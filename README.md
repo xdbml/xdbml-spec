@@ -1,3 +1,5 @@
+<img width="746" height="157" alt="xdbml-logo" src="https://github.com/user-attachments/assets/6af60736-4a9f-4324-9281-eff57f00063a" />
+
 # xDBML
 
 **xDBML** (eXtended Database Markup Language) is an **open markup language** for **describing the shape** of structured and semi-structured data, plus the **declarative metadata** attached to that shape **across heterogeneous storage technologies**. 
