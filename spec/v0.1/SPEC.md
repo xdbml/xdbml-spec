@@ -1,10 +1,10 @@
 # xDBML Specification, version 0.1
 
 **Status:** Draft -- pre-stable. Subject to change before v1.0.
-**License:** Apache License 2.0
-**Steward:** Hackolade (IntegrIT SA/NV) pending governance evolution
-**Repository:** github.com/xdbml/xdbml-spec
-**Canonical home:** xdbml.org
+<br>**License:** Apache License 2.0
+<br>**Steward:** Hackolade (IntegrIT SA/NV) pending governance evolution
+<br>**Repository:** github.com/xdbml/xdbml-spec
+<br>**Canonical home:** xdbml.org
 
 ---
 
@@ -20,34 +20,34 @@ xDBML is designed as the schema layer of a modern data architecture: upstream of
 
 ## Table of contents
 
-1. [Introduction](1.-introduction)
-2. [Document structure](2.-document-structure)
-3. [Lexical conventions](3.-lexical-conventions)
-4. [Version declaration](4.-version-declaration)
-5. [Project](5.-project)
-6. [Container](6.-container)
-7. [Entity](7.-entity)
-8. [Field](8.-field)
-9. [Index](9.-index)
-10. [Relationship and cardinality](10.-relationship-and-cardinality)
-11. [Edge: relationships with properties](11.-edge-relationships-with-properties)
-12. [View: derived shapes with source queries](12.-view-derived-shapes-with-source-queries)
-13. [Named type](13.-named-type)
-14. [Enum](14.-enum)
-15. [TablePartial and TableGroup](15.-tablepartial-and-tablegroup)
-16. [Diagram View](16.-diagram-view)
-17. [Note](17.-note)
-18. [Path syntax](18.-path-syntax)
-19. [Polymorphism](19.-polymorphism)
-20. [JSON as a first-class data type](20.-json-as-a-first-class-data-type)
-21. [BSON scalar types](21.-bson-scalar-types)
-22. [AI-readiness and semantic-interop settings](22.-ai-readiness-and-semantic-interop-settings)
-23. [Validation constraints](23.-validation-constraints)
-24. [Records: sample data](24.-Records-sample-data)
-25. [AST representation](25.-ast-representation)
-26. [Round-trip semantics](26.-Round-trip-semantics)
-27. [Relationship to other standards](27.-relationship-to-other-standards)
-28. [Conformance](28.-conformance)
+1. [Introduction](#1-introduction)
+2. [Document structure](#2-document-structure)
+3. [Lexical conventions](#3-lexical-conventions)
+4. [Version declaration](#4-version-declaration)
+5. [Project](#5-project)
+6. [Container](#6-container)
+7. [Entity](#7-entity)
+9. [Field](#8-field)
+10. [Index](#9-index)
+11. [Relationship and cardinality](#10-relationship-and-cardinality)
+12. [Edge: relationships with properties](#11-edge-relationships-with-properties)
+13. [View: derived shapes with source queries](#12-view-derived-shapes-with-source-queries)
+14. [Named type](#13-named-type)
+15. [Enum](#14-enum)
+16. [TablePartial and TableGroup](#15-tablepartial-and-tablegroup)
+17. [Diagram View](#16-diagram-view)
+18. [Note](#17-note)
+19. [Path syntax](#18-path-syntax)
+20. [Polymorphism](#19-polymorphism)
+21. [JSON as a first-class data type](#20-json-as-a-first-class-data-type)
+22. [BSON scalar types](#21-bson-scalar-types)
+23. [AI-readiness and semantic-interop settings](#22-ai-readiness-and-semantic-interop-settings)
+24. [Validation constraints](#23-validation-constraints)
+25. [Records: sample data](#24-Records-sample-data)
+26. [AST representation](#25-ast-representation)
+27. [Round-trip semantics](#26-Round-trip-semantics)
+28. [Relationship to other standards](#27-relationship-to-other-standards)
+29. [Conformance](#28-conformance)
 
 Appendix A. Reserved keywords
 <br>Appendix B. Lexical grammar reference
