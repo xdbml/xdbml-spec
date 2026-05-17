@@ -26,7 +26,7 @@ xDBML is currently a draft v0.1 specification, stewarded by [Hackolade](https://
 
 ## Where to go next
 
-- [`SPEC.md`](./SPEC.md)  the full v0.1 language specification
+- [`SPEC.md`](https://github.com/xdbml/xdbml-spec/tree/main/spec/v0.1/SPEC.md)  the full v0.1 language specification
 - [`5-minutes.md`](./5-minutes.md) a fast-read introduction with worked examples
 - [`grammar/`](./grammar/)  the ANTLR4 grammar
 - [`examples/`](./examples/)  (TBA) reference xDBML documents covering e-commerce, healthcare, IoT, financial services, event-driven systems, and graph models
