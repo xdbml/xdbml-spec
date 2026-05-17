@@ -43,17 +43,17 @@ xDBML is designed as the schema layer of a modern data architecture: upstream of
 22. [BSON scalar types](#21-bson-scalar-types)
 23. [AI-readiness and semantic-interop settings](#22-ai-readiness-and-semantic-interop-settings)
 24. [Validation constraints](#23-validation-constraints)
-25. [Records: sample data](#24-Records-sample-data)
+25. [Records: sample data](#24-records--sample-data)
 26. [AST representation](#25-ast-representation)
-27. [Round-trip semantics](#26-Round-trip-semantics)
+27. [Round-trip semantics](#26-round-trip-semantics)
 28. [Relationship to other standards](#27-relationship-to-other-standards)
 29. [Conformance](#28-conformance)
 
-Appendix A. Reserved keywords
-<br>Appendix B. Lexical grammar reference
-<br>Appendix C. Worked end-to-end examples
-<br>Appendix D. Compatibility with DBML 3.13.6
-<br>Appendix E. Sources and acknowledgments
+[Appendix A. Reserved keywords](#appendix-a-reserved-keywords)
+<br>[Appendix B. Lexical grammar reference](#appendix-b-lexical-grammar-reference)
+<br>[Appendix C. Worked end-to-end examples](#appendix-c-worked-end-to-end-examples)
+<br>[Appendix D. Compatibility with DBML 3.13.6](#appendix-d-compatibility-with-dbml-3136)
+<br>[Appendix E. Sources and acknowledgments](#appendix-e-sources-and-acknowledgments)
 
 ---
 
@@ -970,7 +970,7 @@ TableGroup e_commerce [color: #3498DB, note: 'Commerce entities'] {
 
 ---
 
-## 16. DiagramView
+## 16. Diagram View
 
 ```
 DiagramView full_view {
