@@ -1,0 +1,1749 @@
+# xDBML Specification, version 0.1
+
+**Status:** Draft — pre-stable. Subject to change before v1.0.
+**License:** Apache License 2.0
+**Steward:** Hackolade (IntegrIT SA/NV) — pending governance evolution
+**Repository:** github.com/xdbml/xdbml-spec
+**Canonical home:** xdbml.org
+
+---
+
+## Abstract
+
+**xDBML** (eXtended Database Markup Language) is an **open markup language** for **describing the shape** of structured and semi-structured data, plus the **declarative metadata** attached to that shape **across heterogeneous storage technologies**: relational databases, document stores, columnar warehouses, search engines, graph databases, serialization formats, and API contracts. 
+
+xDBML is a strict superset of [DBML 3.13.6](https://dbml.dbdiagram.io),the Database Markup Language maintained by Holistics under Apache 2.0, and **extends DBML** with the constructs it cannot currently express: explicit namespace levels, nested hierarchical types, structural polymorphism, first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
+
+xDBML is designed as the schema layer of a modern data architecture: upstream of physical engine DDLs (SQL, Cassandra CQL, MongoDB validators, Cypher), downstream of contract layers (ODCS) and semantic layers (OSI, dbt MetricFlow). It serves human authors, AI-assisted modeling workflows, and bidirectional translation with the major serialization formats (Avro, Parquet, JSON Schema, OpenAPI).
+
+---
+
+## Table of contents
+
+1. Introduction
+2. Document structure
+3. Lexical conventions
+4. Version declaration
+5. Project
+6. Container
+7. Entity
+8. Field
+9. Index
+10. Relationship and cardinality
+11. Edge:  relationships with properties
+12. View: derived shapes with source queries
+13. Named type
+14. Enum
+15. TablePartial and TableGroup
+16. DiagramView
+17. Note
+18. Path syntax
+19. Polymorphism
+20. JSON as a first-class data type
+21. BSON scalar types
+22. AI-readiness and semantic-interop settings
+23. Validation constraints
+24. Records: sample data
+25. AST representation
+26. Round-trip semantics
+27. Relationship to other standards
+28. Conformance
+
+Appendix A. Reserved keywords
+Appendix B. Lexical grammar reference
+Appendix C. Worked end-to-end examples
+Appendix D. Compatibility with DBML 3.13.6
+Appendix E. Sources and acknowledgments
+
+---
+
+## 1. Introduction
+
+### 1.1 Scope
+
+xDBML describes the *shape* of data — what entities exist, what fields they have, how they nest, how they relate, what types they hold, what constraints they obey. The language is deliberately scoped:
+
+- xDBML describes data shapes; it does not describe queries, transformations, or business logic.
+- xDBML targets every storage paradigm equally — relational, document, columnar, key-value, graph, search, file format, API contract.
+- xDBML is closed-world: a field not declared in an entity cannot exist in valid data.
+- xDBML is human-authorable. It is also machine-readable and AI-generable.
+
+### 1.2 Design principles
+
+The language follows seven principles that govern every construct:
+
+1. **Strict superset of DBML.** Every valid DBML 3.13.6 document is a valid xDBML document with identical semantics.
+2. **Polyglot by default.** No construct privileges relational databases over document, columnar, graph, or other paradigms.
+3. **Vocabulary-permissive at every level.** Container, Entity, and type-level keywords accept target-native synonyms.
+4. **Type-name pass-through.** Scalar type names are accepted as-is and lowered by target-specific generators. BSON-specific types (`objectId`, `Decimal128`, `BinData`, etc.) are recognized scalar names; see §21.
+5. **Explicit is better than implicit, where it matters.** Path syntax requires explicit array iteration in relationships; polymorphic paths require explicit alternative selectors.
+6. **Declarative metadata is welcome; computational and contractual meaning are not.** xDBML carries the declarative meaning of stored data — names, descriptions, synonyms, glossary references, classification tags, validation constraints — and leaves computational meaning (measures, metrics, aggregations) to semantic-layer formats and contractual concerns (SLAs, ownership, pricing) to data-contract formats like ODCS.
+7. **Versioned evolution.** Every xDBML document declares the spec version it conforms to.
+
+### 1.3 A first look
+
+A complete xDBML document spanning Oracle (RDBMS), MongoDB (document), Avro (events), and an LPG graph model:
+
+```
+xdbml: 0.1
+
+Project ecommerce {
+  database_type: 'Oracle'
+  Note: 'Reference example for the xDBML v0.1 specification'
+}
+
+Type Address {
+  street  varchar [not null]
+  city    varchar [not null]
+  zip     varchar
+  country varchar [default: 'US']
+}
+
+Type MonetaryAmount {
+  amount   decimal(19,4) [not null]
+  currency varchar(3)    [not null, note: 'ISO 4217']
+}
+
+Container core [type: schema] {
+  Entity customers {
+    id              int     [pk]
+    email           varchar [unique, not null, pattern: '^[^@]+@[^@]+$']
+    display_name    varchar [not null]
+    primary_address Address
+    created_at      timestamp [granularity: second, default: `SYSTIMESTAMP`]
+  }
+}
+
+Container orders_store [type: database] {
+  Collection orders {
+    _id          objectId  [pk]
+    customer_id  int       [not null]
+    placed_at    timestamp [granularity: second]
+    total        MonetaryAmount
+    line_items   array [
+      line_item object {
+        sku         varchar [not null]
+        quantity    int     [not null, minimum: 1]
+        unit_price  MonetaryAmount
+      }
+    ]
+    payment_method oneOf {
+      card   object { last4 varchar(4), brand varchar }
+      bank   object { iban varchar }
+      wallet object { provider varchar, account varchar }
+    } [discriminator: method_kind]
+  }
+}
+
+Container catalog [type: schema] {
+  Entity products {
+    sku       varchar [pk]
+    name      varchar [not null, synonyms: ['product name', 'item name']]
+    price     MonetaryAmount
+    metadata  json {
+      weight_grams int
+      dimensions   object { length int, width int, height int }
+      tags         array [varchar]
+    }
+  }
+
+  View top_sellers [materialized: true, refresh_schedule: 'daily'] {
+    source_query: '''
+      SELECT p.sku, p.name, COUNT(*) AS order_count
+      FROM products p
+      JOIN orders_store.orders o ON o.line_items.sku = p.sku
+      GROUP BY p.sku, p.name
+      ORDER BY order_count DESC
+      FETCH FIRST 100 ROWS ONLY
+    '''
+    sku         varchar [pk]
+    name        varchar
+    order_count int
+  }
+}
+
+Container social [type: keyspace] {
+  Edge FOLLOWS [source: core.customers, target: core.customers,
+                source_cardinality: '0..*', target_cardinality: '0..*'] {
+    since      date    [not null]
+    is_close   boolean [default: false]
+  }
+}
+
+Ref: orders_store.orders.customer_id > core.customers.id [source: '1..*', target: '1..1']
+Ref: orders_store.orders.line_items.[*].sku > catalog.products.sku
+```
+
+This single document expresses an Oracle relational schema, a MongoDB document collection with nested arrays and polymorphism, a catalog with both an entity and a materialized view, an LPG social-graph keyspace with a property-bearing `FOLLOWS` edge, two reusable named types, and cross-container relationships including one that traverses an array. It would round-trip to Oracle DDL, MongoDB collection validators, JSON Schema, Avro, Neo4j Cypher schema, and the ODCS schema section.
+
+---
+
+## 2. Document structure
+
+An xDBML document consists of, in order:
+
+1. A version declaration (§4), optionally followed by an `experimental:` opt-in clause.
+2. Zero or one `Project` declaration (§5).
+3. Any number of top-level declarations in any order: `Container` (§6), `Entity` at project level (§7), `Edge` (§11), `View` (§12), `Type` (§13), `Enum` (§14), `Ref` (§10), `TablePartial`, `TableGroup` (§15), `DiagramView` (§16), `Note` (§17).
+
+Comments may appear anywhere whitespace is permitted.
+
+---
+
+## 3. Lexical conventions
+
+### 3.1 Whitespace and comments
+
+Whitespace is insignificant except as a token separator.
+
+```
+// Single-line comment, runs to end of line
+/* Block comment;
+   may span lines */
+```
+
+### 3.2 Identifiers
+
+A bare identifier matches `[A-Za-z_][A-Za-z0-9_]*`. Quoted identifiers are written in double quotes and may contain any character: `"my-table"`, `"first name"`.
+
+### 3.3 String literals
+
+Single-quoted (`'a string'`) with `\'` and `\\` escapes. Triple-quoted multi-line (`'''line one\nline two'''`) normalizes indentation.
+
+### 3.4 Number literals
+
+Conventional syntax: `42`, `3.14`, `-100`, `1.5e10`.
+
+### 3.5 Expression literals
+
+Backtick-quoted strings pass through as engine-native expressions: `` `SYSTIMESTAMP` ``, `` `uuid_generate_v4()` ``.
+
+### 3.6 Block delimiters
+
+Curly braces `{ ... }` group block bodies. Square brackets `[ ... ]` carry settings and array type expressions.
+
+---
+
+## 4. Version declaration
+
+```
+xdbml: 0.1
+```
+
+SemVer-style `MAJOR.MINOR[.PATCH]` numbering. Appears at the top of the file, before any other construct.
+
+### 4.1 Parser behavior
+
+| Document declares | Parser supports | Behavior |
+|---|---|---|
+| (no declaration) | any | Treated as DBML 3.13.6 — no xDBML extensions recognized. |
+| `xdbml: 0.1` | 0.1 | Parsed with v0.1 feature set. |
+| `xdbml: 0.1` | 0.2+ | Parsed successfully (MINOR-version backward compatibility). |
+| `xdbml: 0.2` | 0.1 | Warning + refuse to parse. |
+
+### 4.2 Experimental features
+
+```
+xdbml: 0.1
+experimental: [graph_path_expressions, temporal_validity]
+```
+
+Without the opt-in, experimental constructs are not recognized. No backward-compatibility guarantee for experimental features.
+
+---
+
+## 5. Project
+
+```
+Project ecommerce {
+  database_type: 'Oracle'
+  Note: 'Reference example'
+}
+```
+
+At most one `Project` may appear. Recognized settings: `database_type`, `Note`.
+
+---
+
+## 6. Container
+
+The namespace-level construct between Project and Entity.
+
+### 6.1 Declaration
+
+```
+Container core [type: schema] {
+  Note: 'Core domain entities'
+
+  Entity customers { ... }
+  Entity accounts { ... }
+}
+```
+
+### 6.2 Keyword synonyms
+
+| Keyword | Native to |
+|---|---|
+| `Container` | xDBML canonical |
+| `Schema` | Oracle, PostgreSQL, SQL Server, Snowflake |
+| `Database` | MongoDB, Cosmos DB |
+| `Keyspace` | Cassandra, ScyllaDB |
+| `Namespace` | Avro, ORC, GraphQL |
+| `Dataset` | BigQuery |
+| `Bucket` | Couchbase |
+
+### 6.3 The `type:` setting
+
+Names the target-native flavor (`schema`, `database`, `keyspace`, `namespace`, `dataset`, `bucket`, `index`).
+
+### 6.4 Container settings
+
+```
+Container kv_store [type: keyspace,
+                    replication: '{class: NetworkTopologyStrategy, dc1: 3, dc2: 2}',
+                    durable_writes: true] { ... }
+```
+
+Open-vocabulary key-value pairs. Generators consume what they understand.
+
+### 6.5 Optional containers
+
+Entities are not required to belong to a container. An entity belongs to at most one container.
+
+### 6.6 Cross-container references
+
+Relationships, edges, and inline references use dotted notation with explicit container prefix:
+
+```
+Container core [type: schema] {
+  Entity customers { id int [pk] }
+}
+
+Container sales [type: schema] {
+  Entity orders {
+    id          int [pk]
+    customer_id int [ref: > core.customers.id]
+  }
+}
+
+Ref: sales.orders.customer_id > core.customers.id
+```
+
+The dotted path is `container_name.entity_name.field_path`.
+
+---
+
+## 7. Entity
+
+A named field-bearing construct.
+
+### 7.1 Declaration
+
+```
+Entity customers {
+  id    int     [pk]
+  email varchar [unique, not null]
+  name  varchar
+}
+```
+
+### 7.2 Keyword synonyms
+
+| Keyword | Native to |
+|---|---|
+| `Entity` | xDBML canonical |
+| `Table` | Oracle, RDBMS, Cassandra, Hive, BigQuery |
+| `Collection` | MongoDB, Cosmos DB, Couchbase |
+| `Record` | Avro, Parquet, ORC, GraphQL |
+
+### 7.3 Schema-qualified declaration
+
+```
+Table core.users { ... }
+```
+
+Produces an Entity named `users` inside an implicit container `core`. Explicit `Container { Entity ... }` blocks are equivalent and preferred for new xDBML.
+
+### 7.4 Aliases
+
+```
+Entity very_long_user_table as U { ... }
+Ref: U.id < posts.user_id
+```
+
+### 7.5 Entity settings
+
+| Setting | Meaning |
+|---|---|
+| `note` | Documentation |
+| `headercolor` | Visualization color |
+| `synonyms` | Alternative names (§22.1) |
+| `business_term` | Glossary reference (§22.2) |
+
+---
+
+## 8. Field
+
+```
+field_name field_type [field_settings]
+```
+
+### 8.1 Field types
+
+- **Scalar type name**: `int`, `varchar`, `decimal(19,4)`, `timestamp`, etc.
+- **BSON scalar type** (§21): `objectId`, `Decimal128`, `BinData`, `Date`, etc.
+- **Complex type expression** (§8.2): `object`, `array`, `map`, `set`.
+- **Polymorphism construct** (§19): `union`, `oneOf`, `anyOf`, `allOf`.
+- **Named type reference** (§13): bare name of a previously declared `Type`.
+- **JSON-with-schema** (§20): `json`, `jsonb`, `variant`.
+
+### 8.2 Complex type keywords
+
+| Concept | Primary | Aliases |
+|---|---|---|
+| Structured value | `object` | `struct`, `record` |
+| Ordered list | `array` | `list` |
+| Heterogeneous tuple | `array` (with positional indices) | `list` |
+| Unique collection | `set` | — |
+| Key-value collection | `map` | `dict`, `dictionary` |
+
+### 8.3 Object type
+
+```
+address object {
+  street    varchar [not null]
+  city      varchar [not null]
+  zip       varchar
+  country   varchar [default: 'US']
+} [not null, note: 'Primary mailing address']
+```
+
+### 8.4 Array of scalars
+
+```
+tags    array [varchar]
+scores  array [int [not null]]
+```
+
+### 8.5 Array of named objects
+
+```
+line_items array [
+  line_item object {
+    sku        varchar       [not null]
+    quantity   int           [not null, default: 1]
+    unit_price decimal(10,2) [not null]
+  }
+] [not null]
+```
+
+### 8.6 Heterogeneous tuple
+
+```
+addresses array [
+  [0] billing  object { street varchar, city varchar, zip varchar }
+  [1] shipping object { street varchar, city varchar, zip varchar }
+]
+```
+
+Positions are zero-indexed and must form a contiguous range starting at 0.
+
+### 8.7 Maps and sets
+
+```
+flags       map [string, boolean]
+permissions set [varchar]
+```
+
+### 8.8 Common field settings
+
+| Setting | Behavior |
+|---|---|
+| `pk` / `primary key` | Primary key |
+| `null` / `not null` | Cardinality |
+| `unique` | Single-field unique constraint |
+| `default: value` | Default value |
+| `increment` | Auto-increment |
+| `note: 'string'` | Documentation |
+| `ref: <op> target` | Inline foreign key (§10) |
+| `check: expr` | Field-level check constraint |
+| Validation constraints | §23 |
+| AI-readiness | §22 |
+
+### 8.9 Cardinality vs. type-level nullability
+
+`null` / `not null` settings express **cardinality** — whether a field is required to be present and whether `null` is acceptable. The token `null` inside a `union [ ... ]` list (§19.1) expresses **type membership** — that the null literal is one of the permitted runtime types. These are distinct concepts.
+
+---
+
+## 9. Index
+
+```
+Entity bookings {
+  id            int
+  country       varchar
+  booking_date  date
+  created_at    timestamp
+
+  indexes {
+    (id, country) [pk]
+    created_at [name: 'created_at_index']
+    booking_date
+    (country, booking_date) [unique]
+    booking_date [type: hash]
+    (`id*2`)
+  }
+}
+```
+
+### 9.1 Index forms
+
+| Form | Example |
+|---|---|
+| Single field | `created_at [name: 'idx_created']` |
+| Composite | `(col1, col2)` |
+| Expression | `` (`expr`) `` |
+
+### 9.2 Index settings
+
+| Setting | Values |
+|---|---|
+| `type` | `btree`, `hash`, engine-specific |
+| `name` | string |
+| `unique` | flag |
+| `pk` | flag |
+| `note` | string |
+
+### 9.3 Indexes on nested fields
+
+Index paths use the path syntax of §18:
+
+```
+indexes {
+  shipping.address.country         // object navigation
+  line_items.sku                   // implicit array iteration
+  line_items.[*].sku               // explicit array iteration
+  addresses.[0].city               // tuple positional
+  flags.["dark_mode"]              // map literal key
+  method.card.brand                // polymorphic alternative
+}
+```
+
+For homogeneous arrays, the implicit iteration form is equivalent to the explicit form. For heterogeneous tuples and `Ref` source paths, explicit syntax is required.
+
+---
+
+## 10. Relationship and cardinality
+
+### 10.1 Cardinality operators
+
+| Operator | Maximum-cardinality |
+|---|---|
+| `<` | one-to-many |
+| `>` | many-to-one |
+| `-` | one-to-one |
+| `<>` | many-to-many |
+
+### 10.2 Declaration forms
+
+```
+// Long form
+Ref name_optional {
+  schema1.entity1.field1 < schema2.entity2.field2
+}
+
+// Short form
+Ref name_optional: schema1.entity1.field1 < schema2.entity2.field2
+
+// Inline form
+Entity schema2.entity2 {
+  id     integer
+  field2 integer [ref: > schema1.entity1.field1]
+}
+```
+
+Relationships are declared at project level. They may span containers.
+
+### 10.3 Cross-container references
+
+```
+Ref: sales.orders.customer_id > core.customers.id
+```
+
+Dotted notation: `container_name.entity_name.field_path`. For relationships into nested fields, the path continues into the nested structure.
+
+### 10.4 Composite foreign keys
+
+```
+Ref: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
+```
+
+### 10.5 Relationships into nested fields
+
+```
+Ref: orders.shipping.address.country > countries.iso_code
+Ref: customers.addresses.[0].zip > postal_codes.code
+```
+
+### 10.6 Explicit `.[*]` required for array crossings
+
+When a `Ref` source path crosses a homogeneous array, the explicit `.[*]` form is required:
+
+```
+Ref: orders.line_items.[*].sku > products.sku    // valid
+Ref: orders.line_items.sku > products.sku        // rejected
+```
+
+### 10.7 Explicit cardinality
+
+The operators express maximum cardinality with optionality inferred from FK nullability. For precise cardinality on both ends, the `source:` and `target:` settings carry UML-style `'min..max'` strings:
+
+```
+// Compact form: operators imply defaults
+Ref: orders.customer_id > customers.id
+
+// Explicit form: precise cardinality on both ends
+Ref: orders.customer_id > customers.id [source: '1..*', target: '1..1']
+
+// Optional parent (each Pet may have no Owner)
+Ref: pets.owner_id > people.id [source: '0..*', target: '0..1']
+```
+
+Recognized cardinality strings:
+
+| String | Meaning |
+|---|---|
+| `'1..1'` | Exactly one |
+| `'0..1'` | Zero or one |
+| `'1..*'` | One or more |
+| `'0..*'` | Zero or more |
+| `'N..M'` | N to M (non-negative integers; `*` allowed for M) |
+
+Alternative four-key form:
+
+```
+Ref: pets.owner_id > people.id [min_source: 0, max_source: '*',
+                                 min_target: 0, max_target: 1]
+```
+
+Both forms produce the same AST. The compact-string form is canonical.
+
+### 10.8 Default cardinality inference
+
+| Operator | FK nullable? | Source | Target |
+|---|---|---|---|
+| `>` | no | `'1..*'` | `'1..1'` |
+| `>` | yes | `'0..*'` | `'1..1'` |
+| `<` | no | `'1..1'` | `'1..*'` |
+| `<` | yes | `'1..1'` | `'0..*'` |
+| `-` | no | `'1..1'` | `'1..1'` |
+| `-` | yes | `'1..1'` | `'0..1'` |
+| `<>` | (n/a) | `'0..*'` | `'0..*'` |
+
+### 10.9 Relationship settings
+
+```
+Ref: products.merchant_id > merchants.id [delete: cascade, update: no action]
+```
+
+| Setting | Values |
+|---|---|
+| `delete` / `update` | `cascade`, `restrict`, `set null`, `set default`, `no action` |
+| `color` | `#rgb` or `#rrggbb` |
+| `source` / `target` | Cardinality strings (§10.7) |
+| `min_source` / `max_source` / `min_target` / `max_target` | Cardinality components |
+
+Settings are not supported on inline `ref:` declarations.
+
+---
+
+## 11. Edge: relationships with properties
+
+Labeled Property Graph (LPG) databases — Neo4j, Memgraph, JanusGraph, Amazon Neptune (LPG mode) — and RDF-star treat relationships as first-class entities that carry properties.
+
+### 11.1 Declaration
+
+```
+Edge KNOWS [source: Person, target: Person] {
+  since      date     [not null]
+  intimacy   int      [minimum: 0, maximum: 10]
+  context    varchar
+}
+
+Edge RATED [source: User, target: Movie] {
+  rating     int       [not null, minimum: 1, maximum: 5]
+  rated_at   timestamp [granularity: second, not null]
+  review     varchar
+}
+```
+
+An Edge declaration carries a name, `source` and `target` settings pointing to connected entities, and a body of fields.
+
+### 11.2 Cardinality on edges
+
+Edges use `source_cardinality` and `target_cardinality` settings (distinct from `source:` and `target:` which name the connected entities):
+
+```
+Edge OWNS [source: Person, target: Pet,
+           source_cardinality: '0..*', target_cardinality: '0..1'] {
+  acquired_date  date
+  purchase_price decimal(10,2)
+}
+```
+
+### 11.3 Directionality
+
+```
+Edge FRIENDS_WITH [source: Person, target: Person, undirected: true] {
+  since date
+}
+```
+
+When `undirected: true`, source and target are interchangeable.
+
+### 11.4 Multiple edges between the same entities
+
+```
+Edge LIKES   [source: User, target: Post] { liked_at timestamp }
+Edge SHARED  [source: User, target: Post] { shared_at timestamp, audience varchar }
+Edge BLOCKED [source: User, target: Post] { blocked_at timestamp, reason varchar }
+```
+
+### 11.5 Edges with named types and partials
+
+```
+Type RelationshipMetadata {
+  created_at    timestamp [granularity: second]
+  created_by    varchar
+  source_system varchar
+}
+
+Edge KNOWS [source: Person, target: Person] {
+  ~RelationshipMetadata
+  since    date
+  intimacy int
+}
+```
+
+### 11.6 Indexes on edges
+
+```
+Edge RATED [source: User, target: Movie] {
+  rating   int       [not null]
+  rated_at timestamp
+
+  indexes {
+    rated_at
+    (rated_at, rating)
+  }
+}
+```
+
+### 11.7 Round-trip across targets
+
+| Target | Edge representation |
+|---|---|
+| Neo4j / LPG | Native relationship type with properties |
+| RDF-star | Quoted triple with annotation properties |
+| RDBMS | Junction table with FKs plus property columns |
+| MongoDB | Array of subdocuments on source-side entity |
+| Avro | Edge events with `source_id`, `target_id`, property fields |
+| RDF (plain) | Reified statements (lossy) |
+
+---
+
+## 12. View: derived shapes with source queries
+
+### 12.1 Declaration
+
+```
+View active_customers [materialized: false] {
+  source_query: '''
+    SELECT id, email, name, created_at
+    FROM customers
+    WHERE deleted_at IS NULL
+  '''
+
+  id         int       [pk]
+  email      varchar
+  name       varchar
+  created_at timestamp [granularity: second]
+}
+
+View monthly_revenue [materialized: true,
+                      refresh_schedule: 'daily',
+                      source_database: 'Oracle'] {
+  source_query: '''
+    SELECT TRUNC(placed_at, 'MM') AS month, SUM(total) AS revenue
+    FROM orders
+    GROUP BY TRUNC(placed_at, 'MM')
+  '''
+
+  month   date           [pk]
+  revenue decimal(15,2)  [granularity: month]
+}
+```
+
+### 12.2 Materialized vs. virtual
+
+- **`materialized: false`** (default) — virtual view; query executes on access.
+- **`materialized: true`** — materialized view; query precomputed and stored.
+
+| Setting | Meaning |
+|---|---|
+| `refresh_schedule` | Refresh schedule (`hourly`, `daily`, `weekly`, engine-specific) |
+| `refresh_on` | Source entities triggering refresh |
+| `storage_options` | Engine-specific storage hints |
+
+### 12.3 Source query as opaque metadata
+
+xDBML does not parse the `source_query` string — it's target-specific. The query is captured verbatim and passed to generators. xDBML can express views for non-SQL query languages (Cypher, MongoDB aggregation pipelines, KSQL) by storing the engine-native query and tagging with `source_database`.
+
+### 12.4 Views in containers
+
+```
+Container analytics [type: schema] {
+  Entity orders { ... }
+  View revenue_by_month [materialized: true] {
+    source_query: '...'
+    month   date
+    revenue decimal(15,2)
+  }
+}
+```
+
+Cross-container references treat views and entities identically.
+
+### 12.5 View settings
+
+| Setting | Meaning |
+|---|---|
+| `source_query` | Defining query (opaque string) |
+| `materialized` | `true` or `false` (default `false`) |
+| `refresh_schedule` | Refresh schedule |
+| `refresh_on` | Source entities |
+| `source_database` | Database flavor of source query |
+| `note` | Documentation |
+| `synonyms`, `business_term` | AI-readiness (§22) |
+
+### 12.6 Round-trip across targets
+
+| Target | View representation |
+|---|---|
+| Oracle / PostgreSQL / SQL Server / Snowflake | `CREATE VIEW` or `CREATE MATERIALIZED VIEW` |
+| MongoDB | `db.createView()` for virtual; `$merge` for materialized |
+| BigQuery | `CREATE VIEW` / `CREATE MATERIALIZED VIEW` |
+| Databricks | `CREATE OR REPLACE VIEW` / `CREATE MATERIALIZED VIEW` |
+| Elasticsearch | Continuous transforms (materialized) |
+
+---
+
+## 13. Named type
+
+A `Type` declaration defines a named, reusable type expression.
+
+### 13.1 Declaration
+
+```
+Type Address {
+  street  varchar [not null]
+  city    varchar [not null]
+  zip     varchar
+  country varchar [default: 'US']
+}
+
+Type MonetaryAmount {
+  amount   decimal(19,4) [not null]
+  currency varchar(3)    [not null]
+}
+```
+
+### 13.2 Reference
+
+```
+Entity orders {
+  shipping_address Address
+  billing_address  Address
+  total            MonetaryAmount [not null]
+}
+
+Entity customers {
+  addresses array [address Address]
+}
+```
+
+Built-in type keywords always take precedence; named types cannot shadow them.
+
+### 13.3 Composition and recursion
+
+```
+Type ContactInfo {
+  email   varchar
+  phone   varchar
+  address Address
+}
+
+Type TreeNode {
+  value    int
+  children array [child TreeNode]    // self-reference
+}
+```
+
+### 13.4 Type settings
+
+```
+Type Address [note: 'Used across customer and order entities'] {
+  ...
+}
+```
+
+Recognized: `note`, `synonyms`, `business_term`.
+
+### 13.5 Scope
+
+Project-scoped. Name collisions across `Type`, `Entity`, `View`, `Edge`, `Enum`, `TablePartial` are rejected at parse time.
+
+### 13.6 Relationship to TablePartial
+
+| `Type` when... | `TablePartial` when... |
+|---|---|
+| Reusing a value shape | Reusing a set of entity fields |
+| Reference from nested structures | Splice fields at entity top level |
+| Cross-references into type's fields | Fields appear as direct columns |
+| One canonical definition for many | Each entity gets own copy of fields |
+
+---
+
+## 14. Enum
+
+```
+enum job_status {
+  created [note: 'Waiting to be processed']
+  running
+  done
+  failure
+}
+
+enum grade {
+  "A+"
+  "A"
+  "A-"
+}
+```
+
+Values with non-identifier characters must be quoted. Enums may be container-qualified.
+
+---
+
+## 15. TablePartial and TableGroup
+
+### 15.1 TablePartial
+
+```
+TablePartial base_template {
+  id         int       [pk, not null]
+  created_at timestamp [default: `SYSTIMESTAMP`]
+  updated_at timestamp [default: `SYSTIMESTAMP`]
+}
+
+Entity users {
+  ~base_template
+  name varchar
+}
+```
+
+Conflict resolution: local entity definitions override partials; among partials, last-injected wins. TablePartials may also be injected into Edge declarations.
+
+### 15.2 TableGroup
+
+```
+TableGroup e_commerce [color: #3498DB, note: 'Commerce entities'] {
+  orders
+  products
+  inventory
+}
+```
+
+### 15.3 Naming
+
+`TablePartial` and `TableGroup` retain their DBML names without `Entity*` synonyms.
+
+---
+
+## 16. DiagramView
+
+```
+DiagramView full_view {
+  Tables { * }
+  Notes { * }
+  TableGroups { * }
+  Containers { * }
+  Views { * }
+  Edges { * }
+}
+
+DiagramView sales_view {
+  Tables { users; orders; products }
+}
+```
+
+Categories: `Tables`, `Notes`, `TableGroups`, `Containers`, `Views`, `Edges`.
+
+---
+
+## 17. Note
+
+Inline notes are settings or blocks on Project, Container, Entity, Field, Index, Edge, View, Type, TableGroup. Standalone notes act as canvas annotations:
+
+```
+Note design_decision {
+  '''
+  We chose to denormalize line items into the orders entity
+  rather than maintaining a separate line_items entity because
+  read patterns dominate writes by 100:1.
+  '''
+}
+```
+
+---
+
+## 18. Path syntax
+
+### 18.1 Segment forms
+
+| Segment | Meaning |
+|---|---|
+| `.field_name` | Navigate into named field |
+| `.[N]` | Specific positional array element (zero-indexed) |
+| `.[*]` | All array elements (iteration) |
+| `.["literal_key"]` | Map literal key |
+| `.[*]` (map context) | All map values |
+| `."quoted name"` | Non-identifier name |
+| `.AlternativeName` | Polymorphic alternative selector |
+
+### 18.2 Path examples
+
+```
+customers.addresses.[0].city          // tuple positional
+orders.line_items.[*].sku             // every sku across line items
+events.[42].payload.user_id           // 43rd event's payload
+flags.["dark_mode"]                   // specific map key
+data."user.id"                        // quoted field name
+payments.method.card.brand            // polymorphic alternative
+sales.orders.line_items.[*].sku       // cross-container with array crossing
+```
+
+### 18.3 Implicit array iteration in indexes
+
+Allowed only in index paths. `Ref` paths and tuple positions require explicit syntax.
+
+### 18.4 JSONPath alias acceptance
+
+JSONPath-style brackets (no leading dot) are accepted at parse time and normalized to the dot-prefixed canonical form:
+
+```
+addresses[0].city     // parsed; normalized to addresses.[0].city
+```
+
+### 18.5 Formatter behavior
+
+Explicit `.[*]` whenever path depth exceeds two segments; implicit auto-iteration otherwise. Tuple positions and quoted segments always emitted explicitly.
+
+---
+
+## 19. Polymorphism
+
+### 19.1 Scalar type union — `union`
+
+```
+Entity records {
+  score      union [int, decimal, null]
+  legacy_id  union [string, int]                 [not null]
+  tags       array [union [string, int]]
+}
+```
+
+Element ordering is significant. The runtime type acts as the discriminator.
+
+### 19.2 Structural polymorphism — `oneOf`, `anyOf`, `allOf`
+
+```
+Entity payments {
+  amount  decimal(10,2)  [not null]
+
+  method  oneOf {
+    card object { last4 varchar(4), brand varchar }
+    bank object { iban varchar }
+    wallet object { provider varchar, account varchar }
+  } [discriminator: method_kind]
+}
+```
+
+### 19.3 Keywords
+
+| Keyword | Semantics |
+|---|---|
+| `oneOf` | Exactly one of N alternatives |
+| `anyOf` | One or more alternatives may apply |
+| `allOf` | Value must satisfy all listed schemas |
+
+### 19.4 Paths through polymorphism — strict alternative selector
+
+```
+indexes {
+  method.card.brand      // valid
+  method.brand           // rejected — selector required even when unambiguous
+}
+```
+
+Paths through `union` (scalar) are rejected.
+
+### 19.5 Polymorphism inside arrays
+
+```
+events array [
+  event oneOf {
+    user_event object { type varchar, user_id objectId, action varchar }
+    item_event object { type varchar, item_id objectId, qty int }
+  } [discriminator: type]
+]
+```
+
+---
+
+## 20. JSON as a first-class data type
+
+### 20.1 Opaque JSON
+
+```
+Entity api_logs {
+  request_body  json   [note: 'shape varies by endpoint']
+  response_body jsonb  [note: 'large; may exceed 1 MB']
+  raw_data      variant
+}
+```
+
+### 20.2 Schema-known JSON
+
+```
+Entity orders {
+  id      int [pk]
+  payload json {
+    shipping_address object {
+      street  varchar [not null]
+      city    varchar [not null]
+    }
+    items array [
+      item object {
+        sku      varchar [not null]
+        quantity int     [not null]
+      }
+    ]
+  }
+}
+```
+
+### 20.3 `json` vs. `object`
+
+`object` describes an abstract structural type — encoding chosen by target. `json`, `jsonb`, `variant` describe a physical storage choice (JSON-typed column).
+
+### 20.4 Keyword semantics
+
+| Keyword | Target intent |
+|---|---|
+| `json` | Generic JSON storage (Oracle 21c+, MySQL, MS SQL Server 2025+, BigQuery) |
+| `jsonb` | PostgreSQL-specific binary JSON, indexable |
+| `variant` | Snowflake-specific semi-structured with auto-typing |
+
+---
+
+## 21. BSON scalar types
+
+MongoDB stores documents in BSON, a JSON superset with additional scalar types. xDBML recognizes BSON type names as ordinary scalar type identifiers — no special grammar treatment but preserved through the AST and emitted in MongoDB collection validators.
+
+| BSON type | Typical use |
+|---|---|
+| `objectId` | 12-byte MongoDB primary key |
+| `Decimal128` | High-precision decimal (IEEE 754-2008) |
+| `BinData` | Binary data with subtype |
+| `Timestamp` | MongoDB-internal timestamp |
+| `Date` | UTC datetime |
+| `Regex` | Compiled regular expression |
+| `JavaScript` | JavaScript code |
+| `Symbol` | Deprecated; preserved for legacy reads |
+| `MinKey` / `MaxKey` | Sentinel comparison values |
+| `DBPointer` | Deprecated; preserved for legacy reads |
+
+```
+Container app_data [type: database] {
+  Collection users {
+    _id          objectId    [pk]
+    email        varchar     [unique, not null]
+    balance      Decimal128
+    last_login   Date
+    avatar       BinData
+  }
+}
+```
+
+Round-trip to non-MongoDB targets:
+
+| BSON type | Oracle | PostgreSQL | Avro | JSON Schema |
+|---|---|---|---|---|
+| `objectId` | `varchar2(24)` w/ check | `varchar(24)` or `bytea` | `string` w/ logical type | `string` w/ `pattern` |
+| `Decimal128` | `number(38,4)` | `numeric(34,0)` | `decimal` high precision | `string` |
+| `BinData` | `blob` | `bytea` | `bytes` | `string` w/ `format: byte` |
+| `Timestamp` | `timestamp with time zone` | `timestamptz` | `long` w/ `logicalType: timestamp-millis` | `string` w/ `format: date-time` |
+| `Date` | `timestamp with time zone` | `timestamptz` | as `Timestamp` | `string` w/ `format: date-time` |
+
+---
+
+## 22. AI-readiness and semantic-interop settings
+
+Four optional settings expose declarative metadata for AI consumers, semantic-layer tools (OSI, dbt MetricFlow, Cube), and governance platforms (Atlan, Collibra, DataHub, Alation). A fifth mechanism (the `x_` prefix) supports organization-specific custom properties without grammar changes.
+
+### 22.1 `synonyms:` — alternative names
+
+```
+Entity customers {
+  display_name varchar [synonyms: ['name', 'full name', 'customer name']]
+  mrr_amount   decimal(10,2) [synonyms: ['monthly revenue', 'recurring revenue']]
+}
+```
+
+### 22.2 `business_term:` — controlled-vocabulary identifier
+
+```
+Entity orders {
+  total_amount decimal(10,2) [business_term: 'Gross Order Value']
+  net_amount   decimal(10,2) [business_term: 'https://glossary.acme.com/terms/net_order_value']
+}
+```
+
+### 22.3 `granularity:` — temporal granularity
+
+```
+Entity events {
+  occurred_at timestamp [granularity: second]
+  recorded_at timestamp [granularity: microsecond]
+}
+```
+
+Values: `year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`, `microsecond`, `nanosecond`.
+
+### 22.4 `tags:` — free-form classification labels
+
+A list of string labels for classification, sensitivity, lifecycle, domain, audience, governance markers, or any other discoverable property. Tags are the dominant pattern in modern data catalogs (Atlan, Collibra, DataHub, Alation, Hackolade Studio).
+
+```
+Entity customers {
+  email        varchar [tags: ['pii', 'contact', 'gdpr-subject']]
+  ssn          varchar [tags: ['pii', 'sensitive', 'gdpr-special', 'restricted']]
+  internal_id  int     [tags: ['internal-only']]
+}
+
+Entity products [tags: ['catalog', 'public-api']] { ... }
+
+Type MonetaryAmount [tags: ['finance', 'reusable']] { ... }
+```
+
+Tags compose freely with `synonyms`, `business_term`, and other settings. They differ from synonyms (which name the same thing in multiple ways) and from business terms (which reference an external glossary): tags are *classification labels*, freeform and multi-valued.
+
+### 22.5 Custom properties — the `x_` prefix
+
+Settings beyond the recognized vocabulary are accepted as open-vocabulary key-value pairs and passed through to the AST. To distinguish *intentional* custom properties from possible typos in reserved keywords, xDBML reserves the `x_` prefix for explicit custom extensions.
+
+```
+Entity customers {
+  email varchar [
+    pattern: '^[^@]+@[^@]+$',
+    x_sensitivity: 'pii-low',
+    x_acme_data_steward: 'jane@acme.com',
+    x_retention_days: 2555
+  ]
+}
+
+Container core [type: schema, x_provisioning_template: 'standard-tier-3'] { ... }
+```
+
+Conventions:
+
+- The prefix is `x_` (underscore-prefix). Dash-prefix is not used because xDBML identifiers do not allow dashes.
+- The prefix is **optional, not required**. The parser also accepts non-prefixed unknown properties.
+- The parser does not validate names or values of `x_*` properties — they pass through to the AST.
+- Tooling can distinguish `x_*` properties as deliberately custom (versus possibly-misspelled reserved keywords); linters may warn on non-`x_`-prefixed unknown properties.
+
+A registry of de-facto-standardized custom properties is maintained at xdbml.org/registry. Custom properties that reach widespread adoption may be promoted to first-class settings in a future MINOR version.
+
+### 22.6 Scope
+
+The four first-class settings and the `x_` mechanism carry *declarative* metadata about stored data — names, descriptions, classifications, glossary references, AI-readiness labels. xDBML does not carry *computational* meaning (measures, metrics, aggregations, derived fields, hierarchies, default-aggregation hints) — that belongs in adjacent semantic-layer formats — nor *contractual* obligations (SLAs, ownership, pricing, support hours) — that belongs in ODCS.
+
+---
+
+## 23. Validation constraints
+
+xDBML accepts the full JSON Schema validation vocabulary as field settings:
+
+| Setting | Applies to | Meaning |
+|---|---|---|
+| `pattern` | string | Regular expression |
+| `format` | string | `email`, `uri`, `uuid`, `date-time`, etc. |
+| `minLength` / `maxLength` | string | Length bounds |
+| `minimum` / `maximum` | number | Value bounds |
+| `exclusiveMinimum` / `exclusiveMaximum` | number | Exclusive bounds |
+| `multipleOf` | number | Multiple of N |
+| `enum` | any | Fixed list of values |
+| `minItems` / `maxItems` | array | Element count bounds |
+| `uniqueItems` | array | All elements distinct |
+| `minProperties` / `maxProperties` | object | Field count bounds |
+| `check` | any | Free-form expression |
+
+Example:
+
+```
+Entity users {
+  email    varchar [pattern: '^[^@]+@[^@]+$', maxLength: 255]
+  age      int     [minimum: 0, maximum: 150]
+  username varchar [pattern: '^[a-z0-9_]{3,32}$']
+  tags     array [varchar] [minItems: 1, maxItems: 10, uniqueItems: true]
+}
+```
+
+### 23.1 Generator behavior
+
+| Target | Constraint output |
+|---|---|
+| Oracle / PostgreSQL / SQL Server / Snowflake | `CHECK` for `minimum`, `maximum`, `pattern`; others as comments |
+| MongoDB validator | Native `$jsonSchema` with all validations |
+| JSON Schema | Direct round-trip |
+| Avro | `pattern` → name validation; bounds → logical-type metadata |
+| Cassandra | Validations without equivalent dropped with warning |
+
+---
+
+## 24. Records — sample data
+
+```
+Entity users {
+  id    int [pk]
+  name  varchar
+  email varchar
+
+  records {
+    1, 'Alice', 'alice@example.com'
+    2, 'Bob',   'bob@example.com'
+  }
+}
+```
+
+Value forms: strings, numbers, booleans, `null`, ISO 8601 dates, enum values, backtick-expressions.
+
+---
+
+## 25. AST representation
+
+```
+Project
+├── settings (database_type, ...)
+├── Note (project-level)
+├── Container (0..n)
+│   ├── settings (type, replication, location, ...)
+│   ├── Note (container-level)
+│   ├── Entity (n per container)
+│   │   ├── Field (n; recursively nested)
+│   │   ├── Index (n)
+│   │   ├── Check (n)
+│   │   ├── Records (0..1)
+│   │   └── Note
+│   ├── View (n per container)
+│   │   ├── settings (source_query, materialized, ...)
+│   │   ├── Field (n)
+│   │   └── Note
+│   └── Edge (n per container)
+│       ├── settings (source, target, source_cardinality, target_cardinality, undirected, ...)
+│       ├── Field (n)
+│       ├── Index (n)
+│       └── Note
+├── Entity (0..n; project-level)
+├── View (0..n; project-level)
+├── Edge (0..n; project-level)
+├── Type (0..n)
+├── Enum (n)
+├── Ref (n; project-level)
+│   └── Cardinality (source/target min and max)
+├── TablePartial (n)
+├── TableGroup (n)
+├── DiagramView (n)
+└── Note (n; sticky notes)
+```
+
+### 25.1 Field recursion
+
+A Field node carries a type expression. Complex types contain nested Field nodes; tree depth is unbounded.
+
+### 25.2 Path segments
+
+Field paths are ordered lists of `PathSegment` nodes, each tagged by kind: `field`, `array_index`, `array_iter`, `map_key`, `map_iter`, `alternative`. Implicit forms are normalized to explicit forms during parsing.
+
+### 25.3 AST flavors
+
+- **Raw** — references stored as strings, for partial-document analysis.
+- **Normalized** — references resolved into direct pointers, for traversal and code generation.
+
+---
+
+## 26. Round-trip semantics
+
+### 26.1 Round-trip targets
+
+| Format | Direction | Notes |
+|---|---|---|
+| DBML 3.13.6 | xDBML ↔ DBML | Strict superset. xDBML-only constructs emit as comments when downgrading. |
+| Oracle DDL | xDBML → SQL | `CREATE TABLE`, `CREATE TYPE`, `CHECK`, FKs. JSON via native `JSON` type (21c+). Views as `CREATE VIEW` / `CREATE MATERIALIZED VIEW`. |
+| PostgreSQL DDL | xDBML → SQL | JSON via `jsonb`. |
+| MongoDB validators | xDBML ↔ `$jsonSchema` | Object/array/oneOf/union direct. BSON types preserved. |
+| Avro schemas | xDBML ↔ Avro | Named types → Avro named records. Union element ordering preserved. |
+| Parquet schemas | xDBML → Parquet | Nested types → Parquet group types. |
+| JSON Schema | xDBML ↔ JSON Schema | Direct correspondence for most constructs. Named types → `$defs`. |
+| OpenAPI | xDBML → OpenAPI | Entities and types → `components.schemas`. |
+| Neo4j / Cypher schema | xDBML → Cypher | Entities → node labels; Edges → relationship types with properties. |
+| RDF-star | xDBML ↔ RDF-star | Edges → quoted triples with annotations. |
+| ODCS (schema section) | xDBML → ODCS | xDBML supplies schema portion; other ODCS sections out of scope. |
+| Hackolade PDM | xDBML ↔ PDM | Lossless round-trip. PDM `Description` fields receive xDBML notes (markdown). |
+
+### 26.2 Lossiness boundary
+
+**Lossless:** Container declarations and settings; Entity, View, Edge, Field, Index, Ref structure; nested types; polymorphism; named types (where target supports `$ref`); validation constraints; cardinality; notes.
+
+**Lossy when target lacks the construct:**
+- Polymorphism to relational targets (lowered to discriminator + checks)
+- Named types to formats without `$ref` (inlined)
+- Edges to non-LPG relational targets (lowered to junction tables)
+- Views with non-portable source queries (passed verbatim; may fail on target)
+
+Generators emit warnings on lossy lowering.
+
+---
+
+## 27. Relationship to other standards
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Data product layer                   ODPS                           │
+├──────────────────────────────────────────────────────────────────────┤
+│  Inferential / reasoning layer        OWL, knowledge graphs          │
+├──────────────────────────────────────────────────────────────────────┤
+│  Semantic / business layer            OSI, dbt MetricFlow, Cube      │
+├──────────────────────────────────────────────────────────────────────┤
+│  Contract layer                       ODCS                           │
+├──────────────────────────────────────────────────────────────────────┤
+│  Validation layer                     JSON Schema, SHACL             │
+├──────────────────────────────────────────────────────────────────────┤
+│  Schema / shape layer                 xDBML ← here                    │
+├──────────────────────────────────────────────────────────────────────┤
+│  Engine DDL layer                     SQL DDL, Cypher, CQL, ...      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+| Standard | Layer | xDBML relationship |
+|---|---|---|
+| SQL DDL | Engine | Forward-engineering target |
+| Cypher schema | Engine | Forward-engineering target for LPG |
+| JSON Schema | Schema (JSON-only) | Bidirectional translation |
+| OpenAPI | Schema (HTTP APIs) | Same shapes |
+| Avro / Parquet | Schema (serialization) | Forward-engineering target |
+| SHACL | Validation | Bidirectional translation |
+| ODCS | Contract | Supplies schema section |
+| ODPS | Data product | Sits above ODCS |
+| OSI | Semantic | Complementary via §22 shared vocabulary |
+| RDFS / OWL | Inferential | Shapes lift into knowledge graphs |
+| RDF-star | Inferential | Bidirectional for edges with properties |
+
+xDBML does not attempt to be SQL, OSI, ODCS, OWL, or JSON Schema. Each addresses part of the data-description problem at one layer.
+
+---
+
+## 28. Conformance
+
+A conforming xDBML v0.1 implementation:
+
+1. **Parses every valid xDBML v0.1 document** to the AST described in §25.
+2. **Rejects malformed documents** with informative error messages.
+3. **Honors the version declaration** per §4.1.
+4. **Honors the `experimental:` opt-in** per §4.2.
+5. **Normalizes implicit forms to canonical AST representations** for paths.
+6. **Preserves declared keyword choices** in the raw AST flavor.
+7. **Computes default cardinality** per §10.8 when not declared.
+
+Generators and importers are not required for spec conformance.
+
+---
+
+## Appendix A. Reserved keywords
+
+**Document-level:** `xdbml`, `experimental`, `Project`
+
+**Container-level:** `Container`, `Schema`, `Database`, `Keyspace`, `Namespace`, `Dataset`, `Bucket`
+
+**Entity-level:** `Entity`, `Table`, `Collection`, `Record`
+
+**Other top-level constructs:** `Edge`, `View`, `Type`, `Enum`, `enum`, `Ref`, `TablePartial`, `TableGroup`, `DiagramView`, `Note`
+
+**Field types:** `object`, `struct`, `record`, `array`, `list`, `map`, `dict`, `dictionary`, `set`, `union`, `oneOf`, `anyOf`, `allOf`, `json`, `jsonb`, `variant`
+
+**Block keywords:** `records`, `indexes`, `checks`
+
+**Relationship operators:** `<`, `>`, `-`, `<>`
+
+**Field settings:** `pk`, `primary key`, `null`, `not null`, `unique`, `default`, `increment`, `note`, `ref`, `check`
+
+**Cardinality settings:** `source`, `target`, `min_source`, `max_source`, `min_target`, `max_target`, `source_cardinality`, `target_cardinality`, `undirected`
+
+**View settings:** `source_query`, `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`
+
+**AI-readiness settings:** `synonyms`, `business_term`, `granularity`, `tags`
+
+**Custom-property prefix:** `x_` (reserved as a convention for organization-specific extensions; see §22.5)
+
+Quoted identifiers (`"keyword"`) may be used for entities or fields that share a name with a reserved keyword.
+
+---
+
+## Appendix B. Lexical grammar reference
+
+| Token class | Pattern |
+|---|---|
+| Identifier | `[A-Za-z_][A-Za-z0-9_]*` |
+| Quoted identifier | `"` any chars with `\"`, `\\` escapes `"` |
+| String literal | `'` any chars with `\'`, `\\` escapes `'` |
+| Multi-line string | `'''` any chars with indentation normalization `'''` |
+| Number | integer or decimal, optional sign and exponent |
+| Expression | `` ` `` any chars `` ` `` |
+| Cardinality string | `'N..M'` where N, M are non-negative integers or `*` |
+| Comment (single-line) | `//` to end of line |
+| Comment (block) | `/*` ... `*/` |
+| Container/entity-qualified name | `identifier.identifier` |
+| Composite reference | `identifier.(identifier, identifier, ...)` |
+| Field path | `identifier` followed by zero or more `.identifier`, `.[N]`, `.[*]`, `.["literal"]`, or `."quoted"` segments |
+
+A formal ANTLR grammar is published at github.com/xdbml/xdbml-grammar.
+
+---
+
+## Appendix C. Worked end-to-end examples
+
+### C.1 Polyglot model: Oracle + MongoDB + events + graph
+
+```
+xdbml: 0.1
+
+Project polyglot_example {
+  database_type: 'Oracle'
+}
+
+Type Address {
+  street  varchar [not null]
+  city    varchar [not null]
+  country varchar
+}
+
+Type MonetaryAmount {
+  amount   decimal(19,4) [not null]
+  currency varchar(3)    [not null]
+}
+
+Container core [type: schema] {
+  Entity customers {
+    id              int     [pk]
+    email           varchar [unique, not null, pattern: '^[^@]+@[^@]+$']
+    display_name    varchar [not null]
+    primary_address Address
+  }
+}
+
+Container orders_store [type: database] {
+  Collection orders {
+    _id          objectId  [pk]
+    customer_id  int       [not null]
+    placed_at    timestamp [granularity: second]
+    total        MonetaryAmount
+    line_items   array [
+      line_item object {
+        sku         varchar [not null]
+        quantity    int     [not null, minimum: 1]
+        unit_price  MonetaryAmount
+      }
+    ]
+    payment_method oneOf {
+      card   object { last4 varchar(4), brand varchar }
+      bank   object { iban varchar }
+      wallet object { provider varchar, account varchar }
+    } [discriminator: method_kind]
+  }
+}
+
+Container events [type: namespace] {
+  Record OrderPlaced {
+    event_id    varchar    [pk]
+    occurred    timestamp  [granularity: millisecond, not null]
+    order_id    objectId   [not null]
+    customer_id int        [not null]
+    total       MonetaryAmount
+  }
+}
+
+Container social [type: keyspace] {
+  Edge FOLLOWS [source: core.customers, target: core.customers,
+                source_cardinality: '0..*', target_cardinality: '0..*'] {
+    since      date    [not null]
+    is_close   boolean [default: false]
+  }
+}
+
+Container catalog [type: schema] {
+  Entity products {
+    sku       varchar [pk]
+    name      varchar [not null]
+    price     MonetaryAmount
+    metadata  json {
+      weight_grams int
+      dimensions   object { length int, width int, height int }
+      tags         array [varchar]
+    }
+  }
+
+  View top_sellers [materialized: true, refresh_schedule: 'daily'] {
+    source_query: '''
+      SELECT p.sku, p.name, COUNT(*) AS order_count
+      FROM catalog.products p
+      JOIN orders_store.orders o ON o.line_items.sku = p.sku
+      GROUP BY p.sku, p.name
+      ORDER BY order_count DESC
+      FETCH FIRST 100 ROWS ONLY
+    '''
+    sku         varchar [pk]
+    name        varchar
+    order_count int
+  }
+}
+
+Ref: orders_store.orders.customer_id > core.customers.id [source: '1..*', target: '1..1']
+Ref: orders_store.orders.line_items.[*].sku > catalog.products.sku
+Ref: events.OrderPlaced.order_id > orders_store.orders._id
+Ref: events.OrderPlaced.customer_id > core.customers.id
+```
+
+### C.2 Heterogeneous tuple
+
+```
+xdbml: 0.1
+
+Entity customers {
+  id        int  [pk]
+  name      varchar
+  addresses array [
+    [0] billing  object { street varchar, city varchar, zip varchar }
+    [1] shipping object { street varchar, city varchar, zip varchar }
+  ]
+
+  indexes {
+    addresses.[0].city
+    addresses.[1].zip
+  }
+}
+```
+
+### C.3 Recursive named type
+
+```
+xdbml: 0.1
+
+Type TreeNode {
+  id       int
+  value    varchar
+  children array [child TreeNode]
+}
+
+Entity organization_chart {
+  root_id int [pk]
+  tree    TreeNode
+}
+```
+
+### C.4 Graph model with property edges
+
+```
+xdbml: 0.1
+
+Project social_network {
+  database_type: 'Neo4j'
+}
+
+Container social [type: keyspace] {
+  Entity Person {
+    id    int     [pk]
+    name  varchar [not null]
+    email varchar [unique]
+  }
+
+  Entity Movie {
+    id    int     [pk]
+    title varchar [not null]
+    year  int
+  }
+
+  Edge KNOWS [source: Person, target: Person,
+              source_cardinality: '0..*', target_cardinality: '0..*'] {
+    since    date  [not null]
+    intimacy int   [minimum: 0, maximum: 10]
+  }
+
+  Edge ACTED_IN [source: Person, target: Movie] {
+    role      varchar [not null]
+    billing   int     [note: 'order in credits']
+  }
+
+  Edge RATED [source: Person, target: Movie] {
+    rating    int       [not null, minimum: 1, maximum: 5]
+    rated_at  timestamp [granularity: second]
+    review    varchar
+  }
+}
+```
+
+---
+
+## Appendix D. Compatibility with DBML 3.13.6
+
+xDBML is a strict superset of DBML 3.13.6:
+
+1. Every valid DBML 3.13.6 document is a valid xDBML document at the lowest compatibility level (no version declaration).
+2. A document declaring `xdbml: 0.1` opts into the v0.1 feature set; all DBML 3.13.6 constructs remain valid.
+3. xDBML extension constructs are not recognized in documents without a version declaration.
+4. DBML's implicit-schema syntax (`Table core.users { ... }`) remains valid; produces an implicit Container.
+5. DBML's `Table` keyword remains valid as a synonym for `Entity`.
+
+A DBML 3.13.6 document is upgraded to xDBML by adding `xdbml: 0.1` at the top. No structural changes required.
+
+---
+
+## Appendix E. Sources and acknowledgments
+
+xDBML builds on the work of Holistics and contributors to DBML (Apache License 2.0). The DBML language reference at dbml.dbdiagram.io served as the foundation for the constructs documented in §5, §7, §9, §10, §14, §15, §16, §17, §24.
+
+xDBML acknowledges intellectual debt to:
+
+- **JSON Schema** — validation vocabulary, `oneOf`/`anyOf`/`allOf`
+- **Avro** — named records, namespaces, union semantics
+- **OpenAPI** — discriminator conventions, `components.schemas` reuse
+- **ODCS** (bitol.io) — schema/contract layering
+- **OSI** — schema/semantic-layer boundary vocabulary
+- **openCypher / Neo4j** — labeled property graph semantics; edge properties
+- **RDF-star** — annotation properties on triples
+- **Mermaid** — cardinality notation principles
+- **Hackolade PDM** — polyglot data modeling principles, AI-readiness settings, path notation
+
+---
+
+*End of xDBML Specification v0.1.*
