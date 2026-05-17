@@ -1,0 +1,23 @@
+xDBML — eXtended Database Markup Language
+Copyright 2026 IntegrIT SA/NV dba Hackolade and the xDBML contributors
+
+This product includes software, documentation, and specification text
+developed by IntegrIT SA/NV (dba Hackolade) and the xDBML contributors.
+
+xDBML extends the DBML (Database Markup Language) maintained by Holistics
+Pte. Ltd. under the Apache License 2.0. See Appendix D of the xDBML
+specification for details of the compatibility relationship.
+
+The xDBML specification (SPEC.md), grammar files, generators, importers,
+and source code are licensed under the Apache License, Version 2.0.
+See the LICENSE file at the root of this repository.
+
+Documentation files (README.md, 5-minutes.md, GOVERNANCE.md,
+CONTRIBUTING.md, and similar narrative documents) and example schemas
+under the examples/ directory are dedicated to the public domain
+under Creative Commons CC0 1.0 Universal, permitting unrestricted reuse
+without attribution.
+
+The xDBML logo and visual identity are trademarks of IntegrIT SA/NV
+(dba Hackolade). Permitted and prohibited uses of the trademark are
+described in GOVERNANCE.md, §7.3.
