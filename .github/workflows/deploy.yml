@@ -1,0 +1,81 @@
+# GitHub Action: build VitePress site and deploy to GitHub Pages
+#
+# Triggers on push to main and on manual dispatch.
+# Builds the VitePress site with Node 20, then deploys to GitHub Pages.
+#
+# Setup required (one-time, in the repo Settings):
+#   - Settings → Pages → Source: "GitHub Actions"
+#   - Settings → Pages → Custom domain: "xdbml.org" (after DNS is configured)
+#
+# DNS required (one-time, in your DNS provider):
+#   - ALIAS / ANAME / CNAME record for xdbml.org → <your-github-org>.github.io
+#   - or, for an apex domain: four A records pointing to GitHub's IPs:
+#       185.199.108.153
+#       185.199.109.153
+#       185.199.110.153
+#       185.199.111.153
+#   - and a CNAME record for www.xdbml.org → <your-github-org>.github.io
+
+name: Build and deploy site
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '.github/**'
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'CODE_OF_CONDUCT.md'
+      - 'MAINTAINERS.md'
+  workflow_dispatch:
+
+# Permissions required for GitHub Pages deployment
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; cancel any in-progress when a new push arrives
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build VitePress site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history is required for VitePress "last updated" git timestamps
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build site
+        run: npm run docs:build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .vitepress/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

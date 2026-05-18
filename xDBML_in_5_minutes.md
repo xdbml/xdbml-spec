@@ -1,12 +1,10 @@
 # xDBML in 5 minutes
 
-**xDBML** is a open text-based **markup language** for **describing the shape** of **structured and semi-structured data**: relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. 
+**xDBML** is a text-based markup language for describing the shape of structured data — relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.
 
-One file, many targets. It is the markup that humans, AI assistants, and data modeling tools all use to describe the same schemas without translation loss.
+xDBML is a strict superset of [DBML](https://dbml.dbdiagram.io), extended for the data shapes DBML can't: nested objects, arrays of records, polymorphism, named reusable types, JSON columns with known schema, target-native vocabulary (MongoDB collections, Avro records, Cassandra keyspaces), property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
 
-xDBML is a **strict superset** of [DBML](https://dbml.dbdiagram.io), **extended** for the data shapes DBML can't: nested objects, arrays of records, polymorphism, named reusable types, JSON columns with known schema, target-native vocabulary (MongoDB collections, Avro records, Cassandra keyspaces), property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
-
-
+---
 
 ## The first 60 seconds
 
@@ -59,20 +57,20 @@ Ref: orders_store.orders.line_items.[*].sku > catalog.products.sku
 What you just read:
 
 - **A reusable `Address` type** used by any field needing an address shape
-- **Two namespace levels (Containers)**: one for an Oracle schema, one for a MongoDB database
+- **Two namespace levels (Containers)**: one for the Oracle schema, one for the MongoDB database
 - **A relational `customers` entity** with regex validation, GDPR/PII tags, and a field declaring its alternative names for AI consumers
 - **A MongoDB `orders` collection** with `objectId` (BSON) primary key, nested arrays of line items, and a polymorphic `payment_method` that's either a card, bank, or wallet
 - **Cross-container relationships with explicit cardinality**, including one that crosses an array — every `sku` in every `line_items` references a row in a `products` entity
 
-This single file generates an Oracle DDL for `customers`, a MongoDB `$jsonSchema` validator for `orders`, a JSON Schema for an OpenAPI contract, an Avro schema for an event stream, and the schema section of an ODCS data contract.
+This single file generates Oracle DDL for `customers`, a MongoDB `$jsonSchema` validator for `orders`, JSON Schema for an API contract, an Avro schema for an event stream, and the schema section of an ODCS data contract.
 
-
+---
 
 ## Why this exists
 
-Every modern data platform mixes paradigms. A typical SaaS product stores users in Oracle, events in Kafka with Avro schemas, application state in MongoDB, analytics in BigQuery, Databricks, or Snowflake, and social graphs in Neo4j. Each technology has its own schema language.
+Every modern data platform mixes paradigms. A typical SaaS product stores users in Oracle, events in Kafka with Avro schemas, application state in MongoDB, analytics in BigQuery, and social graphs in Neo4j. Each technology has its own schema language.
 
-**Hand-maintaining five schemas that describe the same business concepts is where mistakes live.** A field renamed in Oracle doesn't propagate to the MongoDB validator. A new payment method added to the Avro event schema isn't reflected in the Databricks warehouse table. Drift between schemas is one of the most common sources of production data bugs.
+**Hand-maintaining five schemas that describe the same business concepts is where mistakes live.** A field renamed in Oracle doesn't propagate to the MongoDB validator. A new payment method added to the Avro event schema isn't reflected in the BigQuery warehouse table. Drift between schemas is one of the most common sources of production data bugs.
 
 xDBML is the single source of truth that generates all of them.
 
@@ -85,15 +83,11 @@ xDBML  ──── generators ─────────┼─→ Avro / Parqu
                                 └─→ ODCS schema section
 ```
 
-But more importantly: **xDBML is the markup that AI assistants and modeling tools use to describe schemas.** When you ask Claude, GPT-5, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. 
-
-JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. 
-
-xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (descriptions, synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
+But more importantly: **xDBML is the markup that AI assistants and modeling tools use to describe schemas.** When you ask Claude, GPT-5, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
 
 The same schema you author by hand is the schema your AI assistant can extend, refactor, and round-trip back to you. The same schema you generate from MongoDB can be lifted to Oracle, validated as JSON Schema, or wrapped in an ODCS contract.
 
-
+---
 
 ## The six things that make xDBML different
 
@@ -135,7 +129,7 @@ score union [int, decimal, null]
 
 ### 3. Target-native vocabulary
 
-Each storage traditionally has its own word for the same concepts. xDBML accepts all of them:
+Each storage tradition has its own word for the same concepts. xDBML accepts all of them:
 
 ```
 Container core [type: schema] { Entity users { ... } }              // Oracle, PostgreSQL
@@ -148,7 +142,7 @@ BSON types (`objectId`, `Decimal128`, `BinData`, etc.) are recognized as scalar 
 
 ### 4. Precise cardinality on relationships
 
-DBML's four cardinality operators express maximum cardinality. xDBML adds explicit min/max for further precision:
+DBML's four operators express maximum cardinality. xDBML adds explicit min/max for precision:
 
 ```
 // Compact form
@@ -196,7 +190,6 @@ Four first-class settings make schemas legible to LLMs, semantic-layer tools, go
 ```
 Entity customers {
   mrr_amount decimal [
-    note= "Represents the total monthly recurring revenue attributed to the customer. This value reflects the normalized monthly income generated from active subscriptions or contracts, excluding one-time charges, discounts, and taxes. Typically used for revenue tracking, customer segmentation, and forecasting in subscription-based business models."
     synonyms: ['monthly revenue', 'recurring revenue'],
     business_term: 'MRR',
     tags: ['finance', 'kpi', 'sox-controlled'],
@@ -217,7 +210,7 @@ Entity customers [
 
 These settings round-trip cleanly to Snowflake's Open Semantic Interchange (OSI), Atlan/Collibra/DataHub/Alation tag systems, Avro `aliases`, OpenAPI descriptions, and JSON Schema annotations.
 
-
+---
 
 ## What you don't have to learn
 
@@ -230,17 +223,18 @@ xDBML is deliberately narrow. The following are *not* xDBML's job:
 
 xDBML describes shape and declarative metadata. Adjacent standards handle the layers above and below.
 
-
+---
 
 ## Where to go from here
 
-- **Read the [v0.1 specification](https://github.com/xdbml/xdbml-spec/tree/main/spec/v0.1/SPEC.md)** for the full language reference.
-- **Try it in the [playground](https://playground.xdbml.org)** (TBA) — paste xDBML, see rendered diagrams and generated artifacts.
+- **Read the [v0.1 specification](https://xdbml.org/spec/v0.1)** for the full language reference.
+- **Try it in the [playground](https://playground.xdbml.org)** — paste xDBML, see rendered diagrams and generated artifacts.
 - **Browse the [examples](https://github.com/xdbml/xdbml-examples)** — real schemas covering e-commerce, healthcare, IoT, financial services, event-driven systems, and graph models.
-- **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** — the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
+- **Read the [ODCS integration guide](https://xdbml.org/integrations/odcs)** if you're already using Open Data Contract Standard.
+- **Star or contribute on [GitHub](https://github.com/xdbml/xdbml)** — the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
 xDBML is a draft v0.1 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
 
+---
 
-
-*Last updated May 17, 2026. Apache License 2.0. xdbml.org*
+*Last updated 2026. Apache License 2.0. xdbml.org*

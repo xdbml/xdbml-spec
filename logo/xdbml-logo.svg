@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  xDBML logo — primary wordmark (light mode, transparent background)
+  Apache License 2.0
+  Variant C design: opening brace + fanout + faint closing-brace hint.
+
+  No background fill (genuinely transparent).
+  Tight viewBox: snaps to content bounds, no padding.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122 26" role="img" aria-label="xDBML">
+
+  <!-- Mark — origin (0,0) is top-left of content -->
+  <g transform="translate(0, 0)">
+    <!-- Opening brace { -->
+    <path d="M 7,1 C 5,1 4,3 4,5 L 4,10 C 4,11 3.5,12 2,12 C 3.5,12 4,13 4,14 L 4,19 C 4,21 5,23 7,23"
+          stroke="#1a4d7a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- Schema source point -->
+    <circle cx="10" cy="12" r="2.3" fill="#1a4d7a"/>
+
+    <!-- Three branches fanning to compressed target positions -->
+    <path d="M 13,12 Q 19,12 23,4"   stroke="#1a4d7a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <path d="M 13,12 L 25,12"        stroke="#1a4d7a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <path d="M 13,12 Q 19,12 23,20"  stroke="#1a4d7a" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+
+    <!-- Three target dots (also implicit closing-brace vertices) -->
+    <circle cx="23" cy="4"  r="2.3" fill="#3a8dbe"/>
+    <circle cx="25" cy="12" r="2.3" fill="#3a8dbe"/>
+    <circle cx="23" cy="20" r="2.3" fill="#3a8dbe"/>
+
+    <!-- Faint closing-brace curve -->
+    <path d="M 21.5,4 Q 25,6 25,9 L 25,12"    stroke="#3a8dbe" stroke-width="1.1" fill="none" stroke-linecap="round" opacity="0.4"/>
+    <path d="M 25,12 L 25,15 Q 25,18 21.5,20" stroke="#3a8dbe" stroke-width="1.1" fill="none" stroke-linecap="round" opacity="0.4"/>
+  </g>
+
+  <!-- Wordmark with uniform inter-letter spacing -->
+  <text x="34" y="22" font-family="'Inter', 'IBM Plex Sans', 'Helvetica Neue', system-ui, sans-serif"
+        font-weight="600" font-size="22">
+    <tspan fill="#3a8dbe" font-style="italic">x</tspan><tspan fill="#1a4d7a">DBML</tspan>
+  </text>
+
+</svg>

@@ -1,0 +1,113 @@
+/**
+ * xDBML site — custom CSS
+ *
+ * Overrides VitePress default theme variables to apply the xDBML brand palette.
+ * Keeps modifications minimal: brand colors, brand-tinted accents, slight
+ * typography refinements. The rest of the default theme is preserved
+ * (spacing, layout, dark-mode handling, etc.).
+ *
+ * VitePress theme variables reference:
+ *   https://vitepress.dev/reference/default-theme-config#color-customization
+ */
+
+/* ============================================================
+ * Brand palette
+ * ============================================================ */
+:root {
+  /* Primary brand colors */
+  --xdbml-navy:      #1a4d7a;
+  --xdbml-blue:      #3a8dbe;
+  --xdbml-light:     #5fc2e8;
+  --xdbml-pale:      #e8f4fa;
+
+  /* Map xDBML palette to VitePress brand variables */
+  --vp-c-brand-1:        var(--xdbml-navy);
+  --vp-c-brand-2:        var(--xdbml-blue);
+  --vp-c-brand-3:        var(--xdbml-light);
+  --vp-c-brand-soft:     rgba(58, 141, 190, 0.14);
+
+  --vp-c-brand-1-rgb:    26, 77, 122;
+
+  /* Code-block accent for inline xDBML keyword examples */
+  --vp-c-tip-1:          var(--xdbml-navy);
+  --vp-c-tip-2:          var(--xdbml-blue);
+  --vp-c-tip-3:          var(--xdbml-light);
+  --vp-c-tip-soft:       rgba(58, 141, 190, 0.14);
+}
+
+/* Dark mode: shift to lighter brand variants for contrast */
+.dark {
+  --vp-c-brand-1:        var(--xdbml-light);
+  --vp-c-brand-2:        var(--xdbml-blue);
+  --vp-c-brand-3:        var(--xdbml-navy);
+  --vp-c-brand-soft:     rgba(95, 194, 232, 0.16);
+
+  --vp-c-brand-1-rgb:    95, 194, 232;
+}
+
+/* ============================================================
+ * Home-page hero accent
+ * ============================================================ */
+:root {
+  /* Used in the hero name/text gradient on the landing page */
+  --vp-home-hero-name-color:           var(--xdbml-blue);
+  --vp-home-hero-name-background:      linear-gradient(120deg, var(--xdbml-navy) 30%, var(--xdbml-blue) 70%);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, var(--xdbml-blue) 50%, var(--xdbml-light) 50%);
+  --vp-home-hero-image-filter:         blur(40px);
+}
+
+.dark {
+  --vp-home-hero-name-background:      linear-gradient(120deg, var(--xdbml-light) 30%, var(--xdbml-blue) 70%);
+}
+
+/* ============================================================
+ * Code block refinements
+ * ============================================================ */
+
+/* Tighter line-height in xDBML code samples; the spec is dense */
+.vp-doc div[class*='language-'] pre {
+  line-height: 1.55;
+}
+
+/* Slightly larger code font for spec reading */
+:root {
+  --vp-code-font-size: 0.9em;
+}
+
+/* ============================================================
+ * Reading-width refinements
+ * ============================================================ */
+
+/* Wider content area for spec pages with code-heavy tables */
+@media (min-width: 1280px) {
+  .VPDoc .container {
+    max-width: 1200px;
+  }
+
+  .VPDoc.has-aside .content-container {
+    max-width: 800px;
+  }
+}
+
+/* ============================================================
+ * Outline (right-rail TOC) accent
+ * ============================================================ */
+.VPDocOutlineItem.active {
+  color: var(--vp-c-brand-1);
+}
+
+/* ============================================================
+ * Footer styling
+ * ============================================================ */
+.VPFooter {
+  border-top: 1px solid var(--vp-c-divider);
+}
+
+.VPFooter .message {
+  font-size: 0.85em;
+  color: var(--vp-c-text-2);
+}
+
+.VPFooter .copyright {
+  font-size: 0.85em;
+}

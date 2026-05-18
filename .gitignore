@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+.npm/
+
+# VitePress build artifacts
+.vitepress/dist/
+.vitepress/cache/
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local environment
+.env
+.env.local

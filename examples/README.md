@@ -31,7 +31,7 @@ Every example uses xDBML's `note:` setting extensively — at the project level,
 
 A field called `email` of type `varchar [unique, not null]` doesn't need a note. A field called `kyc_status` of type `varchar` with an enum constraint absolutely does.
 
-## Running the examples through a parser (TBA)
+## Running the examples through a parser
 
 Once the reference parser is available, you can validate each example with:
 
