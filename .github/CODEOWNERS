@@ -1,0 +1,26 @@
+# CODEOWNERS for xdbml-spec
+#
+# Specifies who must review pull requests touching specific paths.
+# Combined with branch protection requiring code-owner review,
+# this ensures every change to the spec, grammar, examples, governance,
+# or site goes through a maintainer before merging.
+#
+# Syntax: <path pattern>    <owner1> <owner2> ...
+# Patterns earlier in the file are overridden by patterns later in the file.
+#
+# See: https://docs.github.com/en/repositories/managing-your-repositories-settings-and-security/customizing-your-repository/about-code-owners
+
+# Default: every file requires review from a project maintainer.
+*                                     @pdesmarets
+
+# As maintainers are added, scope ownership to areas of expertise.
+# Examples (uncomment and adjust when applicable):
+#
+# /spec/                              @pdesmarets @spec-editor
+# /grammar/                           @pdesmarets @grammar-maintainer
+# /examples/                          @pdesmarets
+# /.vitepress/                        @pdesmarets @site-maintainer
+# /.github/workflows/                 @pdesmarets
+# /LICENSE                            @pdesmarets
+# /NOTICE                             @pdesmarets
+# /GOVERNANCE.md                      @pdesmarets

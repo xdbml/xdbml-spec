@@ -3,12 +3,23 @@ import { defineConfig } from 'vitepress'
 // xDBML.org site configuration
 // https://vitepress.dev/reference/site-config
 
+// Base path for the site.
+//
+// When deployed to a GitHub Pages project site (https://xdbml.github.io/xdbml-spec/),
+// asset URLs need to be prefixed with the repo name. When deployed to the custom
+// domain (https://xdbml.org/), assets should resolve from the root.
+//
+// The deploy.yml workflow sets the SITE_BASE environment variable to control which
+// mode we build in. Defaults to '/' for local development (`npm run docs:dev`).
+const base = process.env.SITE_BASE || '/'
+
 export default defineConfig({
   // Site metadata
   title: 'xDBML',
   titleTemplate: ':title — xDBML',
   description: 'eXtended Database Markup Language — one schema, many storage technologies, human and AI-readable.',
   lang: 'en-US',
+  base,
 
   // srcDir defaults to the directory containing .vitepress/ — the repo root.
   // Markdown files at the repo root (SPEC.md, GOVERNANCE.md, etc.) become
@@ -209,7 +220,7 @@ export default defineConfig({
 
   // <head> additions for SEO and social card
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo/xdbml-favicon.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo/xdbml-favicon.svg` }],
 
     // Open Graph
     ['meta', { property: 'og:type', content: 'website' }],

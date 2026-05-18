@@ -8,13 +8,20 @@
 #   - Settings → Pages → Custom domain: "xdbml.org" (after DNS is configured)
 #
 # DNS required (one-time, in your DNS provider):
-#   - ALIAS / ANAME / CNAME record for xdbml.org → xdbml.github.io
-#   - or, for an apex domain: four A records pointing to GitHub's IPs:
+#   - For an apex domain: four A records pointing to GitHub's IPs:
 #       185.199.108.153
 #       185.199.109.153
 #       185.199.110.153
 #       185.199.111.153
 #   - and a CNAME record for www.xdbml.org → xdbml.github.io
+#
+# SITE_BASE env var controls the asset URL prefix:
+#   - '/xdbml-spec/' for the preview at https://xdbml.github.io/xdbml-spec/
+#   - '/' for the production site at https://xdbml.org/
+#
+# When DNS is configured and the custom domain is active, change SITE_BASE
+# below from '/xdbml-spec/' to '/' and commit the change. Until then, leave
+# it as '/xdbml-spec/' so the preview site renders correctly.
 
 name: Build and deploy site
 
@@ -22,7 +29,6 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - '.github/**'
       - 'LICENSE'
       - 'NOTICE'
       - 'CODE_OF_CONDUCT.md'
@@ -44,6 +50,11 @@ jobs:
   build:
     name: Build VitePress site
     runs-on: ubuntu-latest
+    env:
+      # Change to '/' when the custom domain (xdbml.org) is live.
+      # Change to '/xdbml-spec/' when the custom domain (xdbml.org) is not configured in Route 53 DNS.
+      # Change to '/' when running for locat dev at localhost:5173/ with npm run docs:dev.
+      SITE_BASE: '/'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
