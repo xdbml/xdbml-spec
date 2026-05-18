@@ -4,7 +4,7 @@ The xDBML grammar is published as an [ANTLR4](https://www.antlr.org) grammar fil
 
 ## Files
 
-- **[`xDBML.g4`](https://github.com/xdbml/xdbml/blob/main/grammar/xDBML.g4)** — the ANTLR4 grammar additions, organized to mirror the specification's §17 numbering
+- **[`xDBML.g4`](https://github.com/xdbml/xdbml-spec/blob/main/grammar/xDBML.g4)** — the ANTLR4 grammar additions, organized to mirror the specification's §17 numbering
 - **[Test cases](./test-cases)** — reference test corpus with VALID and INVALID examples organized by spec section
 
 ## Approach
@@ -31,7 +31,7 @@ A conforming parser implementation should:
 6. Preserve declared keyword choices in the raw AST flavor
 7. Compute default cardinality per §10.8 when not explicitly declared
 
-Multiple implementations in different language ecosystems are welcome and encouraged. Coordination on AST shape (so generators and importers can be language-agnostic) is discussed in [GitHub issues](https://github.com/xdbml/xdbml/issues) tagged `grammar`.
+Multiple implementations in different language ecosystems are welcome and encouraged. Coordination on AST shape (so generators and importers can be language-agnostic) is discussed in [GitHub issues](https://github.com/xdbml/xdbml-spec/issues) tagged `grammar`.
 
 ## Contributing to the grammar
 

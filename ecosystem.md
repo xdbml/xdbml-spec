@@ -1,6 +1,6 @@
 # xDBML Ecosystem
 
-Tools, libraries, and integrations built around the xDBML specification. This page is community-maintained — add yours by [opening a pull request](https://github.com/xdbml/xdbml/pulls) that edits this file.
+Tools, libraries, and integrations built around the xDBML specification. This page is community-maintained — add yours by [opening a pull request](https://github.com/xdbml/xdbml-spec/pulls) that edits this file.
 
 ## Parsers and grammars
 

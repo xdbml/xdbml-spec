@@ -5,9 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "docs:dev":     "vitepress dev .",
-    "docs:build":   "vitepress build .",
-    "docs:preview": "vitepress preview ."
+    "docs:dev":         "npm run prepare:examples && vitepress dev .",
+    "docs:build":       "npm run prepare:examples && vitepress build .",
+    "docs:preview":     "vitepress preview .",
+    "prepare:examples": "node scripts/prepare-examples.mjs"
   },
   "devDependencies": {
     "vitepress": "^1.5.0",
@@ -18,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url":  "https://github.com/xdbml/xdbml.git"
+    "url":  "https://github.com/xdbml/xdbml-spec.git"
   },
   "license": "Apache-2.0",
   "homepage": "https://xdbml.org"

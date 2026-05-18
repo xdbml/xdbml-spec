@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  xDBML social card / README banner — transparent background
+  Apache License 2.0
+  Variant C design at banner scale, no background fill.
+  Aspect ratio approximates 1200x630 (Open Graph / Twitter Card standard).
+
+  Use as Open Graph image — most platforms (LinkedIn, Twitter/X, Slack,
+  Discord) apply their own card background, so transparency lets the
+  content blend naturally with the host context. For contexts requiring
+  a solid background (PDF rendering, presentation slides), wrap the
+  card in a parent element that supplies the background.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="xDBML — eXtended Database Markup Language">
+
+  <!-- Mark + wordmark, centered upper-middle, compressed mark proportions -->
+  <g transform="translate(385, 200)">
+    <!-- Mark at banner scale, compressed footprint -->
+    <g transform="translate(0, 5)">
+      <!-- Opening brace { -->
+      <path d="M 24,12 C 16,12 12,20 12,28 L 12,46 C 12,52 8,56 0,56
+               C 8,56 12,60 12,66 L 12,84 C 12,92 16,100 24,100"
+            stroke="#1a4d7a" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <!-- Schema source point -->
+      <circle cx="36" cy="56" r="9" fill="#1a4d7a"/>
+
+      <!-- Three branches with compressed fanout -->
+      <path d="M 46,56 Q 72,56 88,24"  stroke="#1a4d7a" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M 46,56 L 94,56"        stroke="#1a4d7a" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M 46,56 Q 72,56 88,88"  stroke="#1a4d7a" stroke-width="6" fill="none" stroke-linecap="round"/>
+
+      <!-- Three target dots -->
+      <circle cx="88" cy="24" r="9" fill="#3a8dbe"/>
+      <circle cx="94" cy="56" r="9" fill="#3a8dbe"/>
+      <circle cx="88" cy="88" r="9" fill="#3a8dbe"/>
+
+      <!-- Faint closing-brace curve -->
+      <path d="M 81,24 Q 94,32 94,42 L 94,56"   stroke="#3a8dbe" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+      <path d="M 94,56 L 94,70 Q 94,80 81,88"   stroke="#3a8dbe" stroke-width="3.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+    </g>
+
+    <!-- Wordmark with uniform inter-letter spacing -->
+    <text x="125" y="95" font-family="'Inter', 'IBM Plex Sans', 'Helvetica Neue', system-ui, sans-serif"
+          font-weight="700" font-size="110">
+      <tspan fill="#3a8dbe" font-style="italic">x</tspan><tspan fill="#1a4d7a">DBML</tspan>
+    </text>
+  </g>
+
+  <!-- Tagline -->
+  <text x="600" y="380" text-anchor="middle"
+        font-family="'Inter', 'IBM Plex Sans', system-ui, sans-serif"
+        font-size="32" fill="#364675" font-weight="400">
+    eXtended Database Markup Language
+  </text>
+
+  <!-- Subtagline -->
+  <text x="600" y="430" text-anchor="middle"
+        font-family="'Inter', 'IBM Plex Sans', system-ui, sans-serif"
+        font-size="22" fill="#5a6c80" font-weight="300">
+    One schema. Many storage technologies. Human and AI-readable.
+  </text>
+
+  <!-- Footer -->
+  <text x="600" y="570" text-anchor="middle"
+        font-family="'Inter', 'IBM Plex Sans', system-ui, sans-serif"
+        font-size="16" fill="#8a9aae" font-weight="400">
+    Draft v0.1 · Apache License 2.0 · xdbml.org
+  </text>
+
+</svg>

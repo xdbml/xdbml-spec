@@ -19,7 +19,7 @@ hero:
       link: /spec/v0.1
     - theme: alt
       text: View on GitHub
-      link: https://github.com/xdbml/xdbml
+      link: https://github.com/xdbml/xdbml-spec
 
 features:
   - icon: 🌐
@@ -121,6 +121,6 @@ This single document expresses a relational customer schema in Oracle, a MongoDB
 
 xDBML is currently a draft v0.1 specification stewarded by [Hackolade](https://hackolade.com), with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0. The path to neutral foundation governance is described in the [governance model](/governance).
 
-Feedback from real-world use will shape v1.0. [Open an issue](https://github.com/xdbml/xdbml/issues) with comments, proposals, or questions.
+Feedback from real-world use will shape v1.0. [Open an issue](https://github.com/xdbml/xdbml-spec/issues) with comments, proposals, or questions.
 
 </div>

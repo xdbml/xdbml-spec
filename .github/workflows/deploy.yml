@@ -51,8 +51,9 @@ jobs:
     name: Build VitePress site
     runs-on: ubuntu-latest
     env:
-      # Change to '/' when the custom domain (xdbml.org) is live.
-      # Change to '/xdbml-spec/' when the custom domain (xdbml.org) is not configured in Route 53 DNS.
+      # Custom domain xdbml.org is live, so assets resolve from the root.
+      # If you ever revert to the GitHub Pages preview URL
+      # (https://xdbml.github.io/xdbml-spec/), change this back to '/xdbml-spec/'.
       # Change to '/' when running for locat dev at localhost:5173/ with npm run docs:dev.
       SITE_BASE: '/'
     steps:

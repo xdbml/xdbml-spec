@@ -28,6 +28,6 @@ If you are an implementation author, support the latest version. Support for old
 
 Each specification version is maintained as a markdown file in this directory:
 
-- [`v0.1.md`](https://github.com/xdbml/xdbml/blob/main/spec/v0.1.md) — current draft
+- [`v0.1.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.1.md) — current draft
 
 Substantive changes follow the [contribution process](/contributing#proposing-a-new-specification-construct). Refinements within a published version (typo fixes, ambiguity clarifications) are handled as patch-level updates.

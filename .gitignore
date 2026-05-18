@@ -6,6 +6,11 @@ node_modules/
 .vitepress/dist/
 .vitepress/cache/
 
+# Generated content
+# /public/examples/ is populated by scripts/prepare-examples.mjs from /examples/
+# at build time. Don't commit the generated copies.
+/public/examples/
+
 # Editor and OS
 .DS_Store
 .idea/

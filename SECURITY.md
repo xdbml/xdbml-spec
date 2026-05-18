@@ -19,7 +19,7 @@ Vulnerabilities in third-party tools that consume xDBML — including tools list
 Please report vulnerabilities privately via one of these channels:
 
 - **Email**: security@xdbml.org
-- **GitHub Security Advisory**: https://github.com/xdbml/xdbml/security/advisories/new
+- **GitHub Security Advisory**: https://github.com/xdbml/xdbml-spec/security/advisories/new
 
 Both channels are monitored by the project maintainers. The email channel is preferred for initial contact; the GitHub Security Advisory channel is used for coordinating the fix and disclosure once the report has been triaged.
 
