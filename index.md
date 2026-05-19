@@ -7,7 +7,7 @@ titleTemplate: eXtended Database Markup Language
 hero:
   name: xDBML
   text: One schema. Many storage technologies.
-  tagline: An open markup language for describing structured data across relational, document, columnar, graph, and serialization paradigms. Human-authorable, AI-readable, designed for the polyglot data stack.
+  tagline: An open markup language for describing structured data across relational, document, columnar, graph, and serialization paradigms. Human-authorable, <br>AI-readable, designed for the polyglot data stack.
   image:
     src: /logo/xdbml-mark.svg
     alt: xDBML
@@ -27,6 +27,10 @@ features:
     title: Polyglot by default
     details: One language for Oracle, PostgreSQL, MongoDB, Cassandra, BigQuery, Snowflake, Neo4j, Avro, Parquet, JSON Schema, and OpenAPI. Vocabulary matches each target's native terms.
 
+  - icon: 🤖
+    title: AI-ready by design
+    details: Synonyms, business-term references, granularity hints, classification tags, and a structured custom-properties mechanism. LLMs and humans read the same schema.
+
   - icon: 🪆
     title: Nested structures, first-class
     details: Objects, arrays of records, maps, sets, heterogeneous tuples, and polymorphism via oneOf/anyOf/allOf — described directly without contortions.
@@ -35,17 +39,13 @@ features:
     title: Property edges for graph models
     details: First-class Edge construct for labeled property graph databases (Neo4j, Memgraph, Neptune) and RDF-star. Round-trips to junction tables for relational targets.
 
-  - icon: 📊
-    title: Views as first-class constructs
-    details: Materialized and virtual views with source queries captured as opaque metadata. Forward-engineers to native VIEW statements in every supported target.
-
-  - icon: 🤖
-    title: AI-ready by design
-    details: Synonyms, business-term references, granularity hints, classification tags, and a structured custom-properties mechanism. LLMs and humans read the same schema.
-
   - icon: 📐
     title: Precise cardinality
     details: UML-style 'min..max' cardinality strings on relationships. The classic DBML operators remain as shorthand; precision is available when you need it.
+
+  - icon: 📊
+    title: Views as first-class constructs
+    details: Materialized and virtual views with source queries captured as opaque metadata. Forward-engineers to native VIEW statements in every supported target.
 
   - icon: 🧬
     title: Strict superset of DBML
