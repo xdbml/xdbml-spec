@@ -7,7 +7,7 @@ titleTemplate: eXtended Database Markup Language
 hero:
   name: xDBML
   text: One schema. Many storage technologies.
-  tagline: An open markup language for describing structured data across relational, document, columnar, graph, and serialization paradigms. Human-authorable, AI-readable, designed for the polyglot data stack.
+  tagline: An open markup language for describing structured data across relational, document, columnar, graph, and storage/exchange paradigms. <br>Easy to author and interpret by both humans and AI, designed for the polyglot data stack.
   image:
     src: /logo/xdbml-mark.svg
     alt: xDBML
@@ -25,7 +25,7 @@ hero:
 features:
   - icon: 🌐
     title: Polyglot by default
-    details: One language for Oracle, PostgreSQL, MongoDB, Cassandra, BigQuery, Snowflake, Neo4j, Avro, Parquet, JSON Schema, and OpenAPI. Vocabulary matches each target's native terms.
+    details: One language for Oracle, PostgreSQL, SQL Server, MongoDB, Cassandra, BigQuery, Databricks, Snowflake, Neo4j, Avro, Parquet, JSON Schema, OpenAPI, and many more. Vocabulary matches each target's native terms.
 
   - icon: 🤖
     title: AI-ready by design
@@ -33,11 +33,11 @@ features:
 
   - icon: 🪆
     title: Nested structures, first-class
-    details: Objects, arrays of records, maps, sets, heterogeneous tuples, and polymorphism via oneOf/anyOf/allOf — described directly without contortions.
+    details: Objects, arrays of records, maps, sets, heterogeneous tuples, and polymorphism via oneOf/anyOf/allOf are described directly without contortions.
 
   - icon: 🔗
     title: Property edges for graph models
-    details: First-class Edge construct for labeled property graph databases (Neo4j, Memgraph, Neptune) and RDF-star. Round-trips to junction tables for relational targets.
+    details: First-class Edge construct for labeled property graph databases (Neo4j, Gremlin, Neptune) and RDF-star. Round-trips to junction tables for relational targets.
 
   - icon: 📐
     title: Precise cardinality
@@ -53,7 +53,7 @@ features:
 
   - icon: 🏛️
     title: Layered, not competitive
-    details: The schema-layer companion to ODCS (contracts), OSI (semantics), JSON Schema (validation), and OWL (reasoning). Each layer does one thing well.
+    details: The schema-layer companion to JSON Schema (validation), ODCS (contracts), OSI (semantics), and OWL (reasoning). Each layer does one thing well.
 
   - icon: 🆓
     title: Open standard
@@ -140,7 +140,9 @@ Notes at the project, type, container, table, collection, and field levels carry
 
 ## Why xDBML
 
-DBML's strength is simplicity and developer accessibility — the reasons it was adopted in the first place. xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
+DBML's strength is simplicity and developer accessibility -- the reasons it was adopted in the first place. 
+
+xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange
 
 The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
 

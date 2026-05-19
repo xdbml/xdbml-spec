@@ -5,7 +5,9 @@ description: A fast-read introduction to xDBML — one open markup language for 
 
 # xDBML in 5 minutes
 
-**xDBML** is a text-based markup language for describing the shape of structured data — relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.
+**xDBML** is a text-based markup language for describing the shape of structured data: relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.
+
+xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork. 
 
 xDBML is a strict superset of [DBML](https://dbml.dbdiagram.io), extended for the data shapes DBML can't: nested objects, arrays of records, polymorphism, named reusable types, JSON columns with known schema, target-native vocabulary (MongoDB collections, Avro records, Cassandra keyspaces), property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
 
