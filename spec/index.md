@@ -1,3 +1,8 @@
+---
+title: Specification
+description: The xDBML specification. v0.1 is the current draft. Apache License 2.0. Backward-compatible additions are MINOR versions; documents declaring a specific version are stable across MINOR and PATCH releases.
+---
+
 # xDBML Specification
 
 This is the canonical home of the xDBML specification. xDBML follows [Semantic Versioning](https://semver.org), adapted for a specification: MAJOR.MINOR.PATCH where MAJOR indicates incompatible changes, MINOR indicates backward-compatible additions, and PATCH indicates clarifications. See [GOVERNANCE.md §9](/governance#_9-versioning-and-stability) for the full stability commitments.

@@ -1,3 +1,8 @@
+---
+title: Examples
+description: Six reference xDBML schemas covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services. View in browser or download for parser testing.
+---
+
 # xDBML Examples
 
 Reference xDBML documents covering a range of realistic business domains and storage paradigms. Each example is self-contained, parses standalone against the v0.1 grammar, and demonstrates a specific subset of the language's features.

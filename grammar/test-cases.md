@@ -1,6 +1,8 @@
-# xDBML v0.1 Grammar — Reference Test Cases
+---
+title: Grammar test cases
+description: Reference test corpus for xDBML v0.1 grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases.
+---
 
-This file accompanies `xDBML.g4` and provides a minimal test corpus for grammar validation. A conforming xDBML v0.1 parser must accept every example marked **VALID** and reject every example marked **INVALID** with a clear error message.
 
 A more comprehensive test corpus, with expected ASTs in JSON form, is planned for a future release. The grammar repository (`grammar/`) currently contains the grammar file (`xDBML.g4`) and this reference test corpus only.
 

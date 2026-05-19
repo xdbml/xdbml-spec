@@ -1,3 +1,8 @@
+---
+title: Grammar
+description: The xDBML ANTLR4 grammar for parser implementers and language tooling builders. Layered as an overlay on the upstream DBML grammar.
+---
+
 # xDBML Grammar (ANTLR4)
 
 The xDBML grammar is published as an [ANTLR4](https://www.antlr.org) grammar file, layered on top of the Holistics DBML upstream grammar. It is intended for parser implementers, language tooling builders, and contributors proposing new constructs.

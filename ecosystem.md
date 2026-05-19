@@ -1,3 +1,8 @@
+---
+title: Ecosystem
+description: Tools, libraries, parsers, generators, importers, and integrations built around xDBML. Community-maintained directory of compatible implementations and adjacent-standard bridges.
+---
+
 # xDBML Ecosystem
 
 Tools, libraries, and integrations built around the xDBML specification. This page is community-maintained — add yours by [opening a pull request](https://github.com/xdbml/xdbml-spec/pulls) that edits this file.
@@ -37,7 +42,7 @@ Plugins and language-server implementations for editing xDBML in popular tools:
 
 Visual and interactive tools that consume or produce xDBML:
 
-- **[Hackolade Studio](https://hackolade.com)** — the steward of the xDBML specification; will ship xDBML import/export in a forthcoming release
+- **[Hackolade Studio](https://hackolade.com/products.html)** — the steward of the xDBML specification; will ship xDBML import/export in a forthcoming release
 
 ## Adjacent-standard bridges
 

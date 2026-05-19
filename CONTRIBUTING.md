@@ -1,3 +1,8 @@
+---
+title: Contributing
+description: How to contribute to xDBML. Issue templates, pull request conventions, the proposal process for new specification constructs, and conventions for examples and grammar.
+---
+
 # Contributing to xDBML
 
 Thank you for considering a contribution to xDBML. This document describes how to participate in the project — what to contribute, how to file issues, how to submit pull requests, and how the review process works.

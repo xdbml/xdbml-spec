@@ -1,3 +1,8 @@
+---
+title: 5-minute introduction
+description: A fast-read introduction to xDBML — one open markup language for relational, document, columnar, graph, and serialization paradigms. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling.
+---
+
 # xDBML in 5 minutes
 
 **xDBML** is a text-based markup language for describing the shape of structured data — relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.

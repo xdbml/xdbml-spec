@@ -1,3 +1,8 @@
+---
+title: Governance
+description: How xDBML is governed. Current stewardship by Hackolade, path to neutral foundation governance, decision-making process, the relationship with DBML upstream, and stability commitments.
+---
+
 # Governance
 
 This document describes how the xDBML project is currently governed, how decisions are made, how changes are proposed and accepted, and the intended trajectory toward neutral foundation governance. It is intentionally specific about the current state — xDBML is a draft v0.1 specification stewarded by a single organization, and the governance model reflects that lifecycle stage honestly rather than overclaiming institutional maturity that does not yet exist.

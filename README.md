@@ -10,7 +10,9 @@ xDBML is a strict superset of [DBML 3.13.6](https://dbml.dbdiagram.io), the Data
 
 ## Designed for AI interactions
 
-xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same `oneOf`/`anyOf`/`allOf` vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts `synonyms:`, `business_term:`, `tags:`, and `granularity:` settings that let natural-language queries resolve to canonical schema elements without guesswork. An LLM asked to "find the monthly recurring revenue field" should not have to infer from column naming conventions; xDBML lets the schema declare the synonyms explicitly. The same metadata that helps LLMs also helps humans, governance platforms, data catalogs, and semantic-layer tools — all of them benefit from explicit declarative meaning attached to the schema. Custom properties (via the `x_` prefix convention) let organizations attach domain-specific metadata without grammar changes, and the structured registry path means common patterns can be promoted to first-class status in future minor versions.
+xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same `oneOf`/`anyOf`/`allOf` vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts `synonyms:`, `business_term:`, `tags:`, and `granularity:` settings that let natural-language queries resolve to canonical schema elements without guesswork. An LLM asked to "find the monthly recurring revenue field" should not have to infer from column naming conventions; xDBML lets the schema declare the synonyms explicitly. 
+
+The same metadata that helps LLMs also helps humans, governance platforms, data catalogs, and semantic-layer tools — all of them benefit from explicit declarative meaning attached to the schema. Custom properties (via the `x_` prefix convention) let organizations attach domain-specific metadata without grammar changes, and the structured registry path means common patterns can be promoted to first-class status in future minor versions.
 
 ## Positioning
 
@@ -22,11 +24,11 @@ xDBML is currently a draft v0.1 specification, stewarded by [Hackolade](https://
 
 ## Design philosophy
 
-xDBML is the evolution of DBML from a lightweight schema-diagram language into a true metadata and semantic modeling language. Where DBML excels at simplicity and developer accessibility — strengths that drove its adoption — xDBML targets the additional needs of metadata-as-code, semantic grounding for AI, governance integration, and model-driven engineering, with richer support for validation rules, semantics, cardinality, annotations, and AI-friendly metadata.
+xDBML is the evolution of DBML from a lightweight schema-diagram language into a true metadata and semantic modeling language. Where DBML excels at simplicity and developer accessibility -- strengths that drove its adoption -- xDBML targets the additional needs of metadata-as-code, semantic grounding for AI, governance integration, and model-driven engineering, with richer support for validation rules, semantics, cardinality, annotations, and AI-friendly metadata.
 
-The hardest design constraint on xDBML is not what to add, but what to leave out. Standards like UML and XML Schema started with similar ambitions and lost mainstream developer appeal through over-engineering — accreting features until the cost of authoring exceeded the benefit. xDBML aims to preserve DBML's readability and Git-friendly simplicity while adding the constructs the polyglot, AI-aware era requires. Every proposed extension is weighed against that constraint; constructs that would push xDBML toward XML-Schema complexity are deferred, simplified, or declined.
+The hardest design constraint on xDBML is not what to add, but what to leave out. Other standards started with similar ambitions and lost mainstream developer appeal through over-engineering -- piling up features until the cost of authoring exceeded the benefit. xDBML aims to preserve DBML's readability and Git-friendly simplicity while adding the constructs the polyglot, AI-aware era requires. Every proposed extension is weighed against that constraint; constructs that would push xDBML toward XML-Schema complexity are deferred, simplified, or declined.
 
-If xDBML succeeds at this balance, it can become a foundation for next-generation data modeling and AI-aware metadata systems — one that real teams actually choose to write by hand, not just generate from heavier sources.
+If xDBML succeeds at this balance, it can become a foundation for next-generation data modeling and AI-aware metadata systems -- one that real teams actually choose to write by hand, not just generate from heavier sources.
 
 ## Where to go next
 

@@ -1,0 +1,9 @@
+# robots.txt for xdbml.org
+#
+# Allow all crawlers to index everything.
+# Point to the sitemap so search engines can discover all pages efficiently.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://xdbml.org/sitemap.xml

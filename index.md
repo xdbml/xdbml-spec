@@ -1,6 +1,7 @@
 ---
 layout: home
 title: xDBML
+description: An open markup language for describing the shape of structured data across relational, document, columnar, graph, and serialization paradigms. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling, AI-mediated schema interchange, and metadata-as-code.
 titleTemplate: eXtended Database Markup Language
 
 hero:
