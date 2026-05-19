@@ -634,15 +634,14 @@ Ref: events.OrderPlaced.order_id > orders_store.orders._id
 
 ## Test runner
 
-A reference Python test harness (`xdbml-tests/runner.py`) parses each example, captures the resulting AST, and compares it against expected ASTs in `xdbml-tests/expected/*.json`. Implementations in other languages can run the same corpus with language-appropriate harnesses.
+A reference TypeScript test harness (planned at `grammar/test-runner.ts`) parses each example, captures the resulting AST, and compares it against expected ASTs in `grammar/expected/*.json`. Implementations in other languages can run the same corpus with language-appropriate harnesses.
 
 ```
-$ pip install xdbml-parser
-$ python -m xdbml.test_runner xdbml-tests/
-PASS  §17.1.001  version declaration with experimental opt-in
-PASS  §17.1.002  DBML document parses without xdbml: directive
-FAIL  §17.6.005  expected error not raised: Ref source path crosses array
-PASS  §17.7.001  explicit container with type
+$ npx @xdbml/test-runner grammar/test-cases.md
+PASS  §4.1.001   version declaration with experimental opt-in
+PASS  §4.1.002   DBML document parses without xdbml: directive
+FAIL  §10.6.005  expected error not raised: Ref source path crosses array
+PASS  §6.1.001   explicit container with type
 ...
 PASS rate: 247/250 (98.8%)
 ```
