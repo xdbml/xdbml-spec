@@ -7,7 +7,7 @@ titleTemplate: eXtended Database Markup Language
 hero:
   name: xDBML
   text: One schema. Many storage technologies.
-  tagline: An open markup language for describing structured data across relational, document, columnar, graph, and serialization paradigms. Human-authorable, <br>AI-readable, designed for the polyglot data stack.
+  tagline: An open markup language for describing structured data across relational, document, columnar, graph, and serialization paradigms. Human-authorable, AI-readable, designed for the polyglot data stack.
   image:
     src: /logo/xdbml-mark.svg
     alt: xDBML
@@ -67,53 +67,82 @@ features:
 ```xdbml
 xdbml: 0.1
 
+// Schema spans two storage engines: Oracle for customer master data,
+// MongoDB for order documents. xDBML expresses both in one document
+// using each engine's native vocabulary and type system.
+
+Project ecommerce {
+  database_type: 'Oracle'
+  Note: '''
+  Customer-facing e-commerce platform. Customer master data in Oracle for
+  transactional consistency and reporting access; order documents in MongoDB
+  for flexible nested shape and per-order schema evolution.
+  '''
+}
+
 Type Address {
+  Note: 'Postal address shared between customer profiles and order shipping records'
+
   street  varchar [not null]
   city    varchar [not null]
   country varchar [default: 'US']
 }
 
+// --- Oracle schema for customer master data ---------------------------
 Container core [type: schema] {
-  Entity customers {
+  Note: 'System of record for customer identity and contact information'
+
+  Table customers {
+    Note: 'One row per registered customer; lifetime account, never deleted'
+
     id              int     [pk]
     email           varchar [unique, not null,
                              pattern: '^[^@]+@[^@]+$',
-                             tags: ['pii', 'gdpr-subject']]
+                             tags: ['pii', 'gdpr-subject'],
+                             note: 'Login identifier; verified during onboarding']
     primary_address Address
   }
 }
 
+// --- MongoDB database for order documents (BSON types throughout) -----
 Container orders_store [type: database] {
+  Note: 'Append-only order history; documents immutable after placement'
+
   Collection orders {
-    _id          objectId  [pk]
-    customer_id  int       [not null]
-    placed_at    timestamp [granularity: second]
-    line_items   array [
+    Note: 'One document per placed order; includes line items and payment shape'
+
+    _id            objectId    [pk]
+    customer_id    int32       [not null,
+                                note: 'Cross-engine reference to core.customers.id in Oracle']
+    placed_at      Date        [granularity: second]
+    line_items     array [
       line_item object {
-        sku        varchar [not null]
-        quantity   int     [not null, minimum: 1]
-        unit_price decimal(10,2)
+        sku        string     [not null]
+        quantity   int32      [not null, minimum: 1]
+        unit_price Decimal128
       }
     ]
     payment_method oneOf {
-      card   object { last4 varchar(4), brand varchar }
-      bank   object { iban varchar }
-      wallet object { provider varchar }
-    } [discriminator: method_kind]
+      card   object { last4 string [maxLength: 4], brand string }
+      bank   object { iban string }
+      wallet object { provider string }
+    } [discriminator: method_kind,
+       note: 'Polymorphic payment shape; the method_kind field carries the variant tag']
   }
 }
 
-Ref: orders_store.orders.customer_id        > core.customers.id [source: '1..*', target: '1..1']
-Ref: orders_store.orders.line_items.[*].sku > catalog.products.sku
+Ref: orders_store.orders.customer_id > core.customers.id [source: '1..*', target: '1..1']
 ```
 
-This single document expresses a relational customer schema in Oracle, a MongoDB collection with nested arrays and polymorphic payment methods, a reusable address type, and cross-container relationships including one that traverses an array. It generates Oracle DDL, MongoDB `$jsonSchema` validators, JSON Schema, Avro schemas, and the schema section of an ODCS data contract.
+A single document declares the schema across two storage engines: an Oracle relational schema for customer master data and a MongoDB database for order documents with nested arrays and polymorphic payment methods. Each container uses its engine's native vocabulary --`Table`, `int`, and `varchar` on the Oracle side, `Collection`, `objectId`, `int32`, `string`, `Decimal128`, and `Date` on the MongoDB side. 
+
+Notes at the project, type, container, table, collection, and field levels carry declarative meaning -- what the schema is for, what each entity represents, what each field means -- making the document equally legible to humans, AI assistants, and downstream tools. From this one source, xDBML generates Oracle DDL, MongoDB `$jsonSchema` validators, JSON Schema, Avro schemas, and the schema section of an ODCS data contract.
 
 ## Why xDBML
 
 DBML's strength is simplicity and developer accessibility — the reasons it was adopted in the first place. xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
 
-The discipline is to avoid the trap of standards like UML and XML Schema, which started with similar ambitions and lost mainstream developer appeal through over-engineering. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata — one that teams actually choose to write by hand, not just generate from heavier sources.
+The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
 
 ## Where to go next
 
