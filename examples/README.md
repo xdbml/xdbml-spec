@@ -10,14 +10,16 @@ These files serve three audiences:
 
 ## The examples
 
-| File | Domain | Paradigm | Features emphasized |
-|------|--------|----------|---------------------|
-| [`01-blog.xdbml`](./01-blog.xdbml) | Blogging platform | PostgreSQL relational | Entry-level. Basic entities, foreign keys, indexes, validation patterns. |
-| [`02-ecommerce.xdbml`](./02-ecommerce.xdbml) | E-commerce | Oracle + MongoDB hybrid | Named types, nested arrays of objects, polymorphism with discriminator, BSON scalar types, cross-container relationships with explicit cardinality, array traversal in foreign-key paths. |
-| [`03-iot-telemetry.xdbml`](./03-iot-telemetry.xdbml) | IoT sensor data | TimescaleDB time-series | JSON-with-schema for variable device metadata, validation constraints on sensor value ranges, granularity for AI consumers, deeply nested arrays of structured measurements. |
-| [`04-social-graph.xdbml`](./04-social-graph.xdbml) | Social network | Neo4j labeled property graph | The `Edge` construct, multiple edge types between the same node types, cardinality on both sides of an edge, edges with and without properties. |
-| [`05-healthcare-fhir.xdbml`](./05-healthcare-fhir.xdbml) | Clinical records | PostgreSQL | Named reusable types (CodedConcept, HumanName, ContactPoint, Address), recursive types for organizational hierarchy, polymorphic observation values, `business_term` references to LOINC/SNOMED/ICD-10 vocabularies, compliance tags (HIPAA, PII). |
-| [`06-financial-services.xdbml`](./06-financial-services.xdbml) | Retail banking | Snowflake | Materialized and virtual views with source queries, complex transaction polymorphism, regulatory compliance tags (PCI, SOX, KYC, AML), AI-readiness for natural-language reporting queries. |
+| Example | Domain | Paradigm | View / Download |
+|---------|--------|----------|-----------------|
+| Blog (relational)         | Blogging platform     | PostgreSQL relational           | [View](./01-blog) · [Download](/examples/01-blog.xdbml) |
+| E-commerce (polyglot)     | E-commerce            | Oracle + MongoDB hybrid         | [View](./02-ecommerce) · [Download](/examples/02-ecommerce.xdbml) |
+| IoT telemetry             | IoT sensor data       | TimescaleDB time-series         | [View](./03-iot-telemetry) · [Download](/examples/03-iot-telemetry.xdbml) |
+| Social graph (LPG)        | Social network        | Neo4j labeled property graph    | [View](./04-social-graph) · [Download](/examples/04-social-graph.xdbml) |
+| Healthcare (FHIR-style)   | Clinical records      | PostgreSQL                       | [View](./05-healthcare-fhir) · [Download](/examples/05-healthcare-fhir.xdbml) |
+| Financial services        | Retail banking        | Snowflake                        | [View](./06-financial-services) · [Download](/examples/06-financial-services.xdbml) |
+
+The **View** link opens the rendered example with syntax highlighting and the VitePress theme. The **Download** link serves the raw `.xdbml` file for use with parsers, generators, or your own tooling.
 
 ## A note on the `note:` capability
 

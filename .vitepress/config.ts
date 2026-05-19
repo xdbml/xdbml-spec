@@ -132,12 +132,12 @@ export default defineConfig({
           text: 'Examples',
           items: [
             { text: 'Overview',                  link: '/examples/' },
-            { text: 'Blog (relational)',         link: '/examples/01-blog.xdbml' },
-            { text: 'E-commerce (polyglot)',     link: '/examples/02-ecommerce.xdbml' },
-            { text: 'IoT telemetry',             link: '/examples/03-iot-telemetry.xdbml' },
-            { text: 'Social graph (LPG)',        link: '/examples/04-social-graph.xdbml' },
-            { text: 'Healthcare (FHIR-style)',   link: '/examples/05-healthcare-fhir.xdbml' },
-            { text: 'Financial services',        link: '/examples/06-financial-services.xdbml' },
+            { text: 'Blog (relational)',         link: '/examples/01-blog' },
+            { text: 'E-commerce (polyglot)',     link: '/examples/02-ecommerce' },
+            { text: 'IoT telemetry',             link: '/examples/03-iot-telemetry' },
+            { text: 'Social graph (LPG)',        link: '/examples/04-social-graph' },
+            { text: 'Healthcare (FHIR-style)',   link: '/examples/05-healthcare-fhir' },
+            { text: 'Financial services',        link: '/examples/06-financial-services' },
           ]
         }
       ],
