@@ -12,12 +12,12 @@ These files serve three audiences:
 
 | Example | Domain | Paradigm | View / Download |
 |---------|--------|----------|-----------------|
-| Blog (relational)         | Blogging platform     | PostgreSQL relational           | [View](./01-blog) · [Download](/examples/01-blog.xdbml) |
-| E-commerce (polyglot)     | E-commerce            | Oracle + MongoDB hybrid         | [View](./02-ecommerce) · [Download](/examples/02-ecommerce.xdbml) |
-| IoT telemetry             | IoT sensor data       | TimescaleDB time-series         | [View](./03-iot-telemetry) · [Download](/examples/03-iot-telemetry.xdbml) |
-| Social graph (LPG)        | Social network        | Neo4j labeled property graph    | [View](./04-social-graph) · [Download](/examples/04-social-graph.xdbml) |
-| Healthcare (FHIR-style)   | Clinical records      | PostgreSQL                       | [View](./05-healthcare-fhir) · [Download](/examples/05-healthcare-fhir.xdbml) |
-| Financial services        | Retail banking        | Snowflake                        | [View](./06-financial-services) · [Download](/examples/06-financial-services.xdbml) |
+| Blog (relational)         | Blogging platform     | PostgreSQL relational           | [View](./01-blog) · <a href="/examples/01-blog.xdbml" download="01-blog.xdbml">Download</a> |
+| E-commerce (polyglot)     | E-commerce            | Oracle + MongoDB hybrid         | [View](./02-ecommerce) · <a href="/examples/02-ecommerce.xdbml" download="02-ecommerce.xdbml">Download</a> |
+| IoT telemetry             | IoT sensor data       | TimescaleDB time-series         | [View](./03-iot-telemetry) · <a href="/examples/03-iot-telemetry.xdbml" download="03-iot-telemetry.xdbml">Download</a> |
+| Social graph (LPG)        | Social network        | Neo4j labeled property graph    | [View](./04-social-graph) · <a href="/examples/04-social-graph.xdbml" download="04-social-graph.xdbml">Download</a> |
+| Healthcare (FHIR-style)   | Clinical records      | PostgreSQL                       | [View](./05-healthcare-fhir) · <a href="/examples/05-healthcare-fhir.xdbml" download="05-healthcare-fhir.xdbml">Download</a> |
+| Financial services        | Retail banking        | Snowflake                        | [View](./06-financial-services) · <a href="/examples/06-financial-services.xdbml" download="06-financial-services.xdbml">Download</a> |
 
 The **View** link opens the rendered example with syntax highlighting and the VitePress theme. The **Download** link serves the raw `.xdbml` file for use with parsers, generators, or your own tooling.
 
