@@ -37,7 +37,7 @@ Plugins and language-server implementations for editing xDBML in popular tools:
 
 Visual and interactive tools that consume or produce xDBML:
 
-- **[Hackolade Studio](https://hackolade.com/products.html)** — the steward of the xDBML specification; will ship xDBML import/export in a forthcoming release
+- **[Hackolade Studio](https://hackolade.com)** — the steward of the xDBML specification; will ship xDBML import/export in a forthcoming release
 
 ## Adjacent-standard bridges
 

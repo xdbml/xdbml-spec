@@ -108,6 +108,12 @@ Ref: orders_store.orders.line_items.[*].sku > catalog.products.sku
 
 This single document expresses a relational customer schema in Oracle, a MongoDB collection with nested arrays and polymorphic payment methods, a reusable address type, and cross-container relationships including one that traverses an array. It generates Oracle DDL, MongoDB `$jsonSchema` validators, JSON Schema, Avro schemas, and the schema section of an ODCS data contract.
 
+## Why xDBML
+
+DBML's strength is simplicity and developer accessibility — the reasons it was adopted in the first place. xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
+
+The discipline is to avoid the trap of standards like UML and XML Schema, which started with similar ambitions and lost mainstream developer appeal through over-engineering. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata — one that teams actually choose to write by hand, not just generate from heavier sources.
+
 ## Where to go next
 
 - **[Read the 5-minute introduction](/learn/)** for a quick tour of what xDBML does and why it exists
