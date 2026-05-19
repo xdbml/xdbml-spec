@@ -25,7 +25,7 @@ hero:
 features:
   - icon: 🌐
     title: Polyglot by default
-    details: One language for Oracle, PostgreSQL, SQL Server, MongoDB, Cassandra, BigQuery, Databricks, Snowflake, Neo4j, Avro, Parquet, JSON Schema, OpenAPI, and many more. Vocabulary matches each target's native terms.
+    details: One language for Oracle, Postgres, SQL Server, BigQuery, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, Avro, JSON Schema, Parquet, GraphQL, OpenAPI, and many more. Vocabulary matches each target's native terms.
 
   - icon: 🤖
     title: AI-ready by design

@@ -5,7 +5,7 @@ description: A fast-read introduction to xDBML — one open markup language for 
 
 # xDBML in 5 minutes
 
-**xDBML** is a text-based markup language for describing the shape of structured data: relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.
+**xDBML** is a text-based markup language for describing the shape of structured data -- relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.
 
 xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork.
 
@@ -21,53 +21,57 @@ Here is a complete xDBML document describing an order system. Read it once, top 
 xdbml: 0.1
 
 Type Address {
+  Note: 'Postal address shared between customer profiles and order shipping records'
   street  varchar [not null]
   city    varchar [not null]
   country varchar [default: 'US']
 }
 
 Container core [type: schema] {
-  Entity customers {
+  Table customers {
+    Note: 'One row per registered customer; lifetime account, never deleted'
     id              int     [pk]
     email           varchar [unique, not null, pattern: '^[^@]+@[^@]+$',
                              tags: ['pii', 'contact', 'gdpr-subject']]
     mrr_amount      decimal(10,2) [synonyms: ['monthly revenue', 'recurring revenue'],
-                                   business_term: 'MRR']
+                                   business_term: 'MRR',
+                                   note: 'Login identifier; verified during onboarding']
     primary_address Address
   }
 }
 
 Container orders_store [type: database] {
   Collection orders {
+    Note: 'One document per placed order; includes line items and payment shape'
     _id          objectId  [pk]
-    customer_id  int       [not null]
-    placed_at    timestamp [granularity: second]
+    customer_id  int32     [not null,
+    						note: 'Cross-engine reference to core.customers.id in Oracle']
+    placed_at    Date      [granularity: second]
     line_items   array [
       line_item object {
-        sku        varchar [not null]
-        quantity   int     [not null, minimum: 1]
-        unit_price decimal(10,2)
+        sku        string     [not null]
+        quantity   int32      [not null, minimum: 1]
+        unit_price Decimal128
       }
     ]
     payment_method oneOf {
-      card   object { last4 varchar(4), brand varchar }
-      bank   object { iban varchar }
-      wallet object { provider varchar }
+      card   object { last4 string [maxLength: 4], brand string }
+      bank   object { iban string }
+      wallet object { provider string }
     } [discriminator: method_kind]
   }
 }
 
 Ref: orders_store.orders.customer_id > core.customers.id [source: '1..*', target: '1..1']
-Ref: orders_store.orders.line_items.[*].sku > catalog.products.sku
 ```
 
 What you just read:
 
 - **A reusable `Address` type** used by any field needing an address shape
 - **Two namespace levels (Containers)**: one for the Oracle schema, one for the MongoDB database
-- **A relational `customers` entity** with regex validation, GDPR/PII tags, and a field declaring its alternative names for AI consumers
-- **A MongoDB `orders` collection** with `objectId` (BSON) primary key, nested arrays of line items, and a polymorphic `payment_method` that's either a card, bank, or wallet
-- **Cross-container relationships with explicit cardinality**, including one that crosses an array — every `sku` in every `line_items` references a row in a `products` entity
+- **A relational `customers` table** with regex validation, GDPR/PII tags, and a field declaring its alternative names for AI consumers
+- **A MongoDB `orders` collection** using BSON-native types (`objectId`, `int32`, `string`, `Decimal128`, `Date`), nested arrays of line items, and a polymorphic `payment_method` that's either a card, bank, or wallet
+- **A cross-container relationship with explicit cardinality** linking each order's `customer_id` (BSON `int32` in MongoDB) back to the `customers.id` (relational `int` in Oracle)
 
 This single file generates Oracle DDL for `customers`, a MongoDB `$jsonSchema` validator for `orders`, JSON Schema for an API contract, an Avro schema for an event stream, and the schema section of an ODCS data contract.
 
@@ -75,14 +79,14 @@ This single file generates Oracle DDL for `customers`, a MongoDB `$jsonSchema` v
 
 ## Why this exists
 
-Every modern data platform mixes paradigms. A typical SaaS product stores users in Oracle, events in Kafka with Avro schemas, application state in MongoDB, analytics in BigQuery, and social graphs in Neo4j. Each technology has its own schema language.
+Every modern data platform mixes paradigms. A typical SaaS product stores users in Oracle, events in Kafka with Avro schemas, application state in MongoDB, analytics in Databricks, and social graphs in Neo4j. Each technology has its own schema language.
 
 **Hand-maintaining five schemas that describe the same business concepts is where mistakes live.** A field renamed in Oracle doesn't propagate to the MongoDB validator. A new payment method added to the Avro event schema isn't reflected in the BigQuery warehouse table. Drift between schemas is one of the most common sources of production data bugs.
 
 xDBML is the single source of truth that generates all of them.
 
 ```
-                                ┌─→ Oracle DDL (or PostgreSQL, SQL Server, ...)
+                                ┌─→ Oracle DDL (or PostgreSQL, SQL Server, Databricks, Snowflake,...)
                                 ├─→ MongoDB $jsonSchema
 xDBML  ──── generators ─────────┼─→ Avro / Parquet
                                 ├─→ JSON Schema / OpenAPI
@@ -145,7 +149,7 @@ Keyspace metrics { Table page_views { ... } }                       // Cassandra
 Namespace events { Record OrderPlaced { ... } }                     // Avro
 ```
 
-BSON types (`objectId`, `Decimal128`, `BinData`, etc.) are recognized as scalar types and preserved through round-trips to MongoDB.
+BSON types (`string`, `int32`, `int64`, `objectId`, `Decimal128`, `Date`, `BinData`, etc.) are recognized as scalar types and preserved through round-trips to MongoDB.
 
 ### 4. Precise cardinality on relationships
 
@@ -215,7 +219,7 @@ Entity customers [
 ] { ... }
 ```
 
-These settings round-trip cleanly to Snowflake's Open Semantic Interchange (OSI), Atlan/Collibra/DataHub/Alation tag systems, Avro `aliases`, OpenAPI descriptions, and JSON Schema annotations.
+These settings round-trip cleanly to Snowflake's Open Semantic Interchange (OSI), Collibra/DataHub/Open Metadata/Purview/Atlan metadata management systems, Avro `aliases`, OpenAPI descriptions, and JSON Schema annotations.
 
 ---
 
@@ -235,8 +239,8 @@ xDBML describes shape and declarative metadata. Adjacent standards handle the la
 ## Where to go from here
 
 - **Read the [v0.1 specification](/spec/v0.1)** for the full language reference.
-- **Try it in the [playground](https://playground.xdbml.org)** — paste xDBML, see rendered diagrams and generated artifacts.
 - **Browse the [examples](/examples/)** — real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
+- **Try it in the playground** (planned): type or paste xDBML, see rendered diagrams and generated artifacts.
 - **Read the [ODCS integration guide](/integrations/odcs)** if you're already using Open Data Contract Standard.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** — the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 

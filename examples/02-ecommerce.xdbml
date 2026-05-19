@@ -23,29 +23,40 @@ Project ecommerce {
 // ============================================================
 
 Type Address {
-  Note: 'Postal address used across customers, orders, and shipping records.'
+  Note: '''
+  Postal address used across customers, orders, and shipping records.
+  Uses BSON-native string type so the same Type lowers cleanly to both
+  Oracle VARCHAR2(n) and MongoDB string with maxLength constraint.
+  '''
 
-  street      varchar [not null, maxLength: 200]
-  city        varchar [not null, maxLength: 100]
-  state       varchar [maxLength: 100, note: 'State, province, or region']
-  postal_code varchar [maxLength: 20, note: 'ZIP, postcode, etc., format varies by country']
-  country     varchar [not null,
-                       minLength: 2,
-                       maxLength: 2,
-                       default: 'US',
-                       note: 'ISO 3166-1 alpha-2 country code']
+  street      string [not null, maxLength: 200]
+  city        string [not null, maxLength: 100]
+  state       string [maxLength: 100, note: 'State, province, or region']
+  postal_code string [maxLength: 20, note: 'ZIP, postcode, etc., format varies by country']
+  country     string [not null,
+                      minLength: 2,
+                      maxLength: 2,
+                      default: 'US',
+                      note: 'ISO 3166-1 alpha-2 country code']
 }
 
 Type MonetaryAmount {
-  Note: 'Decimal monetary value with ISO 4217 currency code. Used throughout commerce flows.'
+  Note: '''
+  Decimal monetary value with ISO 4217 currency code. Used throughout
+  commerce flows in both relational and document contexts.
+  Decimal128 is the BSON-native fixed-format decimal; in Oracle/PostgreSQL
+  Containers, it lowers to NUMBER(38,4) / numeric(34,4) per spec §21.3.
+  '''
 
-  amount   decimal(19,4) [not null,
-                          minimum: 0,
-                          note: 'Amount in major currency units (e.g., dollars not cents)']
-  currency varchar(3)    [not null,
-                          pattern: '^[A-Z]{3}$',
-                          default: 'USD',
-                          note: 'ISO 4217 three-letter currency code']
+  amount   Decimal128 [not null,
+                       minimum: 0,
+                       note: 'Amount in major currency units (e.g., dollars not cents)']
+  currency string     [not null,
+                       pattern: '^[A-Z]{3}$',
+                       minLength: 3,
+                       maxLength: 3,
+                       default: 'USD',
+                       note: 'ISO 4217 three-letter currency code']
 }
 
 // ============================================================
@@ -119,8 +130,8 @@ Container orders_store [type: database] {
     '''
 
     _id            objectId  [pk, note: 'MongoDB-generated 12-byte unique identifier']
-    customer_id    int       [not null, note: 'References core.customers.id; the buyer']
-    placed_at      timestamp [not null,
+    customer_id    int32     [not null, note: 'References core.customers.id; the buyer']
+    placed_at      Date      [not null,
                               granularity: second,
                               note: 'Order placement timestamp; UTC']
     total          MonetaryAmount [note: 'Computed at placement; includes tax and shipping but not promotions applied later']
@@ -130,12 +141,12 @@ Container orders_store [type: database] {
       line_item object {
         Note: 'A single line item within an order.'
 
-        sku        varchar       [not null,
+        sku        string        [not null,
                                   pattern: '^[A-Z]{3}-[0-9]{6}$',
                                   note: 'Snapshot of product SKU at placement time']
-        product_name varchar     [not null,
+        product_name string      [not null,
                                   note: 'Snapshot of product name; preserves historical record if product is renamed']
-        quantity   int           [not null,
+        quantity   int32         [not null,
                                   minimum: 1,
                                   note: 'Number of units of this SKU in this order']
         unit_price MonetaryAmount [note: 'Snapshot of unit price at placement time; immune to subsequent price changes']
@@ -145,26 +156,27 @@ Container orders_store [type: database] {
     payment_method oneOf {
       card object {
         Note: 'Credit or debit card payment'
-        last4     varchar(4) [not null,
-                              pattern: '^[0-9]{4}$',
-                              note: 'Last four digits of card number; full PAN never stored, PCI-compliant tokenized reference elsewhere']
-        brand     varchar    [enum: ['visa', 'mastercard', 'amex', 'discover'], note: 'Card network']
-        exp_month int        [minimum: 1, maximum: 12]
-        exp_year  int        [minimum: 2024, note: 'Two-digit year would be ambiguous; use four']
+        last4     string [not null,
+                          maxLength: 4,
+                          pattern: '^[0-9]{4}$',
+                          note: 'Last four digits of card number; full PAN never stored, PCI-compliant tokenized reference elsewhere']
+        brand     string [enum: ['visa', 'mastercard', 'amex', 'discover'], note: 'Card network']
+        exp_month int32  [minimum: 1, maximum: 12]
+        exp_year  int32  [minimum: 2024, note: 'Two-digit year would be ambiguous; use four']
       }
       bank object {
         Note: 'Direct bank transfer (ACH in the US, SEPA in Europe)'
-        iban     varchar [not null, maxLength: 34, note: 'International Bank Account Number where applicable']
-        bic      varchar [maxLength: 11, note: 'Bank Identifier Code; optional within SEPA zone']
+        iban     string [not null, maxLength: 34, note: 'International Bank Account Number where applicable']
+        bic      string [maxLength: 11, note: 'Bank Identifier Code; optional within SEPA zone']
       }
       wallet object {
         Note: 'Digital wallet payment'
-        provider varchar [enum: ['paypal', 'apple_pay', 'google_pay', 'venmo'], note: 'Wallet service used']
-        account  varchar [not null, note: 'Tokenized wallet account reference']
+        provider string [enum: ['paypal', 'apple_pay', 'google_pay', 'venmo'], note: 'Wallet service used']
+        account  string [not null, note: 'Tokenized wallet account reference']
       }
     } [discriminator: method_kind, note: 'One of three payment shapes; method_kind field carries the discriminator value']
 
-    notes varchar [maxLength: 500, note: 'Optional customer notes at checkout, e.g. "leave at back door"']
+    notes string [maxLength: 500, note: 'Optional customer notes at checkout, e.g. "leave at back door"']
   }
 }
 
