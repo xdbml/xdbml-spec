@@ -229,7 +229,7 @@ xDBML describes shape and declarative metadata. Adjacent standards handle the la
 
 - **Read the [v0.1 specification](https://xdbml.org/spec/v0.1)** for the full language reference.
 - **Try it in the [playground](https://playground.xdbml.org)** — paste xDBML, see rendered diagrams and generated artifacts.
-- **Browse the [examples](https://github.com/xdbml/xdbml-examples)** — real schemas covering e-commerce, healthcare, IoT, financial services, event-driven systems, and graph models.
+- **Browse the [examples](https://xdbml.org/examples/)** — real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
 - **Read the [ODCS integration guide](https://xdbml.org/integrations/odcs)** if you're already using Open Data Contract Standard.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** — the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
