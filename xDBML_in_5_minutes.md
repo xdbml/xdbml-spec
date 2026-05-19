@@ -7,7 +7,7 @@ description: A fast-read introduction to xDBML — one open markup language for 
 
 **xDBML** is a text-based markup language for describing the shape of structured data: relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.
 
-xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork. 
+xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork.
 
 xDBML is a strict superset of [DBML](https://dbml.dbdiagram.io), extended for the data shapes DBML can't: nested objects, arrays of records, polymorphism, named reusable types, JSON columns with known schema, target-native vocabulary (MongoDB collections, Avro records, Cassandra keyspaces), property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
 
@@ -234,10 +234,10 @@ xDBML describes shape and declarative metadata. Adjacent standards handle the la
 
 ## Where to go from here
 
-- **Read the [v0.1 specification](https://xdbml.org/spec/v0.1)** for the full language reference.
+- **Read the [v0.1 specification](/spec/v0.1)** for the full language reference.
 - **Try it in the [playground](https://playground.xdbml.org)** — paste xDBML, see rendered diagrams and generated artifacts.
-- **Browse the [examples](https://xdbml.org/examples/)** — real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
-- **Read the [ODCS integration guide](https://xdbml.org/integrations/odcs)** if you're already using Open Data Contract Standard.
+- **Browse the [examples](/examples/)** — real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
+- **Read the [ODCS integration guide](/integrations/odcs)** if you're already using Open Data Contract Standard.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** — the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
 xDBML is a draft v0.1 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.

@@ -10,7 +10,7 @@ xDBML is a strict superset of [DBML 3.13.6](https://dbml.dbdiagram.io), the Data
 
 ## Designed for AI interactions
 
-xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same `oneOf`/`anyOf`/`allOf` vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts `synonyms:`, `business_term:`, `tags:`, and `granularity:` settings that let natural-language queries resolve to canonical schema elements without guesswork. An LLM asked to "find the monthly recurring revenue field" should not have to infer from column naming conventions; xDBML lets the schema declare the synonyms explicitly. 
+xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same `oneOf`/`anyOf`/`allOf` vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts `synonyms:`, `business_term:`, `tags:`, and `granularity:` settings that let natural-language queries resolve to canonical schema elements without guesswork. An LLM asked to "find the monthly recurring revenue field" should not have to infer from column naming conventions; xDBML lets the schema declare the synonyms explicitly.
 
 The same metadata that helps LLMs also helps humans, governance platforms, data catalogs, and semantic-layer tools — all of them benefit from explicit declarative meaning attached to the schema. Custom properties (via the `x_` prefix convention) let organizations attach domain-specific metadata without grammar changes, and the structured registry path means common patterns can be promoted to first-class status in future minor versions.
 
@@ -32,9 +32,9 @@ If xDBML succeeds at this balance, it can become a foundation for next-generatio
 
 ## Where to go next
 
-- [`spec/v0.1.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.1.md) — the full v0.1 language specification
-- [`xDBML_in_5_minutes.md`](https://github.com/xdbml/xdbml-spec/blob/main/xDBML_in_5_minutes.md) — a fast-read introduction with worked examples
-- [`grammar/`](https://github.com/xdbml/xdbml-spec/tree/main/grammar) — the ANTLR4 grammar and reference test corpus
-- [`examples/`](https://github.com/xdbml/xdbml-spec/tree/main/examples) — reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
-- [`integrations/`](https://github.com/xdbml/xdbml-spec) (planned) — generators and importers (SQL DDL, JSON Schema, Avro, OpenAPI, MongoDB validators, Neo4j/Cypher, ODCS)
+- [`spec/v0.1.md`](./spec/v0.1.md) — the full v0.1 language specification
+- [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) — a fast-read introduction with worked examples
+- [`grammar/`](./grammar) — the ANTLR4 grammar and reference test corpus
+- [`examples/`](./examples) — reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
+- **`integrations/`** (planned) — generators and importers (SQL DDL, JSON Schema, Avro, OpenAPI, MongoDB validators, Neo4j/Cypher, ODCS)
 - [xdbml.org](https://xdbml.org) — canonical home, with the playground and community spaces planned
