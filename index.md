@@ -33,7 +33,7 @@ features:
 
   - icon: 🪆
     title: Nested structures, first-class
-    details: Objects, sub-documents, maps, records, arrays, lists, sets, heterogeneous tuples, and polymorphism via union types or oneOf/anyOf/allOf choices described directly without contortions.
+    details: Objects, sub-documents, maps, structs, records, arrays, lists, sets, heterogeneous tuples, and polymorphism via union types or oneOf/anyOf/allOf choices described directly without contortions.
 
   - icon: 🔗
     title: Property edges for graph models
@@ -53,7 +53,7 @@ features:
 
   - icon: 🧬
     title: Strict superset of DBML
-    details: "Every valid DBML 3.13.6 document is a valid xDBML document. Upgrade in place by adding 'xdbml: 0.1' at the top."
+    details: "Every valid DBML 3.13.6 document is a valid xDBML document, but not vice versa. Upgrade in place by adding 'xdbml: 0.1' at the top."
 
   - icon: 🆓
     title: Open standard
