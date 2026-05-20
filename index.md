@@ -29,11 +29,11 @@ features:
 
   - icon: 🤖
     title: AI-ready by design
-    details: Synonyms, business-term references, granularity hints, classification tags, and a structured custom-properties mechanism. LLMs and humans read the same schema.
+    details: Synonyms, business-term references, granularity hints, classification tags, and a structured custom-properties mechanism. Designed for AI-assisted data modeling and <br>AI-mediated schema interchange. <br>LLMs and humans read and write the same schema language.
 
   - icon: 🪆
     title: Nested structures, first-class
-    details: Objects, arrays of records, maps, sets, heterogeneous tuples, and polymorphism via oneOf/anyOf/allOf -- described directly without contortions.
+    details: Objects, sub-documents, maps, records, arrays, lists, sets, heterogeneous tuples, and polymorphism via union types or oneOf/anyOf/allOf choices described directly without contortions.
 
   - icon: 🔗
     title: Property edges for graph models
@@ -45,15 +45,15 @@ features:
 
   - icon: 📊
     title: Views as first-class constructs
-    details: Materialized and virtual views with source queries captured as opaque metadata. <br>Handles native SQL view statements in every supported target.
+    details: Materialized and virtual views with source queries captured as metadata. <br>Native handling of SQL view statements in every supported target.
+
+  - icon: 🏛️
+    title: The schema layer
+    details: "xDBML describes what data is -- entities, tables, classes, attributes, fields, columns, relationships, data types, classifications. <br>Higher layers build on top of xDBML: ODCS for contracts, OSI for measures and metrics, <br>JSON Schema for validation, OWL for inference. <br>xDBML tooling generates the schemas they reference."
 
   - icon: 🧬
     title: Strict superset of DBML
     details: "Every valid DBML 3.13.6 document is a valid xDBML document. Upgrade in place by adding 'xdbml: 0.1' at the top."
-
-  - icon: 🏛️
-    title: The schema layer
-    details: "xDBML describes what data is -- entities, tables, classes, attributes, fields, columns, relationships, types, classifications. <br>Higher layers build on top: ODCS for contracts, OSI for measures and metrics, JSON Schema for validation, OWL for inference. <br>xDBML generates the schemas they reference."
 
   - icon: 🆓
     title: Open standard
@@ -141,6 +141,8 @@ A single document declares the schema across two storage engines: an Oracle rela
 DBML's strength is simplicity and developer accessibility -- the reasons it was adopted in the first place. 
 
 xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
+
+xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dot.notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork. It combines compactness, simplicity, and structure. It is text‑only, declarative, and close to “pseudo‑code”.
 
 The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. The risk is to become another ambitious modeling standard that architects admire and developers avoid. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
 
