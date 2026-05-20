@@ -7,7 +7,7 @@ titleTemplate: eXtended Database Markup Language
 hero:
   name: xDBML
   text: One schema. Many storage technologies.
-  tagline: An open markup language for describing structured data across relational, document, columnar, graph, and storage/exchange paradigms. <br>Easy to author and interpret by both humans and AI, designed for the polyglot data stack.
+  tagline: An open markup language for describing structured and semi-structured data across relational, document, columnar, graph, and exchange formats. Easy to author and interpret by both humans and AI, designed for the polyglot data stack.
   image:
     src: /logo/xdbml-mark.svg
     alt: xDBML
@@ -136,7 +136,7 @@ Ref: orders_store.orders.customer_id > core.customers.id [source: '1..*', target
 
 A single document declares the schema across two storage engines: an Oracle relational schema for customer master data and a MongoDB database for order documents with nested arrays and polymorphic payment methods. Each container uses its engine's native vocabulary --`Table`, `int`, and `varchar` on the Oracle side, `Collection`, `objectId`, `int32`, `string`, `Decimal128`, and `Date` on the MongoDB side. 
 
-Notes at the project, type, container, table, collection, and field levels carry declarative meaning -- what the schema is for, what each entity represents, what each field means -- making the document equally legible to humans, AI assistants, and downstream tools. From this one source, xDBML generates Oracle DDL, MongoDB `$jsonSchema` validators, JSON Schema, Avro schemas, and the schema section of an ODCS data contract.
+Notes at the project, type, container, table, collection, and field levels carry declarative meaning -- what the schema is for, what each entity represents, what each field means -- making the document equally legible to humans, AI assistants, and downstream tools. From this one source, xDBML tools generate Oracle DDL, MongoDB `$jsonSchema` validators, JSON Schema, Avro schemas, and the schema section of an ODCS data contract.
 
 ## Why xDBML
 
