@@ -61,6 +61,33 @@
 }
 
 /* ============================================================
+ * Hero text width — fit the headline on two lines (one per sentence)
+ * ============================================================
+ *
+ * Default VitePress hero `.text` max-width is around 392-592px depending on
+ * viewport, and `.VPHero.has-image .main` is clamped to 592px. Our headline
+ * "One schema language. Many target technologies." needs more room so the
+ * second sentence ("Many target technologies.") fits on its own line.
+ *
+ * 640px is the sweet spot: wide enough for either sentence on its own
+ * line, narrow enough that the full string can't fit on one line — so
+ * the browser wraps naturally at the period between sentences without
+ * needing an explicit <br>. This also leaves the image column with
+ * its default 320px width on desktop.
+ *
+ * !important and the [class] attribute trick are both used to beat
+ * VitePress's scoped default rule on .VPHero.has-image .main.
+ */
+@media (min-width: 640px) {
+  .VPHero[class] .main,
+  .VPHero[class] .text,
+  .VPHero[class].has-image .main,
+  .VPHero[class].has-image .text {
+    max-width: 760px !important;
+  }
+}
+
+/* ============================================================
  * Code block refinements
  * ============================================================ */
 

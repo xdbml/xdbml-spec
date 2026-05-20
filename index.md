@@ -1,13 +1,13 @@
 ---
 layout: home
 title: xDBML
-description: An open markup language for describing the shape of structured data across relational, document, columnar, graph, and serialization paradigms. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling, AI-mediated schema interchange, and metadata-as-code.
+description: A unified, open markup language for describing structured and semi-structured data across relational, document, columnar, graph, and exchange formats. One declarative source, many target-native outputs. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling, AI-mediated schema interchange, and metadata-as-code.
 titleTemplate: eXtended Database Markup Language
 
 hero:
   name: xDBML
-  text: One schema. Many storage technologies.
-  tagline: An open markup language for describing structured and semi-structured data across relational, document, columnar, graph, and exchange formats. Easy to author and interpret by both humans and AI, designed for the polyglot data stack.
+  text: One schema language. <br>Many target technologies.
+  tagline: A unified, open markup language for describing structured and semi-structured data across relational, document, columnar, graph, and exchange formats. <br>One declarative source describes them all. <br>Easy to author and interpret by both humans and AI, designed for the polyglot data stack.
   image:
     src: /logo/xdbml-mark.svg
     alt: xDBML
@@ -25,7 +25,7 @@ hero:
 features:
   - icon: 🌐
     title: Polyglot by default
-    details: One language for Oracle, Postgres, SQL Server, BigQuery, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, Avro, JSON Schema, Parquet, GraphQL, OpenAPI, and many more. Vocabulary matches each target's native terms.
+    details: One declarative source describes schemas for Oracle, PostgreSQL, SQL Server, BigQuery, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, Avro, JSON Schema, Parquet, GraphQL, OpenAPI, and many more. <br>Vocabulary matches each target's native terms. <br>Write the schema once; xDBML tools generate target-native artifacts for every engine.
 
   - icon: 🤖
     title: AI-ready by design
@@ -33,7 +33,7 @@ features:
 
   - icon: 🪆
     title: Nested structures, first-class
-    details: Objects, arrays of records, maps, sets, heterogeneous tuples, and polymorphism via oneOf/anyOf/allOf are described directly without contortions.
+    details: Objects, arrays of records, maps, sets, heterogeneous tuples, and polymorphism via oneOf/anyOf/allOf -- described directly without contortions.
 
   - icon: 🔗
     title: Property edges for graph models
@@ -45,20 +45,19 @@ features:
 
   - icon: 📊
     title: Views as first-class constructs
-    details: Materialized and virtual views with source queries captured as opaque metadata. Forward-engineers to native VIEW statements in every supported target.
-
-  - icon: 🆓
-    title: Open standard
-    details: Apache License 2.0. Stewarded by Hackolade pending evolution to neutral foundation governance. Free to use, extend, and implement.
-
-  - icon: 🏛️
-    title: Layered, not competitive
-    details: The schema-layer companion to JSON Schema (validation), ODCS (contracts), OSI (semantics), and OWL (reasoning). Each layer does one thing well.
+    details: Materialized and virtual views with source queries captured as opaque metadata. <br>Handles native SQL view statements in every supported target.
 
   - icon: 🧬
     title: Strict superset of DBML
     details: "Every valid DBML 3.13.6 document is a valid xDBML document. Upgrade in place by adding 'xdbml: 0.1' at the top."
 
+  - icon: 🏛️
+    title: The schema layer
+    details: "xDBML describes what data is -- entities, tables, classes, attributes, fields, columns, relationships, types, classifications. <br>Higher layers build on top: ODCS for contracts, OSI for measures and metrics, JSON Schema for validation, OWL for inference. <br>xDBML generates the schemas they reference."
+
+  - icon: 🆓
+    title: Open standard
+    details: Apache License 2.0. Stewarded by Hackolade pending evolution to neutral foundation governance. <br>Free to use, extend, and implement.
 ---
 
 <div class="vp-doc" style="max-width: 960px; margin: 64px auto; padding: 0 24px;">
@@ -135,17 +134,15 @@ Container orders_store [type: database] {
 Ref: orders_store.orders.customer_id > core.customers.id [source: '1..*', target: '1..1']
 ```
 
-A single document declares the schema across two storage engines: an Oracle relational schema for customer master data and a MongoDB database for order documents with nested arrays and polymorphic payment methods. Each container uses its engine's native vocabulary --`Table`, `int`, and `varchar` on the Oracle side, `Collection`, `objectId`, `int32`, `string`, `Decimal128`, and `Date` on the MongoDB side. 
-
-Notes at the project, type, container, table, collection, and field levels carry declarative meaning -- what the schema is for, what each entity represents, what each field means -- making the document equally legible to humans, AI assistants, and downstream tools. From this one source, xDBML tools generate Oracle DDL, MongoDB `$jsonSchema` validators, JSON Schema, Avro schemas, and the schema section of an ODCS data contract.
+A single document declares the schema across two storage engines: an Oracle relational schema for customer master data and a MongoDB database for order documents with nested arrays and polymorphic payment methods. Each container uses its engine's native vocabulary --  `Schema`,`Table`, `int`, and `varchar` on the Oracle side, and `Database`, `Collection`, `objectId`, `int32`, `string`, `Decimal128`, and `Date` on the MongoDB side. Notes at the project, type, container, table, collection, and field levels carry declarative meaning -- what the schema is for, what each entity represents, what each field means — making the document equally legible to humans, AI assistants, and downstream tools. From this one source, xDBML generates Oracle DDL, MongoDB `$jsonSchema` validators, JSON Schema, Avro schemas, and the schema section of an ODCS data contract.
 
 ## Why xDBML
 
 DBML's strength is simplicity and developer accessibility -- the reasons it was adopted in the first place. 
 
-xDBML extends DBML into a unified metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange.
+xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
 
-The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
+The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. The risk is to become another ambitious modeling standard that architects admire and developers avoid. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
 
 ## Where to go next
 
