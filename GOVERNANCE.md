@@ -259,7 +259,7 @@ Specifications themselves do not typically have security vulnerabilities in the 
 Hackolade currently funds the project's operational costs, including:
 
 - Canonical site hosting (xdbml.org)
-- Playground infrastructure (playground.xdbml.org)
+- Playground infrastructure (playground.xdbml.org) (planned)
 - Reference implementation development
 - Generator and importer development for target formats listed in the specification
 
