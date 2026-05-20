@@ -142,7 +142,7 @@ Notes at the project, type, container, table, collection, and field levels carry
 
 DBML's strength is simplicity and developer accessibility -- the reasons it was adopted in the first place. 
 
-xDBML extends DBML into a unified metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange
+xDBML extends DBML into a unified metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange.
 
 The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
 

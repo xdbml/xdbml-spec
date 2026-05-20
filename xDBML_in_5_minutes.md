@@ -5,13 +5,14 @@ description: A fast-read introduction to xDBML — one open markup language for 
 
 # xDBML in 5 minutes
 
-**xDBML** is a text-based markup language for describing the shape of structured data -- relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and modeling tools all use to describe the same schemas without translation loss.
+**xDBML** is a text-based markup language for describing the shape of structured data -- relational tables, document collections, event records, JSON columns, graph relationships, views, API contracts. One file, many targets. It is the markup that humans, AI assistants, and data modeling tools all use to describe the same schemas without translation loss.
 
-xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork.
+xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dotted notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork.  It combines compactness, simplicity, and structure.  It is text‑only, declarative, and close to “pseudo‑code”.
 
 xDBML is a strict superset of [DBML](https://dbml.dbdiagram.io), extended for the data shapes DBML can't: nested objects, arrays of records, polymorphism, named reusable types, JSON columns with known schema, target-native vocabulary (MongoDB collections, Avro records, Cassandra keyspaces), property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
 
----
+xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange.
+
 
 ## The first 60 seconds
 
@@ -75,7 +76,6 @@ What you just read:
 
 This single file generates Oracle DDL for `customers`, a MongoDB `$jsonSchema` validator for `orders`, JSON Schema for an API contract, an Avro schema for an event stream, and the schema section of an ODCS data contract.
 
----
 
 ## Why this exists
 
@@ -94,11 +94,10 @@ xDBML  ──── generators ─────────┼─→ Avro / Parqu
                                 └─→ ODCS schema section
 ```
 
-But more importantly: **xDBML is the markup that AI assistants and modeling tools use to describe schemas.** When you ask Claude, GPT-5, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
+But more importantly: **xDBML is the markup that AI assistants and modeling tools use to describe schemas.** When you ask Claude, ChatGPT, Gemini, Grok, Llama, Mistral AI, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
 
 The same schema you author by hand is the schema your AI assistant can extend, refactor, and round-trip back to you. The same schema you generate from MongoDB can be lifted to Oracle, validated as JSON Schema, or wrapped in an ODCS contract.
 
----
 
 ## The six things that make xDBML different
 
