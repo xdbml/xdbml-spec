@@ -25,7 +25,7 @@ hero:
 features:
   - icon: 🌐
     title: Polyglot by default
-    details: One declarative source describes schemas for Oracle, PostgreSQL, SQL Server, BigQuery, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, Avro, JSON Schema, Parquet, GraphQL, OpenAPI, and many more. <br>Vocabulary matches each target's native terms. <br>Write the schema once; xDBML tools generate target-native artifacts for every engine.
+    details: One declarative source describes schemas for Oracle, PostgreSQL, SQL Server, BigQuery, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, Avro, JSON Schema, Parquet, Protobuf, GraphQL, OpenAPI, and many more. <br>Vocabulary matches each target's native terms. <br>Write the schema once; xDBML tools generate target-native artifacts for every engine.
 
   - icon: 🤖
     title: AI-ready by design
