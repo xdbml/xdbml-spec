@@ -27,6 +27,10 @@ features:
     title: Polyglot by default
     details: One language for Oracle, Postgres, SQL Server, BigQuery, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, Avro, JSON Schema, Parquet, GraphQL, OpenAPI, and many more. Vocabulary matches each target's native terms.
 
+  - icon: 🏛️
+    title: Layered, not competitive
+    details: The schema-layer companion to JSON Schema (validation), ODCS (contracts), OSI (semantics), and OWL (reasoning). Each layer does one thing well.
+
   - icon: 🤖
     title: AI-ready by design
     details: Synonyms, business-term references, granularity hints, classification tags, and a structured custom-properties mechanism. LLMs and humans read the same schema.
@@ -50,10 +54,6 @@ features:
   - icon: 🧬
     title: Strict superset of DBML
     details: "Every valid DBML 3.13.6 document is a valid xDBML document. Upgrade in place by adding 'xdbml: 0.1' at the top."
-
-  - icon: 🏛️
-    title: Layered, not competitive
-    details: The schema-layer companion to JSON Schema (validation), ODCS (contracts), OSI (semantics), and OWL (reasoning). Each layer does one thing well.
 
   - icon: 🆓
     title: Open standard
