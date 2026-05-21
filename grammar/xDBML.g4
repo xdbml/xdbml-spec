@@ -1,7 +1,7 @@
 /*
- * xDBML v0.1 — ANTLR4 grammar additions
+ * xDBML v0.1 -- ANTLR4 grammar additions
  *
- * Status:    Draft v0.1 — pre-stable
+ * Status:    Draft v0.1 -- pre-stable
  * License:   Apache License 2.0
  * Spec:      xDBML Specification v0.1 (xdbml.org/spec/v0.1)
  * Upstream:  github.com/holistics/dbml (Apache 2.0)
@@ -143,7 +143,7 @@ MANY_TO_MANY        : '<>' ;
 // See `cardinalitySetting` rule below.
 
 // ---- §17.9 AI-readiness setting keys --------------------------------------
-// Same approach as cardinality keys — recognized as parser rules.
+// Same approach as cardinality keys -- recognized as parser rules.
 
 // ---- §17.5/17.6 Path syntax tokens ----------------------------------------
 
@@ -158,7 +158,7 @@ LBRACK_STAR         : '[*]' ;        // wildcard array iteration
 // ===========================================================================
 // PARSER RULES
 // ===========================================================================
-// Top-level entry point — replaces upstream DBML's top rule.
+// Top-level entry point -- replaces upstream DBML's top rule.
 // xDBML adds versionDeclaration at the top and new top-level constructs
 // alongside the upstream DBML constructs.
 
@@ -524,7 +524,7 @@ cardinalityOperator
 // ---- §17.10 Cardinality settings (on Ref and via edgeSetting on Edge) -----
 
 cardinalityValue
-    : STRING_LITERAL     // '1..*', '0..1', '0..*', 'N..M' — content validated semantically
+    : STRING_LITERAL     // '1..*', '0..1', '0..*', 'N..M' -- content validated semantically
     ;
 
 cardinalitySetting
@@ -654,10 +654,23 @@ projectDefinition
     ;
 
 projectSetting
-    : 'database_type' COLON STRING_LITERAL
+    : 'targets' COLON (stringOrIdent | stringOrIdentList)
     | noteDefinition
     | generalSetting
     | customProperty
+    ;
+
+// Allow bare identifiers in settings where strings are expected. A bare
+// identifier like `Oracle` is equivalent to the quoted form `'Oracle'`.
+// Quoted form is still required when the value contains spaces, punctuation,
+// or characters outside the bare-identifier character set.
+stringOrIdent
+    : STRING_LITERAL
+    | IDENTIFIER
+    ;
+
+stringOrIdentList
+    : LBRACK stringOrIdent (COMMA stringOrIdent)* RBRACK
     ;
 
 // ===========================================================================
@@ -685,7 +698,7 @@ BOOLEAN_LITERAL     : 'true' | 'false' ;
 NULL_LITERAL        : 'null' ;
 
 // IDENTIFIER, NUMBER, STRING_LITERAL, MULTILINE_STRING, QUOTED_STRING,
-// EXPRESSION_LITERAL, LINE_COMMENT, BLOCK_COMMENT, WS — inherited from
+// EXPRESSION_LITERAL, LINE_COMMENT, BLOCK_COMMENT, WS -- inherited from
 // upstream DBML grammar.
 
 // ===========================================================================

@@ -1,7 +1,7 @@
 xdbml: 0.1
 
 Project healthcare {
-  database_type: 'PostgreSQL'
+  targets: PostgreSQL
   Note: '''
   A healthcare records schema partially inspired by FHIR resource
   patterns. Demonstrates named reusable types for clinical concepts

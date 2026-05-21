@@ -1,7 +1,7 @@
 xdbml: 0.1
 
 Project iot_telemetry {
-  database_type: 'TimescaleDB'
+  targets: TimescaleDB
   Note: '''
   Schema for an IoT telemetry platform ingesting sensor readings from
   heterogeneous devices. Demonstrates time-series patterns, variable

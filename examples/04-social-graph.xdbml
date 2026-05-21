@@ -1,7 +1,7 @@
 xdbml: 0.1
 
 Project social_graph {
-  database_type: 'Neo4j'
+  targets: Neo4j
   Note: '''
   A labeled property graph model for a social network, demonstrating
   the xDBML Edge construct. Multiple edge types connect the same node

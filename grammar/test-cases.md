@@ -14,7 +14,7 @@ A more comprehensive test corpus, with expected ASTs in JSON form, is planned fo
 
 ```
 xdbml: 0.1
-Project p { database_type: 'Oracle' }
+Project p { targets: Oracle }
 ```
 
 ### VALID -- with experimental opt-in
@@ -23,7 +23,7 @@ Project p { database_type: 'Oracle' }
 xdbml: 0.1
 experimental: [graph_path_expressions]
 
-Project p { database_type: 'Oracle' }
+Project p { targets: Oracle }
 ```
 
 ### VALID -- DBML compatibility (no version declaration)
@@ -564,7 +564,7 @@ Container analytics [type: schema] {
 ```
 xdbml: 0.1
 
-Project polyglot { database_type: 'Oracle' }
+Project polyglot { targets: [Oracle, MongoDB, Avro, Neo4j] }
 
 Type Address {
   street  varchar [not null]
@@ -573,11 +573,11 @@ Type Address {
 }
 
 Type MonetaryAmount {
-  amount   decimal(19,4) [not null]
-  currency varchar(3)    [not null]
+  amount   Decimal128 [not null]
+  currency string     [not null, pattern: '^[A-Z]{3}$', minLength: 3, maxLength: 3]
 }
 
-Container core [type: schema] {
+Container core [type: schema, target: Oracle] {
   Entity customers {
     id              int     [pk]
     email           varchar [unique, not null, pattern: '^[^@]+@[^@]+$']
@@ -586,38 +586,38 @@ Container core [type: schema] {
   }
 }
 
-Container orders_store [type: database] {
+Container orders_store [type: database, target: MongoDB] {
   Collection orders {
     _id          objectId  [pk]
-    customer_id  int       [not null]
-    placed_at    timestamp [granularity: second]
+    customer_id  int32     [not null]
+    placed_at    Date      [granularity: second]
     total        MonetaryAmount
     line_items   array [
       line_item object {
-        sku        varchar [not null]
-        quantity   int     [not null, minimum: 1]
+        sku        string [not null]
+        quantity   int32  [not null, minimum: 1]
         unit_price MonetaryAmount
       }
     ]
     payment_method oneOf {
-      card   object { last4 varchar(4), brand varchar }
-      bank   object { iban varchar }
-      wallet object { provider varchar, account varchar }
+      card   object { last4 string [maxLength: 4], brand string }
+      bank   object { iban string }
+      wallet object { provider string, account string }
     } [discriminator: method_kind]
   }
 }
 
-Container events [type: namespace] {
+Container events [type: namespace, target: Avro] {
   Record OrderPlaced {
-    event_id    varchar    [pk]
-    occurred    timestamp  [granularity: millisecond, not null]
-    order_id    objectId   [not null]
+    event_id    string     [pk]
+    occurred    long       [granularity: millisecond, not null]
+    order_id    string     [not null]
     customer_id int        [not null]
     total       MonetaryAmount
   }
 }
 
-Container social [type: keyspace] {
+Container social [type: database, target: Neo4j] {
   Edge FOLLOWS [source: core.customers, target: core.customers,
                 source_cardinality: '0..*', target_cardinality: '0..*'] {
     since      date    [not null]

@@ -72,7 +72,7 @@ xdbml: 0.1
 // using each engine's native vocabulary and type system.
 
 Project ecommerce {
-  database_type: 'Oracle'
+  targets: [Oracle, MongoDB]
   Note: '''
   Customer-facing e-commerce platform. Customer master data in Oracle for
   transactional consistency and reporting access; order documents in MongoDB
@@ -89,7 +89,7 @@ Type Address {
 }
 
 // --- Oracle schema for customer master data ---------------------------
-Container core [type: schema] {
+Container core [type: schema, target: Oracle] {
   Note: 'System of record for customer identity and contact information'
 
   Table customers {
@@ -105,7 +105,7 @@ Container core [type: schema] {
 }
 
 // --- MongoDB database for order documents (BSON types throughout) -----
-Container orders_store [type: database] {
+Container orders_store [type: database, target: MongoDB] {
   Note: 'Append-only order history; documents immutable after placement'
 
   Collection orders {

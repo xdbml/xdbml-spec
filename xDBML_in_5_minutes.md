@@ -21,6 +21,11 @@ Here is a complete xDBML document describing an order system. Read it once, top 
 ```
 xdbml: 0.1
 
+Project ecommerce {
+  targets: [Oracle, MongoDB]
+  Note: 'Customer master data in Oracle; order documents in MongoDB.'
+}
+
 Type Address {
   Note: 'Postal address shared between customer profiles and order shipping records'
   street  varchar [not null]
@@ -28,7 +33,7 @@ Type Address {
   country varchar [default: 'US']
 }
 
-Container core [type: schema] {
+Container core [type: schema, target: Oracle] {
   Table customers {
     Note: 'One row per registered customer; lifetime account, never deleted'
     id              int     [pk]
@@ -41,12 +46,12 @@ Container core [type: schema] {
   }
 }
 
-Container orders_store [type: database] {
+Container orders_store [type: database, target: MongoDB] {
   Collection orders {
     Note: 'One document per placed order; includes line items and payment shape'
     _id          objectId  [pk]
     customer_id  int32     [not null,
-    						note: 'Cross-engine reference to core.customers.id in Oracle']
+                            note: 'Cross-engine reference to core.customers.id in Oracle']
     placed_at    Date      [granularity: second]
     line_items   array [
       line_item object {

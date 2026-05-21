@@ -1,7 +1,7 @@
 xdbml: 0.1
 
 Project ecommerce {
-  database_type: 'Oracle'
+  targets: [Oracle, MongoDB]
   Note: '''
   A polyglot e-commerce schema combining an Oracle relational system
   of record (customers, products, orders) with a MongoDB document
@@ -63,7 +63,7 @@ Type MonetaryAmount {
 // Containers
 // ============================================================
 
-Container core [type: schema] {
+Container core [type: schema, target: Oracle] {
   Note: 'Oracle schema holding customer and product master data. Source of truth for entities that need transactional integrity.'
 
   Entity customers {
@@ -115,7 +115,7 @@ Container core [type: schema] {
   }
 }
 
-Container orders_store [type: database] {
+Container orders_store [type: database, target: MongoDB] {
   Note: '''
   MongoDB database holding cart state and order events. Chosen for
   document-shape access patterns and flexible schema evolution as new
@@ -124,7 +124,7 @@ Container orders_store [type: database] {
 
   Collection orders {
     Note: '''
-    Confirmed customer orders. Documents are write-once after creation —
+    Confirmed customer orders. Documents are write-once after creation --
     status changes and fulfillment events are appended as separate
     records in the events container rather than mutated here.
     '''

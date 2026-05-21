@@ -1,7 +1,7 @@
 xdbml: 0.1
 
 Project banking {
-  database_type: 'Snowflake'
+  targets: Snowflake
   Note: '''
   A financial services schema for a retail banking platform. Demonstrates
   the View construct (both materialized and virtual), complex polymorphism
@@ -174,7 +174,7 @@ Container accounts [type: schema] {
 
   Entity transactions {
     Note: '''
-    Posted financial transactions. Transactions are append-only —
+    Posted financial transactions. Transactions are append-only --
     a posted transaction is never modified. Corrections are issued
     as compensating transactions referencing the original.
     '''
