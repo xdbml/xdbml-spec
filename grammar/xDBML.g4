@@ -655,6 +655,7 @@ projectDefinition
 
 projectSetting
     : 'targets' COLON (stringOrIdent | stringOrIdentList)
+    | 'database_type' COLON stringOrIdent                 // DBML-compatibility alias for single-target targets:
     | noteDefinition
     | generalSetting
     | customProperty
