@@ -1,6 +1,6 @@
 # xDBML Maintainers
 
-This document lists the current maintainers of the xDBML project — individuals with commit access to the canonical repositories and responsibility for reviewing and accepting contributions.
+This document lists the current maintainers of the xDBML project -- individuals with commit access to the canonical repositories and responsibility for reviewing and accepting contributions.
 
 For the maintainer role's responsibilities, the criteria for becoming a maintainer, and the process for maintainer changes, see GOVERNANCE.md §4.2.
 
@@ -16,13 +16,13 @@ None at this stage.
 
 ## Becoming a maintainer
 
-Maintainership is earned through sustained substantive contribution over a minimum of six months. The bar is not strictly quantitative — review quality, breadth of engagement, and consistent demonstration of project values matter as much as commit count.
+Maintainership is earned through sustained substantive contribution over a minimum of six months. The bar is not strictly quantitative -- review quality, breadth of engagement, and consistent demonstration of project values matter as much as commit count.
 
 Current maintainers may nominate a contributor for maintainership at any time. Nomination is followed by a discussion period of at least two weeks, during which other maintainers and the broader community may comment. Approval requires consensus among current maintainers.
 
 If you are interested in becoming a maintainer:
 
-1. Contribute consistently over several months — reviews, proposals, examples, tooling, or documentation improvements all count
+1. Contribute consistently over several months -- reviews, proposals, examples, tooling, or documentation improvements all count
 2. Demonstrate familiarity with the specification and the governance model
 3. Engage constructively in discussions, including ones where you disagree
 4. Let an existing maintainer know you are interested; we will discuss readiness openly

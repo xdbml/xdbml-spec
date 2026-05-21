@@ -12,7 +12,7 @@ This policy applies to vulnerabilities discovered in:
 
 The specification itself does not typically have security vulnerabilities in the same sense that software does. If a specification ambiguity creates a security risk in implementations (for example, by enabling a parser to be tricked into accepting malicious documents), it is treated under this process.
 
-Vulnerabilities in third-party tools that consume xDBML — including tools listed on the ecosystem page — should be reported to their respective maintainers, not through this process.
+Vulnerabilities in third-party tools that consume xDBML -- including tools listed on the ecosystem page -- should be reported to their respective maintainers, not through this process.
 
 ## Reporting a vulnerability
 

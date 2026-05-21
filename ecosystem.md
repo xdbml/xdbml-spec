@@ -5,7 +5,7 @@ description: Tools, libraries, parsers, generators, importers, and integrations 
 
 # xDBML Ecosystem
 
-Tools, libraries, and integrations built around the xDBML specification. This page is community-maintained — add yours by [opening a pull request](https://github.com/xdbml/xdbml-spec/pulls) that edits this file.
+Tools, libraries, and integrations built around the xDBML specification. This page is community-maintained -- add yours by [opening a pull request](https://github.com/xdbml/xdbml-spec/pulls) that edits this file.
 
 ## Parsers and grammars
 
@@ -42,7 +42,7 @@ Plugins and language-server implementations for editing xDBML in popular tools:
 
 Visual and interactive tools that consume or produce xDBML:
 
-- **[Hackolade Studio](https://hackolade.com/products.html)** — the steward of the xDBML specification; will ship xDBML import/export in a forthcoming release
+- **[Hackolade Studio](https://hackolade.com/products.html)** -- the steward of the xDBML specification; will ship xDBML import/export in a forthcoming release
 
 ## Adjacent-standard bridges
 
@@ -50,10 +50,10 @@ Integration tooling that bridges xDBML to adjacent standards:
 
 *No published bridges yet.* Particularly desired:
 
-- **xDBML ↔ ODCS** — bidirectional bridge to the Open Data Contract Standard
-- **xDBML ↔ OSI** — bridge to the Open Semantic Interchange schema layer
-- **xDBML ↔ dbt** — generation of dbt model `schema.yml` from xDBML
-- **xDBML ↔ Confluent Schema Registry** — Avro round-trip via the Confluent Schema Registry
+- **xDBML ↔ ODCS** -- bidirectional bridge to the Open Data Contract Standard
+- **xDBML ↔ OSI** -- bridge to the Open Semantic Interchange schema layer
+- **xDBML ↔ dbt** -- generation of dbt model `schema.yml` from xDBML
+- **xDBML ↔ Confluent Schema Registry** -- Avro round-trip via the Confluent Schema Registry
 
 ## Adding your project
 
@@ -64,4 +64,4 @@ To add a project to this page:
 3. Include: project name (with link), one-sentence description, license, and maintainer (organization or individual)
 4. If the project supports a partial subset of xDBML v0.1, note which constructs are supported
 
-The xDBML maintainers will review for accuracy and license verification, then merge. There is no formal certification — listing on this page indicates community awareness of the project, not endorsement.
+The xDBML maintainers will review for accuracy and license verification, then merge. There is no formal certification -- listing on this page indicates community awareness of the project, not endorsement.

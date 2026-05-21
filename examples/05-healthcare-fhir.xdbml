@@ -55,7 +55,7 @@ Type HumanName {
 }
 
 Type ContactPoint {
-  Note: 'A contact method — phone, email, address, etc. — for a person or organization.'
+  Note: 'A contact method -- phone, email, address, etc. -- for a person or organization.'
 
   system varchar [enum: ['phone', 'email', 'fax', 'pager', 'url', 'sms'],
                   note: 'Type of contact mechanism']

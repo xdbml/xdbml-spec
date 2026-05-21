@@ -28,9 +28,9 @@ The **View** link opens the rendered example with syntax highlighting and the Vi
 
 ## A note on the `note:` capability
 
-Every example uses xDBML's `note:` setting extensively — at the project level, container level, entity level, field level, and inside nested types and polymorphic alternatives. This is deliberate. The examples demonstrate the full range of what `note:` can carry: short field-level descriptions, multi-paragraph design rationale, regulatory references, and cross-references to companion documentation.
+Every example uses xDBML's `note:` setting extensively -- at the project level, container level, entity level, field level, and inside nested types and polymorphic alternatives. This is deliberate. The examples demonstrate the full range of what `note:` can carry: short field-level descriptions, multi-paragraph design rationale, regulatory references, and cross-references to companion documentation.
 
-**Production schemas should be more selective.** Over-noting is as bad as no noting — the noise drowns out the signal. As a general guideline:
+**Production schemas should be more selective.** Over-noting is as bad as no noting -- the noise drowns out the signal. As a general guideline:
 
 - Project and container notes should explain *why* the schema is structured the way it is. Decisions worth preserving for the next maintainer.
 - Entity notes should describe the entity's role in the broader system and any non-obvious lifecycle rules.
@@ -70,4 +70,4 @@ To contribute, open a pull request adding a new file numbered consecutively. Fol
 
 ## License
 
-The examples are dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Copy, adapt, derive — no attribution required. The xDBML specification itself is Apache License 2.0.
+The examples are dedicated to the public domain under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). Copy, adapt, derive -- no attribution required. The xDBML specification itself is Apache License 2.0.

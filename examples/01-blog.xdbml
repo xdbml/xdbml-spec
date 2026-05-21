@@ -4,7 +4,7 @@ Project blog {
   database_type: 'PostgreSQL'
   Note: '''
   A minimal relational blog schema covering users, posts, and comments.
-  This is the simplest example in the xDBML examples corpus — a single
+  This is the simplest example in the xDBML examples corpus -- a single
   container, three entities, two foreign-key relationships, and a
   small handful of indexes. Intended as a first-look reference for
   anyone learning xDBML.
@@ -15,7 +15,7 @@ Container blog_app [type: schema] {
   Note: '''
   The default application schema. All user-facing entities live here.
   In a production deployment this schema would also carry session
-  storage, password reset tokens, and audit log entities — omitted
+  storage, password reset tokens, and audit log entities -- omitted
   here for brevity.
   '''
 

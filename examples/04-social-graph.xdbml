@@ -163,7 +163,7 @@ Container social [type: keyspace] {
                source_cardinality: '0..*',
                target_cardinality: '0..*'] {
     Note: '''
-    Block relationship. Independent of FOLLOWS — a Person who blocks B
+    Block relationship. Independent of FOLLOWS -- a Person who blocks B
     may still have a FOLLOWS edge to B from before the block, which the
     application treats as inactive. The block is enforced at read time.
     '''

@@ -1,6 +1,6 @@
 ---
 title: 5-minute introduction
-description: A fast-read introduction to xDBML — one open markup language for relational, document, columnar, graph, and serialization paradigms. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling.
+description: A fast-read introduction to xDBML -- one open markup language for relational, document, columnar, graph, and serialization paradigms. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling.
 ---
 
 # xDBML in 5 minutes
@@ -158,7 +158,7 @@ DBML's four operators express maximum cardinality. xDBML adds explicit min/max f
 // Compact form
 Ref: orders.customer_id > customers.id
 
-// Precise form — each Pet may have no Owner; each Owner may have many Pets
+// Precise form -- each Pet may have no Owner; each Owner may have many Pets
 Ref: pets.owner_id > people.id [source: '0..*', target: '0..1']
 ```
 
@@ -227,7 +227,7 @@ These settings round-trip cleanly to Snowflake's Open Semantic Interchange (OSI)
 xDBML is deliberately narrow. The following are *not* xDBML's job:
 
 - **Query languages.** xDBML doesn't replace SQL. It generates DDL; you still write `SELECT`.
-- **Metrics, measures, aggregations.** Those belong in OSI, dbt MetricFlow, or LookML — the semantic layer above xDBML.
+- **Metrics, measures, aggregations.** Those belong in OSI, dbt MetricFlow, or LookML -- the semantic layer above xDBML.
 - **Data quality rules, SLAs, ownership, pricing.** Those belong in ODCS (Open Data Contract Standard), which wraps an xDBML schema with contractual metadata.
 - **Reasoning and inference.** OWL and knowledge graphs operate at a different layer.
 
@@ -238,10 +238,10 @@ xDBML describes shape and declarative metadata. Adjacent standards handle the la
 ## Where to go from here
 
 - **Read the [v0.1 specification](/spec/v0.1)** for the full language reference.
-- **Browse the [examples](/examples/)** — real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
+- **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
 - **Try it in the playground** (planned): type or paste xDBML, see rendered diagrams and generated artifacts.
 - **Read the [ODCS integration guide](/integrations/odcs)** if you're already using Open Data Contract Standard.
-- **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** — the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
+- **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** -- the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
 xDBML is a draft v0.1 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
 

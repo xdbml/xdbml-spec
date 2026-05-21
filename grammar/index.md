@@ -9,8 +9,8 @@ The xDBML grammar is published as an [ANTLR4](https://www.antlr.org) grammar fil
 
 ## Files
 
-- **[`xDBML.g4`](https://github.com/xdbml/xdbml-spec/blob/main/grammar/xDBML.g4)** — the ANTLR4 grammar additions, organized to mirror the specification's §17 numbering
-- **[Test cases](./test-cases)** — reference test corpus with VALID and INVALID examples organized by spec section
+- **[`xDBML.g4`](https://github.com/xdbml/xdbml-spec/blob/main/grammar/xDBML.g4)** -- the ANTLR4 grammar additions, organized to mirror the specification's §17 numbering
+- **[Test cases](./test-cases)** -- reference test corpus with VALID and INVALID examples organized by spec section
 
 ## Approach
 
@@ -40,4 +40,4 @@ Multiple implementations in different language ecosystems are welcome and encour
 
 ## Contributing to the grammar
 
-Proposed changes to the grammar follow the [contribution process](/contributing). For minor refinements (token clarifications, rule comment improvements), open a PR directly. For grammar changes that reflect new spec constructs, follow the [construct proposal process](/contributing#proposing-a-new-specification-construct) — the grammar change should accompany the spec change in the same pull request.
+Proposed changes to the grammar follow the [contribution process](/contributing). For minor refinements (token clarifications, rule comment improvements), open a PR directly. For grammar changes that reflect new spec constructs, follow the [construct proposal process](/contributing#proposing-a-new-specification-construct) -- the grammar change should accompany the spec change in the same pull request.

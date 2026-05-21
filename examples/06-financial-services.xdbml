@@ -10,7 +10,7 @@ Project banking {
   compliance (PCI-DSS for card data, SOX for financial controls, KYC for
   identity verification, AML for transaction monitoring).
 
-  The schema is intentionally simplified — real banking systems carry
+  The schema is intentionally simplified -- real banking systems carry
   many concerns out of xDBML scope: double-entry bookkeeping invariants,
   immutable transaction logs, settlement networks, regulatory reporting
   pipelines, and so on. This example focuses on the shape of the data

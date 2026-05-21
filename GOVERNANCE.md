@@ -5,7 +5,7 @@ description: How xDBML is governed. Current stewardship by Hackolade, path to ne
 
 # Governance
 
-This document describes how the xDBML project is currently governed, how decisions are made, how changes are proposed and accepted, and the intended trajectory toward neutral foundation governance. It is intentionally specific about the current state — xDBML is a draft v0.1 specification stewarded by a single organization, and the governance model reflects that lifecycle stage honestly rather than overclaiming institutional maturity that does not yet exist.
+This document describes how the xDBML project is currently governed, how decisions are made, how changes are proposed and accepted, and the intended trajectory toward neutral foundation governance. It is intentionally specific about the current state -- xDBML is a draft v0.1 specification stewarded by a single organization, and the governance model reflects that lifecycle stage honestly rather than overclaiming institutional maturity that does not yet exist.
 
 This document will evolve as the project matures. Substantive changes to governance follow the same proposal and review process as substantive changes to the specification.
 
@@ -93,7 +93,7 @@ The project recognizes three roles:
 
 ### 4.1 Contributors
 
-Anyone who participates in the project — opening issues, commenting on proposals, submitting pull requests, building generators or importers, writing examples, reporting bugs — is a contributor. Contribution does not require formal affiliation, employment by Hackolade, or any prior approval.
+Anyone who participates in the project -- opening issues, commenting on proposals, submitting pull requests, building generators or importers, writing examples, reporting bugs -- is a contributor. Contribution does not require formal affiliation, employment by Hackolade, or any prior approval.
 
 ### 4.2 Maintainers
 
@@ -107,7 +107,7 @@ Maintainership is a working role, not a status. Inactive maintainers (no review 
 
 Editors are responsible for the prose quality, consistency of voice, and structural integrity of the specification document specifically. Editorial role is separate from maintainership: a maintainer may or may not also serve as an editor.
 
-The role of editor exists because language specifications are read documents — readability, internal consistency, and editorial discipline matter as much as technical correctness. Editors hold the line against scope creep, inconsistent terminology, and overweight prose.
+The role of editor exists because language specifications are read documents -- readability, internal consistency, and editorial discipline matter as much as technical correctness. Editors hold the line against scope creep, inconsistent terminology, and overweight prose.
 
 ## 5. Relationship with DBML upstream
 
@@ -153,10 +153,10 @@ These are guideposts rather than rigid requirements. Substantial progress on mos
 
 The project has not committed to a specific destination foundation. Candidates under consideration:
 
-- **The Linux Foundation** — broad scope, hosts Bitol/ODCS and many open data-infrastructure standards
-- **The OpenJS Foundation** — natural fit if xDBML's reference implementations remain JavaScript/TypeScript-led
-- **Apache Software Foundation** — strong governance reputation, longer incubation path
-- **A new dedicated foundation** — possible but unlikely; xDBML does not warrant its own foundation absent extraordinary growth
+- **The Linux Foundation** -- broad scope, hosts Bitol/ODCS and many open data-infrastructure standards
+- **The OpenJS Foundation** -- natural fit if xDBML's reference implementations remain JavaScript/TypeScript-led
+- **Apache Software Foundation** -- strong governance reputation, longer incubation path
+- **A new dedicated foundation** -- possible but unlikely; xDBML does not warrant its own foundation absent extraordinary growth
 
 The decision will be made publicly, with community input, when the criteria above are met.
 

@@ -10,14 +10,14 @@ A more comprehensive test corpus, with expected ASTs in JSON form, is planned fo
 
 ## §17.1 Version declaration
 
-### VALID — bare version
+### VALID -- bare version
 
 ```
 xdbml: 0.1
 Project p { database_type: 'Oracle' }
 ```
 
-### VALID — with experimental opt-in
+### VALID -- with experimental opt-in
 
 ```
 xdbml: 0.1
@@ -26,7 +26,7 @@ experimental: [graph_path_expressions]
 Project p { database_type: 'Oracle' }
 ```
 
-### VALID — DBML compatibility (no version declaration)
+### VALID -- DBML compatibility (no version declaration)
 
 ```
 Table users {
@@ -35,7 +35,7 @@ Table users {
 }
 ```
 
-### INVALID — version declared after other constructs
+### INVALID -- version declared after other constructs
 
 ```
 Project p { }
@@ -48,7 +48,7 @@ Expected error: "version declaration must precede all other constructs."
 
 ## §17.2 Nested / hierarchical structures
 
-### VALID — nested object
+### VALID -- nested object
 
 ```
 xdbml: 0.1
@@ -62,7 +62,7 @@ Entity customers {
 }
 ```
 
-### VALID — array of named objects
+### VALID -- array of named objects
 
 ```
 xdbml: 0.1
@@ -78,7 +78,7 @@ Entity orders {
 }
 ```
 
-### VALID — heterogeneous tuple
+### VALID -- heterogeneous tuple
 
 ```
 xdbml: 0.1
@@ -92,7 +92,7 @@ Entity customers {
 }
 ```
 
-### VALID — recursive named type
+### VALID -- recursive named type
 
 ```
 xdbml: 0.1
@@ -108,7 +108,7 @@ Entity org_chart {
 }
 ```
 
-### INVALID — tuple positions not contiguous
+### INVALID -- tuple positions not contiguous
 
 ```
 xdbml: 0.1
@@ -127,7 +127,7 @@ Expected error (semantic-analysis pass, not grammar): "tuple positions must be c
 
 ## §17.3 Polymorphism
 
-### VALID — oneOf with discriminator
+### VALID -- oneOf with discriminator
 
 ```
 xdbml: 0.1
@@ -140,7 +140,7 @@ Entity payments {
 }
 ```
 
-### VALID — union (scalar type alternatives)
+### VALID -- union (scalar type alternatives)
 
 ```
 xdbml: 0.1
@@ -151,7 +151,7 @@ Entity records {
 }
 ```
 
-### VALID — polymorphism inside an array
+### VALID -- polymorphism inside an array
 
 ```
 xdbml: 0.1
@@ -170,7 +170,7 @@ Entity event_log {
 
 ## §17.5 JSON-with-schema
 
-### VALID — opaque JSON
+### VALID -- opaque JSON
 
 ```
 xdbml: 0.1
@@ -181,7 +181,7 @@ Entity api_logs {
 }
 ```
 
-### VALID — JSON with inline schema
+### VALID -- JSON with inline schema
 
 ```
 xdbml: 0.1
@@ -200,7 +200,7 @@ Entity orders {
 }
 ```
 
-### VALID — BSON types
+### VALID -- BSON types
 
 ```
 xdbml: 0.1
@@ -220,7 +220,7 @@ Container app [type: database] {
 
 ## §17.6 Path syntax
 
-### VALID — path on index
+### VALID -- path on index
 
 ```
 xdbml: 0.1
@@ -239,7 +239,7 @@ Entity orders {
 }
 ```
 
-### VALID — quoted segment for non-identifier name
+### VALID -- quoted segment for non-identifier name
 
 ```
 xdbml: 0.1
@@ -255,7 +255,7 @@ Entity legacy {
 }
 ```
 
-### VALID — JSONPath alias (parses, normalizes to dot-prefixed)
+### VALID -- JSONPath alias (parses, normalizes to dot-prefixed)
 
 ```
 xdbml: 0.1
@@ -270,7 +270,7 @@ Entity orders {
 }
 ```
 
-### INVALID — implicit array iteration in Ref source path
+### INVALID -- implicit array iteration in Ref source path
 
 ```
 xdbml: 0.1
@@ -289,7 +289,7 @@ Ref: orders.line_items.sku > products.sku
 
 Expected error (semantic-analysis pass): "Ref source path crosses array; explicit .[*] required."
 
-### VALID — explicit .[*] in Ref
+### VALID -- explicit .[*] in Ref
 
 ```
 Ref: orders.line_items.[*].sku > products.sku
@@ -299,7 +299,7 @@ Ref: orders.line_items.[*].sku > products.sku
 
 ## §17.7 Container
 
-### VALID — explicit container
+### VALID -- explicit container
 
 ```
 xdbml: 0.1
@@ -312,7 +312,7 @@ Container core [type: schema] {
 }
 ```
 
-### VALID — container synonyms
+### VALID -- container synonyms
 
 ```
 xdbml: 0.1
@@ -336,7 +336,7 @@ Namespace events {
 }
 ```
 
-### VALID — cross-container reference
+### VALID -- cross-container reference
 
 ```
 xdbml: 0.1
@@ -361,7 +361,7 @@ Ref: sales.orders.customer_id > core.customers.id
 
 ## §17.8 Named types
 
-### VALID — named type referenced from multiple entities
+### VALID -- named type referenced from multiple entities
 
 ```
 xdbml: 0.1
@@ -381,7 +381,7 @@ Entity orders {
 }
 ```
 
-### INVALID — named type shadows builtin
+### INVALID -- named type shadows builtin
 
 ```
 xdbml: 0.1
@@ -397,7 +397,7 @@ Expected error (semantic-analysis pass): "named type 'varchar' shadows built-in 
 
 ## §17.9 AI-readiness settings
 
-### VALID — all four AI-readiness settings
+### VALID -- all four AI-readiness settings
 
 ```
 xdbml: 0.1
@@ -412,7 +412,7 @@ Entity customers {
 }
 ```
 
-### VALID — custom property with x_ prefix
+### VALID -- custom property with x_ prefix
 
 ```
 xdbml: 0.1
@@ -430,7 +430,7 @@ Entity customers [
 
 ## §17.10 Cardinality
 
-### VALID — compact form
+### VALID -- compact form
 
 ```
 xdbml: 0.1
@@ -441,13 +441,13 @@ Entity orders { id int [pk]; customer_id int }
 Ref: orders.customer_id > customers.id
 ```
 
-### VALID — explicit source/target cardinality
+### VALID -- explicit source/target cardinality
 
 ```
 Ref: orders.customer_id > customers.id [source: '1..*', target: '1..1']
 ```
 
-### VALID — four-key alternative form
+### VALID -- four-key alternative form
 
 ```
 Ref: pets.owner_id > people.id [
@@ -460,7 +460,7 @@ Ref: pets.owner_id > people.id [
 
 ## §17.11 Edge
 
-### VALID — basic edge
+### VALID -- basic edge
 
 ```
 xdbml: 0.1
@@ -473,7 +473,7 @@ Edge KNOWS [source: Person, target: Person] {
 }
 ```
 
-### VALID — edge with cardinality
+### VALID -- edge with cardinality
 
 ```
 Edge OWNS [source: Person, target: Pet,
@@ -482,7 +482,7 @@ Edge OWNS [source: Person, target: Pet,
 }
 ```
 
-### VALID — undirected edge
+### VALID -- undirected edge
 
 ```
 Edge FRIENDS_WITH [source: Person, target: Person, undirected: true] {
@@ -490,7 +490,7 @@ Edge FRIENDS_WITH [source: Person, target: Person, undirected: true] {
 }
 ```
 
-### VALID — multiple edges between same entities
+### VALID -- multiple edges between same entities
 
 ```
 Edge LIKES   [source: User, target: Post] { liked_at timestamp }
@@ -502,7 +502,7 @@ Edge BLOCKED [source: User, target: Post] { blocked_at timestamp }
 
 ## §17.12 View
 
-### VALID — virtual view
+### VALID -- virtual view
 
 ```
 xdbml: 0.1
@@ -519,7 +519,7 @@ View active_customers [materialized: false] {
 }
 ```
 
-### VALID — materialized view with refresh settings
+### VALID -- materialized view with refresh settings
 
 ```
 View monthly_revenue [materialized: true,
@@ -535,7 +535,7 @@ View monthly_revenue [materialized: true,
 }
 ```
 
-### VALID — view inside container
+### VALID -- view inside container
 
 ```
 xdbml: 0.1
@@ -559,7 +559,7 @@ Container analytics [type: schema] {
 
 ## End-to-end: polyglot model
 
-### VALID — full polyglot model with Oracle, MongoDB, Avro, Neo4j
+### VALID -- full polyglot model with Oracle, MongoDB, Avro, Neo4j
 
 ```
 xdbml: 0.1

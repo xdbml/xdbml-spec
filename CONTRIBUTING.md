@@ -5,9 +5,9 @@ description: How to contribute to xDBML. Issue templates, pull request conventio
 
 # Contributing to xDBML
 
-Thank you for considering a contribution to xDBML. This document describes how to participate in the project — what to contribute, how to file issues, how to submit pull requests, and how the review process works.
+Thank you for considering a contribution to xDBML. This document describes how to participate in the project -- what to contribute, how to file issues, how to submit pull requests, and how the review process works.
 
-For the *who decides and how* of project governance — decision-making, roles, the relationship with DBML upstream, the path to neutral governance — see [`GOVERNANCE.md`](./GOVERNANCE.md).
+For the *who decides and how* of project governance -- decision-making, roles, the relationship with DBML upstream, the path to neutral governance -- see [`GOVERNANCE.md`](./GOVERNANCE.md).
 
 ## Quick links
 
@@ -22,15 +22,15 @@ For the *who decides and how* of project governance — decision-making, roles, 
 
 Contributions to xDBML take many forms. All of them are welcome, and none of them require prior approval or affiliation with any organization.
 
-- **Reporting issues** — typos, ambiguities, inconsistencies, unclear examples, broken cross-references
-- **Improving documentation** — clarifying wording, adding worked examples, improving the 5-minute introduction
-- **Adding example schemas** — realistic domains that demonstrate features not yet covered by the existing examples
-- **Proposing new specification constructs** — new keywords, settings, vocabulary additions, target-format support
-- **Building parsers, generators, or importers** — implementations in any programming language ecosystem
-- **Coordinating with adjacent standards** — bridging xDBML to ODCS, OSI, JSON Schema, Avro, OpenAPI, and other formats
-- **Reviewing pull requests** — substantive review by community members is invaluable and counted toward maintainership eligibility
+- **Reporting issues** -- typos, ambiguities, inconsistencies, unclear examples, broken cross-references
+- **Improving documentation** -- clarifying wording, adding worked examples, improving the 5-minute introduction
+- **Adding example schemas** -- realistic domains that demonstrate features not yet covered by the existing examples
+- **Proposing new specification constructs** -- new keywords, settings, vocabulary additions, target-format support
+- **Building parsers, generators, or importers** -- implementations in any programming language ecosystem
+- **Coordinating with adjacent standards** -- bridging xDBML to ODCS, OSI, JSON Schema, Avro, OpenAPI, and other formats
+- **Reviewing pull requests** -- substantive review by community members is invaluable and counted toward maintainership eligibility
 
-If you're not sure where to start, look for issues tagged [`good first issue`](https://github.com/xdbml/xdbml-spec/labels/good%20first%20issue) — these are curated by maintainers to be approachable for newcomers.
+If you're not sure where to start, look for issues tagged [`good first issue`](https://github.com/xdbml/xdbml-spec/labels/good%20first%20issue) -- these are curated by maintainers to be approachable for newcomers.
 
 ## Filing an issue
 
@@ -69,7 +69,7 @@ We use GitHub's pull-request workflow for all changes. The process:
 ### Before you start
 
 1. **For substantive changes**, open an issue first to discuss the proposed approach. This avoids wasted work when a maintainer would have suggested a different direction.
-2. **For typos, broken links, and other small editorial fixes**, no issue is needed — open a pull request directly.
+2. **For typos, broken links, and other small editorial fixes**, no issue is needed -- open a pull request directly.
 3. **For new construct proposals**, follow the formal proposal process described below before submitting a pull request.
 
 ### Branch and commit conventions
@@ -101,7 +101,7 @@ Once approved, a maintainer will merge the pull request. We use squash-merges by
 
 ## Proposing a new specification construct
 
-New constructs — new keywords, new settings, new vocabulary, new round-trip targets — follow a deliberate process described in §3.3 of [`GOVERNANCE.md`](./GOVERNANCE.md). The operational steps:
+New constructs -- new keywords, new settings, new vocabulary, new round-trip targets -- follow a deliberate process described in §3.3 of [`GOVERNANCE.md`](./GOVERNANCE.md). The operational steps:
 
 ### Step 1: Open a proposal issue
 
@@ -177,11 +177,11 @@ The pull request goes through standard pull-request review (see above). Maintain
 
 Possible outcomes:
 
-- **Accepted** — merged into the specification for inclusion in the next MINOR version
-- **Accepted with modifications** — merged after the proposer applies requested changes
-- **Promoted to experimental** — merged but gated behind the `experimental:` opt-in clause for a trial period
-- **Deferred** — held for a future minor version, often because related proposals are also under discussion
-- **Declined** — closed with explanation; the discussion thread remains as a reference for future similar proposals
+- **Accepted** -- merged into the specification for inclusion in the next MINOR version
+- **Accepted with modifications** -- merged after the proposer applies requested changes
+- **Promoted to experimental** -- merged but gated behind the `experimental:` opt-in clause for a trial period
+- **Deferred** -- held for a future minor version, often because related proposals are also under discussion
+- **Declined** -- closed with explanation; the discussion thread remains as a reference for future similar proposals
 
 Declined proposals are not failures. Refining what the specification doesn't cover is as important as refining what it does.
 
@@ -202,7 +202,7 @@ Submit the example as a pull request. Add a row to the table in the examples [`R
 
 The reference parser and the various generators and importers live in companion repositories under the [`xdbml/`](https://github.com/xdbml) organization. Each has its own `CONTRIBUTING.md` describing its specific build and test conventions; this document covers the specification repository only.
 
-If you've built an xDBML-compatible tool outside the canonical repositories — a parser in another language, a generator for an unusual target format, an editor plugin — we'd love to list it in the ecosystem section of the project website. Open an issue or pull request adding it to [`ECOSYSTEM.md`](./ECOSYSTEM.md).
+If you've built an xDBML-compatible tool outside the canonical repositories -- a parser in another language, a generator for an unusual target format, an editor plugin -- we'd love to list it in the ecosystem section of the project website. Open an issue or pull request adding it to [`ECOSYSTEM.md`](./ECOSYSTEM.md).
 
 ## Style and conventions
 
@@ -221,7 +221,7 @@ The specification document is reference documentation, not narrative prose. Conv
 - One blank line before and after every heading.
 - Tables for tabular data (round-trip mappings, keyword tables, etc.).
 - Em-dashes (`—`) for parenthetical asides; not double-hyphens (`--`).
-- US English spelling (`modeling`, `behavior`, `color`) — chosen for consistency with the existing specification; do not mix US and UK English within a single document.
+- US English spelling (`modeling`, `behavior`, `color`) -- chosen for consistency with the existing specification; do not mix US and UK English within a single document.
 
 ### Code examples
 
@@ -245,12 +245,12 @@ ANTLR4 grammar files in [`grammar/`](./grammar/) follow ANTLR4 idiomatic style:
 
 Contributors are recognized in several ways:
 
-- **Git history** — every commit preserves the author's name and email
-- **CHANGELOG entries** — substantive changes credit the contributor in the changelog
-- **Maintainer eligibility** — sustained substantive contribution over a minimum of six months is the criterion for maintainership (see [`GOVERNANCE.md`](./GOVERNANCE.md), §4.2)
-- **Specification acknowledgments** — Appendix E of the specification credits major contributors
+- **Git history** -- every commit preserves the author's name and email
+- **CHANGELOG entries** -- substantive changes credit the contributor in the changelog
+- **Maintainer eligibility** -- sustained substantive contribution over a minimum of six months is the criterion for maintainership (see [`GOVERNANCE.md`](./GOVERNANCE.md), §4.2)
+- **Specification acknowledgments** -- Appendix E of the specification credits major contributors
 
-We do not currently maintain an "all contributors" emoji-table or similar — we may add one if the contributor count grows large enough to warrant it.
+We do not currently maintain an "all contributors" emoji-table or similar -- we may add one if the contributor count grows large enough to warrant it.
 
 ## Help and contact
 
