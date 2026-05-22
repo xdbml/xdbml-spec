@@ -33,6 +33,29 @@
 
 grammar xDBML;
 
+// ===========================================================================
+// CASE SENSITIVITY POLICY
+// ===========================================================================
+//
+// Keywords (Project, Container, Table, Entity, Type, Note, Edge, View, etc.)
+// and reserved-word settings are case-insensitive. The lexer accepts any
+// casing: `note`, `Note`, `NOTE`, and `nOtE` all match the same token.
+//
+// Identifiers (entity names, field names, container names, type names) are
+// case-sensitive: `customer_email` and `Customer_Email` are different
+// identifiers. This matters for target databases with different casing
+// conventions (MongoDB uses camelCase, Cassandra uses lower_snake_case,
+// Oracle defaults to UPPER_SNAKE_CASE).
+//
+// Implementation: the grammar-level `caseInsensitive=true` option flips
+// the entire lexer to case-insensitive matching. The IDENTIFIER and
+// quotedIdentifier rules explicitly opt out via per-rule `caseInsensitive=false`
+// to preserve identifier case-sensitivity.
+
+options {
+    caseInsensitive = true;
+}
+
 import DBML;  // Holistics upstream grammar
 
 // ===========================================================================
@@ -698,7 +721,32 @@ MINUS               : '-' ;
 BOOLEAN_LITERAL     : 'true' | 'false' ;
 NULL_LITERAL        : 'null' ;
 
-// IDENTIFIER, NUMBER, STRING_LITERAL, MULTILINE_STRING, QUOTED_STRING,
+// ----------------------------------------------------------------------------
+// IDENTIFIER and quotedIdentifier override the upstream DBML versions to
+// opt out of grammar-level case-insensitivity. Identifiers (entity names,
+// field names, container names, type names) preserve user-supplied case.
+// `customer_email` and `Customer_Email` are different identifiers because
+// target databases have different casing conventions:
+//   - MongoDB: typically camelCase (orderId, customerEmail)
+//   - Cassandra: lower_snake_case
+//   - Oracle: UPPER_SNAKE_CASE by default
+//   - PostgreSQL: lower_snake_case by convention
+//
+// Per-rule `caseInsensitive=false` overrides the grammar-level
+// `caseInsensitive=true` option declared at the top of this file.
+// ----------------------------------------------------------------------------
+
+IDENTIFIER options { caseInsensitive=false; }
+    : [a-zA-Z_] [a-zA-Z0-9_]*
+    ;
+
+// quotedIdentifier supports identifiers with spaces or punctuation, common
+// in legacy systems and SQL identifiers with embedded spaces.
+quotedIdentifier options { caseInsensitive=false; }
+    : '"' (~["\r\n])+ '"'
+    ;
+
+// NUMBER, STRING_LITERAL, MULTILINE_STRING, QUOTED_STRING,
 // EXPRESSION_LITERAL, LINE_COMMENT, BLOCK_COMMENT, WS -- inherited from
 // upstream DBML grammar.
 
