@@ -80,6 +80,7 @@ export default defineConfig({
         items: [
           { text: '5-minute introduction',  link: '/learn/' },
           { text: 'Examples',                link: '/examples/' },
+          { text: 'FAQ',                     link: '/faq' },
         ]
       },
       { text: 'Specification',
@@ -123,6 +124,18 @@ export default defineConfig({
           items: [
             { text: '5-minute introduction', link: '/learn/' },
             { text: 'Examples',               link: '/examples/' },
+            { text: 'FAQ',                    link: '/faq' },
+          ]
+        }
+      ],
+
+      '/faq': [
+        {
+          text: 'Learn xDBML',
+          items: [
+            { text: '5-minute introduction', link: '/learn/' },
+            { text: 'Examples',               link: '/examples/' },
+            { text: 'FAQ',                    link: '/faq' },
           ]
         }
       ],

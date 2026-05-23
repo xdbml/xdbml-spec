@@ -32,6 +32,16 @@ xDBML aims to preserve DBML's readability and Git-friendly simplicity while addi
 
 If xDBML succeeds at this balance, it can become a foundation for next-generation data modeling and AI-aware metadata systems -- one that real teams actually choose to write by hand, not just generate from heavier sources.
 
+## Scope: what xDBML covers (and what it deliberately doesn't)
+
+xDBML describes the **structural and semantic layer** of data: entities, fields, types, relationships, classifications, validation rules, and AI-readiness metadata. It is the format for **humans and AI to exchange schemas with an xDBML tool**.
+
+![xDBML scope diagram](public/diagrams/xdbml-scope.svg)
+
+xDBML is **not** the round-trip format between an xDBML tool or xDBML-compatible data modeling tool and a target technology. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands the target's complete capability surface (partitioning, sharding, tablespaces, replication, PL/SQL, triggers, identity columns, advanced constraints, refresh schedules) and preserves it in the tool's own canonical model. xDBML carries the parts of that model with meaning across boundaries.
+
+Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage.
+
 ## Where to go next
 
 - [`spec/v0.1.md`](./spec/v0.1.md) -- the full v0.1 language specification

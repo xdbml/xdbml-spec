@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400" role="img" aria-labelledby="title desc">
+  <title id="title">xDBML scope: two distinct round-trips</title>
+  <desc id="desc">Humans and AI exchange xDBML with an xDBML tool. Separately, the xDBML tool forward-engineers and reverse-engineers with target technologies using native DDL and schemas. xDBML is not used between humans/AI and target technologies directly.</desc>
+
+  <defs>
+    <marker id="arrowblue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2878b4"/>
+    </marker>
+    <marker id="arrownavy" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#364675"/>
+    </marker>
+  </defs>
+
+  <style>
+    .box        { fill: #ffffff; stroke: #2878b4; stroke-width: 2; rx: 8; ry: 8; }
+    .toolbox    { fill: #2878b4; stroke: #1a4d7a; stroke-width: 2; rx: 8; ry: 8; }
+    .targetbox  { fill: #ffffff; stroke: #364675; stroke-width: 2; rx: 8; ry: 8; }
+    .label      { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; fill: #1b1b1f; }
+    .labelwhite { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 17px; font-weight: 600; fill: #ffffff; }
+    .arrowlabel { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: #2878b4; font-weight: 600; }
+    .arrowlabel2{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #364675; font-weight: 600; }
+    .sublabel   { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #595959; }
+    .sectionlabel { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; fill: #595959; font-style: italic; }
+    .arrowline  { stroke: #2878b4; stroke-width: 2; fill: none; }
+    .arrowline2 { stroke: #364675; stroke-width: 2; fill: none; }
+  </style>
+
+  <!-- Section labels above each side -->
+  <text x="120"  y="25" text-anchor="middle" class="sectionlabel">Describe and assist</text>
+  <text x="680"  y="25" text-anchor="middle" class="sectionlabel">Engineer and extract</text>
+
+  <!-- LEFT: Human box -->
+  <rect x="30" y="65" width="160" height="70" class="box"/>
+  <circle cx="60" cy="90" r="9" fill="#2878b4"/>
+  <path d="M 45 120 Q 45 105, 60 105 Q 75 105, 75 120 Z" fill="#2878b4"/>
+  <text x="95" y="105" class="label">Human</text>
+  <text x="95" y="123" class="sublabel">authors, reviews</text>
+
+  <!-- LEFT: AI box -->
+  <rect x="30" y="245" width="160" height="70" class="box"/>
+  <path d="M 60 265 L 63 275 L 73 278 L 63 281 L 60 291 L 57 281 L 47 278 L 57 275 Z" fill="#2878b4"/>
+  <path d="M 70 260 L 71 263 L 74 264 L 71 265 L 70 268 L 69 265 L 66 264 L 69 263 Z" fill="#2878b4"/>
+  <text x="95" y="285" class="label">AI assistant</text>
+  <text x="95" y="303" class="sublabel">extends, describes</text>
+
+  <!-- CENTER: xDBML tool -->
+  <rect x="290" y="155" width="220" height="90" class="toolbox"/>
+  <text x="400" y="190" text-anchor="middle" class="labelwhite">xDBML tool</text>
+  <text x="400" y="215" text-anchor="middle" class="labelwhite" style="font-size: 13px; font-weight: 400; opacity: 0.9;">canonical model</text>
+  <text x="400" y="233" text-anchor="middle" class="labelwhite" style="font-size: 13px; font-weight: 400; opacity: 0.9;">preserved natively</text>
+
+  <!-- RIGHT: Target technology -->
+  <rect x="650" y="155" width="140" height="90" class="targetbox"/>
+  <ellipse cx="720" cy="180" rx="18" ry="5" fill="none" stroke="#364675" stroke-width="2"/>
+  <path d="M 702 180 L 702 200 Q 702 206, 720 206 Q 738 206, 738 200 L 738 180" fill="none" stroke="#364675" stroke-width="2"/>
+  <ellipse cx="720" cy="190" rx="18" ry="5" fill="none" stroke="#364675" stroke-width="1" opacity="0.5"/>
+  <text x="720" y="227" text-anchor="middle" class="label">Target technology</text>
+
+  <!-- ARROWS: Human ↔ xDBML tool -->
+  <path d="M 190 100 L 285 175" class="arrowline" marker-end="url(#arrowblue)" marker-start="url(#arrowblue)"/>
+  <text x="240" y="120" text-anchor="middle" class="arrowlabel">xDBML</text>
+
+  <!-- ARROWS: AI ↔ xDBML tool -->
+  <path d="M 190 280 L 285 225" class="arrowline" marker-end="url(#arrowblue)" marker-start="url(#arrowblue)"/>
+  <text x="240" y="263" text-anchor="middle" class="arrowlabel">xDBML</text>
+
+  <!-- ARROWS: xDBML tool ↔ Target technology -->
+  <!-- Forward-engineer (left to right) -->
+  <path d="M 515 180 L 645 180" class="arrowline2" marker-end="url(#arrownavy)"/>
+  <text x="580" y="172" text-anchor="middle" class="arrowlabel2">forward-engineer</text>
+
+  <!-- Reverse-engineer (right to left) -->
+  <path d="M 645 215 L 515 215" class="arrowline2" marker-end="url(#arrownavy)"/>
+  <text x="580" y="231" text-anchor="middle" class="arrowlabel2">reverse-engineer</text>
+
+  <!-- Common label below for both arrows -->
+  <text x="580" y="254" text-anchor="middle" class="sublabel">in native DDL or schema</text>
+
+  <!-- Caption at bottom -->
+  <text x="400" y="355" text-anchor="middle" class="sublabel" style="font-size: 13px;">xDBML is the format for humans and AI to exchange schemas with the tool.</text>
+  <text x="400" y="375" text-anchor="middle" class="sublabel" style="font-size: 13px;">Tool-to-target engineering uses each target's native DDL or schema, preserving operational features.</text>
+</svg>

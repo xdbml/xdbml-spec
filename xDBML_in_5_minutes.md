@@ -227,14 +227,27 @@ These settings round-trip cleanly to Snowflake's Open Semantic Interchange (OSI)
 
 ---
 
-## What you don't have to learn
+## What xDBML does -- and what it deliberately doesn't
 
-xDBML is deliberately narrow. The following are *not* xDBML's job:
+xDBML describes the **structural and semantic layer** of data: entities, fields, types, relationships, classifications, validation rules, and AI-readiness metadata. It is the format for **humans and AI to exchange schemas with an xDBML tool**.
 
-- **Query languages.** xDBML doesn't replace SQL. It generates DDL; you still write `SELECT`.
+![xDBML scope diagram](/diagrams/xdbml-scope.svg)
+
+The tool-to-target round-trip -- the one between a modeling tool and an actual database -- happens in **native DDL or schema**, not in xDBML. The tool understands each target's complete capability surface (partitioning, sharding, tablespaces, PL/SQL, triggers, advanced constraints, identity columns, replication, refresh schedules) and preserves it in its own canonical model. xDBML carries the parts of that model that have meaning across boundaries: across engines, across tools, across humans and AI.
+
+Trying to import Oracle DDL into xDBML and re-export it as Oracle DDL preserving operational features is a misuse of the standard. The tool-to-target conversation should happen in native DDL throughout. xDBML is for a different conversation entirely.
+
+The following are *not* xDBML's job:
+
+- **Engine operational features.** Partitioning strategies, sharding configuration, tablespaces, storage models, replication topology, materialized view refresh schedules, clustering keys, time-travel configuration. These stay native to each target and live in the modeling tool's representation.
+- **Procedural code.** PL/SQL, T-SQL, stored procedures, triggers, server-side functions, computed columns with engine-specific functions. xDBML expresses declarative shape and metadata, not behavior.
+- **Identity and sequencing details.** IDENTITY columns, sequences, auto-increment configuration. xDBML can declare a field as a primary key with auto-generation; the exact sequence configuration is engine-specific.
+- **Wire-protocol and evolution rules.** Avro schema evolution rules, Protobuf reserved fields, GraphQL federation directives, OpenAPI endpoints (xDBML describes the *types*, not the *operations*).
+- **Query languages.** xDBML doesn't replace or is a functional superset of SQL, Cypher, MQL, or GraphQL queries. The xDBML tool may generate DDL; you still write `SELECT`.
 - **Metrics, measures, aggregations.** Those belong in OSI, dbt MetricFlow, or LookML -- the semantic layer above xDBML.
 - **Data quality rules, SLAs, ownership, pricing.** Those belong in ODCS (Open Data Contract Standard), which wraps an xDBML schema with contractual metadata.
 - **Reasoning and inference.** OWL and knowledge graphs operate at a different layer.
+- **Provisioning and operations.** Terraform, Pulumi, database operators, security policies -- these handle the infrastructure layer.
 
 xDBML describes shape and declarative metadata. Adjacent standards handle the layers above and below.
 
