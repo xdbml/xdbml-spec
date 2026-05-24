@@ -255,6 +255,7 @@ xDBML describes shape and declarative metadata. Adjacent standards handle the la
 
 ## Where to go from here
 
+- **Browse the [FAQ](/faq)** for answers to the questions newcomers most often ask after reading this introduction.
 - **Read the [v0.1 specification](/spec/v0.1)** for the full language reference.
 - **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
 - **Try it in the playground** (planned): type or paste xDBML, see rendered diagrams and generated artifacts.

@@ -159,6 +159,7 @@ Operational features (partitions, storage configuration, replication), procedura
 ## Where to go next
 
 - **[Read the 5-minute introduction](/learn/)** for a quick tour of what xDBML does and why it exists
+- **[Browse the FAQ](/faq)** for answers to the questions newcomers most often ask
 - **[Read the v0.1 specification](/spec/v0.1)** for the complete language reference
 - **[Browse the examples](/examples/)** for realistic schemas across e-commerce, IoT, healthcare, social graphs, and financial services
 - **[See the grammar](/grammar/)** for parser implementers

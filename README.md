@@ -46,6 +46,7 @@ Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side func
 
 - [`spec/v0.1.md`](./spec/v0.1.md) -- the full v0.1 language specification
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
+- [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
 - [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
 - **`integrations/`** (planned) -- generators and importers (SQL DDL, JSON Schema, Avro, OpenAPI, MongoDB validators, Neo4j/Cypher, ODCS)
