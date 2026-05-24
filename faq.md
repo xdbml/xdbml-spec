@@ -9,13 +9,13 @@ This page collects questions that come up repeatedly. New entries are added as t
 
 
 
-## Can I round-trip Oracle DDL through xDBML and back without losing anything?
+## Can I round-trip Oracle (or other RDBMS) DDL through xDBML and back without losing anything?
 
-No, and this is by design. xDBML is not the round-trip format between a an xDBML or xDBML-compatible data modeling tool and a target technology. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands Oracle's complete capability surface (partitioning, tablespaces, PL/SQL, triggers, identity columns, advanced constraints, materialized view refresh schedules, sequences) and preserves it in the tool's own canonical model.
+No, and this is by design. xDBML is not the round-trip format between an xDBML tool or xDBML-compatible data modeling tools and a target technology instance. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands Oracle's complete capability surface (partitioning, tablespaces, PL/SQL, triggers, identity columns, advanced constraints, materialized view refresh schedules, sequences) and preserves it in the tool's own canonical model.
 
 xDBML carries the parts of that model with meaning across boundaries: structural shape, types, relationships, declarative constraints, classifications, and AI-readiness metadata. Operational and procedural features stay native.
 
-The diagram in the [scope section of the specification](/spec/v0.1#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL between the tool and the target on the other.
+The diagram in the [scope section of the specification](/spec/v0.1#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
 
 What this means in practice:
 
@@ -32,6 +32,22 @@ These are target-specific operational features. xDBML's job is to describe the d
 A schema with Oracle-specific partition strategy is not portable to MongoDB or Avro by definition. xDBML expresses what IS portable -- the shape, the types, the relationships, the semantics -- so that one declarative source can describe schemas across an Oracle relational system, a MongoDB document store, an Avro event stream, and a JSON Schema API contract simultaneously.
 
 If you need to capture partition strategy, sharding configuration, or any other operational feature, that lives in the modeling tool's native format alongside the xDBML projection. The tool generates the target-native DDL with all operational features intact; xDBML is the export channel for the parts that matter across boundaries.
+
+
+
+## Does that make xDBML a logical data model?
+
+No -- and the question has the wrong shape. xDBML is not bound to any single layer of the conceptual/logical/physical taxonomy. It is an exchange format -- a portable representation of the parts of a schema that have structure and meaning across boundaries (humans, AI, tools, engines, data modeling conceptual-logical-physical layers).
+
+The same language constructs serve all three layers, depending on what the author includes or omits:
+
+- A **conceptual** xDBML document lists entities and relationships with descriptive notes and semantic metadata (synonyms, business terms, classifications), without committing to types or implementation details. Useful for asking an AI assistant to draft the entity landscape for a new domain.
+
+- A **logical** xDBML document adds engine-neutral typing, cardinality, declarative constraints, and normalized structure -- still without commitment to a specific target technology. Useful for asking an AI assistant to refine a conceptual draft into a deployable shape, or for cross-team schema design conversations before the engine choice is made.
+
+- A **physical** xDBML document adds explicit `targets:` and per-Container `target:` declarations, engine-specific scalar types (`varchar`, `objectId`, `Decimal128`, `int32`), and engine-native container kinds (`schema`, `database`, `keyspace`, `namespace`). Useful for AI-assisted modeling against one or more concrete engines, or for handing a tool the structural-and-semantic content it needs to forward-engineer.
+
+What xDBML deliberately is NOT is the persistent model artifact that a data modeling tool maintains internally. Those tool-native artifacts carry versioning, branching, audit trails, generation metadata, validation history, UI state, and target-specific operational features (partitions, storage, PL/SQL, triggers) -- everything needed to run a working modeling environment. xDBML is what the tool exports from its canonical model when something outside the tool needs to read the schema's structural and semantic content. The two are complementary, not interchangeable.
 
 
 
