@@ -82,7 +82,24 @@ What you just read:
 This single file generates Oracle DDL for `customers`, a MongoDB `$jsonSchema` validator for `orders`, JSON Schema for an API contract, an Avro schema for an event stream, and the schema section of an ODCS data contract.
 
 
-## Why this exists
+## Why xDBML was created
+
+xDBML is born to solve the same frustrations DBML was designed for:
+
+- **Difficulty building a "big picture"** of an entire project's database structure
+- **Tables and fields whose meaning is opaque** to anyone not on the team
+- **ER diagrams and SQL DDL that are hard to read**, poorly written, and usually outdated
+
+And the additional frustrations DBML cannot address:
+
+- **AI-readiness as a language feature.** Synonyms, business terms, classification tags, and granularity hints let LLMs, governance platforms, and downstream tools resolve natural-language queries to canonical schema elements without guesswork.
+- **LLM-portable schemas.** Ask any LLM to design a schema in xDBML and the result lowers to whatever target you eventually choose -- no premature commitment to one format, no information loss switching between formats.
+- **Nested structures and polymorphism as first-class constructs.** Objects, arrays of records, `oneOf` alternatives with discriminators -- expressed directly without contortions. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables but not nested types; xDBML expresses all of them, in the same syntax.
+- **Schema drift across polyglot stacks.** Hand-maintaining five schemas across Oracle, MongoDB, Avro, BigQuery, and Neo4j is where mistakes live. xDBML is the single source of truth.
+- **Property-bearing graph edges.** Labeled property graph databases (Neo4j, Neptune) and RDF-star treat relationships as first-class with their own properties. DBML can't express this; xDBML's `Edge` construct does.
+
+
+## The polyglot stack problem
 
 Every modern data platform mixes paradigms. A typical SaaS product stores users in Oracle, events in Kafka with Avro schemas, application state in MongoDB, analytics in Databricks, and social graphs in Neo4j. Each technology has its own schema language.
 

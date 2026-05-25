@@ -32,6 +32,15 @@ xDBML aims to preserve DBML's readability and Git-friendly simplicity while addi
 
 If xDBML succeeds at this balance, it can become a foundation for next-generation data modeling and AI-aware metadata systems -- one that real teams actually choose to write by hand, not just generate from heavier sources.
 
+## Same frustrations as DBML -- plus the ones DBML cannot solve
+
+xDBML is born to solve the same frustrations DBML was designed for:
+- Difficulty building a mental "big picture" of an entire project's database structure
+- Trouble understanding tables and what their fields mean
+- ER diagrams and SQL DDL that are poorly written, hard to read, and usually outdated
+
+Plus the additional pains DBML cannot solve: AI-readiness metadata for LLMs and governance platforms (synonyms, business terms, classifications, granularity), LLM-portable schemas that lower to any target without premature commitment, nested structures and polymorphism as first-class constructs (objects, arrays of records, oneOf alternatives with discriminators), schema drift across polyglot stacks (Oracle + MongoDB + Avro + BigQuery + Neo4j + ...), and property-bearing graph edges. See the [FAQ on xdbml.org](https://xdbml.org/faq) for the full positioning.
+
 ## Scope: what xDBML covers (and what it deliberately doesn't)
 
 xDBML describes the **structural and semantic layer** of data: entities, fields, types, relationships, classifications, validation rules, and AI-readiness metadata. It is the format for **humans and AI to exchange schemas with an xDBML tool**.

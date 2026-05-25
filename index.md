@@ -146,6 +146,8 @@ xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-
 
 The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. The risk is to become another ambitious modeling standard that architects admire and developers avoid. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
 
+xDBML is born to solve the same frustrations DBML was designed for -- difficulty building a mental big picture, opaque field meanings, ER diagrams and DDL that are hard to read and usually outdated -- and the additional pains DBML cannot solve: AI-readiness metadata for LLMs and governance platforms, LLM-portable schemas without target lock-in, nested structures and polymorphism as first-class constructs, schema drift across polyglot stacks, and property-bearing graph edges. See the [FAQ](/faq) for the full positioning.
+
 ## Scope: what xDBML covers (and what it deliberately doesn't)
 
 xDBML describes the **structural and semantic layer** of data: entities, fields, types, relationships, classifications, validation rules, and AI-readiness metadata. It is the format for **humans and AI to exchange schemas with an xDBML tool**.
