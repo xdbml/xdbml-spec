@@ -1,0 +1,140 @@
+xdbml: 0.1
+
+Project iot_telemetry {
+  targets: TimescaleDB
+  Note: '''
+  Schema for an IoT telemetry platform ingesting sensor readings from
+  heterogeneous devices. Demonstrates time-series patterns, variable
+  device metadata via JSON-with-schema, validation constraints for
+  sensor value ranges, granularity hints for AI consumers, and
+  arrays of structured measurements within a single reading.
+
+  The platform supports environmental sensors (temperature, humidity,
+  air quality), industrial sensors (vibration, pressure, flow rate),
+  and consumer-grade sensors (smart-home devices). Each device type
+  has a distinct metadata shape captured as JSON with declared schema
+  rather than as a fully separate table.
+  '''
+}
+
+Container devices_catalog [type: schema] {
+  Note: 'Device registry. One row per provisioned physical device.'
+
+  Entity devices {
+    Note: 'Registered IoT devices that have been provisioned to the platform.'
+
+    id              varchar  [pk,
+                              pattern: '^DEV-[A-Z0-9]{12}$',
+                              note: 'Globally unique device identifier; printed on device label as QR code']
+    device_type     varchar  [not null,
+                              enum: ['env_sensor', 'industrial_sensor', 'consumer_sensor'],
+                              note: 'High-level category determining the shape of device_metadata']
+    model           varchar  [not null,
+                              maxLength: 100,
+                              note: 'Manufacturer model number for compatibility lookups']
+    serial_number   varchar  [unique,
+                              maxLength: 50,
+                              tags: ['hardware-identifier'],
+                              note: 'Manufacturer serial; immutable and unique across all devices']
+    firmware_version varchar [pattern: '^[0-9]+\.[0-9]+\.[0-9]+$',
+                              note: 'Semantic version of currently installed firmware']
+    provisioned_at  timestamp [not null,
+                               granularity: second,
+                               note: 'When the device was added to the platform; not when it was manufactured']
+    last_seen_at    timestamp [granularity: second,
+                               note: 'Most recent successful telemetry receipt; null if device has never reported']
+
+    // Device-type-specific metadata as JSON with known schema.
+    // Different device types populate different subsets of this structure.
+    device_metadata json {
+      Note: 'Device-specific characteristics not common to all devices'
+
+      installation_location object {
+        Note: 'Physical placement information'
+        building varchar [maxLength: 100]
+        floor    int     [minimum: -10, maximum: 200, note: 'Negative values for basement levels']
+        room     varchar [maxLength: 50]
+        latitude  decimal(9,6) [minimum: -90, maximum: 90,
+                                note: 'Approximate GPS coordinates; precision deliberately limited for privacy']
+        longitude decimal(9,6) [minimum: -180, maximum: 180]
+      }
+
+      sensor_specifications object {
+        Note: 'Sensor hardware capabilities and limits'
+        measurement_range_min decimal(10,4) [note: 'Lowest value the sensor can measure in its native unit']
+        measurement_range_max decimal(10,4) [note: 'Highest value the sensor can measure in its native unit']
+        unit                  varchar       [maxLength: 20, note: 'Native unit, e.g. celsius, hPa, m/s²']
+        accuracy_pct          decimal(5,2)  [minimum: 0, maximum: 100,
+                                             note: 'Manufacturer-stated accuracy as a percentage']
+      }
+
+      capabilities array [varchar] [note: 'Free-form capability flags, e.g. "battery-powered", "wifi", "lorawan"']
+    }
+
+    indexes {
+      device_type
+      (device_type, last_seen_at)
+      serial_number [unique]
+    }
+  }
+}
+
+Container telemetry [type: schema] {
+  Note: '''
+  Time-series telemetry data. The readings entity is partitioned by
+  observed_at in TimescaleDB; older partitions are compressed and
+  eventually moved to cold storage per retention policy.
+  '''
+
+  Entity readings {
+    Note: '''
+    A single telemetry reading from a device. Each reading may contain
+    multiple measurements (a single environmental sensor commonly reports
+    temperature, humidity, and pressure together).
+    '''
+
+    reading_id   varchar  [pk,
+                           note: 'Composite of device_id and observed_at_epoch for deterministic deduplication']
+    device_id    varchar  [not null,
+                           pattern: '^DEV-[A-Z0-9]{12}$',
+                           note: 'References devices_catalog.devices.id']
+    observed_at  timestamp [not null,
+                            granularity: millisecond,
+                            note: 'Time the reading was captured by the device; not when it arrived at the platform']
+    received_at  timestamp [not null,
+                            granularity: millisecond,
+                            note: 'Time the reading arrived at the ingest endpoint; useful for measuring transmission lag']
+
+    measurements array [
+      measurement object {
+        Note: 'A single named measurement within a reading'
+
+        name  varchar       [not null,
+                             maxLength: 50,
+                             synonyms: ['metric', 'channel'],
+                             note: 'Measurement identifier, e.g. "temperature", "humidity_pct", "vibration_rms"']
+        value decimal(15,6) [not null,
+                             note: 'Numeric value in the units declared by the device metadata for this measurement']
+        unit  varchar       [maxLength: 20,
+                             note: 'Unit override if differs from device default; usually omitted']
+        quality varchar     [enum: ['ok', 'estimated', 'questionable', 'bad'],
+                             default: 'ok',
+                             note: 'Quality flag set by the device firmware based on internal diagnostics']
+      }
+    ] [minItems: 1, note: 'A reading must contain at least one measurement']
+
+    battery_pct  decimal(5,2) [minimum: 0,
+                               maximum: 100,
+                               note: 'Battery level when applicable; null for line-powered devices']
+    signal_dbm   int          [minimum: -120,
+                               maximum: 0,
+                               note: 'Signal strength in dBm; closer to zero is stronger; null for wired devices']
+
+    indexes {
+      (device_id, observed_at)
+      observed_at [note: 'Used by time-range queries that span all devices, e.g. fleet-wide analytics']
+    }
+  }
+}
+
+Ref: telemetry.readings.device_id > devices_catalog.devices.id [source: '0..*', target: '1..1']

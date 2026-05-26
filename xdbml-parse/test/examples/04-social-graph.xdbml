@@ -1,0 +1,177 @@
+xdbml: 0.1
+
+Project social_graph {
+  targets: Neo4j
+  Note: '''
+  A labeled property graph model for a social network, demonstrating
+  the xDBML Edge construct. Multiple edge types connect the same node
+  types, edges carry their own properties, and cardinality is declared
+  on both source and target sides.
+
+  This schema would forward-engineer to Neo4j as node labels and
+  relationship types with native property storage, to RDF-star as
+  quoted triples with annotation properties, or to a relational
+  database as junction tables (one per edge type) carrying the
+  property columns.
+  '''
+}
+
+Container social [type: keyspace] {
+  Note: '''
+  Single keyspace holding all social-graph entities and edges. In a
+  larger system this might split into separate keyspaces for user
+  data versus content engagement, but a single namespace is
+  appropriate for this example.
+  '''
+
+  // ============================================================
+  // Node entities
+  // ============================================================
+
+  Entity Person {
+    Note: 'A registered user of the platform. Maps to a Person node in Neo4j.'
+
+    id            int     [pk,
+                           note: 'Internal numeric identifier; never exposed in URLs']
+    username      varchar [unique,
+                           not null,
+                           pattern: '^[a-z0-9_]{3,30}$',
+                           minLength: 3,
+                           maxLength: 30,
+                           note: 'Public handle shown in URLs and mentions']
+    display_name  varchar [not null,
+                           maxLength: 80,
+                           note: 'User-controlled display name; may contain spaces and Unicode']
+    bio           varchar [maxLength: 500,
+                           note: 'Free-form biography; markdown formatting allowed']
+    joined_at     timestamp [not null,
+                             granularity: day,
+                             tags: ['lifecycle'],
+                             note: 'Date of account creation; precise time is not retained for privacy']
+    is_verified   boolean [not null,
+                           default: false,
+                           note: 'Indicates identity verification by platform staff']
+  }
+
+  Entity Post {
+    Note: 'A short-form text post authored by a Person.'
+
+    id          int       [pk]
+    content     varchar   [not null,
+                           minLength: 1,
+                           maxLength: 280,
+                           note: 'Post text body; format inspired by short-form platforms']
+    posted_at   timestamp [not null,
+                           granularity: second,
+                           note: 'Server-side timestamp at acceptance; immutable thereafter']
+    is_pinned   boolean   [not null,
+                           default: false,
+                           note: 'Whether the author has pinned this post to the top of their profile']
+  }
+
+  Entity Tag {
+    Note: 'Hashtags used to categorize posts. Created on first use by any user.'
+
+    label varchar [pk,
+                   pattern: '^[a-z0-9_]{1,50}$',
+                   minLength: 1,
+                   maxLength: 50,
+                   note: 'Lowercase identifier with no leading hash; the # is presentational only']
+    first_used_at timestamp [not null,
+                             granularity: second,
+                             note: 'When the tag was first applied to a post; useful for trend analysis']
+    usage_count   int       [not null,
+                             default: 0,
+                             minimum: 0,
+                             note: 'Total times this tag has been applied; denormalized counter, updated by application']
+  }
+
+  // ============================================================
+  // Edges (property-bearing relationships)
+  // ============================================================
+
+  Edge FOLLOWS [source: Person,
+                target: Person,
+                source_cardinality: '0..*',
+                target_cardinality: '0..*'] {
+    Note: '''
+    Asymmetric follow relationship. A follows B does not imply B follows A.
+    Two FOLLOWS edges (in opposite directions) make a mutual-follow pair.
+    '''
+
+    since        date    [not null,
+                          note: 'Date when the follow was initiated; precise time not retained']
+    notifications_on boolean [not null,
+                              default: true,
+                              note: 'Whether the follower receives notifications for new posts from the followed account']
+    muted        boolean [not null,
+                          default: false,
+                          note: 'Whether the follower has temporarily muted the followed account; remains a follower for graph purposes']
+  }
+
+  Edge AUTHORED [source: Person,
+                 target: Post,
+                 source_cardinality: '1..*',
+                 target_cardinality: '1..1'] {
+    Note: 'Authorship link between a Person and their Posts. Each Post has exactly one author.'
+
+    // Authored is structurally a 1:1 author edge with no additional properties,
+    // but declaring it as an Edge rather than a Ref makes it traversable in
+    // Cypher queries the same way other relationships are.
+  }
+
+  Edge LIKED [source: Person,
+              target: Post,
+              source_cardinality: '0..*',
+              target_cardinality: '0..*'] {
+    Note: 'A like reaction. The same Person cannot LIKE the same Post twice.'
+
+    at timestamp [not null,
+                  granularity: second,
+                  note: 'When the like was applied; used for chronological reaction feeds']
+  }
+
+  Edge REPLIED [source: Post,
+                target: Post,
+                source_cardinality: '0..*',
+                target_cardinality: '0..*'] {
+    Note: '''
+    A reply relationship between Posts. The source Post is a reply to the
+    target Post. A single Post may have many replies (children) and may
+    itself be a reply to multiple parents in some platforms; in this
+    schema we allow the more general 0..* on both sides.
+    '''
+
+    at timestamp [not null,
+                  granularity: second,
+                  note: 'When the reply was posted; redundant with Post.posted_at but indexed differently for thread traversal']
+  }
+
+  Edge TAGGED_WITH [source: Post,
+                    target: Tag,
+                    source_cardinality: '0..*',
+                    target_cardinality: '0..*'] {
+    Note: 'Hashtag application. A Post may carry multiple tags; a Tag aggregates many Posts.'
+
+    extracted_at timestamp [not null,
+                            granularity: second,
+                            note: 'When the hashtag was extracted from the post content; should match Post.posted_at within milliseconds']
+  }
+
+  Edge BLOCKS [source: Person,
+               target: Person,
+               source_cardinality: '0..*',
+               target_cardinality: '0..*'] {
+    Note: '''
+    Block relationship. Independent of FOLLOWS -- a Person who blocks B
+    may still have a FOLLOWS edge to B from before the block, which the
+    application treats as inactive. The block is enforced at read time.
+    '''
+
+    blocked_at timestamp [not null,
+                          granularity: second,
+                          note: 'When the block was created']
+    reason     varchar   [maxLength: 200,
+                          note: 'Optional reason recorded by the blocker; not visible to the blocked party']
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@xdbml/playground",
+  "version": "0.1.0-poc.1",
+  "description": "Interactive playground for xDBML -- edit on the left, diagram on the right.",
+  "license": "Apache-2.0",
+  "private": true,
+  "homepage": "https://playground.xdbml.org",
+  "keywords": ["xdbml", "playground", "vue3", "monaco"],
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "lodash-es": "^4.17.21",
+    "monaco-editor": "^0.52.2",
+    "pinia": "^2.3.1",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.11",
+    "@types/lodash-es": "^4.17.12",
+    "@types/node": "^24.0.14",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "@vue/tsconfig": "^0.7.0",
+    "tailwindcss": "^4.1.11",
+    "typescript": "^5.7.3",
+    "vite": "^7.1.7",
+    "vue-tsc": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

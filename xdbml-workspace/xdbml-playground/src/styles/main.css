@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/*
+ * Make Monaco fill its container and not draw a blue focus ring on the
+ * wrapper element. The editor itself manages its own focus visuals.
+ */
+.monaco-editor,
+.monaco-editor .overflow-guard {
+  border-radius: 0;
+}
+
+/*
+ * The diagram canvas can show a subtle background grid so users see they
+ * can pan/move things around. Re-enable when pan/zoom lands.
+ */
+.diagram-canvas {
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/*
+ * Card hover affordance -- entity cards shouldn't visually shift on hover
+ * (that creates jitter when they're connected by lines), so we just lift
+ * the shadow.
+ */
+.entity-card:hover .entity-card-header {
+  filter: brightness(0.98);
+}
