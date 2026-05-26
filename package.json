@@ -6,9 +6,11 @@
   "type": "module",
   "scripts": {
     "docs:dev": "npm run prepare:examples && vitepress dev .",
-    "docs:build": "npm run prepare:examples && vitepress build .",
+    "docs:build": "npm run prepare:examples && npm run prepare:playground && vitepress build .",
     "docs:preview": "vitepress preview .",
-    "prepare:examples": "node scripts/prepare-examples.mjs"
+    "prepare:examples": "node scripts/prepare-examples.mjs",
+    "prepare:playground": "node scripts/prepare-playground.mjs",
+    "build:playground": "cd playground && npm install && npm run build"
   },
   "devDependencies": {
     "vitepress": "^1.6.4",

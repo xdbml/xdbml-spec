@@ -16,7 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@xdbml/parse": ["../xdbml-parse/src/index.ts"]
+      "@xdbml/parse": ["../parser/src/index.ts"]
     },
     "types": ["vite/client"]
   },
@@ -25,6 +25,6 @@
     "src/**/*.ts",
     "src/**/*.vue",
     "vite.config.ts",
-    "../xdbml-parse/src/**/*.ts"
+    "../parser/src/**/*.ts"
   ]
 }

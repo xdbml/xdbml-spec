@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Vite build output
+dist/
+.vite/
+
+# Generated assets, populated by scripts/prepare-assets.mjs from the
+# canonical sources in /logo/. Not committed; produced at build time.
+public/xdbml-*.svg
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

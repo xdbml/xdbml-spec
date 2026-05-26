@@ -67,12 +67,28 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '24'
+          # Cache both lockfiles -- root for VitePress, playground for the
+          # heavyweight Vue/Vite/Monaco bundle.
           cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            playground/package-lock.json
 
-      - name: Install dependencies
+      - name: Install dependencies (root)
         run: npm ci
 
+      - name: Install dependencies (playground)
+        # The playground is a separate Vite project with its own deps; the
+        # docs:build script will call this automatically if needed, but
+        # doing it explicitly here keeps build logs clean and lets the npm
+        # cache do its job.
+        run: cd playground && npm ci
+
       - name: Build site
+        # docs:build runs prepare-examples, prepare-playground (which
+        # builds the playground), then vitepress build. The playground's
+        # output is staged into /public/playground/ and published as a
+        # static asset under xdbml.org/playground/.
         run: npm run docs:build
 
       - name: Upload artifact

@@ -1,15 +1,16 @@
 {
   "name": "@xdbml/playground",
   "version": "0.1.0-poc.1",
-  "description": "Interactive playground for xDBML -- edit on the left, diagram on the right.",
+  "description": "Interactive playground for xDBML -- edit on the left, diagram on the right. Lives at xdbml.org/playground/.",
   "license": "Apache-2.0",
   "private": true,
-  "homepage": "https://playground.xdbml.org",
+  "homepage": "https://xdbml.org/playground/",
   "keywords": ["xdbml", "playground", "vue3", "monaco"],
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "prepare:assets": "node scripts/prepare-assets.mjs",
+    "dev": "npm run prepare:assets && vite",
+    "build": "npm run prepare:assets && vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit"
   },

@@ -14,6 +14,13 @@ node_modules/
 # The .xdbml source files and README.md are committed; the generated .md
 # viewing wrappers are not.
 /examples/0*.md
+# /public/playground/ is populated by scripts/prepare-playground.mjs from
+# /playground/dist/ at build time. Generated copy, not committed.
+/public/playground/
+# The playground has its own build output too; gitignored alongside.
+/playground/dist/
+/playground/.vite/
+/playground/public/xdbml-*.svg
 
 # Editor and OS
 .DS_Store

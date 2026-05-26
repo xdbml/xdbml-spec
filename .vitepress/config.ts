@@ -32,6 +32,12 @@ export default defineConfig({
   // README.md is excluded because the website's landing page (index.md)
   // is hero-styled and supersedes the README for site visitors.
   // The README remains visible on GitHub for repo browsers.
+  //
+  // /playground/ and /parser/ are standalone Vite/TypeScript projects;
+  // their READMEs and source files would otherwise be picked up by
+  // VitePress as docs pages. The playground is published at /playground/
+  // as a built static asset (see scripts/prepare-playground.mjs),
+  // bypassing VitePress entirely.
   srcExclude: [
     'README.md',
     'LICENSE',
@@ -41,6 +47,8 @@ export default defineConfig({
     'SECURITY.md',
     'node_modules/**',
     '.github/**',
+    'playground/**',
+    'parser/**',
   ],
 
   // Routing: map markdown source files to clean URLs.
@@ -90,6 +98,11 @@ export default defineConfig({
           { text: 'Grammar',         link: '/grammar/' },
         ]
       },
+      // Playground is served as a static asset under /playground/ -- not a
+      // VitePress page, just a standalone Vue app published at the same
+      // domain. The link opens it in the same tab; the playground's own
+      // header has a wordmark linking back to xdbml.org.
+      { text: 'Playground', link: '/playground/' },
       { text: 'Project',
         items: [
           { text: 'Governance',     link: '/governance' },
