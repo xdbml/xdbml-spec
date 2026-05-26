@@ -58,5 +58,5 @@ Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side func
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
 - [`spec/v0.1.md`](./spec/v0.1.md) -- the full v0.1 language specification
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
-- [`playground/`](./playground/index.html) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
+- [`playground/`](https://xdbml.org/playground/index.html) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus and [parser/](./parser)
