@@ -26,15 +26,12 @@
         </span>
       </div>
 
-      <!-- Placeholder action buttons. These render but show a 'coming soon'
-           toast when clicked. Kept here so the visual footprint of the
-           header is stable and the buttons can wire to real handlers
-           later without re-jiggling the layout. -->
+      <!-- Action buttons. Examples is wired up; the others are still
+           placeholders that show a 'coming soon' toast. Kept here so
+           the visual footprint is stable as the other buttons get
+           implemented in turn. -->
       <div class="flex items-center gap-1">
-        <HeaderButton
-          label="Examples"
-          @click="onPlaceholder('Examples')"
-        />
+        <ExamplesMenu />
         <HeaderButton
           label="Import"
           @click="onPlaceholder('Import')"
@@ -77,10 +74,11 @@
 /**
  * The top header bar.
  *
- * Visual frame for the playground with placeholder buttons that will be
- * wired up to real functionality later (Share, Import, Export, Help,
- * Examples picker). For now each shows a 'coming soon' toast so users
- * understand the affordance is intentional but not yet active.
+ * The Examples menu is wired up via the ExamplesMenu component (sibling
+ * file). The remaining buttons (Import, Export, Share, Help) are still
+ * placeholders that show a 'coming soon' toast on click. Visual
+ * footprint is stable so the placeholders can be wired up to real
+ * handlers later without re-jiggling layout.
  *
  * No login / account UI -- the playground is intentionally accountless;
  * persistence is localStorage and URL sharing (to come) is the same
@@ -90,6 +88,7 @@
 import { ref } from 'vue';
 
 import HeaderButton from './HeaderButton.vue';
+import ExamplesMenu from './ExamplesMenu.vue';
 
 const toast = ref<string | null>(null);
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
