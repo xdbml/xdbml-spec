@@ -108,6 +108,7 @@
             :entity="entity"
             :collapsed-paths="collapsedPaths"
             @toggle-path="(path) => togglePath(entity.id, path)"
+            @drag-start="onEntityDragStart"
           />
         </g>
 
@@ -190,6 +191,19 @@
         @click="zoomTo(1)"
         title="Reset to 100%"
       >1:1</button>
+
+      <!-- Reset entity positions to layout default. Only shown when at
+           least one position has been overridden, otherwise the button
+           would be confusing (nothing to reset). -->
+      <template v-if="userPositions.size > 0">
+        <div class="w-px h-5 bg-gray-200 mx-0.5" />
+        <button
+          type="button"
+          class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          @click="resetPositions"
+          :title="`Reset ${userPositions.size} repositioned entit${userPositions.size === 1 ? 'y' : 'ies'} to layout default`"
+        >Reset positions</button>
+      </template>
     </div>
   </div>
 </template>
@@ -232,7 +246,8 @@ import { useParserStore } from '@/stores/parserStore';
 
 import EntityCard from './EntityCard.vue';
 import RefLine from './RefLine.vue';
-import { buildDiagram, makeCollapsedKey } from './layout';
+import { buildDiagram, makeCollapsedKey, applyUserPositions } from './layout';
+import type { UserPositions } from './layout';
 
 const parser = useParserStore();
 
@@ -515,10 +530,161 @@ function onWheel (e: WheelEvent): void {
 }
 
 /* -------------------------------------------------------------------------
- * Diagram model -- recomputed reactively from AST + collapsed state.
+ * User-overridden entity positions (drag-to-reposition)
+ *
+ * Stored as a Map<entityId, {x, y}> in SVG coordinates. Storing in SVG
+ * units (not viewport pixels) means zoom doesn't affect persistence:
+ * drag at 50% zoom, reload at 200% zoom, and the entity is still at
+ * the same canvas point.
+ *
+ * Keyed by `EntityLayout.id` which is `containerName.entityName` or
+ * just `entityName` for orphans. So if a user renames an entity in
+ * source, its position override is dropped (the key no longer matches)
+ * and the entity reverts to layout-default. That's the intended
+ * behavior -- renaming is a structural change.
  * ----------------------------------------------------------------------- */
 
-const diagram = computed(() => buildDiagram(parser.ast, collapsedPaths.value));
+const POSITIONS_STORAGE_KEY = 'xdbml-playground:entity-positions';
+
+function loadUserPositions (): Map<string, { x: number; y: number }> {
+  try {
+    const raw = localStorage.getItem(POSITIONS_STORAGE_KEY);
+    if (!raw) return new Map();
+    const obj = JSON.parse(raw);
+    if (typeof obj !== 'object' || obj === null) return new Map();
+    const out = new Map<string, { x: number; y: number }>();
+    for (const [k, v] of Object.entries(obj)) {
+      if (
+        v && typeof v === 'object' &&
+        typeof (v as { x?: unknown }).x === 'number' &&
+        typeof (v as { y?: unknown }).y === 'number'
+      ) {
+        out.set(k, { x: (v as { x: number }).x, y: (v as { y: number }).y });
+      }
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+const userPositions = ref<Map<string, { x: number; y: number }>>(loadUserPositions());
+
+function persistUserPositions (): void {
+  try {
+    const obj: Record<string, { x: number; y: number }> = {};
+    for (const [k, v] of userPositions.value) obj[k] = v;
+    localStorage.setItem(POSITIONS_STORAGE_KEY, JSON.stringify(obj));
+  } catch {
+    // best-effort
+  }
+}
+
+function resetPositions (): void {
+  if (userPositions.value.size === 0) return;
+  userPositions.value = new Map();
+  persistUserPositions();
+}
+
+/* -------------------------------------------------------------------------
+ * Drag interaction
+ *
+ * EntityCard emits `drag-start` on header mousedown. We then attach
+ * document-level mousemove and mouseup listeners so the cursor can
+ * leave the card while the button is held. Math:
+ *
+ *   pixel delta in viewport      = clientX - dragStartClientX
+ *   SVG-units delta              = pixelDelta / zoom
+ *   new entity position          = dragStartEntityPos + svgDelta
+ *
+ * The drag updates `userPositions` reactively so the entity follows
+ * the cursor in real time; the resulting diagram model is recomputed
+ * by `applyUserPositions`, which also recomputes container bounds and
+ * the overall canvas size.
+ *
+ * On mouseup, we persist to localStorage.
+ * ----------------------------------------------------------------------- */
+
+interface DragState {
+  entityId: string;
+  startEntityX: number;
+  startEntityY: number;
+  startClientX: number;
+  startClientY: number;
+  startZoom: number;
+  moved: boolean; // gate persistence on actual movement
+}
+
+let dragState: DragState | null = null;
+
+function onEntityDragStart (e: { entityId: string; clientX: number; clientY: number }): void {
+  const entity = diagram.value.entities.find((x) => x.id === e.entityId);
+  if (!entity) return;
+  dragState = {
+    entityId: e.entityId,
+    startEntityX: entity.bounds.x,
+    startEntityY: entity.bounds.y,
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    startZoom: zoom.value,
+    moved: false,
+  };
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+  // Suppress text selection during drag.
+  document.body.style.userSelect = 'none';
+}
+
+function onDragMove (e: MouseEvent): void {
+  if (!dragState) return;
+  const dxPx = e.clientX - dragState.startClientX;
+  const dyPx = e.clientY - dragState.startClientY;
+  // Tiny movements (under 2px) shouldn't trigger a position write --
+  // accidental wiggles when the user actually meant to click. Once
+  // we've crossed the threshold once, all subsequent moves count.
+  if (!dragState.moved && Math.abs(dxPx) < 2 && Math.abs(dyPx) < 2) return;
+  dragState.moved = true;
+
+  // Convert pixel delta to SVG-unit delta via the zoom at drag start.
+  // (Using current zoom would cause weird behavior if the user
+  // somehow zoomed mid-drag via keyboard; using start-zoom is stable.)
+  const dxSvg = dxPx / dragState.startZoom;
+  const dySvg = dyPx / dragState.startZoom;
+  const newX = dragState.startEntityX + dxSvg;
+  const newY = dragState.startEntityY + dySvg;
+
+  // Clamp to non-negative coordinates -- entities shouldn't go into
+  // negative canvas space (it would be unreachable by scroll).
+  const clampedX = Math.max(0, newX);
+  const clampedY = Math.max(0, newY);
+
+  const next = new Map(userPositions.value);
+  next.set(dragState.entityId, { x: clampedX, y: clampedY });
+  userPositions.value = next;
+}
+
+function onDragEnd (): void {
+  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('mouseup', onDragEnd);
+  document.body.style.userSelect = '';
+  if (dragState?.moved) persistUserPositions();
+  dragState = null;
+}
+
+/* -------------------------------------------------------------------------
+ * Diagram model -- recomputed reactively from AST, collapsed state,
+ * and user-overridden positions.
+ *
+ * The pipeline is:
+ *   1. buildDiagram(ast, collapsedPaths) -- pure layout from source
+ *   2. applyUserPositions(diagram, userPositions) -- overlay user moves,
+ *      recompute container bounds + canvas size
+ * ----------------------------------------------------------------------- */
+
+const diagram = computed(() => {
+  const base = buildDiagram(parser.ast, collapsedPaths.value);
+  return applyUserPositions(base, userPositions.value as UserPositions);
+});
 
 const hasAst = computed(() => parser.hasAst);
 

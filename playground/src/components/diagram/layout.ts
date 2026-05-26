@@ -840,3 +840,127 @@ function settingValueAsString (settings: Setting[], name: string): string | unde
       return undefined;
   }
 }
+
+/* =========================================================================
+ * User-overridden positions (drag-to-reposition)
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Per-entity position override. Keyed by `EntityLayout.id` (which is
+ * `containerName.entityName` or just `entityName` for orphans).
+ *
+ * Positions are in SVG coordinates -- same coordinate system the layout
+ * function produces. Storing in SVG units rather than viewport pixels
+ * means zoom doesn't affect the stored value: drag at 50% zoom and the
+ * stored position is in canvas units, so reloading at 200% zoom still
+ * shows the entity at the same canvas point.
+ */
+export type UserPositions = ReadonlyMap<string, { x: number; y: number }>;
+
+/**
+ * Apply user-overridden positions to a freshly built DiagramModel.
+ *
+ * Returns a new DiagramModel with:
+ *   - Entity bounds updated to user-chosen coordinates where overrides
+ *     exist. Width/height are kept (they depend on field count and
+ *     collapse state, not user choice).
+ *   - Container bounds recomputed as the bounding box of the
+ *     entities they contain, plus padding for the container's own
+ *     header band. So when a user drags an entity inside a container,
+ *     the container grows or shifts to stay wrapping its members.
+ *   - Top-level diagram width/height recomputed to the union of all
+ *     placed elements plus a margin.
+ *   - Refs are untouched here -- `RefLine.vue` reads entity bounds at
+ *     render time, so refs follow whatever positions the entities end
+ *     up at.
+ *
+ * Pure function: doesn't mutate the input. Cheap enough to call on
+ * every drag tick.
+ */
+export function applyUserPositions (
+  diagram: DiagramModel,
+  userPositions: UserPositions,
+): DiagramModel {
+  // Fast path: no overrides at all.
+  if (userPositions.size === 0) return diagram;
+
+  // First pass: relocate entities that have an override.
+  const newEntities: EntityLayout[] = diagram.entities.map((entity) => {
+    const override = userPositions.get(entity.id);
+    if (!override) return entity;
+    return {
+      ...entity,
+      bounds: {
+        x: override.x,
+        y: override.y,
+        width: entity.bounds.width,
+        height: entity.bounds.height,
+      },
+    };
+  });
+
+  // Index entities by their containerName for the container-recomputation pass.
+  const byContainer = new Map<string, EntityLayout[]>();
+  for (const e of newEntities) {
+    if (!e.containerName) continue;
+    const list = byContainer.get(e.containerName) ?? [];
+    list.push(e);
+    byContainer.set(e.containerName, list);
+  }
+
+  // Second pass: recompute container bounds as the bounding box of their
+  // members, padded for the header band and inset.
+  const newContainers: ContainerLayout[] = diagram.containers.map((container) => {
+    const members = byContainer.get(container.name) ?? [];
+    if (members.length === 0) {
+      // No members -- container keeps original bounds. Could shrink to
+      // a minimum, but the natural layout already gave it a sensible
+      // header-only size, so we don't disturb it.
+      return container;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const m of members) {
+      if (m.bounds.x < minX) minX = m.bounds.x;
+      if (m.bounds.y < minY) minY = m.bounds.y;
+      if (m.bounds.x + m.bounds.width > maxX) maxX = m.bounds.x + m.bounds.width;
+      if (m.bounds.y + m.bounds.height > maxY) maxY = m.bounds.y + m.bounds.height;
+    }
+
+    // Wrap in padding. The top padding has to include the container's
+    // own header band height; the others are uniform.
+    const newBounds = {
+      x: minX - CONTAINER_PADDING,
+      y: minY - CONTAINER_PADDING - CONTAINER_HEADER_HEIGHT,
+      width: (maxX - minX) + CONTAINER_PADDING * 2,
+      height: (maxY - minY) + CONTAINER_PADDING * 2 + CONTAINER_HEADER_HEIGHT,
+    };
+
+    return { ...container, bounds: newBounds };
+  });
+
+  // Recompute the overall canvas size as the union of everything placed,
+  // plus the outer margin. This grows the scrollable area when the user
+  // drags entities beyond the original bounds.
+  let canvasMaxX = 0;
+  let canvasMaxY = 0;
+  for (const c of newContainers) {
+    if (c.bounds.x + c.bounds.width > canvasMaxX) canvasMaxX = c.bounds.x + c.bounds.width;
+    if (c.bounds.y + c.bounds.height > canvasMaxY) canvasMaxY = c.bounds.y + c.bounds.height;
+  }
+  for (const e of newEntities) {
+    if (e.bounds.x + e.bounds.width > canvasMaxX) canvasMaxX = e.bounds.x + e.bounds.width;
+    if (e.bounds.y + e.bounds.height > canvasMaxY) canvasMaxY = e.bounds.y + e.bounds.height;
+  }
+
+  return {
+    containers: newContainers,
+    entities: newEntities,
+    refs: diagram.refs,
+    width: Math.max(diagram.width, canvasMaxX + CANVAS_MARGIN),
+    height: Math.max(diagram.height, canvasMaxY + CANVAS_MARGIN),
+  };
+}

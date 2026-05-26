@@ -13,38 +13,55 @@
       filter="url(#entity-shadow)"
     />
 
-    <!-- Header band -->
-    <rect
-      :x="entity.bounds.x"
-      :y="entity.bounds.y"
-      :width="entity.bounds.width"
-      :height="headerHeight"
-      :fill="headerFill"
-      rx="5"
-    />
-    <rect
-      :x="entity.bounds.x"
-      :y="entity.bounds.y + headerHeight - 6"
-      :width="entity.bounds.width"
-      height="6"
-      :fill="headerFill"
-    />
+    <!-- Draggable header band. Mousedown on this group starts a drag;
+         the parent canvas listens for drag-start and runs the rest of
+         the drag interaction at document level (so the cursor can leave
+         the card while the mouse button is held). Field rows are
+         deliberately NOT part of the drag handle: a future field-
+         inspector feature will use field-row clicks for selection,
+         and a draggable field row would conflict with that. The
+         convention in dbdiagram.io, Lucidchart, and similar tools is
+         the same -- header-only drag. -->
+    <g
+      class="entity-header"
+      style="cursor: move;"
+      @mousedown.stop="onHeaderMouseDown"
+    >
+      <!-- Header band -->
+      <rect
+        :x="entity.bounds.x"
+        :y="entity.bounds.y"
+        :width="entity.bounds.width"
+        :height="headerHeight"
+        :fill="headerFill"
+        rx="5"
+      />
+      <rect
+        :x="entity.bounds.x"
+        :y="entity.bounds.y + headerHeight - 6"
+        :width="entity.bounds.width"
+        height="6"
+        :fill="headerFill"
+      />
 
-    <text
-      :x="entity.bounds.x + 12"
-      :y="entity.bounds.y + 20"
-      fill="white"
-      font-size="13"
-      font-weight="600"
-    >{{ entity.name }}</text>
-    <text
-      :x="entity.bounds.x + entity.bounds.width - 12"
-      :y="entity.bounds.y + 20"
-      fill="white"
-      font-size="10"
-      text-anchor="end"
-      opacity="0.85"
-    >{{ entity.keyword }}</text>
+      <text
+        :x="entity.bounds.x + 12"
+        :y="entity.bounds.y + 20"
+        fill="white"
+        font-size="13"
+        font-weight="600"
+        style="pointer-events: none; user-select: none;"
+      >{{ entity.name }}</text>
+      <text
+        :x="entity.bounds.x + entity.bounds.width - 12"
+        :y="entity.bounds.y + 20"
+        fill="white"
+        font-size="10"
+        text-anchor="end"
+        opacity="0.85"
+        style="pointer-events: none; user-select: none;"
+      >{{ entity.keyword }}</text>
+    </g>
 
     <!-- Field rows -->
     <g
@@ -157,8 +174,12 @@
  * intermediate rows (array element labels, polymorphism alternative
  * labels) that don't correspond to user-written field names.
  *
- * Emits `toggle-path` when a caret is clicked. The parent canvas owns
- * the collapse-state set and decides what to do with the toggle.
+ * Emits two events:
+ *   - `toggle-path`: caret clicked. The parent canvas owns the collapse
+ *     state and decides what to do with the toggle.
+ *   - `drag-start`: header mousedown. The parent canvas takes over,
+ *     attaches document-level mousemove/mouseup listeners, and updates
+ *     the entity's user-overridden position as the mouse moves.
  */
 import type { EntityLayout, FieldLayout } from './layout';
 
@@ -167,9 +188,24 @@ const props = defineProps<{
   collapsedPaths: ReadonlySet<string>;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   'toggle-path': [path: string];
+  'drag-start': [event: { entityId: string; clientX: number; clientY: number }];
 }>();
+
+function onHeaderMouseDown (e: MouseEvent): void {
+  // Only the primary (left) button starts a drag. Right-click and
+  // middle-click are reserved for future use (context menu, pan).
+  if (e.button !== 0) return;
+  // The parent runs the rest at the document level so the mouse can
+  // leave the card while the button is held.
+  emit('drag-start', {
+    entityId: props.entity.id,
+    clientX: e.clientX,
+    clientY: e.clientY,
+  });
+  e.preventDefault();
+}
 
 const headerHeight = 32;
 const INDENT_PX = 14;
