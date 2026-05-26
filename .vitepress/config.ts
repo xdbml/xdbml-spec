@@ -98,11 +98,18 @@ export default defineConfig({
           { text: 'Grammar',         link: '/grammar/' },
         ]
       },
-      // Playground is served as a static asset under /playground/ -- not a
-      // VitePress page, just a standalone Vue app published at the same
-      // domain. The link opens it in the same tab; the playground's own
-      // header has a wordmark linking back to xdbml.org.
-      { text: 'Playground', link: '/playground/' },
+      // Playground is a standalone Vue app published at /playground/, NOT
+      // a VitePress page. The nav link is marked target='_blank' for two
+      // reasons:
+      //   1. It opens in a new tab, so the docs page the user came from
+      //      stays open behind them.
+      //   2. It bypasses VitePress's client-side SPA router. Without this,
+      //      VitePress would try to resolve /playground/ as a Vue route
+      //      and render the 404 page, since no .md source exists at that
+      //      path. The static playground/index.html only gets served on a
+      //      full page load.
+      // `rel: 'noopener'` is the safer default for new-tab links.
+      { text: 'Playground', link: '/playground/', target: '_blank', rel: 'noopener' },
       { text: 'Project',
         items: [
           { text: 'Governance',     link: '/governance' },

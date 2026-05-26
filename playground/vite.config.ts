@@ -31,7 +31,15 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3001,
+    // 5174 is adjacent to VitePress's default 5173. Two reasons:
+    //   1. Easy to remember -- one digit apart, both five-digit ports.
+    //   2. No clash if `vitepress dev` is also running (e.g. you're
+    //      iterating on the playground but have the docs site open in
+    //      another tab).
+    // When you only want to verify the integrated site, run
+    // `npm run docs:dev` from the repo root -- that builds the
+    // playground first and VitePress serves it at /playground/ on 5173.
+    port: 5174,
     open: false,
   },
   build: {

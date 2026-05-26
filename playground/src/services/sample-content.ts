@@ -25,7 +25,14 @@ import socialXdbml from '../../../examples/04-social-graph.xdbml?raw';
 import healthcareXdbml from '../../../examples/05-healthcare-fhir.xdbml?raw';
 import financeXdbml from '../../../examples/06-financial-services.xdbml?raw';
 
-export const DEFAULT_SAMPLE_CONTENT = blogXdbml;
+// The polyglot Oracle + MongoDB e-commerce schema is the default for
+// new visitors. It exercises the features that distinguish xDBML from
+// DBML -- containers with different targets, nested objects, arrays of
+// objects, oneOf polymorphism, named types, BSON scalars, cross-container
+// refs with array wildcards -- so first-time visitors see the unique
+// value proposition immediately rather than a plain relational schema.
+// Users with existing localStorage content keep what they had.
+export const DEFAULT_SAMPLE_CONTENT = ecommerceXdbml;
 
 export interface SampleCategory {
   readonly slug: string;
