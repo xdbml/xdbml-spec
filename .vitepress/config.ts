@@ -100,25 +100,31 @@ export default defineConfig({
       },
       // Playground is a standalone Vue app, NOT a VitePress page.
       //
-      // The link is the same in dev and prod: /playground/ -- a same-
-      // domain subpath. `target: '_blank'` is critical: it tells
-      // VitePress to treat this as an external link, which bypasses the
-      // client-side SPA router. Without it, VitePress's router would try
-      // to resolve /playground/ as a Vue route and render the 404 page,
-      // since no .md source exists at that path.
+      // The link uses the explicit /playground/index.html, NOT the
+      // directory form /playground/. `target: '_blank'` makes VitePress
+      // treat this as an external link so the click bypasses the
+      // client-side SPA router (which would otherwise render the 404
+      // page because no .md source exists at /playground).
       //
-      // How /playground/ actually serves:
-      //   - In `docs:build` -> the playground is built into
-      //     /public/playground/ and VitePress publishes it as a static
-      //     asset. A normal request to /playground/index.html resolves.
-      //   - In `docs:dev` -> a Vite proxy rule (see the `vite` key below)
-      //     forwards /playground/ requests to the playground's own dev
-      //     server on port 5174, which `docs:dev` starts in parallel.
-      //     Hot reload works in the proxied tab; the user only sees
-      //     localhost:5173.
+      // Why the explicit `index.html` filename matters:
+      //
+      //   - In `docs:build` / `docs:preview` and on the deployed site,
+      //     both /playground/ and /playground/index.html resolve to the
+      //     same static file. Either form works.
+      //
+      //   - In `docs:dev`, VitePress's dev server catches /playground/
+      //     (directory form) first and renders an empty Vue SPA shell --
+      //     it never falls through to public/playground/index.html. The
+      //     EXPLICIT filename /playground/index.html bypasses that
+      //     interception: the dev server's static-middleware sees a
+      //     concrete .html file under public/ and serves it directly.
+      //
+      // The playground is staged into /public/playground/ by
+      // scripts/prepare-playground.mjs, which runs as part of both
+      // `docs:dev` and `docs:build`. So the file is always there.
       {
         text: 'Playground',
-        link: '/playground/',
+        link: '/playground/index.html',
         target: '_blank',
         rel: 'noopener',
       },
@@ -436,33 +442,5 @@ export default defineConfig({
   // Build hooks
   sitemap: {
     hostname: 'https://xdbml.org',
-  },
-
-  // Vite config overrides for VitePress's underlying dev server.
-  //
-  // The `server.proxy` rule forwards /playground/ to the playground's
-  // own Vite dev server on port 5174. Effect: in `docs:dev` the user
-  // browses everything from localhost:5173 -- docs at /, playground at
-  // /playground/ -- on a single port. Hot reload still works because
-  // the playground's dev server handles the actual playground requests;
-  // VitePress only forwards. The `rewrite` strips the /playground prefix
-  // so the playground's server sees the request as it expects.
-  //
-  // In `docs:build` this proxy is irrelevant -- VitePress builds the
-  // site once, no dev server runs, and the playground is served from
-  // /public/playground/ as a static asset (staged there by
-  // scripts/prepare-playground.mjs).
-  //
-  // ws: true keeps Vite's HMR websocket alive across the proxy.
-  vite: {
-    server: {
-      proxy: {
-        '/playground': {
-          target: 'http://localhost:5174',
-          changeOrigin: true,
-          ws: true,
-        },
-      },
-    },
   },
 })
