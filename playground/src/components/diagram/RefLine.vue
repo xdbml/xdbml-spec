@@ -1,19 +1,33 @@
 <template>
   <g v-if="path">
+    <!-- Wide invisible hit-area over the curve. Catches clicks even
+         when the user doesn't land exactly on the 1.5 px stroke.
+         Drawn BEFORE the visible path so SVG painter's order puts the
+         visible line on top. -->
     <path
       :d="path.d"
       fill="none"
-      stroke="#64748b"
-      stroke-width="1.5"
+      stroke="transparent"
+      stroke-width="14"
+      style="cursor: pointer;"
+      @click.stop="$emit('select')"
+    />
+    <!-- Visible curve. Stroke thickens and turns blue when selected. -->
+    <path
+      :d="path.d"
+      fill="none"
+      :stroke="isSelected ? '#2563eb' : '#64748b'"
+      :stroke-width="isSelected ? 2.5 : 1.5"
+      style="pointer-events: none;"
     />
     <!-- Source endpoint marker -->
-    <g v-if="sourceLabel">
+    <g v-if="sourceLabel" style="pointer-events: none;">
       <circle
         :cx="path.startX"
         :cy="path.startY"
         r="3.5"
         fill="white"
-        stroke="#64748b"
+        :stroke="isSelected ? '#2563eb' : '#64748b'"
         stroke-width="1.5"
       />
       <text
@@ -21,18 +35,18 @@
         :y="path.startY - 5"
         font-size="10"
         font-weight="600"
-        fill="#475569"
+        :fill="isSelected ? '#2563eb' : '#475569'"
         :text-anchor="path.startSide === 'right' ? 'start' : 'end'"
       >{{ sourceLabel }}</text>
     </g>
     <!-- Target endpoint marker -->
-    <g v-if="targetLabel">
+    <g v-if="targetLabel" style="pointer-events: none;">
       <circle
         :cx="path.endX"
         :cy="path.endY"
         r="3.5"
         fill="white"
-        stroke="#64748b"
+        :stroke="isSelected ? '#2563eb' : '#64748b'"
         stroke-width="1.5"
       />
       <text
@@ -40,7 +54,7 @@
         :y="path.endY - 5"
         font-size="10"
         font-weight="600"
-        fill="#475569"
+        :fill="isSelected ? '#2563eb' : '#475569'"
         :text-anchor="path.endSide === 'right' ? 'start' : 'end'"
       >{{ targetLabel }}</text>
     </g>
@@ -63,6 +77,13 @@
  * (`<` `>` `-` `<>`) is currently not visualized; the explicit
  * cardinality strings carry richer information and are preferred when
  * present.
+ *
+ * Selection:
+ *   - `is-selected` prop: when true, the curve and its endpoint markers
+ *     turn blue and the stroke thickens.
+ *   - A transparent stroke-14 path sits over the visible curve to
+ *     catch clicks more easily -- the visible 1.5 px line is too thin
+ *     to be a reliable click target on its own.
  */
 import { computed } from 'vue';
 
@@ -72,6 +93,11 @@ import { ENTITY_HEADER_HEIGHT, ROW_HEIGHT } from './layout';
 const props = defineProps<{
   refLayout: RefLayout;
   entities: EntityLayout[];
+  isSelected: boolean;
+}>();
+
+defineEmits<{
+  select: [];
 }>();
 
 interface Anchor {

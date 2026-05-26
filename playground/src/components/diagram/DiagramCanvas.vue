@@ -26,6 +26,7 @@
         :height="diagram.height * zoom"
         :viewBox="`0 0 ${diagram.width} ${diagram.height}`"
         class="block"
+        @click="onBackgroundClick"
       >
         <defs>
           <!-- Entity card drop-shadow. Subtle -- the diagram already has
@@ -35,7 +36,9 @@
           </filter>
         </defs>
 
-        <!-- Containers (drawn first so entities render on top) -->
+        <!-- Containers (drawn first so entities render on top).
+             Clicking anywhere on a container's body or header band
+             selects it. Selection thickens the outline. -->
         <g
           v-for="container in diagram.containers"
           :key="container.id"
@@ -48,9 +51,11 @@
             :height="container.bounds.height"
             rx="6"
             fill="white"
-            stroke="#cbd5e1"
-            stroke-width="1.5"
+            :stroke="isContainerSelected(container.name) ? '#2563eb' : '#cbd5e1'"
+            :stroke-width="isContainerSelected(container.name) ? 2.5 : 1.5"
             stroke-dasharray="4 3"
+            style="cursor: pointer;"
+            @click.stop="onContainerClick(container.name, $event)"
           />
           <rect
             :x="container.bounds.x"
@@ -59,15 +64,17 @@
             :height="32"
             :fill="container.accentColor"
             rx="6"
+            style="cursor: pointer;"
+            @click.stop="onContainerClick(container.name, $event)"
           />
-          <!-- Square off the bottom of the container's header band so it
-               flushes with the container body below. -->
           <rect
             :x="container.bounds.x"
             :y="container.bounds.y + 16"
             :width="container.bounds.width"
             height="16"
             :fill="container.accentColor"
+            style="cursor: pointer;"
+            @click.stop="onContainerClick(container.name, $event)"
           />
           <text
             :x="container.bounds.x + 12"
@@ -75,6 +82,7 @@
             fill="white"
             font-size="13"
             font-weight="600"
+            style="pointer-events: none; user-select: none;"
           >{{ container.keyword }} · {{ container.name }}</text>
           <text
             v-if="container.target"
@@ -84,6 +92,7 @@
             font-size="11"
             text-anchor="end"
             opacity="0.85"
+            style="pointer-events: none; user-select: none;"
           >→ {{ container.target }}</text>
         </g>
 
@@ -95,6 +104,8 @@
             :key="ref.id"
             :ref-layout="ref"
             :entities="diagram.entities"
+            :is-selected="isRefSelected(ref.id)"
+            @select="onRefClick(ref.id)"
           />
         </g>
 
@@ -107,8 +118,11 @@
           <EntityCard
             :entity="entity"
             :collapsed-paths="collapsedPaths"
+            :selection="selectionForEntity(entity.id)"
+            :is-selected="isEntitySelected(entity.id)"
             @toggle-path="(path) => togglePath(entity.id, path)"
             @drag-start="onEntityDragStart"
+            @select-field="(path) => onFieldClick(entity.id, path)"
           />
         </g>
 
@@ -248,8 +262,88 @@ import EntityCard from './EntityCard.vue';
 import RefLine from './RefLine.vue';
 import { buildDiagram, makeCollapsedKey, applyUserPositions } from './layout';
 import type { UserPositions } from './layout';
+import type { Selection } from '@/components/inspector/selection';
 
 const parser = useParserStore();
+
+/* -------------------------------------------------------------------------
+ * Selection plumbing
+ *
+ * Selection state lives in App.vue (shared between this canvas and the
+ * Inspector). We receive it as a prop, paint the highlight, and emit
+ * `select` events when the user clicks something. The parent decides
+ * what to store and how to react.
+ *
+ * Click sources:
+ *   - Container body/header rect: explicit @click handler below
+ *   - Entity header: drag handler's mouseup-with-no-movement fires
+ *     `select` instead of persisting a drag
+ *   - Field row: EntityCard's `select-field` event
+ *   - Ref line: RefLine's `select` event
+ *   - SVG background (didn't hit anything else): clears the selection
+ * ----------------------------------------------------------------------- */
+
+const props = defineProps<{
+  selection: Selection;
+}>();
+
+const emit = defineEmits<{
+  select: [selection: Selection];
+}>();
+
+function onContainerClick (containerName: string, e: MouseEvent): void {
+  e.stopPropagation();
+  emit('select', { kind: 'container', containerName });
+}
+
+function onEntityHeaderClick (entityId: string): void {
+  // Called by the drag handler on mouseup when no movement occurred.
+  emit('select', { kind: 'entity', entityId });
+}
+
+function onFieldClick (entityId: string, path: string): void {
+  emit('select', { kind: 'field', entityId, path });
+}
+
+function onRefClick (refId: string): void {
+  emit('select', { kind: 'ref', refId });
+}
+
+function onBackgroundClick (e: MouseEvent): void {
+  // Only fire when the click target is the SVG element itself, not a
+  // descendant. Click events bubble from inside the SVG to the outer
+  // SVG, so we filter by target identity to detect actual-background
+  // clicks vs clicks that landed on a card/ref/container.
+  if (e.target === e.currentTarget) {
+    emit('select', null);
+  }
+}
+
+function isContainerSelected (name: string): boolean {
+  return props.selection?.kind === 'container' && props.selection.containerName === name;
+}
+
+function isEntitySelected (entityId: string): boolean {
+  // An entity highlights when:
+  //   - it's directly selected
+  //   - one of its fields is selected (the card outline still tints,
+  //     and EntityCard handles the row-level highlight internally)
+  if (props.selection?.kind === 'entity' && props.selection.entityId === entityId) return true;
+  if (props.selection?.kind === 'field'  && props.selection.entityId === entityId) return true;
+  return false;
+}
+
+function isRefSelected (refId: string): boolean {
+  return props.selection?.kind === 'ref' && props.selection.refId === refId;
+}
+
+/** What to pass to EntityCard so it can also highlight a selected field row. */
+function selectionForEntity (entityId: string): Selection {
+  if (props.selection?.kind === 'field' && props.selection.entityId === entityId) {
+    return props.selection;
+  }
+  return null;
+}
 
 /* -------------------------------------------------------------------------
  * Collapse state
@@ -667,8 +761,15 @@ function onDragEnd (): void {
   document.removeEventListener('mousemove', onDragMove);
   document.removeEventListener('mouseup', onDragEnd);
   document.body.style.userSelect = '';
-  if (dragState?.moved) persistUserPositions();
+  const final = dragState;
   dragState = null;
+  if (final?.moved) {
+    persistUserPositions();
+  } else if (final) {
+    // No drag actually happened (< 2px movement): treat as a click on
+    // the entity header and emit a selection event.
+    onEntityHeaderClick(final.entityId);
+  }
 }
 
 /* -------------------------------------------------------------------------

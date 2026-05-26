@@ -140,4 +140,24 @@ watch(() => parser.errors, (errors) => {
   if (!model) return;
   setMonacoMarkers(model, errors);
 }, { immediate: true });
+
+/**
+ * Programmatic navigation to a line/column. Used by the inspector's
+ * "Edit in source" button: clicking it reveals the AST node's source
+ * position in the editor, scrolling it into view and placing the
+ * cursor there. The selection collapses to a cursor (start == end)
+ * so the user types from that point.
+ *
+ * Lines and columns are 1-indexed, matching both Monaco's API and
+ * the parser's Position type.
+ */
+function revealPosition (line: number, column: number): void {
+  const ed = editor.value;
+  if (!ed) return;
+  ed.revealPositionInCenter({ lineNumber: line, column });
+  ed.setPosition({ lineNumber: line, column });
+  ed.focus();
+}
+
+defineExpose({ revealPosition });
 </script>

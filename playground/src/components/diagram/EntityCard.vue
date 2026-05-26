@@ -1,6 +1,8 @@
 <template>
   <g>
-    <!-- Card background -->
+    <!-- Card background. Stroke thickens and turns blue when this
+         entity is the current selection (entity itself or one of its
+         fields). -->
     <rect
       :x="entity.bounds.x"
       :y="entity.bounds.y"
@@ -8,8 +10,8 @@
       :height="entity.bounds.height"
       rx="5"
       fill="white"
-      stroke="#94a3b8"
-      stroke-width="1"
+      :stroke="isSelected ? '#2563eb' : '#94a3b8'"
+      :stroke-width="isSelected ? 2 : 1"
       filter="url(#entity-shadow)"
     />
 
@@ -63,19 +65,58 @@
       >{{ entity.keyword }}</text>
     </g>
 
-    <!-- Field rows -->
+    <!-- Field rows. Each row's wrapping <g> receives a `click` handler
+         via its child hit-rect. The caret's @click.stop runs first so
+         caret clicks don't trigger field selection. -->
     <g
       v-for="(field, i) in entity.fields"
       :key="field.path"
     >
-      <!-- Row background: PK highlight, zebra, or synthetic-row tint. -->
+      <!-- Row background tint: selected-field highlight wins; otherwise
+           the layout's chosen tint (PK / zebra / synthetic-row). -->
       <rect
-        v-if="rowFill(field, i) !== undefined"
+        v-if="isFieldSelected(field.path)"
+        :x="entity.bounds.x + 1"
+        :y="entity.bounds.y + field.rowY"
+        :width="entity.bounds.width - 2"
+        :height="field.rowHeight"
+        fill="#dbeafe"
+        style="pointer-events: none;"
+      />
+      <rect
+        v-else-if="rowFill(field, i) !== undefined"
         :x="entity.bounds.x + 1"
         :y="entity.bounds.y + field.rowY"
         :width="entity.bounds.width - 2"
         :height="field.rowHeight"
         :fill="rowFill(field, i)"
+        style="pointer-events: none;"
+      />
+
+      <!-- Selected-row left-edge accent strip. -->
+      <rect
+        v-if="isFieldSelected(field.path)"
+        :x="entity.bounds.x + 1"
+        :y="entity.bounds.y + field.rowY"
+        width="3"
+        :height="field.rowHeight"
+        fill="#2563eb"
+        style="pointer-events: none;"
+      />
+
+      <!-- Transparent hit-rect over the full row. Captures clicks so
+           the user can select the field by clicking anywhere on the
+           row (not just on the text). Drawn BEFORE the caret and
+           text elements so they render on top visually; the caret's
+           @click.stop prevents its clicks from bubbling here. -->
+      <rect
+        :x="entity.bounds.x + 1"
+        :y="entity.bounds.y + field.rowY"
+        :width="entity.bounds.width - 2"
+        :height="field.rowHeight"
+        fill="transparent"
+        style="cursor: pointer;"
+        @click="onFieldRowClick(field.path, $event)"
       />
 
       <!-- Indent guide line at each parent indent level (subtle vertical
@@ -90,16 +131,17 @@
         :y2="entity.bounds.y + field.rowY + field.rowHeight"
         stroke="#e2e8f0"
         stroke-width="1"
+        style="pointer-events: none;"
       />
 
       <!-- Caret (▾ expanded, ▸ collapsed) when this row has children.
-           Clicking emits toggle-path so the canvas can update collapse
-           state. Wrapped in a generous transparent hitbox so mobile/
-           imprecise clicks still register. -->
+           @click.stop prevents the click from also reaching the row
+           hit-rect underneath, so toggling collapse doesn't change
+           the selection. -->
       <g
         v-if="field.hasChildren"
         class="cursor-pointer"
-        @click="$emit('toggle-path', field.path)"
+        @click.stop="$emit('toggle-path', field.path)"
       >
         <rect
           :x="entity.bounds.x + 12 + field.indent * INDENT_PX - 2"
@@ -114,6 +156,7 @@
           font-size="9"
           fill="#475569"
           text-anchor="middle"
+          style="pointer-events: none; user-select: none;"
         >{{ isCollapsed(field.path) ? '▸' : '▾' }}</text>
       </g>
 
@@ -126,6 +169,7 @@
         :font-weight="field.flags.pk ? 600 : 400"
         :font-style="field.synthetic ? 'italic' : 'normal'"
         :fill="nameColor(field)"
+        style="pointer-events: none; user-select: none;"
       >{{ field.name }}</text>
 
       <!-- Type label, right-aligned -->
@@ -136,12 +180,14 @@
         font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
         fill="#64748b"
         text-anchor="end"
+        style="pointer-events: none; user-select: none;"
       >{{ truncate(field.typeLabel, 22) }}</text>
 
       <!-- Inline flag badges. Position is just after the field-name text. -->
       <g
         v-for="(badge, bi) in fieldBadges(field)"
         :key="bi"
+        style="pointer-events: none;"
       >
         <circle
           :cx="entity.bounds.x + badgeX(field) + bi * 14"
@@ -174,24 +220,52 @@
  * intermediate rows (array element labels, polymorphism alternative
  * labels) that don't correspond to user-written field names.
  *
- * Emits two events:
+ * Selection:
+ *   - `is-selected` prop: when true the card's outline highlights,
+ *     because the entity is the current selection (or one of its
+ *     fields is).
+ *   - `selection` prop: when of kind 'field' for this entity, the
+ *     matching field row also highlights (tint + left accent strip).
+ *
+ * Events:
  *   - `toggle-path`: caret clicked. The parent canvas owns the collapse
  *     state and decides what to do with the toggle.
  *   - `drag-start`: header mousedown. The parent canvas takes over,
  *     attaches document-level mousemove/mouseup listeners, and updates
- *     the entity's user-overridden position as the mouse moves.
+ *     the entity's user-overridden position as the mouse moves. If no
+ *     drag occurred (mouseup with movement < 2 px), the parent fires
+ *     an entity-selection event instead.
+ *   - `select-field`: a field row was clicked. The parent canvas
+ *     forwards this to App.vue as a field selection. Carets stop
+ *     propagation so caret clicks don't trigger this.
  */
 import type { EntityLayout, FieldLayout } from './layout';
+import type { Selection } from '@/components/inspector/selection';
 
 const props = defineProps<{
   entity: EntityLayout;
   collapsedPaths: ReadonlySet<string>;
+  selection: Selection;
+  isSelected: boolean;
 }>();
 
 const emit = defineEmits<{
   'toggle-path': [path: string];
   'drag-start': [event: { entityId: string; clientX: number; clientY: number }];
+  'select-field': [path: string];
 }>();
+
+function isFieldSelected (path: string): boolean {
+  return props.selection?.kind === 'field' && props.selection.path === path;
+}
+
+function onFieldRowClick (path: string, e: MouseEvent): void {
+  // Stop the click from bubbling to the SVG background-click handler
+  // (which would clear the selection -- the opposite of what the user
+  // wants when they click a row).
+  e.stopPropagation();
+  emit('select-field', path);
+}
 
 function onHeaderMouseDown (e: MouseEvent): void {
   // Only the primary (left) button starts a drag. Right-click and
