@@ -31,11 +31,49 @@ import type { Token, XDbmlDocument } from '@xdbml/parse';
 import logger from '@/utils/logger';
 import type { ParserError } from '@/types';
 import { DEFAULT_SAMPLE_CONTENT } from '@/services/sample-content';
+import { decodeShareHash, clearShareHashFromUrl } from '@/services/share';
 
 const STORAGE_KEY = 'xdbml-playground:content';
 const DEBOUNCE_MS = 250;
 
+/**
+ * Initial content resolution order:
+ *
+ *   1. URL hash (`#s=...`): a shared schema link takes precedence over
+ *      any local working copy. After loading, the hash is stripped from
+ *      the URL bar so subsequent reloads use the working copy rather
+ *      than re-applying the stale shared content.
+ *
+ *   2. localStorage: the user's last working copy from a previous
+ *      session.
+ *
+ *   3. DEFAULT_SAMPLE_CONTENT: first-time visitors get the bundled
+ *      welcome schema.
+ *
+ * The URL-hash path is intentionally destructive of any prior
+ * localStorage content: clicking someone else's share link replaces
+ * the working copy. That matches the dbdiagram.io pattern and what
+ * users expect from "open someone's schema and start editing it."
+ * Monaco's undo history still preserves the previous content if the
+ * user wants to recover it within the session.
+ */
 function loadInitial (): string {
+  try {
+    const shared = decodeShareHash();
+    if (shared !== null) {
+      clearShareHashFromUrl();
+      // Persist immediately as the new working copy so the user's
+      // first edit doesn't drop them back to the previous content.
+      try {
+        localStorage.setItem(STORAGE_KEY, shared);
+      } catch {
+        // best-effort
+      }
+      return shared;
+    }
+  } catch (e) {
+    logger.warn('URL hash decode failed', e);
+  }
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored && stored.length > 0) return stored;

@@ -26,10 +26,10 @@
         </span>
       </div>
 
-      <!-- Action buttons. Examples is wired up; the others are still
-           placeholders that show a 'coming soon' toast. Kept here so
-           the visual footprint is stable as the other buttons get
-           implemented in turn. -->
+      <!-- Action buttons. Examples and Share are wired up; the others
+           are still placeholders that show a 'coming soon' toast.
+           Kept here so the visual footprint is stable as the
+           remaining buttons get implemented in turn. -->
       <div class="flex items-center gap-1">
         <ExamplesMenu />
         <HeaderButton
@@ -40,10 +40,7 @@
           label="Export"
           @click="onPlaceholder('Export')"
         />
-        <HeaderButton
-          label="Share"
-          @click="onPlaceholder('Share')"
-        />
+        <ShareMenu />
         <HeaderButton
           label="Help"
           @click="onPlaceholder('Help')"
@@ -74,14 +71,14 @@
 /**
  * The top header bar.
  *
- * The Examples menu is wired up via the ExamplesMenu component (sibling
- * file). The remaining buttons (Import, Export, Share, Help) are still
- * placeholders that show a 'coming soon' toast on click. Visual
- * footprint is stable so the placeholders can be wired up to real
- * handlers later without re-jiggling layout.
+ * The Examples and Share menus are wired up via dedicated dropdown
+ * components (sibling files). The remaining buttons (Import, Export,
+ * Help) are still placeholders that show a 'coming soon' toast on
+ * click. Visual footprint is stable so the placeholders can be
+ * wired up to real handlers later without re-jiggling layout.
  *
  * No login / account UI -- the playground is intentionally accountless;
- * persistence is localStorage and URL sharing (to come) is the same
+ * persistence is localStorage and URL sharing uses the same
  * compress-into-the-URL pattern dbdiagram.io uses for non-account
  * sharing.
  */
@@ -89,6 +86,7 @@ import { ref } from 'vue';
 
 import HeaderButton from './HeaderButton.vue';
 import ExamplesMenu from './ExamplesMenu.vue';
+import ShareMenu from './ShareMenu.vue';
 
 const toast = ref<string | null>(null);
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
