@@ -104,10 +104,6 @@ const STRUCTURAL_TYPE_KEYWORDS = new Set([
   'set', 'union', 'oneof', 'anyof', 'allof', 'json', 'jsonb', 'variant',
 ]);
 
-const FLAG_SETTINGS = new Set([
-  'pk', 'primary key', 'unique', 'null', 'not null', 'increment',
-]);
-
 function kw (token: Token | undefined): string | null {
   if (!token || token.kind !== TokenKind.Identifier) return null;
   return token.text.toLowerCase();

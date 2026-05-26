@@ -17,3 +17,11 @@ export * from './ast.ts';
 export { tokenize, TokenKind, LexError } from './lexer.ts';
 export type { Token } from './lexer.ts';
 export { parse, Parser, ParseError } from './parser.ts';
+export {
+  xdbmlLanguageConfig,
+  xdbmlMonarchTokensProvider,
+} from './monarch.ts';
+export type {
+  XDbmlLanguageConfiguration,
+  XDbmlMonarchLanguage,
+} from './monarch.ts';
