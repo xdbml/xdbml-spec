@@ -164,7 +164,8 @@ Operational features (partitions, storage configuration, replication), procedura
 - **[Browse the FAQ](/faq)** for answers to the questions newcomers most often ask
 - **[Read the v0.1 specification](/spec/v0.1)** for the complete language reference
 - **[Browse the examples](/examples/)** for realistic schemas across e-commerce, IoT, healthcare, social graphs, and financial services
-- **[See the grammar](/grammar/)** for parser implementers
+- [**Try it in the playground**](/playground) by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
+- **[Review the ANTLR4 grammar](/grammar)** and [**parser**](https://github.com/xdbml/xdbml-spec/tree/main/parser)
 - **[Read the governance model](/governance)** to understand stewardship and the path to neutral governance
 - **[Contribute](/contributing)** by filing an issue, proposing a construct, or building tooling
 

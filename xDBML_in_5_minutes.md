@@ -264,7 +264,7 @@ The following are *not* xDBML's job:
 - **Metrics, measures, aggregations.** Those belong in OSI, dbt MetricFlow, or LookML -- the semantic layer above xDBML.
 - **Data quality rules, SLAs, ownership, pricing.** Those belong in ODCS (Open Data Contract Standard), which wraps an xDBML schema with contractual metadata.
 - **Reasoning and inference.** OWL and knowledge graphs operate at a different layer.
-- **Provisioning and operations.** Terraform, Pulumi, database operators, security policies -- these handle the infrastructure layer.
+- **Provisioning and operations.** Terraform, database operators, security policies -- these handle the infrastructure layer.
 
 xDBML describes shape and declarative metadata. Adjacent standards handle the layers above and below.
 
@@ -275,12 +275,11 @@ xDBML describes shape and declarative metadata. Adjacent standards handle the la
 - **Browse the [FAQ](/faq)** for answers to the questions newcomers most often ask after reading this introduction.
 - **Read the [v0.1 specification](/spec/v0.1)** for the full language reference.
 - **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
-- **Try it in the playground** (planned): type or paste xDBML, see rendered diagrams and generated artifacts.
-- **Read the [ODCS integration guide](/integrations/odcs)** if you're already using Open Data Contract Standard.
+- **Try it in the [playground](/playground)** -- type or paste xDBML, see rendered the corresponding Entity-Relationship diagram.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** -- the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
 xDBML is a draft v0.1 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
 
 ---
 
-*Last updated 2026. Apache License 2.0. xdbml.org*
+*Last updated May 2026. Apache License 2.0. xdbml.org*

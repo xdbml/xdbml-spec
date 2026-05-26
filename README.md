@@ -53,10 +53,10 @@ Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side func
 
 ## Where to go next
 
-- [`spec/v0.1.md`](./spec/v0.1.md) -- the full v0.1 language specification
+- [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
-- [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus
+- [`spec/v0.1.md`](./spec/v0.1.md) -- the full v0.1 language specification
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
-- **`integrations/`** (planned) -- generators and importers (SQL DDL, JSON Schema, Avro, OpenAPI, MongoDB validators, Neo4j/Cypher, ODCS)
-- [xdbml.org](https://xdbml.org) -- canonical home, with the playground and community spaces planned
+- [`playground/`](./playground) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
+- [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus and [parser/](./parser)
