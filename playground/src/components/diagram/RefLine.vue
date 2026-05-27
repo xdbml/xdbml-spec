@@ -16,45 +16,51 @@
     <path
       :d="path.d"
       fill="none"
-      :stroke="isSelected ? '#2563eb' : '#64748b'"
+      :stroke="lineColor"
       :stroke-width="isSelected ? 2.5 : 1.5"
       style="pointer-events: none;"
     />
-    <!-- Source endpoint marker -->
-    <g v-if="sourceLabel" style="pointer-events: none;">
-      <circle
-        :cx="path.startX"
-        :cy="path.startY"
-        r="3.5"
-        fill="white"
-        :stroke="isSelected ? '#2563eb' : '#64748b'"
-        stroke-width="1.5"
-      />
+
+    <!-- Source endpoint: crow's-foot glyph + cardinality text. -->
+    <g style="pointer-events: none;">
+      <g
+        :transform="`translate(${path.startX} ${path.startY}) scale(${path.startSide === 'right' ? 1 : -1} 1)`"
+      >
+        <CrowFootGlyph
+          :min="sourceCardinality.min"
+          :max="sourceCardinality.max"
+          :color="lineColor"
+        />
+      </g>
       <text
-        :x="path.startX + (path.startSide === 'right' ? 6 : -6)"
-        :y="path.startY - 5"
-        font-size="10"
-        font-weight="600"
-        :fill="isSelected ? '#2563eb' : '#475569'"
+        v-if="sourceLabel"
+        :x="path.startX + (path.startSide === 'right' ? 22 : -22)"
+        :y="path.startY - 6"
+        font-size="9"
+        font-weight="500"
+        :fill="textColor"
         :text-anchor="path.startSide === 'right' ? 'start' : 'end'"
       >{{ sourceLabel }}</text>
     </g>
-    <!-- Target endpoint marker -->
-    <g v-if="targetLabel" style="pointer-events: none;">
-      <circle
-        :cx="path.endX"
-        :cy="path.endY"
-        r="3.5"
-        fill="white"
-        :stroke="isSelected ? '#2563eb' : '#64748b'"
-        stroke-width="1.5"
-      />
+
+    <!-- Target endpoint: same. -->
+    <g style="pointer-events: none;">
+      <g
+        :transform="`translate(${path.endX} ${path.endY}) scale(${path.endSide === 'right' ? 1 : -1} 1)`"
+      >
+        <CrowFootGlyph
+          :min="targetCardinality.min"
+          :max="targetCardinality.max"
+          :color="lineColor"
+        />
+      </g>
       <text
-        :x="path.endX + (path.endSide === 'right' ? 6 : -6)"
-        :y="path.endY - 5"
-        font-size="10"
-        font-weight="600"
-        :fill="isSelected ? '#2563eb' : '#475569'"
+        v-if="targetLabel"
+        :x="path.endX + (path.endSide === 'right' ? 22 : -22)"
+        :y="path.endY - 6"
+        font-size="9"
+        font-weight="500"
+        :fill="textColor"
         :text-anchor="path.endSide === 'right' ? 'start' : 'end'"
       >{{ targetLabel }}</text>
     </g>
@@ -72,15 +78,37 @@
  *   - Control points are offset horizontally by half the gap between
  *     the two endpoints, producing a smooth horizontal-flowing curve.
  *
- * Cardinality labels come from the Ref's settings (`source: '0..*'`)
- * and render as small text near each endpoint. The cardinality operator
- * (`<` `>` `-` `<>`) is currently not visualized; the explicit
- * cardinality strings carry richer information and are preferred when
- * present.
+ * Cardinality is encoded at each endpoint using the standard ER
+ * "crow's foot" notation:
+ *
+ *   ─║      exactly one         (min=1, max=1)
+ *   ─○║     zero or one         (min=0, max=1)
+ *   ─≺      one or many         (min=1, max=*)
+ *   ─○≺     zero or many        (min=0, max=*)
+ *
+ * The ring (○) means "zero is allowed" (optional participation). The
+ * bar (║) caps "exactly one." The crow's foot (≺) means "many." This
+ * is the same notation Chen/Information Engineering tools have used
+ * since the 1980s and the same notation dbdiagram.io, Lucidchart, and
+ * DataGrip use today.
+ *
+ * Cardinality sources, in priority order:
+ *   1. Explicit settings: `[source: '0..*', target: '1..1']`. UML-style
+ *      "min..max" with `*` meaning unbounded.
+ *   2. Operator inference: `<` `>` `-` `<>` shorthand from the Ref
+ *      declaration. Less precise (no way to express optionality), so
+ *      we infer mandatory ("1") for the min.
+ *   3. Fallback if neither: treat as 1..1 on both ends.
+ *
+ * The cardinality text label (e.g. "0..*", "1..1") still renders
+ * alongside the glyph for users who prefer reading the explicit value
+ * or have non-standard cardinalities the glyph can't represent
+ * exactly. It's smaller and lighter than before -- the glyph is the
+ * primary signal now.
  *
  * Selection:
- *   - `is-selected` prop: when true, the curve and its endpoint markers
- *     turn blue and the stroke thickens.
+ *   - `is-selected` prop: when true, curve + glyphs turn blue and the
+ *     stroke thickens.
  *   - A transparent stroke-14 path sits over the visible curve to
  *     catch clicks more easily -- the visible 1.5 px line is too thin
  *     to be a reliable click target on its own.
@@ -89,6 +117,7 @@ import { computed } from 'vue';
 
 import type { EntityLayout, RefLayout } from './layout';
 import { ENTITY_HEADER_HEIGHT, ROW_HEIGHT } from './layout';
+import CrowFootGlyph from './CrowFootGlyph.vue';
 
 const props = defineProps<{
   refLayout: RefLayout;
@@ -183,17 +212,86 @@ function computeAnchor (
   return { x, y, side };
 }
 
+/* -------------------------------------------------------------------------
+ * Cardinality parsing & operator inference
+ * ----------------------------------------------------------------------- */
+
+interface Cardinality {
+  /** Minimum participations: 0 or 1. */
+  min: 0 | 1;
+  /** Maximum participations: 1 or '*' (many). */
+  max: 1 | '*';
+}
+
+const DEFAULT_CARDINALITY: Cardinality = { min: 1, max: 1 };
+
+/**
+ * Parse a `N..M` cardinality string into the glyph's two-value model.
+ * Anything we can't classify falls into DEFAULT_CARDINALITY -- the user
+ * still sees the original string via the text label, so no information
+ * is lost.
+ */
+function parseCardinality (s: string | undefined): Cardinality {
+  if (!s) return DEFAULT_CARDINALITY;
+  const m = s.match(/^(\d+|\*)\.\.(\d+|\*)$/);
+  if (!m) return DEFAULT_CARDINALITY;
+  const [, minRaw, maxRaw] = m;
+  const min: 0 | 1 = minRaw === '0' ? 0 : 1;
+  const max: 1 | '*' = (maxRaw === '*' || (Number(maxRaw) > 1)) ? '*' : 1;
+  return { min, max };
+}
+
+/**
+ * Map the operator shorthand to default cardinalities. The operators
+ * cannot express optionality, so min defaults to 1 (mandatory). The
+ * 'side' tells us which endpoint we're computing for, since `<` is
+ * "source is one, target is many" and `>` is the reverse.
+ */
+function cardinalityFromOperator (op: string, side: 'source' | 'target'): Cardinality {
+  switch (op) {
+    case '>': // source: many, target: one
+      return side === 'source' ? { min: 1, max: '*' } : { min: 1, max: 1 };
+    case '<': // source: one, target: many
+      return side === 'source' ? { min: 1, max: 1 } : { min: 1, max: '*' };
+    case '-': // one-to-one
+      return { min: 1, max: 1 };
+    case '<>': // many-to-many
+      return { min: 1, max: '*' };
+    default:
+      return DEFAULT_CARDINALITY;
+  }
+}
+
+const sourceCardinality = computed<Cardinality>(() => {
+  if (props.refLayout.sourceCardinality) return parseCardinality(props.refLayout.sourceCardinality);
+  return cardinalityFromOperator(props.refLayout.operator, 'source');
+});
+const targetCardinality = computed<Cardinality>(() => {
+  if (props.refLayout.targetCardinality) return parseCardinality(props.refLayout.targetCardinality);
+  return cardinalityFromOperator(props.refLayout.operator, 'target');
+});
+
+/* -------------------------------------------------------------------------
+ * Display strings (smaller, less prominent than before -- the glyph
+ * carries the primary signal now). We still show the original
+ * settings string verbatim so users with non-standard cardinalities
+ * (e.g. "0..3", "2..5") see the exact value the glyph approximates.
+ * ----------------------------------------------------------------------- */
+
 const sourceLabel = computed(() => formatCardinality(props.refLayout.sourceCardinality));
 const targetLabel = computed(() => formatCardinality(props.refLayout.targetCardinality));
 
 function formatCardinality (s?: string): string {
   if (!s) return '';
-  // The cardinality string is already in `N..M` form (e.g. '0..*', '1..1').
-  // Compact common cases visually: 1..1 -> 1, 0..* -> *, etc.
-  if (s === '1..1') return '1';
-  if (s === '0..1') return '0..1';
-  if (s === '0..*') return '*';
-  if (s === '1..*') return '1..*';
+  // Don't compact -- show the exact source value, since the glyph
+  // already does the visual shorthand.
   return s;
 }
+
+/* -------------------------------------------------------------------------
+ * Colors
+ * ----------------------------------------------------------------------- */
+
+const lineColor = computed(() => props.isSelected ? '#2563eb' : '#64748b');
+const textColor = computed(() => props.isSelected ? '#2563eb' : '#94a3b8');
 </script>
