@@ -33,7 +33,7 @@
 import {
   ref, shallowRef, useTemplateRef, watch, onMounted, onBeforeUnmount,
 } from 'vue';
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 import { useParserStore } from '@/stores/parserStore';
 

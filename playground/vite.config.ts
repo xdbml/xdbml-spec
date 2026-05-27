@@ -49,6 +49,11 @@ export default defineConfig({
     outDir: 'dist',
   },
   optimizeDeps: {
-    include: ['monaco-editor', 'vue'],
+    // Use the API-only ESM entry point (not the full 'monaco-editor'
+    // main entry). The .api path skips Monaco's auto-registration of
+    // 80+ default languages -- we only need our custom Monarch grammar
+    // for xdbml. This single import-path change shaves ~600 KB of
+    // language-pack code from the production bundle.
+    include: ['monaco-editor/esm/vs/editor/editor.api', 'vue'],
   },
 });

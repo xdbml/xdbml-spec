@@ -9,7 +9,7 @@
  *
  * Idempotent -- safe to call from multiple components on mount.
  */
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import {
   xdbmlLanguageConfig,
   xdbmlMonarchTokensProvider,

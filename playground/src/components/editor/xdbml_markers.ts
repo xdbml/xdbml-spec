@@ -6,7 +6,7 @@
  * (matching Monaco's convention), so no offset arithmetic is needed --
  * unlike DBML's parser which is 0-indexed.
  */
-import * as monaco from 'monaco-editor';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 import type { ParserError } from '@/types';
 
