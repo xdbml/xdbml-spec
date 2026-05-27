@@ -54,6 +54,15 @@
         />
       </section>
     </main>
+
+    <!-- Diagnostics panel: a thin bottom strip listing parse errors
+         (and, when the semantic-analysis pass lands, warnings too).
+         Click an entry to jump the editor cursor to that source
+         position. Collapsed state persists across sessions. -->
+    <DiagnosticsPanel
+      v-model:body-visible="diagnosticsExpanded"
+      @goto="onDiagnosticsGoto"
+    />
   </div>
 </template>
 
@@ -89,6 +98,7 @@ import HeaderBar from '@/components/header/HeaderBar.vue';
 import XdbmlEditor from '@/components/editor/XdbmlEditor.vue';
 import DiagramCanvas from '@/components/diagram/DiagramCanvas.vue';
 import Inspector from '@/components/inspector/Inspector.vue';
+import DiagnosticsPanel from '@/components/diagnostics/DiagnosticsPanel.vue';
 import { useParserStore } from '@/stores/parserStore';
 import { selectionEquals, type Selection } from '@/components/inspector/selection';
 import { spanStart } from '@/components/inspector/source-location';
@@ -189,6 +199,45 @@ watch(selection, (s) => {
 
 function onEditSource (span: Span): void {
   const pos = spanStart(span);
+  editorRef.value?.revealPosition(pos.line, pos.column);
+}
+
+/* -------------------------------------------------------------------------
+ * Diagnostics panel
+ *
+ * The panel maintains its own user-visible "expanded / collapsed"
+ * state, persisted to localStorage. Auto-open behavior: when errors
+ * first appear AND the user hasn't manually collapsed the panel for
+ * this session, pop it open. The user's explicit collapse always
+ * wins -- we don't keep re-opening on every typo.
+ * ----------------------------------------------------------------------- */
+
+const DIAGNOSTICS_EXPANDED_KEY = 'xdbml-playground:diagnostics-expanded';
+
+function loadDiagnosticsExpanded (): boolean {
+  try {
+    const v = localStorage.getItem(DIAGNOSTICS_EXPANDED_KEY);
+    if (v === 'false') return false;
+    if (v === 'true')  return true;
+  } catch {
+    // ignore
+  }
+  // Default: expanded -- so first-time visitors see the panel content
+  // immediately if there are errors, and learn the affordance exists.
+  return true;
+}
+
+const diagnosticsExpanded = ref(loadDiagnosticsExpanded());
+
+watch(diagnosticsExpanded, (v) => {
+  try {
+    localStorage.setItem(DIAGNOSTICS_EXPANDED_KEY, String(v));
+  } catch {
+    // ignore
+  }
+});
+
+function onDiagnosticsGoto (pos: { line: number; column: number }): void {
   editorRef.value?.revealPosition(pos.line, pos.column);
 }
 

@@ -17,7 +17,7 @@
       >
         <div class="text-center">
           <div class="font-medium text-gray-600 mb-1">Diagram unavailable</div>
-          <div>Fix the parse error to see the diagram</div>
+          <div>See the diagnostics panel below for the parse error</div>
         </div>
       </div>
       <svg
