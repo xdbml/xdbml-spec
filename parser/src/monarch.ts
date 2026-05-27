@@ -219,6 +219,9 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
   // Bare-flag settings: `pk`, `unique`, `not null`, etc.
   // `not null` and `primary key` are two words but tokenized one at a time
   // here -- the highlighter colors each as `keyword.setting`.
+  // `required` is a synonym for `not null` (spec §8); the parser
+  // normalizes it to `not null` in the AST, but for highlighting
+  // purposes both spellings get the same `keyword.setting` color.
   settingFlags: [
     'pk',
     'primary',
@@ -226,6 +229,7 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
     'unique',
     'null',
     'not',
+    'required',
     'increment',
   ],
 

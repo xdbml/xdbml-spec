@@ -1456,9 +1456,17 @@ export class Parser {
     const lower = nameSource.toLowerCase();
     // If next token is not a colon, this is a pure flag setting.
     if (!this.match(TokenKind.Colon)) {
+      // Spec §8: `required` is accepted as a synonym for `not null` and
+      // parsers MUST normalize it. `name` becomes the canonical form so
+      // every downstream consumer (inspector REQUIRED badge, layout's
+      // required-flag detection, generators) checks one value.
+      // `nameSource` keeps the user's original spelling so the settings
+      // table renders what was typed and round-tripping the AST back to
+      // source preserves the author's wording.
+      const canonicalName = lower === 'required' ? 'not null' : lower;
       return {
         kind: 'Setting',
-        name: lower,
+        name: canonicalName,
         nameSource,
         value: null,
         span: this.spanFrom(start),

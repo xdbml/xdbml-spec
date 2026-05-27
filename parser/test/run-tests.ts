@@ -497,6 +497,68 @@ Ref: e.f > g.h [delete: no action]`,
         return null;
       },
     },
+    {
+      // Spec §8: `required` is a synonym for `not null`. Parsers MUST
+      // normalize: name=='not null' canonically, nameSource keeps the
+      // original spelling so source round-tripping preserves what the
+      // user typed.
+      name: 'required is normalized to not null in the AST',
+      source: `xdbml: 0.1
+Table users {
+  email varchar [required]
+  name  varchar [not null]
+}`,
+      assert: (doc) => {
+        const t = doc.statements[0];
+        if (t.kind !== 'EntityDeclaration') return `expected EntityDeclaration, got ${t.kind}`;
+        const email = t.body.find((b) => b.kind === 'FieldDeclaration' && b.name === 'email');
+        const name  = t.body.find((b) => b.kind === 'FieldDeclaration' && b.name === 'name');
+        if (!email || email.kind !== 'FieldDeclaration') return 'email field missing';
+        if (!name  || name.kind  !== 'FieldDeclaration') return 'name field missing';
+
+        const emailFlag = email.settings.find((s) => s.value === null);
+        if (!emailFlag) return 'email has no flag setting';
+        if (emailFlag.name !== 'not null') {
+          return `email canonical name should be 'not null', got '${emailFlag.name}'`;
+        }
+        if (emailFlag.nameSource !== 'required') {
+          return `email nameSource should preserve 'required', got '${emailFlag.nameSource}'`;
+        }
+
+        const nameFlag = name.settings.find((s) => s.value === null);
+        if (!nameFlag) return 'name field has no flag setting';
+        if (nameFlag.name !== 'not null') {
+          return `name canonical name should be 'not null', got '${nameFlag.name}'`;
+        }
+        if (nameFlag.nameSource !== 'not null') {
+          return `name nameSource should preserve 'not null', got '${nameFlag.nameSource}'`;
+        }
+        return null;
+      },
+    },
+    {
+      // Case-insensitivity: `Required`, `REQUIRED`, `not null`, `NOT NULL`
+      // all normalize to the canonical lowercase form.
+      name: 'required normalization is case-insensitive',
+      source: `xdbml: 0.1
+Table t {
+  a varchar [REQUIRED]
+  b varchar [Required]
+  c varchar [NOT NULL]
+}`,
+      assert: (doc) => {
+        const t = doc.statements[0];
+        if (t.kind !== 'EntityDeclaration') return 'expected EntityDeclaration';
+        for (const fieldName of ['a', 'b', 'c']) {
+          const f = t.body.find((x) => x.kind === 'FieldDeclaration' && x.name === fieldName);
+          if (!f || f.kind !== 'FieldDeclaration') return `field ${fieldName} missing`;
+          const flag = f.settings.find((s) => s.value === null);
+          if (!flag) return `${fieldName} has no flag`;
+          if (flag.name !== 'not null') return `${fieldName} canonical name should be 'not null', got '${flag.name}'`;
+        }
+        return null;
+      },
+    },
   ];
 
   const results: TestResult[] = [];
