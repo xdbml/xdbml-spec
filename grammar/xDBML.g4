@@ -606,7 +606,7 @@ setting
     ;
 
 flagSetting
-    : 'pk' | 'primary key' | 'unique' | 'null' | 'not null' | 'increment'
+    : 'pk' | 'primary key' | 'unique' | 'null' | 'not null' | 'required' | 'increment'
     ;
 
 generalSetting
