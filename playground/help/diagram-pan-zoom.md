@@ -1,14 +1,63 @@
 ---
-title: Diagram pan zoom
-description: Coming soon -- this page is being written.
+title: Pan and zoom
+description: Navigation controls for the diagram pane.
 ---
 
-# Diagram pan zoom
+# Pan and zoom
 
-This page is being written and will be published soon. In the meantime, here are some good starting points:
+The diagram pane supports the standard pan-and-zoom interactions you'd expect from a graphical tool. Useful when a schema grows past what fits on screen at default zoom.
 
-- [**A 60-second tour**](./sixty-second-tour): a quick overview of the playground.
-- [**Your first schema**](./your-first-schema): a hands-on walkthrough.
-- [**Getting started**](./getting-started): the full Getting started section.
+## Zoom controls in the corner
 
-If you have specific questions about this topic, please [open an issue on GitHub](https://github.com/xdbml/xdbml-spec/issues) and we'll prioritize the page.
+The bottom-right of the diagram pane has five controls grouped into a small toolbar:
+
+::: screenshot
+**[Screenshot needed]**
+Filename suggestion: `diagram-pan-zoom-controls.png`
+Caption: The zoom toolbar in the bottom-right corner of the diagram pane, with controls labeled.
+Should show: close-up of the bottom-right corner. The toolbar with: minus button, percentage display showing e.g. "100%", plus button, Fit button, and 1:1 reset button. Annotations or callouts pointing at each.
+:::
+
+From left to right:
+
+- **`−` (minus) button**: zoom out by one step (steps follow a discrete ladder, see below).
+- **Percentage input**: shows the current zoom level. Click to edit; type a number; press Enter to apply. Valid range is 25% to 400%.
+- **`+` (plus) button**: zoom in by one step.
+- **Fit button**: scale the diagram to fit the available pane width and height. Useful after a layout has been rearranged or when starting on a large schema.
+- **1:1 button**: reset to 100% zoom.
+
+## Mouse wheel zoom
+
+Hold `Ctrl` (or `Cmd` on macOS) and scroll the mouse wheel anywhere in the diagram pane to zoom in or out. The zoom is centered on the cursor position, not on the viewport center: the point under your cursor stays under your cursor as you zoom. This makes zooming-to-inspect feel natural, because you point at what you want to look at and zoom from there.
+
+Without the modifier key, the mouse wheel scrolls the pane vertically (or horizontally with `Shift`). This means you can scroll a tall schema with the wheel and zoom on demand with `Ctrl`.
+
+## Zoom step ladder
+
+The `+` and `−` buttons use a discrete ladder of zoom levels: 25%, 33%, 50%, 67%, 75%, 90%, 100%, 110%, 125%, 150%, 175%, 200%, 250%, 300%, 400%. This matches the ladder used in browsers and most design tools. Each click on `+` or `−` moves to the next level.
+
+Mouse wheel zoom (with `Ctrl`) is continuous, not stepped, and uses a smaller increment per tick so fine adjustments feel smooth.
+
+The percentage input accepts any integer in the 25 to 400 range, so you can type 87 if you want 87%.
+
+## Panning
+
+Three ways to pan around a diagram larger than the visible pane:
+
+- **Scrollbars**: the pane shows horizontal and vertical scrollbars when the diagram doesn't fit.
+- **Mouse wheel** (vertical scroll without Ctrl): scrolls the pane vertically. Hold `Shift` for horizontal scroll.
+- **Click-and-drag on the canvas background**: not currently supported. Use scrollbars or wheel.
+
+## Persistence
+
+Your zoom level is saved to local storage and restored on page reload. The default for a fresh visitor is 100%.
+
+## What if the diagram is empty?
+
+The zoom controls still work, but there's nothing to see. This usually means the schema doesn't parse, or it has no entities yet. Check the diagnostics panel at the bottom for parse errors, or write at least one `Table` / `Entity` block in the editor.
+
+## What's next
+
+- [**Repositioning entities**](./diagram-drag): drag entities around the canvas.
+- [**Diagram pane**](./diagram-pane): the full overview.
+- [**Keyboard shortcuts**](./keyboard-shortcuts): the complete keyboard reference.
