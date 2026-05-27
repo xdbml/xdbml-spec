@@ -1,7 +1,14 @@
 import { defineConfig } from 'vitepress'
+import container from 'markdown-it-container'
+import { buildHelpSidebar, assertHelpIsConsistent } from './help-sidebar'
 
 // xDBML.org site configuration
 // https://vitepress.dev/reference/site-config
+
+// Fail the build early if the help manifest references slugs without
+// corresponding <slug>.md files. Better to catch this here than to
+// ship a sidebar with broken links.
+assertHelpIsConsistent(process.cwd())
 
 // Base path for the site.
 //
@@ -35,9 +42,15 @@ export default defineConfig({
   //
   // /playground/ and /parser/ are standalone Vite/TypeScript projects;
   // their READMEs and source files would otherwise be picked up by
-  // VitePress as docs pages. The playground is published at /playground/
-  // as a built static asset (see scripts/prepare-playground.mjs),
-  // bypassing VitePress entirely.
+  // VitePress as docs pages. The playground app itself is published at
+  // /playground/ as a built static asset (see
+  // scripts/prepare-playground.mjs), bypassing VitePress entirely.
+  //
+  // Exception: /playground/help/*.md ARE picked up by VitePress, so
+  // the help section is rendered as part of the docs site (under
+  // /playground/help/<slug>). The exclusions below target specific
+  // playground sub-paths instead of `playground/**` so that
+  // `playground/help/` remains visible.
   srcExclude: [
     'README.md',
     'LICENSE',
@@ -47,7 +60,11 @@ export default defineConfig({
     'SECURITY.md',
     'node_modules/**',
     '.github/**',
-    'playground/**',
+    'playground/README.md',
+    'playground/src/**',
+    'playground/dist/**',
+    'playground/public/**',
+    'playground/node_modules/**',
     'parser/**',
   ],
 
@@ -242,6 +259,12 @@ export default defineConfig({
           ]
         }
       ],
+
+      // Help section -- driven by playground/help/help-menu.toml.
+      // The sidebar structure lives in the TOML manifest, not in this
+      // config, so menu reorganization doesn't require touching the
+      // VitePress config and slugs stay stable as identifiers.
+      '/playground/help/': buildHelpSidebar(process.cwd()),
     },
 
     // Social and external links shown in the top right
@@ -437,6 +460,26 @@ export default defineConfig({
 
     // External links open in new tab and get rel=noopener noreferrer
     externalLinkIcon: true,
+
+    // Custom containers used in playground/help/*.md.
+    //
+    // ::: screenshot
+    //   [body describing what the screenshot should show]
+    // :::
+    //
+    // Renders as a visible TODO block in the rendered help page until
+    // an actual screenshot is captured and embedded. The CSS lives in
+    // .vitepress/theme/style.css under .custom-block.screenshot.
+    config(md) {
+      md.use(container, 'screenshot', {
+        render(tokens: { nesting: number }[], idx: number): string {
+          if (tokens[idx].nesting === 1) {
+            return '<div class="custom-block screenshot"><p class="custom-block-title">📸 Screenshot placeholder</p>\n';
+          }
+          return '</div>\n';
+        },
+      });
+    },
   },
 
   // Build hooks

@@ -13,6 +13,8 @@
     "build:playground": "cd playground && npm install && npm run build"
   },
   "devDependencies": {
+    "@iarna/toml": "^2.2.5",
+    "markdown-it-container": "^4.0.0",
     "vitepress": "^1.6.4",
     "vue": "^3.5.0"
   },

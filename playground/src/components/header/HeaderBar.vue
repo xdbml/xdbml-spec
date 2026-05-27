@@ -26,44 +26,19 @@
         </span>
       </div>
 
-      <!-- Action buttons. Examples and Share are wired up; the others
-           are still placeholders that show a 'coming soon' toast.
-           Kept here so the visual footprint is stable as the
-           remaining buttons get implemented in turn. -->
+      <!-- Action buttons. Examples, Share, and Help are wired up.
+           Import and Export were removed (file I/O is not in scope
+           for the playground; users paste content in and copy it out).
+           -->
       <div class="flex items-center gap-1">
         <ExamplesMenu />
-        <HeaderButton
-          label="Import"
-          @click="onPlaceholder('Import')"
-        />
-        <HeaderButton
-          label="Export"
-          @click="onPlaceholder('Export')"
-        />
         <ShareMenu />
         <HeaderButton
           label="Help"
-          @click="onPlaceholder('Help')"
+          @click="onOpenHelp"
         />
       </div>
     </div>
-
-    <!-- Toast for placeholder actions -->
-    <Transition
-      enter-active-class="transition duration-150 ease-out"
-      enter-from-class="opacity-0 -translate-y-1"
-      enter-to-class="opacity-100 translate-y-0"
-      leave-active-class="transition duration-100 ease-in"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div
-        v-if="toast"
-        class="fixed top-16 right-5 z-50 bg-gray-900 text-white text-sm px-3 py-2 rounded shadow-lg"
-      >
-        {{ toast }} — coming soon
-      </div>
-    </Transition>
   </header>
 </template>
 
@@ -71,29 +46,33 @@
 /**
  * The top header bar.
  *
- * The Examples and Share menus are wired up via dedicated dropdown
- * components (sibling files). The remaining buttons (Import, Export,
- * Help) are still placeholders that show a 'coming soon' toast on
- * click. Visual footprint is stable so the placeholders can be
- * wired up to real handlers later without re-jiggling layout.
+ * Action buttons: Examples (dropdown), Share (dropdown), Help (opens
+ * the help section in a new tab).
  *
- * No login / account UI -- the playground is intentionally accountless;
- * persistence is localStorage and URL sharing uses the same
+ * No login / account UI: the playground is intentionally accountless.
+ * Persistence is localStorage and URL sharing uses the same
  * compress-into-the-URL pattern dbdiagram.io uses for non-account
  * sharing.
  */
-import { ref } from 'vue';
-
 import HeaderButton from './HeaderButton.vue';
 import ExamplesMenu from './ExamplesMenu.vue';
 import ShareMenu from './ShareMenu.vue';
 
-const toast = ref<string | null>(null);
-let toastTimer: ReturnType<typeof setTimeout> | undefined;
-
-function onPlaceholder (action: string): void {
-  toast.value = action;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { toast.value = null; }, 1800);
+/**
+ * Open the help section in a new tab.
+ *
+ * The URL uses the explicit `.html` suffix so the click bypasses the
+ * playground's SPA routing AND VitePress's SPA shell. Without the
+ * suffix, navigating from inside the playground to /playground/help/...
+ * would be caught by the SPA's client-side router (which would 404
+ * because the playground SPA doesn't know about /help routes). The
+ * explicit .html ensures the browser does a full document load to
+ * the static HTML file VitePress emits.
+ *
+ * `target="_blank"` + `noopener,noreferrer` keep the user's playground
+ * state intact in the original tab and avoid window.opener leaking.
+ */
+function onOpenHelp (): void {
+  window.open('/playground/help/getting-started.html', '_blank', 'noopener,noreferrer');
 }
 </script>

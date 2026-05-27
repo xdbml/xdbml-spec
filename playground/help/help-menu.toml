@@ -1,0 +1,132 @@
+# playground/help/help-menu.toml
+#
+# Help menu structure for the playground.
+#
+# Each node has:
+#   - title:    label shown in the sidebar
+#   - slug:     URL component pointing to <slug>.md (optional --
+#               nodes without a slug are pure section headers that
+#               group children but aren't themselves a page)
+#   - children: nested nodes (optional, any depth)
+#
+# A node may have both a slug AND children: clicking the label
+# navigates to that page; clicking the disclosure triangle toggles
+# the children. Mixed-mode nodes are useful for section landing pages
+# that also list sub-topics.
+#
+# Slugs are stable identifiers. Once a page is published, its slug
+# never changes -- the menu can be reorganized freely without breaking
+# any external link. If a page ever needs to be retired, set up a
+# redirect from the old slug to the new one rather than deleting.
+
+
+# === Getting started ====================================================
+
+[[nodes]]
+title = "Getting started"
+slug  = "getting-started"
+[[nodes.children]]
+title = "What is the playground?"
+slug  = "what-is-the-playground"
+[[nodes.children]]
+title = "A 60-second tour"
+slug  = "sixty-second-tour"
+[[nodes.children]]
+title = "Your first schema"
+slug  = "your-first-schema"
+
+
+# === The interface ======================================================
+
+[[nodes]]
+title = "The interface"
+[[nodes.children]]
+title = "Layout overview"
+slug  = "layout-overview"
+[[nodes.children]]
+title = "Header bar & menus"
+slug  = "header-bar"
+[[nodes.children]]
+title = "Editor pane"
+slug  = "editor-pane"
+[[nodes.children]]
+title = "Diagram pane"
+slug  = "diagram-pane"
+[[nodes.children.children]]
+title = "Pan and zoom"
+slug  = "diagram-pan-zoom"
+[[nodes.children.children]]
+title = "Repositioning entities"
+slug  = "diagram-drag"
+[[nodes.children]]
+title = "Inspector pane"
+slug  = "inspector-pane"
+[[nodes.children]]
+title = "Diagnostics panel"
+slug  = "diagnostics-panel"
+
+
+# === Reading the diagram ================================================
+
+[[nodes]]
+title = "Reading the diagram"
+slug  = "reading-the-diagram"
+[[nodes.children]]
+title = "Entity cards"
+slug  = "entity-cards"
+[[nodes.children]]
+title = "Containers"
+slug  = "containers"
+[[nodes.children]]
+title = "Relationships & crow's foot notation"
+slug  = "relationships-crows-foot"
+[[nodes.children]]
+title = "Nested fields"
+slug  = "nested-fields"
+[[nodes.children]]
+title = "Visual cues at a glance"
+slug  = "visual-cues"
+
+
+# === Working with schemas ===============================================
+
+[[nodes]]
+title = "Working with schemas"
+[[nodes.children]]
+title = "Loading examples"
+slug  = "loading-examples"
+[[nodes.children]]
+title = "Sharing via URL"
+slug  = "sharing-via-url"
+[[nodes.children]]
+title = "Persistence & undo"
+slug  = "persistence-and-undo"
+[[nodes.children]]
+title = "When parsing fails"
+slug  = "when-parsing-fails"
+
+
+# === Keyboard shortcuts =================================================
+
+[[nodes]]
+title = "Keyboard shortcuts"
+slug  = "keyboard-shortcuts"
+
+
+# === Limitations & roadmap ==============================================
+
+[[nodes]]
+title = "Limitations & roadmap"
+slug  = "limitations-and-roadmap"
+
+
+# === Learn more =========================================================
+
+[[nodes]]
+title = "Learn more"
+[[nodes.children]]
+title = "About xDBML"
+slug  = "about-xdbml"
+[[nodes.children]]
+title = "Feedback & contributing"
+slug  = "feedback-and-contributing"

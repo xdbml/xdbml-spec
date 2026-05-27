@@ -138,3 +138,42 @@
 .VPFooter .copyright {
   font-size: 0.85em;
 }
+
+/* ============================================================
+ * ::: screenshot custom container
+ *
+ * Used in playground/help/*.md to mark placeholders where screenshots
+ * still need to be captured. Renders as a dashed-border block with
+ * an amber tint and a 📸 icon-prefixed title.
+ *
+ * Once a real screenshot is captured, edit the page to replace
+ *
+ *   ::: screenshot
+ *   ...
+ *   :::
+ *
+ * with a regular markdown image:
+ *
+ *   ![alt text](./img/the-filename.png)
+ *
+ * No CSS change required.
+ * ============================================================ */
+.custom-block.screenshot {
+  border-color: #f59e0b;
+  border-style: dashed;
+  background-color: rgba(245, 158, 11, 0.05);
+  color: var(--vp-c-text-2);
+}
+
+.custom-block.screenshot .custom-block-title {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.dark .custom-block.screenshot {
+  background-color: rgba(245, 158, 11, 0.08);
+}
+
+.dark .custom-block.screenshot .custom-block-title {
+  color: #fbbf24;
+}
