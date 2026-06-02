@@ -77,6 +77,42 @@ Synthetic rows you'll see:
 
 You can't click a synthetic row to inspect it (in the current version); clicking it opens the inspector for the parent named field. A future version may add synthetic-row inspection for showing the structural details of array/oneOf/map types.
 
+## Named types
+
+Fields whose type references a top-level `Type` declaration (rather than a built-in scalar like `int` or `varchar`) get the same expansion treatment as inline `object {...}` fields. The type's body shows as indented rows below the referencing field, with a disclosure caret to toggle.
+
+For example, in the e-commerce sample, `Type MonetaryAmount` is defined once at the top of the schema with `amount` and `currency` fields. Every entity field typed as `MonetaryAmount` then expands to show those two sub-fields inline:
+
+```xdbml
+Type MonetaryAmount {
+  amount   Decimal128
+  currency string
+}
+
+Table products {
+  price  MonetaryAmount   // expands inline: amount + currency
+}
+```
+
+The same type used in multiple fields expands at each occurrence. If your schema uses a `MonetaryAmount` type in five different entities, all five places show the same `amount` + `currency` structure. The visual repetition is information: it tells you "this is the same type used here." You can collapse any individual occurrence independently if it gets too noisy.
+
+### Recursive types
+
+A `Type` can reference itself (directly or via another type), forming a cycle. For example:
+
+```xdbml
+Type Node {
+  id     int
+  parent Node     // a Node references itself
+}
+```
+
+To prevent the diagram from trying to render an infinite chain, the playground stops expansion when a type's name reappears in the current expansion path. The cyclic field shows its type name (`Node`) but no caret, signaling "this is a node like above, but we won't draw it again here." If you want to inspect the type's structure from another angle, you can look at any non-recursive occurrence elsewhere in the diagram, or read the source.
+
+### When the type isn't defined
+
+If a field's type identifier doesn't match any declared `Type`, the playground treats it as a leaf scalar (no caret, no expansion). This happens for genuine scalar types (`int`, `varchar`, `objectId`) and also for typos or references to types that haven't been declared yet. The diagram won't show an error in that case; the inspector will.
+
 ## What gets collapsed and what stays
 
 Collapsing a parent hides all of its descendants, regardless of depth. So collapsing a top-level `addresses` array hides not only `[item]` but also every field inside the array element's object type. Expanding shows them all back.
