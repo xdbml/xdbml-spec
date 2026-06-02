@@ -160,8 +160,9 @@
         >{{ isCollapsed(field.path) ? '▸' : '▾' }}</text>
       </g>
 
-      <!-- Field name. Indented by indent * INDENT_PX. When hasChildren,
-           leave space for the caret on the left. -->
+      <!-- Field name. Indented by indent * INDENT_PX, then offset by the
+           reserved caret gutter so names align at every depth regardless
+           of whether the row carries a caret. -->
       <text
         :x="entity.bounds.x + nameLeftEdge(field)"
         :y="entity.bounds.y + field.rowY + 16"
@@ -322,12 +323,19 @@ function nameColor (field: FieldLayout): string {
 
 /**
  * X-offset where the field name text starts. Indent baseline is 12px
- * left padding plus `indent * INDENT_PX`. Rows with carets reserve an
- * extra 12px so the caret has room to its left.
+ * left padding plus `indent * INDENT_PX`, then an additional 12px for
+ * the caret gutter.
+ *
+ * The caret gutter is reserved unconditionally at every indent level,
+ * whether or not the row actually has a caret. This keeps field names
+ * vertically aligned with each other within the same indent level:
+ * `name`, `price ▾`, and `inventory` all start at the same X regardless
+ * of which one carries a caret. Without the reservation, caret rows
+ * would push their name 12px to the right of non-caret siblings,
+ * which made columns look jagged.
  */
 function nameLeftEdge (field: FieldLayout): number {
-  const indentX = 12 + field.indent * INDENT_PX;
-  return field.hasChildren ? indentX + 12 : indentX;
+  return 12 + field.indent * INDENT_PX + 12;
 }
 
 /**
