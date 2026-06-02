@@ -2,6 +2,16 @@ import { defineConfig } from 'vitepress'
 import container from 'markdown-it-container'
 import { buildHelpSidebar, assertHelpIsConsistent } from './help-sidebar'
 
+// Load the xDBML TextMate grammar so Shiki can highlight ```xdbml code
+// blocks across the site. The grammar lives in tools/textmate/ and is
+// generated from parser/src/keywords.ts; see tools/textmate/README.md
+// for the build pipeline.
+//
+// Imported with the `assert { type: 'json' }` syntax so VitePress's
+// esbuild-based config compiler treats it as a JSON module rather than
+// trying to evaluate it.
+import xdbmlGrammar from '../tools/textmate/xdbml.tmLanguage.json' with { type: 'json' }
+
 // xDBML.org site configuration
 // https://vitepress.dev/reference/site-config
 
@@ -448,11 +458,19 @@ export default defineConfig({
     // Syntax highlighting theme
     theme: { light: 'github-light', dark: 'github-dark' },
 
-    // Map xdbml and dbml language tags to sql for approximate highlighting
-    // until a proper Shiki grammar is registered.
+    // Custom languages registered with Shiki. xDBML uses our own
+    // TextMate grammar from tools/textmate/ (canonical source of truth
+    // for syntax highlighting across Shiki, VS Code, and GitHub).
+    //
+    // DBML is still aliased to SQL for now -- a proper DBML grammar
+    // can be added later if/when the playground gains DBML import.
+    languages: [
+      xdbmlGrammar as never,
+    ],
+
+    // Language aliases for blocks tagged with a different name.
     languageAlias: {
-      'xdbml': 'sql',
-      'dbml':  'sql',
+      'dbml': 'sql',
     },
 
     // Show line numbers in code blocks

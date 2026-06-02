@@ -18,7 +18,7 @@ xDBML extends DBML into a unified metadata and semantic modeling language with r
 
 Here is a complete xDBML document describing an order system. Read it once, top to bottom:
 
-```
+```xdbml
 xdbml: 0.1
 
 Project ecommerce {
@@ -127,7 +127,7 @@ The same schema you author by hand is the schema your AI assistant can extend, r
 
 Most schema languages assume flat tables. xDBML supports unlimited nesting:
 
-```
+```xdbml
 Entity customers {
   id int [pk]
   addresses array [
@@ -145,7 +145,7 @@ This is the natural shape of MongoDB documents, JSON Schema documents, Avro reco
 
 When a value can take one of several shapes, declare it with `oneOf`:
 
-```
+```xdbml
 notification oneOf {
   email object { address varchar, subject varchar }
   sms   object { phone varchar, body varchar }
@@ -155,7 +155,7 @@ notification oneOf {
 
 For scalar type alternatives:
 
-```
+```xdbml
 score union [int, decimal, null]
 ```
 
@@ -163,7 +163,7 @@ score union [int, decimal, null]
 
 Each storage tradition has its own word for the same concepts. xDBML accepts all of them:
 
-```
+```xdbml
 Container core [type: schema] { Entity users { ... } }              // Oracle, PostgreSQL
 Database orders_store { Collection orders { ... } }                 // MongoDB
 Keyspace metrics { Table page_views { ... } }                       // Cassandra
@@ -176,7 +176,7 @@ BSON types (`string`, `int32`, `int64`, `objectId`, `Decimal128`, `Date`, `BinDa
 
 DBML's four operators express maximum cardinality. xDBML adds explicit min/max for precision:
 
-```
+```xdbml
 // Compact form
 Ref: orders.customer_id > customers.id
 
@@ -188,7 +188,7 @@ Ref: pets.owner_id > people.id [source: '0..*', target: '0..1']
 
 Labeled Property Graph databases (Neo4j, Neptune) and RDF-star treat relationships as first-class with their own properties. DBML can't express this. xDBML's `Edge` construct does:
 
-```
+```xdbml
 Edge KNOWS [source: Person, target: Person,
             source_cardinality: '0..*', target_cardinality: '0..*'] {
   since      date [not null]
@@ -200,7 +200,7 @@ Edge KNOWS [source: Person, target: Person,
 
 xDBML expresses both virtual and materialized views, capturing the output shape declaratively and the source query as opaque metadata:
 
-```
+```xdbml
 View top_customers [materialized: true, refresh_schedule: 'daily'] {
   source_query: '''
     SELECT id, name, SUM(total) AS lifetime_value
@@ -219,7 +219,7 @@ View top_customers [materialized: true, refresh_schedule: 'daily'] {
 
 Four first-class settings make schemas legible to LLMs, semantic-layer tools, governance platforms, and data catalogs:
 
-```
+```xdbml
 Entity customers {
   mrr_amount decimal [
     synonyms: ['monthly revenue', 'recurring revenue'],
@@ -232,7 +232,7 @@ Entity customers {
 
 And when you need metadata xDBML doesn't promote to first-class, the `x_` prefix convention adds organization-specific extensions without grammar changes:
 
-```
+```xdbml
 Entity customers [
   x_governance_owner: 'finance-team@acme.com',
   x_collibra_asset_id: 'urn:collibra:asset:abc-123',

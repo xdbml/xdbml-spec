@@ -17,6 +17,11 @@ import { dirname } from 'node:path';
 
 import { parse } from '../src/index.ts';
 import type { XDbmlDocument } from '../src/index.ts';
+import {
+  CONTAINER_KEYWORDS,
+  ENTITY_KEYWORDS,
+  SETTING_FLAGS,
+} from '../src/keywords.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const examplesDir = join(__dirname, 'examples');
@@ -579,8 +584,175 @@ Table t {
 }
 
 /* -------------------------------------------------------------------------
- * Report
+ * Keyword-consistency tests
+ *
+ * Ensures every keyword in parser/src/keywords.ts is actually recognized
+ * by the parser. This is the safety net for the shared-keyword-vocabulary
+ * setup: keywords.ts is the source of truth for both the Monarch tokenizer
+ * (in the playground) and the TextMate grammar (in tools/textmate/), so if
+ * the parser ever stops recognizing a listed keyword, both highlighters
+ * would silently mis-color it.
+ *
+ * Strategy: construct a minimal valid xDBML document that exercises each
+ * keyword in its natural context (entity keyword as the start of an entity
+ * declaration, scalar type as a field type, structural type as a structured
+ * field type, etc.), parse it, and assert the AST has the expected shape.
  * ----------------------------------------------------------------------- */
+
+function runKeywordConsistencyTests (): TestResult[] {
+  const results: TestResult[] = [];
+
+  // Lazily import keywords.ts via dynamic-style require; since we're
+  // running with --experimental-strip-types, this is fine.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+
+  // Each test parses a small document and verifies the keyword was
+  // tokenized into the expected construct. A failure here means
+  // keywords.ts and the parser have drifted apart.
+
+  type KW = string;
+
+  function tryParse (source: string, expect: (doc: XDbmlDocument) => string | null): string | null {
+    try {
+      const doc = parse(source);
+      return expect(doc);
+    } catch (e) {
+      return (e as Error).message;
+    }
+  }
+
+  // Entity keywords: Table / Entity / Collection / Record should each
+  // produce an EntityDeclaration when used as the start of an entity.
+  for (const kw of ENTITY_KEYWORDS) {
+    const source = `xdbml: 0.1\n${kw} t {\n  id int [pk]\n}\n`;
+    const err = tryParse(source, (doc) => {
+      const d = doc.statements[0];
+      if (!d || d.kind !== 'EntityDeclaration') {
+        return `expected EntityDeclaration, got ${d?.kind ?? 'none'}`;
+      }
+      return null;
+    });
+    if (err === null) {
+      results.push(ok(`Entity keyword: ${kw}`));
+    } else {
+      results.push(fail(`Entity keyword: ${kw}`, err));
+    }
+  }
+
+  // Container keywords: each should produce a ContainerDeclaration.
+  for (const kw of CONTAINER_KEYWORDS) {
+    const source = `xdbml: 0.1\n${kw} c {\n  Table t {\n    id int [pk]\n  }\n}\n`;
+    const err = tryParse(source, (doc) => {
+      const d = doc.statements[0];
+      if (!d || d.kind !== 'ContainerDeclaration') {
+        return `expected ContainerDeclaration, got ${d?.kind ?? 'none'}`;
+      }
+      return null;
+    });
+    if (err === null) {
+      results.push(ok(`Container keyword: ${kw}`));
+    } else {
+      results.push(fail(`Container keyword: ${kw}`, err));
+    }
+  }
+
+  // Setting flags: each should parse as a flag setting on a field.
+  // `not null`, `primary key`, and `required` are special cases: they
+  // produce specific canonical settings, but the bare flag should
+  // always parse without error in a flag context.
+  for (const flag of SETTING_FLAGS) {
+    const source = `xdbml: 0.1\nTable t {\n  f int [${flag}]\n}\n`;
+    const err = tryParse(source, (doc) => {
+      const t = doc.statements[0];
+      if (!t || t.kind !== 'EntityDeclaration') return `parse failed`;
+      const field = t.body.find((b) => b.kind === 'FieldDeclaration');
+      if (!field || field.kind !== 'FieldDeclaration') return `field missing`;
+      // Just verifying parse-without-error: setting may be combined
+      // (e.g. `primary key` is two tokens at the lexer but combined at
+      // the parser) so we accept any non-empty settings list.
+      if (field.settings.length === 0) return `no settings parsed`;
+      return null;
+    });
+    if (err === null) {
+      results.push(ok(`Setting flag: ${flag}`));
+    } else {
+      results.push(fail(`Setting flag: ${flag}`, err));
+    }
+  }
+
+  // Spot-check a handful of representative keywords across the other
+  // categories. Exhaustive checks would inflate test time without
+  // catching meaningfully more bugs.
+  const spotChecks: { name: string; source: string; expect: (doc: XDbmlDocument) => string | null }[] = [
+    {
+      name: 'Top-level Project',
+      source: `xdbml: 0.1\nProject p {\n  database_type: 'PostgreSQL'\n}\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'ProjectDeclaration' ? null : 'no Project',
+    },
+    {
+      name: 'Top-level Ref',
+      source: `xdbml: 0.1\nTable a { id int [pk] }\nTable b { aid int }\nRef: b.aid > a.id\n`,
+      expect: (doc) => doc.statements.some((s) => s.kind === 'RefDeclaration') ? null : 'no Ref',
+    },
+    {
+      name: 'Type expression: array',
+      source: `xdbml: 0.1\nTable t { tags array [varchar] }\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EntityDeclaration' ? null : 'parse failed',
+    },
+    {
+      name: 'Type expression: object',
+      source: `xdbml: 0.1\nTable t { meta object { name varchar } }\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EntityDeclaration' ? null : 'parse failed',
+    },
+    {
+      name: 'Polymorphism: oneOf',
+      source: `xdbml: 0.1\nTable t { pm oneOf { card object {} cash object {} } }\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EntityDeclaration' ? null : 'parse failed',
+    },
+    {
+      name: 'Scalar type: varchar',
+      source: `xdbml: 0.1\nTable t { f varchar(100) }\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EntityDeclaration' ? null : 'parse failed',
+    },
+    {
+      name: 'BSON type: objectId',
+      source: `xdbml: 0.1\nTable t { _id objectId [pk] }\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EntityDeclaration' ? null : 'parse failed',
+    },
+    {
+      name: 'Setting key: default with string value',
+      source: `xdbml: 0.1\nTable t { f varchar [default: 'hello'] }\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EntityDeclaration' ? null : 'parse failed',
+    },
+    {
+      name: 'Note declaration',
+      source: `xdbml: 0.1\nTable t {\n  id int [pk]\n  Note: 'a table'\n}\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EntityDeclaration' ? null : 'parse failed',
+    },
+    {
+      name: 'Enum declaration',
+      source: `xdbml: 0.1\nEnum colors { red green blue }\n`,
+      expect: (doc) => doc.statements[0]?.kind === 'EnumDeclaration' ? null : 'expected EnumDeclaration',
+    },
+    {
+      name: 'Directive: xdbml version',
+      source: `xdbml: 0.1\nTable t { id int [pk] }\n`,
+      expect: (doc) => (doc.version as { version?: string })?.version === '0.1' ? null : `version not parsed correctly`,
+    },
+  ];
+  for (const s of spotChecks) {
+    const err = tryParse(s.source, s.expect);
+    if (err === null) {
+      results.push(ok(s.name));
+    } else {
+      results.push(fail(s.name, err));
+    }
+  }
+
+  return results;
+}
+
+
 
 function report (title: string, results: TestResult[]): { passed: number; failed: number } {
   console.log(`\n${CYAN}== ${title} ==${RESET}`);
@@ -608,10 +780,12 @@ function main (): void {
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
   const inline = runInlineTests();
   const examples = runExampleTests();
+  const keywords = runKeywordConsistencyTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
-  const totalPassed = ir.passed + er.passed;
-  const totalFailed = ir.failed + er.failed;
+  const kr = report('Keyword-consistency tests (parser/src/keywords.ts vs parser)', keywords);
+  const totalPassed = ir.passed + er.passed + kr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

@@ -1,0 +1,25 @@
+# Files to exclude from the published .vsix package.
+#
+# vsce reads this file and skips matching entries when packaging.
+# Everything not listed here ships to end users.
+
+# Build-time tooling (not needed at runtime)
+scripts/**
+.vscodeignore
+
+# Source markers
+.gitignore
+.editorconfig
+
+# Anything that might accidentally end up in the extension folder
+node_modules/**
+.git/**
+.github/**
+*.log
+*.tmp
+*.bak
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/**

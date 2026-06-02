@@ -1,0 +1,65 @@
+{
+  "name": "xdbml",
+  "displayName": "xDBML language support",
+  "description": "Syntax highlighting and editor support for the xDBML data-modeling language.",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "publisher": "xdbml",
+
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+
+  "categories": [
+    "Programming Languages"
+  ],
+
+  "keywords": [
+    "xdbml",
+    "dbml",
+    "data modeling",
+    "database",
+    "schema",
+    "erd",
+    "entity-relationship"
+  ],
+
+  "icon": "icons/xdbml-marketplace.png",
+
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xdbml/xdbml-spec.git"
+  },
+
+  "bugs": {
+    "url": "https://github.com/xdbml/xdbml-spec/issues"
+  },
+
+  "homepage": "https://xdbml.org",
+
+  "contributes": {
+    "languages": [
+      {
+        "id": "xdbml",
+        "aliases": ["xDBML", "xdbml"],
+        "extensions": [".xdbml"],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/xdbml-language.svg",
+          "dark":  "./icons/xdbml-language.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "xdbml",
+        "scopeName": "source.xdbml",
+        "path": "./syntaxes/xdbml.tmLanguage.json"
+      }
+    ]
+  },
+
+  "scripts": {
+    "prepare": "node scripts/prepare.mjs"
+  }
+}

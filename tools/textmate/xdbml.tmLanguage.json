@@ -1,0 +1,278 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "$comment": "AUTO-GENERATED FROM xdbml.tmLanguage.template.json BY tools/textmate/scripts/build.mjs. Keyword vocabulary sourced from parser/src/keywords.ts. To modify: edit the template or keywords.ts, then re-run the build script.",
+  "name": "xdbml",
+  "displayName": "xDBML",
+  "scopeName": "source.xdbml",
+  "fileTypes": [
+    "xdbml"
+  ],
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#directives"
+    },
+    {
+      "include": "#settings-block"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#constants"
+    },
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#type-keywords"
+    },
+    {
+      "include": "#scalar-types"
+    },
+    {
+      "include": "#bson-types"
+    },
+    {
+      "include": "#x-properties"
+    },
+    {
+      "include": "#ref-cardinality-operators"
+    },
+    {
+      "include": "#brackets"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.xdbml",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.xdbml",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "directives": {
+      "patterns": [
+        {
+          "comment": "Top-of-file version directive: `xdbml: 0.1` or `experimental: ...`. Recognized only at the start of a line with the colon immediately after, to avoid colliding with `xdbml` appearing elsewhere.",
+          "match": "^\\s*((?i:experimental|xdbml))(\\s*)(:)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.directive.xdbml"
+            },
+            "3": {
+              "name": "punctuation.separator.key-value.xdbml"
+            }
+          }
+        }
+      ]
+    },
+    "declarations": {
+      "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name).",
+      "patterns": [
+        {
+          "match": "\\b((?i:tablepartial|diagramview|collection|tablegroup|container|namespace|database|keyspace|project|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.xdbml"
+            },
+            "2": {
+              "name": "entity.name.type.xdbml"
+            }
+          }
+        }
+      ]
+    },
+    "type-keywords": {
+      "comment": "Structural type and polymorphism keywords (object, array, oneOf, etc.). Matched wherever they appear -- which in xDBML is always in a type position after a colon, but TextMate doesn't track context cheaply, so we accept them anywhere.",
+      "patterns": [
+        {
+          "name": "keyword.control.type.xdbml",
+          "match": "\\b((?i:dictionary|variant|object|struct|array|jsonb|list|dict|json|map|set))\\b"
+        },
+        {
+          "name": "keyword.control.polymorphism.xdbml",
+          "match": "\\b((?i:union|oneof|anyof|allof))\\b"
+        }
+      ]
+    },
+    "scalar-types": {
+      "name": "storage.type.xdbml",
+      "match": "\\b((?i:timestamptz|mediumtext|mediumblob|smallmoney|mediumint|nvarchar2|varbinary|datetime2|timestamp|smallint|varchar2|nvarchar|longtext|longblob|tinyblob|tinytext|datetime|tinyint|integer|decimal|numeric|boolean|varchar|variant|bigint|double|string|binary|int32|int64|float|nchar|ntext|jsonb|inet6|money|real|bool|char|text|blob|json|date|time|year|uuid|enum|int|dec|bit|xml))\\b"
+    },
+    "bson-types": {
+      "name": "storage.type.bson.xdbml",
+      "match": "\\b((?i:decimal128|objectid|bindata|minkey|maxkey|symbol|double|regex|long))\\b"
+    },
+    "x-properties": {
+      "comment": "Custom AI-readiness properties prefixed with `x_` or `x-`. Highlighted as extension points.",
+      "name": "support.other.x-property.xdbml",
+      "match": "\\b(x[_-][A-Za-z_][A-Za-z0-9_]*)\\b"
+    },
+    "settings-block": {
+      "comment": "Square-bracket settings block. Inside, we recognize flag settings, keyed settings, ordinary string/number values, and cardinality operators (>, <, -) for Ref-style settings.",
+      "begin": "\\[",
+      "end": "\\]",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.section.brackets.begin.xdbml"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.brackets.end.xdbml"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comments"
+        },
+        {
+          "include": "#cardinality-strings"
+        },
+        {
+          "include": "#strings"
+        },
+        {
+          "include": "#numbers"
+        },
+        {
+          "include": "#constants"
+        },
+        {
+          "include": "#x-properties"
+        },
+        {
+          "include": "#setting-keys"
+        },
+        {
+          "include": "#setting-flags"
+        },
+        {
+          "include": "#scalar-types"
+        },
+        {
+          "include": "#bson-types"
+        },
+        {
+          "include": "#cardinality-operators"
+        },
+        {
+          "name": "punctuation.separator.xdbml",
+          "match": "[,:]"
+        }
+      ]
+    },
+    "setting-flags": {
+      "name": "support.constant.flag.xdbml",
+      "match": "\\b((?i:increment|required|primary|unique|null|key|not|pk))\\b"
+    },
+    "setting-keys": {
+      "comment": "Setting keys appear before a colon. Matched only here inside the settings block.",
+      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|source_database|storage_options|default_charset|database_type|discriminator|minproperties|maxproperties|business_term|source_query|materialized|headercolor|uniqueitems|granularity|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|minlength|maxlength|inactive|minitems|maxitems|synonyms|location|default|targets|pattern|minimum|maximum|indexes|target|source|format|delete|update|color|check|note|name|type|tags|ref|as))\\b(\\s*)(:)",
+      "captures": {
+        "1": {
+          "name": "variable.parameter.setting.xdbml"
+        },
+        "3": {
+          "name": "punctuation.separator.key-value.xdbml"
+        }
+      }
+    },
+    "cardinality-strings": {
+      "comment": "Cardinality settings have values like '0..*' or '1..1' that we color as a distinct kind of string.",
+      "name": "string.unquoted.cardinality.xdbml",
+      "match": "'(?:[0-9*]+\\.\\.[0-9*]+)'"
+    },
+    "cardinality-operators": {
+      "name": "keyword.operator.cardinality.xdbml",
+      "match": "(<>|>|<|-)"
+    },
+    "ref-cardinality-operators": {
+      "comment": "Cardinality operators (>, <, -, <>) in Ref declarations. Recognized between two qualified identifiers (foo.bar > baz.qux). The pattern requires word characters or dots on each side to avoid matching `>` in comments or other contexts.",
+      "match": "(?<=[A-Za-z_][A-Za-z0-9_.]*\\s)(<>|>|<|-)(?=\\s[A-Za-z_])",
+      "name": "keyword.operator.cardinality.xdbml"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "comment": "Triple-quoted multi-line string (DBML extension). Must come before single-quoted matcher.",
+          "name": "string.quoted.triple.xdbml",
+          "begin": "'''",
+          "end": "'''"
+        },
+        {
+          "name": "string.quoted.single.xdbml",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.xdbml",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.template.xdbml",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "constant.character.escape.xdbml",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "comment": "Double-quoted identifier (used to escape reserved keywords as names).",
+          "name": "string.quoted.double.xdbml",
+          "begin": "\"",
+          "end": "\""
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.xdbml",
+          "match": "\\b-?[0-9]+(\\.[0-9]+)?\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.xdbml",
+          "match": "\\b(?i:true|false|null)\\b"
+        }
+      ]
+    },
+    "brackets": {
+      "patterns": [
+        {
+          "name": "punctuation.section.brackets.xdbml",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.section.parens.xdbml",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.section.braces.xdbml",
+          "match": "[{}]"
+        }
+      ]
+    }
+  }
+}

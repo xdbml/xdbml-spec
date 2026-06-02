@@ -16,6 +16,8 @@
     "@iarna/toml": "^2.2.5",
     "markdown-it-container": "^4.0.0",
     "vitepress": "^1.6.4",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2",
     "vue": "^3.5.0"
   },
   "engines": {

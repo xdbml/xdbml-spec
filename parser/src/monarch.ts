@@ -19,6 +19,19 @@
  * are structurally compatible -- the consumer casts at the boundary.
  */
 
+import {
+  CONTAINER_KEYWORDS,
+  ENTITY_KEYWORDS,
+  DECLARATION_KEYWORDS,
+  STRUCTURAL_TYPE_KEYWORDS,
+  POLYMORPHISM_KEYWORDS,
+  SCALAR_TYPES,
+  BSON_TYPES,
+  SETTING_FLAGS,
+  SETTING_KEYS,
+  GRANULARITY_VALUES,
+} from './keywords.ts';
+
 /** Subset of Monaco's LanguageConfiguration -- only the fields we set. */
 export interface XDbmlLanguageConfiguration {
   comments: {
@@ -125,96 +138,30 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
     { open: '{', close: '}', token: 'delimiter.curly' },
   ],
 
+  // Keyword vocabulary is sourced from ./keywords.ts so the TextMate
+  // grammar (in tools/textmate/) and this Monarch tokenizer stay in
+  // sync. To add a keyword: edit ./keywords.ts (one place), then
+  // re-run the TextMate build script. See keywords.ts for the full
+  // workflow.
+
   // Top-level declaration keywords
-  decls: [
-    'project',
-    'container',
-    'schema',
-    'database',
-    'keyspace',
-    'namespace',
-    'dataset',
-    'bucket',
-    'table',
-    'entity',
-    'collection',
-    'record',
-    'type',
-    'edge',
-    'view',
-    'enum',
-    'ref',
-    'note',
-    'tablepartial',
-    'tablegroup',
-    'diagramview',
-  ],
+  decls: [...DECLARATION_KEYWORDS],
 
-  containerKeywords: [
-    'container',
-    'schema',
-    'database',
-    'keyspace',
-    'namespace',
-    'dataset',
-    'bucket',
-  ],
+  containerKeywords: [...CONTAINER_KEYWORDS],
 
-  entityKeywords: ['table', 'entity', 'collection', 'record'],
+  entityKeywords: [...ENTITY_KEYWORDS],
 
   // Structural type expression keywords (used as type expressions inside fields)
-  structuralTypeKeywords: [
-    'object',
-    'struct',
-    'array',
-    'list',
-    'map',
-    'dict',
-    'dictionary',
-    'set',
-    'json',
-    'jsonb',
-    'variant',
-  ],
+  structuralTypeKeywords: [...STRUCTURAL_TYPE_KEYWORDS],
 
-  polymorphismKeywords: [
-    'union',
-    'oneof',
-    'anyof',
-    'allof',
-  ],
+  polymorphismKeywords: [...POLYMORPHISM_KEYWORDS],
 
   // SQL scalar types -- recognized for highlighting; the parser accepts any
   // identifier as a scalar type, so this list is for color, not validation.
-  scalarTypes: [
-    'tinyint', 'smallint', 'mediumint', 'int', 'integer', 'bigint',
-    'int32', 'int64',
-    'float', 'double', 'decimal', 'dec', 'numeric', 'real',
-    'bit', 'bool', 'boolean',
-    'char', 'varchar', 'varchar2', 'nvarchar', 'nvarchar2', 'nchar',
-    'text', 'mediumtext', 'longtext', 'string', 'ntext',
-    'binary', 'varbinary', 'blob', 'mediumblob', 'longblob', 'tinyblob',
-    'tinytext',
-    'json', 'jsonb', 'variant', 'xml',
-    'date', 'time', 'datetime', 'datetime2', 'timestamp',
-    'timestamptz', 'year',
-    'uuid', 'inet6',
-    'money', 'smallmoney',
-    'enum',
-  ],
+  scalarTypes: [...SCALAR_TYPES],
 
   // BSON / document-store types
-  bsonTypes: [
-    'objectid',
-    'decimal128',
-    'bindata',
-    'minkey',
-    'maxkey',
-    'symbol',
-    'regex',
-    'long',
-    'double',
-  ],
+  bsonTypes: [...BSON_TYPES],
 
   // Bare-flag settings: `pk`, `unique`, `not null`, etc.
   // `not null` and `primary key` are two words but tokenized one at a time
@@ -222,85 +169,13 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
   // `required` is a synonym for `not null` (spec §8); the parser
   // normalizes it to `not null` in the AST, but for highlighting
   // purposes both spellings get the same `keyword.setting` color.
-  settingFlags: [
-    'pk',
-    'primary',
-    'key',
-    'unique',
-    'null',
-    'not',
-    'required',
-    'increment',
-  ],
+  settingFlags: [...SETTING_FLAGS],
 
   // Setting keys appearing as `name: value` -- recognized for highlighting.
   // Open-vocabulary at the parser level; this list drives coloring only.
-  settingKeys: [
-    'note',
-    'default',
-    'ref',
-    'name',
-    'color',
-    'headercolor',
-    'as',
-    'check',
-    'inactive',
-    // xDBML-specific
-    'type',
-    'target',
-    'targets',
-    'database_type',
-    'source',
-    'source_cardinality',
-    'target_cardinality',
-    'min_source',
-    'max_source',
-    'min_target',
-    'max_target',
-    'undirected',
-    'discriminator',
-    'source_query',
-    'materialized',
-    'refresh_schedule',
-    'refresh_on',
-    'source_database',
-    'storage_options',
-    // Validation
-    'pattern',
-    'format',
-    'minlength',
-    'maxlength',
-    'minimum',
-    'maximum',
-    'exclusiveminimum',
-    'exclusivemaximum',
-    'multipleof',
-    'minitems',
-    'maxitems',
-    'uniqueitems',
-    'minproperties',
-    'maxproperties',
-    // AI-readiness
-    'synonyms',
-    'business_term',
-    'granularity',
-    'tags',
-    // Referential actions
-    'delete',
-    'update',
-    // Index entries
-    'indexes',
-    // Container settings
-    'replication',
-    'location',
-    'default_charset',
-  ],
+  settingKeys: [...SETTING_KEYS],
 
-  granularityValues: [
-    'year', 'quarter', 'month', 'week', 'day',
-    'hour', 'minute', 'second',
-    'millisecond', 'microsecond', 'nanosecond',
-  ],
+  granularityValues: [...GRANULARITY_VALUES],
 
   ignoreCase: true,
   unicode: true,
