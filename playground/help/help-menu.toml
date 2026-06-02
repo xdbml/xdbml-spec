@@ -96,6 +96,9 @@ title = "Working with schemas"
 title = "Loading examples"
 slug  = "loading-examples"
 [[nodes.children]]
+title = "Open and save files"
+slug  = "open-and-save-files"
+[[nodes.children]]
 title = "Sharing via URL"
 slug  = "sharing-via-url"
 [[nodes.children]]

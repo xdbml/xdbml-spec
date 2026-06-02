@@ -96,11 +96,13 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 import { useParserStore } from '@/stores/parserStore';
+import { useFileSystemStore } from '@/stores/fileSystemStore';
 import { SAMPLE_CATEGORIES, type SampleCategory } from '@/services/sample-content';
 
 import HeaderButton from './HeaderButton.vue';
 
 const parser = useParserStore();
+const fs = useFileSystemStore();
 
 const isOpen = ref(false);
 const rootEl = ref<HTMLDivElement | null>(null);
@@ -115,6 +117,10 @@ function isCurrent (sample: SampleCategory): boolean {
 
 function onPick (sample: SampleCategory): void {
   parser.setContent(sample.content);
+  // Loading an example is not "the file we had open" anymore -- clear
+  // the file-system association so a subsequent Save prompts for a
+  // filename rather than silently overwriting the previously-open file.
+  fs.clearFile();
   isOpen.value = false;
 }
 

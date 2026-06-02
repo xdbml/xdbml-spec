@@ -87,6 +87,18 @@ These are the standard Monaco editor shortcuts; they work whenever the editor ha
 
 Currently the diagram pane has no keyboard-only operations. Interactions are mouse-driven: click to select, drag to reposition, scroll-with-Ctrl to zoom. A future release may add arrow-key navigation between entities and keyboard zoom shortcuts.
 
+## File operations
+
+These work regardless of which pane has focus. See [**Open and save files**](./open-and-save-files) for the full behavior.
+
+| Shortcut | Action |
+|---|---|
+| `Ctrl + O` | Open an `.xdbml` file from your computer |
+| `Ctrl + S` | Save (or Save As, if no file is open) |
+| `Ctrl + Shift + S` | Save As (always prompts for a filename) |
+
+These override the browser's default behavior for the same combinations (which would normally save the entire web page or open a local file in the browser). On Firefox and Safari, Save and Save As trigger a download rather than overwriting the file in place.
+
 ## Global
 
 These work regardless of which pane has focus.
