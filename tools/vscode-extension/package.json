@@ -1,6 +1,6 @@
 {
   "name": "xdbml",
-  "displayName": "xDBML language support",
+  "displayName": "xDBML",
   "description": "Syntax highlighting and editor support for the xDBML data-modeling language.",
   "version": "0.1.0",
   "license": "Apache-2.0",

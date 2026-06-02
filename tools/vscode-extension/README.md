@@ -2,7 +2,7 @@
 
 Syntax highlighting and editor support for the [xDBML](https://xdbml.org) eXtended Database Markup Language.
 
-xDBML is a a **unified, open markup language** for **describing the shape** of structured and semi-structured data, plus the **declarative metadata** attached to that shape **across heterogeneous storage technologies**.  xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**.  A single xDBML document expresses entities, tables, attributes, columns, fields, data types, nested structures, relationships, polymorphism, named reusable types, classification tags, business-glossary references, validation constraints, synonyms, and the polyglot target-native vocabulary that real enterprise data architectures use.
+xDBML is a **unified, open markup language** for **describing the shape** of structured and semi-structured data, plus the **declarative metadata** attached to that shape **across heterogeneous storage technologies**.  xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**.  A single xDBML document expresses entities, tables, attributes, columns, fields, data types, nested structures, relationships, polymorphism, named reusable types, classification tags, business-glossary references, validation constraints, synonyms, and the polyglot target-native vocabulary that real enterprise data architectures use.
 
 It builds on [DBML](https://dbml.dbdiagram.io) and extends it with first-class support for containers, nested types, polymorphism, and reference data.
 
