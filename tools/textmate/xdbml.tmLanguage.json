@@ -1,0 +1,406 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "xDBML",
+  "scopeName": "source.xdbml",
+  "fileTypes": ["xdbml"],
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#version-declaration" },
+    { "include": "#top-level-constructs" },
+    { "include": "#block-keywords" },
+    { "include": "#field-types" },
+    { "include": "#polymorphism-keywords" },
+    { "include": "#json-types" },
+    { "include": "#bson-types" },
+    { "include": "#field-settings" },
+    { "include": "#cardinality-settings" },
+    { "include": "#view-settings" },
+    { "include": "#ai-readiness-settings" },
+    { "include": "#custom-property-prefix" },
+    { "include": "#target-names" },
+    { "include": "#cardinality-strings" },
+    { "include": "#relationship-operators" },
+    { "include": "#cardinality-operators-in-refs" },
+    { "include": "#strings" },
+    { "include": "#expressions" },
+    { "include": "#numbers" },
+    { "include": "#booleans" },
+    { "include": "#null" },
+    { "include": "#settings-separator" },
+    { "include": "#path-segments" },
+    { "include": "#qualified-names" },
+    { "include": "#partial-injection" },
+    { "include": "#identifiers" },
+    { "include": "#brackets" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.xdbml",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.xdbml",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "version-declaration": {
+      "patterns": [
+        {
+          "name": "meta.version-declaration.xdbml",
+          "match": "^\\s*(xdbml|experimental)\\s*(:)\\s*",
+          "captures": {
+            "1": { "name": "keyword.control.directive.version.xdbml" },
+            "2": { "name": "punctuation.separator.key-value.xdbml" }
+          }
+        }
+      ]
+    },
+    "top-level-constructs": {
+      "patterns": [
+        {
+          "name": "keyword.control.construct.project.xdbml",
+          "match": "(?i)\\b(Project)\\b"
+        },
+        {
+          "name": "keyword.control.construct.container.xdbml",
+          "match": "(?i)\\b(Container|Schema|Database|Keyspace|Namespace|Dataset|Bucket)\\b"
+        },
+        {
+          "name": "keyword.control.construct.entity.xdbml",
+          "match": "(?i)\\b(Entity|Table|Collection|Record)\\b"
+        },
+        {
+          "name": "keyword.control.construct.edge.xdbml",
+          "match": "(?i)\\b(Edge)\\b"
+        },
+        {
+          "name": "keyword.control.construct.view.xdbml",
+          "match": "(?i)\\b(View)\\b"
+        },
+        {
+          "name": "keyword.control.construct.type.xdbml",
+          "match": "(?i)\\b(Type)\\b"
+        },
+        {
+          "name": "keyword.control.construct.enum.xdbml",
+          "match": "(?i)\\b(Enum|enum)\\b"
+        },
+        {
+          "name": "keyword.control.construct.ref.xdbml",
+          "match": "(?i)\\b(Ref)\\b\\s*(?=[:\\s{a-zA-Z_])"
+        },
+        {
+          "name": "keyword.control.construct.table-partial.xdbml",
+          "match": "(?i)\\b(TablePartial|TableGroup|DiagramView)\\b"
+        },
+        {
+          "name": "keyword.control.construct.note.xdbml",
+          "match": "(?i)\\b(Note)\\b"
+        }
+      ]
+    },
+    "block-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.other.block.xdbml",
+          "match": "\\b(records|indexes|checks)\\b"
+        }
+      ]
+    },
+    "field-types": {
+      "patterns": [
+        {
+          "name": "storage.type.complex.xdbml",
+          "match": "\\b(object|struct|record|array|list|map|dict|dictionary|set)\\b"
+        },
+        {
+          "name": "storage.type.scalar.relational.xdbml",
+          "match": "\\b(int|integer|bigint|smallint|tinyint|varchar|char|text|nvarchar|nchar|clob|nclob|blob|bytea|decimal|numeric|float|real|double|boolean|bool|date|time|timestamp|timestamptz|datetime|interval|uuid|bytes)\\b(?:\\s*\\([^)]*\\))?"
+        }
+      ]
+    },
+    "bson-types": {
+      "patterns": [
+        {
+          "name": "storage.type.scalar.bson.xdbml",
+          "match": "\\b(string|int32|int64|long|double|bool|null|objectId|Decimal128|BinData|Date|Timestamp|Regex|JavaScript|MinKey|MaxKey|Symbol|DBPointer)\\b"
+        }
+      ]
+    },
+    "json-types": {
+      "patterns": [
+        {
+          "name": "storage.type.scalar.json.xdbml",
+          "match": "\\b(json|jsonb|variant)\\b"
+        }
+      ]
+    },
+    "polymorphism-keywords": {
+      "patterns": [
+        {
+          "name": "keyword.other.polymorphism.xdbml",
+          "match": "\\b(union|oneOf|anyOf|allOf)\\b"
+        }
+      ]
+    },
+    "field-settings": {
+      "patterns": [
+        {
+          "name": "support.type.property-name.xdbml",
+          "match": "\\b(pk|primary\\s+key|not\\s+null|null|unique|increment)\\b"
+        },
+        {
+          "name": "support.type.property-name.xdbml",
+          "match": "\\b(default|note|ref|check|headercolor|color|delete|update|discriminator|materialized|refresh_schedule|refresh_on|source_database|storage_options|source_query|targets|target|type|replication|durable_writes|undirected|database_type|pattern|format|minLength|maxLength|minimum|maximum|exclusiveMinimum|exclusiveMaximum|multipleOf|enum|minItems|maxItems|uniqueItems|minProperties|maxProperties)\\b(?=\\s*:)"
+        }
+      ]
+    },
+    "cardinality-settings": {
+      "patterns": [
+        {
+          "name": "support.type.property-name.cardinality.xdbml",
+          "match": "\\b(source|target|min_source|max_source|min_target|max_target|source_cardinality|target_cardinality)\\b(?=\\s*:)"
+        }
+      ]
+    },
+    "view-settings": {
+      "patterns": [
+        {
+          "name": "support.type.property-name.view.xdbml",
+          "match": "\\b(materialized|refresh_schedule|refresh_on|source_database|storage_options|source_query)\\b(?=\\s*:)"
+        }
+      ]
+    },
+    "ai-readiness-settings": {
+      "patterns": [
+        {
+          "name": "support.type.property-name.ai.xdbml",
+          "match": "\\b(synonyms|business_term|granularity|tags)\\b(?=\\s*:)"
+        }
+      ]
+    },
+    "custom-property-prefix": {
+      "patterns": [
+        {
+          "name": "variable.other.custom-property.xdbml",
+          "match": "\\b(x_[A-Za-z0-9_]+)\\b(?=\\s*:)"
+        }
+      ]
+    },
+    "target-names": {
+      "patterns": [
+        {
+          "name": "constant.language.target.xdbml",
+          "match": "\\b(Oracle|PostgreSQL|Postgres|pg|MySQL|MariaDB|SQLite|Snowflake|Databricks|BigQuery|Redshift|TimescaleDB|ClickHouse|MongoDB|Mongo|DocumentDB|Couchbase|RavenDB|DynamoDB|Cassandra|ScyllaDB|Neo4j|Memgraph|Neptune|JanusGraph|Avro|Parquet|Protobuf|Proto|GraphQL|OpenAPI|Swagger|Elasticsearch|OpenSearch|MSSQL|Polyglot)\\b"
+        }
+      ]
+    },
+    "cardinality-strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.cardinality.xdbml",
+          "match": "'([0-9]+|\\*)\\.\\.([0-9]+|\\*)'",
+          "captures": {
+            "0": { "name": "constant.numeric.cardinality.xdbml" }
+          }
+        }
+      ]
+    },
+    "relationship-operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.relationship.many-to-many.xdbml",
+          "match": "<>"
+        },
+        {
+          "name": "keyword.operator.relationship.one-to-many.xdbml",
+          "match": "(?<=[\\s.\\)A-Za-z0-9_\"])<(?=\\s)"
+        },
+        {
+          "name": "keyword.operator.relationship.many-to-one.xdbml",
+          "match": "(?<=\\s)>(?=\\s)"
+        },
+        {
+          "name": "keyword.operator.relationship.one-to-one.xdbml",
+          "match": "(?<=\\s)-(?=\\s)"
+        }
+      ]
+    },
+    "cardinality-operators-in-refs": {
+      "patterns": [
+        {
+          "name": "keyword.operator.relationship.inline.xdbml",
+          "match": "\\bref\\s*:\\s*([<>\\-]|<>)",
+          "captures": {
+            "1": { "name": "keyword.operator.relationship.xdbml" }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.triple.xdbml",
+          "begin": "'''",
+          "end": "'''",
+          "patterns": [
+            {
+              "name": "constant.character.escape.xdbml",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.xdbml",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.xdbml",
+              "match": "\\\\['\\\\]"
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.double.xdbml",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.xdbml",
+              "match": "\\\\[\"\\\\]"
+            }
+          ]
+        }
+      ]
+    },
+    "expressions": {
+      "patterns": [
+        {
+          "name": "string.interpolated.backtick.xdbml",
+          "begin": "`",
+          "end": "`",
+          "patterns": [
+            {
+              "name": "constant.character.escape.xdbml",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.decimal.xdbml",
+          "match": "\\b-?[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.xdbml",
+          "match": "\\b-?[0-9]+([eE][+-]?[0-9]+)?\\b"
+        }
+      ]
+    },
+    "booleans": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.xdbml",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "null": {
+      "patterns": [
+        {
+          "name": "constant.language.null.xdbml",
+          "match": "(?<!\\b(not|union)\\s)(?<![\\[,]\\s)\\bnull\\b(?!\\s*[,\\]])"
+        }
+      ]
+    },
+    "settings-separator": {
+      "patterns": [
+        {
+          "name": "punctuation.separator.key-value.xdbml",
+          "match": "(?<=[A-Za-z0-9_])\\s*:\\s*"
+        }
+      ]
+    },
+    "path-segments": {
+      "patterns": [
+        {
+          "name": "constant.numeric.array-index.xdbml",
+          "match": "\\.\\[([0-9]+|\\*)\\]",
+          "captures": {
+            "1": { "name": "constant.numeric.xdbml" }
+          }
+        },
+        {
+          "name": "string.quoted.double.map-key.xdbml",
+          "begin": "\\.\\[\"",
+          "end": "\"\\]"
+        }
+      ]
+    },
+    "qualified-names": {
+      "patterns": [
+        {
+          "name": "meta.qualified-name.xdbml",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\.([A-Za-z_][A-Za-z0-9_]*)\\.([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "entity.name.namespace.container.xdbml" },
+            "2": { "name": "entity.name.class.entity.xdbml" },
+            "3": { "name": "variable.other.field.xdbml" }
+          }
+        },
+        {
+          "name": "meta.qualified-name.xdbml",
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\.([A-Za-z_][A-Za-z0-9_]*)\\b",
+          "captures": {
+            "1": { "name": "entity.name.class.entity.xdbml" },
+            "2": { "name": "variable.other.field.xdbml" }
+          }
+        }
+      ]
+    },
+    "partial-injection": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.partial-injection.xdbml",
+          "match": "~[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.identifier.xdbml",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+        }
+      ]
+    },
+    "brackets": {
+      "patterns": [
+        {
+          "name": "punctuation.section.brackets.xdbml",
+          "match": "[\\[\\]]"
+        },
+        {
+          "name": "punctuation.section.braces.xdbml",
+          "match": "[{}]"
+        },
+        {
+          "name": "punctuation.section.parens.xdbml",
+          "match": "[()]"
+        },
+        {
+          "name": "punctuation.separator.comma.xdbml",
+          "match": ","
+        }
+      ]
+    }
+  }
+}
