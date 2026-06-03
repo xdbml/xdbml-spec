@@ -10,7 +10,11 @@
     "docs:preview": "vitepress preview .",
     "prepare:examples": "node scripts/prepare-examples.mjs",
     "prepare:playground": "node scripts/prepare-playground.mjs",
-    "build:playground": "cd playground && npm install && npm run build"
+    "build:playground": "cd playground && npm install && npm run build",
+    "test:parser": "cd parser && npm test",
+    "test:playground": "cd playground && npm test",
+    "test": "npm run test:parser && npm run test:playground",
+    "check": "npm test && cd playground && npm run type-check && cd .. && npm run docs:build"
   },
   "devDependencies": {
     "@iarna/toml": "^2.2.5",
@@ -21,7 +25,7 @@
     "vue": "^3.5.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",

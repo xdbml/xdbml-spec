@@ -198,6 +198,67 @@ Examples live in [`/examples/`](./examples/) and follow the conventions describe
 
 Submit the example as a pull request. Add a row to the table in the examples [`README.md`](./examples/README.md) describing the new file.
 
+## Developing and testing locally
+
+The repository is a monorepo with three test-relevant pieces: the reference parser (`/parser/`), the playground (`/playground/`), and the VitePress documentation site (`/`). Each has its own dependencies and scripts.
+
+### Prerequisites
+
+- **Node.js 22 or later.** The test runner uses `--experimental-strip-types`, which Node added behind that flag in 22.6 and made unflagged in 23.6. Older versions of Node won't run the tests.
+- **npm** (bundled with Node).
+
+### Setting up
+
+From the repository root:
+
+```sh
+npm install
+cd playground && npm install && cd ..
+```
+
+The parser has no install step; it uses Node's experimental TypeScript stripping directly. The root and playground packages have their own `node_modules`.
+
+### Running tests
+
+Two test suites, runnable independently or together:
+
+```sh
+# Run both suites:
+npm test
+
+# Just the parser:
+npm run test:parser
+
+# Just the playground:
+npm run test:playground
+```
+
+The parser suite (60 cases) covers grammar correctness, keyword consistency, and full parsing of every bundled example. The playground suite (16 cases) covers the diagram layout pipeline: named-type expansion, recursion handling, inspector AST lookup, and full layout of every bundled example.
+
+Each suite uses Node's built-in test runner with no external test framework. Output is plain text with ANSI colors when stdout is a TTY.
+
+### Running the full check
+
+Before committing, the `check` script runs both test suites plus a full type-check and site build:
+
+```sh
+npm run check
+```
+
+This is the same set of checks CI runs on push. Running it locally catches regressions before they reach CI. It takes about 60 seconds.
+
+### Continuous integration
+
+A GitHub Actions workflow (`.github/workflows/ci.yml`) runs on every push to any branch and on every pull request. It runs the same `npm run check` equivalent on Node 22 and Node 24 in parallel.
+
+CI failures are surfaced in the GitHub UI on the commit and on any associated pull request. CI is not gating deployment yet -- the `deploy.yml` workflow runs independently on push to main -- but a red CI on main is a signal that something needs fixing before the next release.
+
+### Adding a new test
+
+For the parser, add to `parser/test/run-tests.ts` following the existing patterns. For the playground, add a new entry to the `tests` array in `playground/test/run-tests.ts`. The test framework is minimal by design: each test is an object with a name, a source string (or function), and a check function that throws on failure.
+
+When fixing a regression, add a test that would have caught it. The healthcare-example overflow bug (commit `94d447c`...fix-commit) is preserved as one of the playground regression tests; future changes that reintroduce that class of bug will fail loudly instead of silently breaking a specific example.
+
 ## Contributing to generators, importers, and other tooling
 
 The reference parser and the various generators and importers live in companion repositories under the [`xdbml/`](https://github.com/xdbml) organization. Each has its own `CONTRIBUTING.md` describing its specific build and test conventions; this document covers the specification repository only.

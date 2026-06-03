@@ -1,0 +1,98 @@
+# GitHub Action: continuous integration.
+#
+# Runs on every push to any branch and on every pull request. Independent
+# of deploy.yml so a failing CI doesn't block deployment (and vice versa)
+# until that gating is desired.
+#
+# What gets checked:
+#   1. Parser tests (cd parser && npm test): 60 cases covering the
+#      grammar, keyword consistency, and bundled .xdbml examples.
+#   2. Playground tests (cd playground && npm test): regression suite
+#      for the diagram layout, named-type expansion, recursion handling,
+#      inspector AST lookup, and bundled-example layout.
+#   3. Playground type check (vue-tsc --noEmit): catches TypeScript
+#      errors across the Vue components and TS modules.
+#   4. Full site build (npm run docs:build): exercises the docs build,
+#      the playground build pipeline, and the integration between them.
+#
+# The matrix runs on Node 22 and 24:
+#   - 22 is the minimum supported by the parser and playground (per
+#     each package.json's "engines" field). The test runner uses
+#     --experimental-strip-types, which Node added behind that flag
+#     in 22.6.
+#   - 24 is what deploy.yml uses for production builds. Running tests
+#     on 24 too keeps CI in sync with the deployed environment.
+#
+# Caching: same scheme as deploy.yml. Both lockfiles (root and
+# playground) are cached via setup-node.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - 'LICENSE'
+      - 'NOTICE'
+      - 'CODE_OF_CONDUCT.md'
+      - 'MAINTAINERS.md'
+      - '**.md'
+      - 'tools/**'
+      - 'examples/**'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Cancel an in-progress run for the same branch when a new commit lands.
+# Saves CI minutes without blocking parallel branches.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      # Run all matrix entries even if one fails, so we see which Node
+      # versions are affected rather than getting a single error and
+      # cancellation.
+      fail-fast: false
+      matrix:
+        node-version: ['22', '24']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            playground/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install playground dependencies
+        run: cd playground && npm ci
+
+      - name: Parser tests
+        run: npm run test:parser
+
+      - name: Playground tests
+        run: npm run test:playground
+
+      - name: Type check playground
+        run: cd playground && npm run type-check
+
+      - name: Build playground
+        run: cd playground && npm run build
+
+      - name: Build site (full integration)
+        # docs:build runs prepare-examples, prepare-playground, then
+        # vitepress build. Catches any regression in the full pipeline
+        # that isn't caught by the playground build alone.
+        run: npm run docs:build
