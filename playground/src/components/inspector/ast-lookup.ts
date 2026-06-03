@@ -10,12 +10,22 @@
  * inspector component:
  *
  *   1. The lookup needs to traverse nested fields (an entity contains
- *      fields, fields can contain object/array/oneOf types with their
- *      own field children, recursively). Keeping the recursion in a
- *      separate function keeps the component render code clear.
+ *      fields, fields can contain object/array/oneOf types or
+ *      named-Type references with their own field children, recursively).
+ *      Keeping the recursion in a separate function keeps the component
+ *      render code clear.
  *
  *   2. Reuse: if "Edit in source" later grows variants (Reveal & select,
  *      Reveal & insert next-to, etc.), they all start with span lookup.
+ *
+ * Named-Type step-through: when a field is typed as a user-defined
+ * `Type Foo { ... }`, the diagram expands its body inline, producing
+ * clickable rows for fields inside the type. Clicking those rows
+ * sends a path like `price.amount`; we step from `price` (a ScalarType
+ * named `MonetaryAmount`) into the matching Type declaration's body
+ * and find `amount` there. The Edit-in-source span on the resolved
+ * field points to its definition site INSIDE the Type declaration,
+ * which is correct -- that's where the field is actually written.
  */
 
 import type {
@@ -23,6 +33,7 @@ import type {
   EntityDeclaration,
   FieldDeclaration,
   RefDeclaration,
+  TypeDeclaration,
   TypeExpression,
   XDbmlDocument,
 } from '@xdbml/parse';
@@ -56,6 +67,21 @@ export function resolveSelection (doc: XDbmlDocument | undefined, sel: Selection
   }
 }
 
+/**
+ * Build a name -> TypeDeclaration map from the document's top-level
+ * Type declarations. Used when resolving field paths that step into
+ * a named-type reference, so the inspector can find the FieldDeclaration
+ * inside a Type body. Same idea as the diagram's typeTable; we rebuild
+ * it locally to keep ast-lookup self-contained.
+ */
+function collectTypeTable (doc: XDbmlDocument): Map<string, TypeDeclaration> {
+  const table = new Map<string, TypeDeclaration>();
+  for (const stmt of doc.statements) {
+    if (stmt.kind === 'TypeDeclaration') table.set(stmt.name, stmt);
+  }
+  return table;
+}
+
 function resolveContainer (doc: XDbmlDocument, name: string): ResolvedSelection {
   for (const stmt of doc.statements) {
     if (stmt.kind === 'ContainerDeclaration' && stmt.name === name) {
@@ -76,9 +102,13 @@ function resolveField (doc: XDbmlDocument, entityId: string, path: string): Reso
   if (!found) return null;
   // path may be "name", "name.child", "name.[item].child", "name.{alt}.child", etc.
   // Synthetic intermediate segments ([item], {alt}, <key>, <value>, <item>) point
-  // into structural type expressions, not actual FieldDeclarations.
+  // into structural type expressions, not actual FieldDeclarations. Named-type
+  // references (a ScalarType whose name matches a top-level Type declaration)
+  // also need step-through: traversing into a field of type `MonetaryAmount`
+  // resolves to a field inside the `Type MonetaryAmount { ... }` body.
+  const typeTable = collectTypeTable(doc);
   const segments = path.split('.');
-  const traversal = traverseFieldPath(found.entity, segments);
+  const traversal = traverseFieldPath(found.entity, segments, typeTable);
   if (!traversal) return null;
   return {
     kind: 'field',
@@ -166,6 +196,7 @@ function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null
 function traverseFieldPath (
   entity: EntityDeclaration,
   segments: readonly string[],
+  typeTable: ReadonlyMap<string, TypeDeclaration>,
 ): { field: FieldDeclaration; ancestors: readonly FieldDeclaration[] } | null {
   if (segments.length === 0) return null;
 
@@ -188,7 +219,7 @@ function traverseFieldPath (
       continue;
     }
 
-    const childField = findNamedField(currentType, seg);
+    const childField = findNamedField(currentType, seg, typeTable);
     if (!childField) return null;
     ancestors.push(currentField);
     currentField = childField;
@@ -236,12 +267,26 @@ function traverseStructuralStep (type: TypeExpression, seg: string): TypeExpress
   }
 }
 
-function findNamedField (type: TypeExpression, name: string): FieldDeclaration | null {
+function findNamedField (
+  type: TypeExpression,
+  name: string,
+  typeTable: ReadonlyMap<string, TypeDeclaration>,
+): FieldDeclaration | null {
   switch (type.kind) {
     case 'ObjectType':
       return findFieldInBody(type.fields, name);
     case 'JsonType':
       return type.fields ? findFieldInBody(type.fields, name) : null;
+    case 'ScalarType': {
+      // A ScalarType whose name matches a top-level Type declaration is
+      // a reference to a user-defined type. Step into that type's body
+      // and look for the named field. Genuine scalars (int, varchar)
+      // don't have fields and fall through to null. Same resolution
+      // as the diagram's named-type expansion.
+      const decl = typeTable.get(type.name);
+      if (!decl) return null;
+      return findFieldInBody(decl.body, name);
+    }
     default:
       return null;
   }
