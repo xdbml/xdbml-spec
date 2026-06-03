@@ -520,26 +520,112 @@ function zoomToAnchored (target: number, anchorX?: number, anchorY?: number): vo
 }
 
 /**
- * Compute the zoom level that makes the entire diagram fit within the
- * viewport (with a 5% margin), then center-scroll. Used by the Fit
- * button.
+ * Compute the zoom level that makes the diagram fit nicely within the
+ * viewport, then center-scroll. Used by the Fit button.
+ *
+ * "Nicely" is shape-dependent:
+ *
+ *   - For roughly square or wider-than-tall diagrams, use strict fit:
+ *     min(viewportWidth / contentWidth, viewportHeight / contentHeight),
+ *     with a 5% margin. This makes the whole diagram visible at the
+ *     largest zoom that doesn't overflow.
+ *
+ *   - For tall diagrams (where strict fit would zoom below 50%), use
+ *     fit-to-width instead: the diagram fills the viewport horizontally
+ *     and the user scrolls vertically. This keeps text readable rather
+ *     than shrinking it to illegibility just to fit a tall column of
+ *     entities on one screen.
+ *
+ * The 50% threshold is the practical floor for readable text. Below
+ * that, the schema becomes a thumbnail rather than a working view, and
+ * the user has to manually zoom in anyway. Fit-to-width gives a usable
+ * starting zoom while preserving the option to scroll.
+ *
+ * The fit-to-width branch caps at 75% (not 100%) so the diagram has
+ * generous side margins rather than filling the viewport edge-to-edge.
+ * At 75% of 1:1, an 800-pixel-wide schema renders 600 pixels wide,
+ * with the remaining viewport width as comfortable margin. Capping at
+ * 100% would feel "too zoomed in" -- technically correct but visually
+ * cramped, especially on monitors where the playground occupies most
+ * of the screen width. Also clamps to the global ZOOM_MIN/MAX range.
+ *
+ * Important: Fit uses the ACTUAL CONTENT bounding box (the smallest
+ * rectangle enclosing all entities and containers), NOT `diagram.width`
+ * and `diagram.height`. The canvas dimensions stored on the diagram
+ * are sticky in `applyUserPositions` -- they grow as the user drags
+ * entities into new territory but never shrink back when the user
+ * compacts the layout. So the canvas can be much larger than the
+ * actual content footprint. Fit needs the live content extent or it
+ * zooms against phantom empty space.
  */
 function zoomToFit (): void {
   const vp = viewportEl.value;
   if (!vp) return;
-  const w = diagram.value.width;
-  const h = diagram.value.height;
-  if (w === 0 || h === 0) return;
+
+  // Compute the bounding box of every visible piece of content. We
+  // include containers (which wrap their entities) and free-floating
+  // entities (those without containers). Refs aren't included --
+  // their endpoints already sit on entity boundaries, so the entity
+  // bounds cover them.
+  const d = diagram.value;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const c of d.containers) {
+    if (c.bounds.x < minX) minX = c.bounds.x;
+    if (c.bounds.y < minY) minY = c.bounds.y;
+    if (c.bounds.x + c.bounds.width > maxX) maxX = c.bounds.x + c.bounds.width;
+    if (c.bounds.y + c.bounds.height > maxY) maxY = c.bounds.y + c.bounds.height;
+  }
+  for (const e of d.entities) {
+    if (e.bounds.x < minX) minX = e.bounds.x;
+    if (e.bounds.y < minY) minY = e.bounds.y;
+    if (e.bounds.x + e.bounds.width > maxX) maxX = e.bounds.x + e.bounds.width;
+    if (e.bounds.y + e.bounds.height > maxY) maxY = e.bounds.y + e.bounds.height;
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY)) return;
+
+  const contentW = maxX - minX;
+  const contentH = maxY - minY;
+  if (contentW === 0 || contentH === 0) return;
+
   // 5% margin so the diagram doesn't touch the scrollbar/edge.
   const margin = 0.95;
-  const fitZoom = Math.min(vp.clientWidth / w, vp.clientHeight / h) * margin;
+  const strict = Math.min(vp.clientWidth / contentW, vp.clientHeight / contentH) * margin;
+
+  let fitZoom: number;
+  if (strict >= 0.5) {
+    // Strict fit gives a readable zoom; use it as-is.
+    fitZoom = strict;
+  } else {
+    // Diagram is too tall (relative to the viewport) for strict fit to
+    // produce a readable zoom. Switch to fit-to-width with generous
+    // breathing room; the user scrolls vertically. Cap at 75% so the
+    // diagram doesn't fill the viewport edge-to-edge.
+    fitZoom = Math.min((vp.clientWidth / contentW) * margin, 0.75);
+  }
+
   const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, fitZoom));
   zoom.value = clamped;
-  // Center the diagram in the viewport after the next render.
+
+  // Scroll so the content is centered (or top-anchored for tall content
+  // that exceeds the viewport vertically). The (minX, minY) offset
+  // accounts for content that starts away from origin -- after user
+  // drags or in the original layout's canvas-margin region.
   nextTick(() => {
     if (!vp) return;
-    vp.scrollLeft = Math.max(0, (w * clamped - vp.clientWidth) / 2);
-    vp.scrollTop  = Math.max(0, (h * clamped - vp.clientHeight) / 2);
+    const scaledContentLeft = minX * clamped;
+    const scaledContentTop  = minY * clamped;
+    const scaledW = contentW * clamped;
+    const scaledH = contentH * clamped;
+
+    vp.scrollLeft = Math.max(0, scaledContentLeft - (vp.clientWidth - scaledW) / 2);
+    vp.scrollTop  = scaledH > vp.clientHeight
+      ? Math.max(0, scaledContentTop - 20)
+      : Math.max(0, scaledContentTop - (vp.clientHeight - scaledH) / 2);
   });
 }
 
