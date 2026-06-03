@@ -1,6 +1,6 @@
 <template>
   <g v-if="path">
-    <!-- Wide invisible hit-area over the curve. Catches clicks even
+    <!-- Wide invisible hit-area over the path. Catches clicks even
          when the user doesn't land exactly on the 1.5 px stroke.
          Drawn BEFORE the visible path so SVG painter's order puts the
          visible line on top. -->
@@ -12,7 +12,7 @@
       style="cursor: pointer;"
       @click.stop="$emit('select')"
     />
-    <!-- Visible curve. Stroke thickens and turns blue when selected. -->
+    <!-- Visible line. Stroke thickens and turns blue when selected. -->
     <path
       :d="path.d"
       fill="none"
@@ -23,9 +23,7 @@
 
     <!-- Source endpoint: crow's-foot glyph + cardinality text. -->
     <g style="pointer-events: none;">
-      <g
-        :transform="`translate(${path.startX} ${path.startY}) scale(${path.startSide === 'right' ? 1 : -1} 1)`"
-      >
+      <g :transform="glyphTransform(path.startSide, path.startX, path.startY)">
         <CrowFootGlyph
           :min="sourceCardinality.min"
           :max="sourceCardinality.max"
@@ -34,20 +32,18 @@
       </g>
       <text
         v-if="sourceLabel"
-        :x="path.startX + (path.startSide === 'right' ? 22 : -22)"
-        :y="path.startY - 6"
+        :x="labelX(path.startSide, path.startX)"
+        :y="labelY(path.startSide, path.startY)"
         font-size="9"
         font-weight="500"
         :fill="textColor"
-        :text-anchor="path.startSide === 'right' ? 'start' : 'end'"
+        :text-anchor="labelAnchor(path.startSide)"
       >{{ sourceLabel }}</text>
     </g>
 
     <!-- Target endpoint: same. -->
     <g style="pointer-events: none;">
-      <g
-        :transform="`translate(${path.endX} ${path.endY}) scale(${path.endSide === 'right' ? 1 : -1} 1)`"
-      >
+      <g :transform="glyphTransform(path.endSide, path.endX, path.endY)">
         <CrowFootGlyph
           :min="targetCardinality.min"
           :max="targetCardinality.max"
@@ -56,12 +52,12 @@
       </g>
       <text
         v-if="targetLabel"
-        :x="path.endX + (path.endSide === 'right' ? 22 : -22)"
-        :y="path.endY - 6"
+        :x="labelX(path.endSide, path.endX)"
+        :y="labelY(path.endSide, path.endY)"
         font-size="9"
         font-weight="500"
         :fill="textColor"
-        :text-anchor="path.endSide === 'right' ? 'start' : 'end'"
+        :text-anchor="labelAnchor(path.endSide)"
       >{{ targetLabel }}</text>
     </g>
   </g>
@@ -72,46 +68,42 @@
  * One Ref line between two entity field rows.
  *
  * Path construction:
- *   - Anchor points are computed at the row's vertical center on either
- *     the left or right edge of the source/target entity card,
- *     whichever side is nearer to the other endpoint.
- *   - Control points are offset horizontally by half the gap between
- *     the two endpoints, producing a smooth horizontal-flowing curve.
+ *
+ *   1. Pick an anchor edge on each entity based on the two entities'
+ *      relative positions:
+ *
+ *        - If their X projections don't overlap (the entities sit
+ *          side-by-side), use their left/right edges. The anchor's Y
+ *          coordinate is the row of the named field, preserving the
+ *          "which field connects" visual cue.
+ *
+ *        - If their X projections do overlap (the entities are
+ *          stacked vertically), use their top/bottom edges. The
+ *          anchor's X coordinate is the entity's horizontal center;
+ *          a stacked layout doesn't expose individual field rows on
+ *          a horizontal edge, so the field-level cue gracefully
+ *          degrades to an entity-level cue.
+ *
+ *   2. Route the line orthogonally between the two anchors:
+ *
+ *        - Side-to-side (left/right edges): three segments,
+ *          horizontal-vertical-horizontal, with the V segment at the
+ *          midpoint X between the two anchors.
+ *
+ *        - Top/bottom edges: three segments, vertical-horizontal-
+ *          vertical, with the H segment at the midpoint Y.
  *
  * Cardinality is encoded at each endpoint using the standard ER
- * "crow's foot" notation:
- *
- *   ─║      exactly one         (min=1, max=1)
- *   ─○║     zero or one         (min=0, max=1)
- *   ─≺      one or many         (min=1, max=*)
- *   ─○≺     zero or many        (min=0, max=*)
- *
- * The ring (○) means "zero is allowed" (optional participation). The
- * bar (║) caps "exactly one." The crow's foot (≺) means "many." This
- * is the same notation Chen/Information Engineering tools have used
- * since the 1980s and the same notation dbdiagram.io, Lucidchart, and
- * DataGrip use today.
- *
- * Cardinality sources, in priority order:
- *   1. Explicit settings: `[source: '0..*', target: '1..1']`. UML-style
- *      "min..max" with `*` meaning unbounded.
- *   2. Operator inference: `<` `>` `-` `<>` shorthand from the Ref
- *      declaration. Less precise (no way to express optionality), so
- *      we infer mandatory ("1") for the min.
- *   3. Fallback if neither: treat as 1..1 on both ends.
- *
- * The cardinality text label (e.g. "0..*", "1..1") still renders
- * alongside the glyph for users who prefer reading the explicit value
- * or have non-standard cardinalities the glyph can't represent
- * exactly. It's smaller and lighter than before -- the glyph is the
- * primary signal now.
+ * "crow's foot" notation. The crow's-foot glyph orients automatically:
+ * mirrored for left anchors and rotated 90 degrees for top/bottom
+ * anchors, so the "opening" of the foot always faces the entity,
+ * regardless of edge.
  *
  * Selection:
- *   - `is-selected` prop: when true, curve + glyphs turn blue and the
+ *   - `is-selected` prop: when true, line + glyphs turn blue and the
  *     stroke thickens.
- *   - A transparent stroke-14 path sits over the visible curve to
- *     catch clicks more easily -- the visible 1.5 px line is too thin
- *     to be a reliable click target on its own.
+ *   - A transparent stroke-14 path sits over the visible line to
+ *     catch clicks more easily.
  */
 import { computed } from 'vue';
 
@@ -129,20 +121,26 @@ defineEmits<{
   select: [];
 }>();
 
+/* -------------------------------------------------------------------------
+ * Anchor + path computation
+ * ----------------------------------------------------------------------- */
+
+type Side = 'left' | 'right' | 'top' | 'bottom';
+
 interface Anchor {
   x: number;
   y: number;
-  side: 'left' | 'right';
+  side: Side;
 }
 
 interface RefPath {
   d: string;
   startX: number;
   startY: number;
-  startSide: 'left' | 'right';
+  startSide: Side;
   endX: number;
   endY: number;
-  endSide: 'left' | 'right';
+  endSide: Side;
 }
 
 const sourceEntity = computed(() =>
@@ -161,18 +159,10 @@ const path = computed((): RefPath | undefined => {
   const tgt = targetEntity.value;
   if (!src || !tgt) return undefined;
 
-  const srcAnchor = computeAnchor(src, props.refLayout.source!.fieldName, tgt);
-  const tgtAnchor = computeAnchor(tgt, props.refLayout.target!.fieldName, src);
-
-  // Control point offset: horizontal, half the gap between endpoints,
-  // clamped to a sensible minimum so very-close endpoints still curve.
-  const dx = Math.abs(tgtAnchor.x - srcAnchor.x);
-  const offset = Math.max(40, dx * 0.4);
-
-  const c1x = srcAnchor.x + (srcAnchor.side === 'right' ? offset : -offset);
-  const c2x = tgtAnchor.x + (tgtAnchor.side === 'right' ? offset : -offset);
-
-  const d = `M ${srcAnchor.x} ${srcAnchor.y} C ${c1x} ${srcAnchor.y}, ${c2x} ${tgtAnchor.y}, ${tgtAnchor.x} ${tgtAnchor.y}`;
+  const { sourceSide, targetSide } = chooseSides(src, tgt);
+  const srcAnchor = anchorOnSide(src, sourceSide, props.refLayout.source!.fieldName);
+  const tgtAnchor = anchorOnSide(tgt, targetSide, props.refLayout.target!.fieldName);
+  const d = orthogonalPath(srcAnchor, tgtAnchor);
 
   return {
     d,
@@ -186,51 +176,164 @@ const path = computed((): RefPath | undefined => {
 });
 
 /**
- * Place an anchor on the side of `entity` nearest to `other`. The y
- * coordinate is the row of the named field, or the entity header if
- * the field is missing or the path didn't name one.
+ * Decide which edge of each entity the line should attach to, based
+ * on the entities' relative positions.
+ *
+ * Rule: if the entities' X projections do NOT overlap, attach to the
+ * facing left/right edges (the classic side-by-side layout). If they
+ * DO overlap horizontally, attach to facing top/bottom edges (the
+ * stacked layout). For weird cases where entities overlap on both
+ * axes (normally only possible if the user has dragged entities onto
+ * each other), we still pick top/bottom and accept the line crossing
+ * one box; the visible result is reasonable for the rare case.
  */
-function computeAnchor (
-  entity: EntityLayout,
-  fieldName: string | undefined,
-  other: EntityLayout,
-): Anchor {
-  const entityCenterX = entity.bounds.x + entity.bounds.width / 2;
-  const otherCenterX = other.bounds.x + other.bounds.width / 2;
-  const side: 'left' | 'right' = otherCenterX >= entityCenterX ? 'right' : 'left';
-  const x = side === 'right'
-    ? entity.bounds.x + entity.bounds.width
-    : entity.bounds.x;
+function chooseSides (src: EntityLayout, tgt: EntityLayout): { sourceSide: Side; targetSide: Side } {
+  const srcL = src.bounds.x;
+  const srcR = src.bounds.x + src.bounds.width;
+  const tgtL = tgt.bounds.x;
+  const tgtR = tgt.bounds.x + tgt.bounds.width;
+  const xOverlap = srcR > tgtL && tgtR > srcL;
 
-  let y = entity.bounds.y + ENTITY_HEADER_HEIGHT / 2;
-  if (fieldName) {
-    const field = entity.fields.find((f) => f.name === fieldName);
-    if (field) {
-      y = entity.bounds.y + field.rowY + ROW_HEIGHT / 2;
-    }
+  if (xOverlap) {
+    const srcCy = src.bounds.y + src.bounds.height / 2;
+    const tgtCy = tgt.bounds.y + tgt.bounds.height / 2;
+    if (srcCy <= tgtCy) return { sourceSide: 'bottom', targetSide: 'top' };
+    return { sourceSide: 'top', targetSide: 'bottom' };
   }
-  return { x, y, side };
+  const srcCx = src.bounds.x + src.bounds.width / 2;
+  const tgtCx = tgt.bounds.x + tgt.bounds.width / 2;
+  if (srcCx <= tgtCx) return { sourceSide: 'right', targetSide: 'left' };
+  return { sourceSide: 'left', targetSide: 'right' };
+}
+
+/**
+ * Compute the (x, y) of an anchor on the given side of the entity.
+ *
+ * For left/right anchors, the Y coordinate is the row of the named
+ * field (or the header midline if no field). For top/bottom anchors,
+ * the X coordinate is the entity's horizontal center; top and bottom
+ * edges don't expose field-row positions.
+ */
+function anchorOnSide (entity: EntityLayout, side: Side, fieldName: string | undefined): Anchor {
+  const left = entity.bounds.x;
+  const right = entity.bounds.x + entity.bounds.width;
+  const top = entity.bounds.y;
+  const bottom = entity.bounds.y + entity.bounds.height;
+  const centerX = entity.bounds.x + entity.bounds.width / 2;
+
+  switch (side) {
+    case 'left':
+    case 'right': {
+      let y = entity.bounds.y + ENTITY_HEADER_HEIGHT / 2;
+      if (fieldName) {
+        const field = entity.fields.find((f) => f.name === fieldName);
+        if (field) {
+          y = entity.bounds.y + field.rowY + ROW_HEIGHT / 2;
+        }
+      }
+      return { x: side === 'right' ? right : left, y, side };
+    }
+    case 'top':
+      return { x: centerX, y: top, side };
+    case 'bottom':
+      return { x: centerX, y: bottom, side };
+  }
+}
+
+/**
+ * Build the SVG path "d" attribute for an orthogonal route between
+ * two anchors.
+ *
+ * Same-axis (both side or both top/bottom): a three-segment H-V-H or
+ * V-H-V "Z" with the perpendicular middle segment at the midpoint
+ * coordinate between the two anchors.
+ *
+ * Mixed-axis (one side, one top/bottom): not produced by chooseSides
+ * under the current rule. We handle it defensively with a two-segment
+ * "L" path in case a future selection rule introduces mixed cases.
+ */
+function orthogonalPath (a: Anchor, b: Anchor): string {
+  const aHoriz = a.side === 'left' || a.side === 'right';
+  const bHoriz = b.side === 'left' || b.side === 'right';
+
+  if (aHoriz && bHoriz) {
+    const mx = (a.x + b.x) / 2;
+    return `M ${a.x} ${a.y} L ${mx} ${a.y} L ${mx} ${b.y} L ${b.x} ${b.y}`;
+  }
+  if (!aHoriz && !bHoriz) {
+    const my = (a.y + b.y) / 2;
+    return `M ${a.x} ${a.y} L ${a.x} ${my} L ${b.x} ${my} L ${b.x} ${b.y}`;
+  }
+  if (aHoriz) {
+    return `M ${a.x} ${a.y} L ${b.x} ${a.y} L ${b.x} ${b.y}`;
+  }
+  return `M ${a.x} ${a.y} L ${a.x} ${b.y} L ${b.x} ${b.y}`;
 }
 
 /* -------------------------------------------------------------------------
- * Cardinality parsing & operator inference
+ * Glyph + label placement helpers
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Transform that places the CrowFootGlyph at the anchor and orients
+ * its "away from entity" axis correctly.
+ *
+ * The glyph is drawn with (0,0) at the anchor and positive X pointing
+ * AWAY from the entity. To put that direction in the right place:
+ *
+ *   - right anchor:  positive X points right (no transform needed)
+ *   - left anchor:   positive X points left  (mirror via scale(-1,1))
+ *   - bottom anchor: positive X points down  (rotate 90 CW)
+ *   - top anchor:    positive X points up    (rotate 90 CCW)
+ */
+function glyphTransform (side: Side, x: number, y: number): string {
+  switch (side) {
+    case 'right':  return `translate(${x} ${y})`;
+    case 'left':   return `translate(${x} ${y}) scale(-1 1)`;
+    case 'bottom': return `translate(${x} ${y}) rotate(90)`;
+    case 'top':    return `translate(${x} ${y}) rotate(-90)`;
+  }
+}
+
+/**
+ * X coordinate for the cardinality text label. Offset away from the
+ * anchor along the line direction for side anchors; offset to the
+ * right of the anchor for top/bottom anchors (so the label sits
+ * next to the glyph rather than overlapping the line).
+ */
+function labelX (side: Side, x: number): number {
+  switch (side) {
+    case 'right':  return x + 22;
+    case 'left':   return x - 22;
+    case 'bottom': return x + 6;
+    case 'top':    return x + 6;
+  }
+}
+
+function labelY (side: Side, y: number): number {
+  switch (side) {
+    case 'right':  return y - 6;
+    case 'left':   return y - 6;
+    case 'bottom': return y + 22;
+    case 'top':    return y - 18;
+  }
+}
+
+function labelAnchor (side: Side): 'start' | 'end' | 'middle' {
+  return side === 'left' ? 'end' : 'start';
+}
+
+/* -------------------------------------------------------------------------
+ * Cardinality parsing & operator inference (unchanged from prior version)
  * ----------------------------------------------------------------------- */
 
 interface Cardinality {
-  /** Minimum participations: 0 or 1. */
   min: 0 | 1;
-  /** Maximum participations: 1 or '*' (many). */
   max: 1 | '*';
 }
 
 const DEFAULT_CARDINALITY: Cardinality = { min: 1, max: 1 };
 
-/**
- * Parse a `N..M` cardinality string into the glyph's two-value model.
- * Anything we can't classify falls into DEFAULT_CARDINALITY -- the user
- * still sees the original string via the text label, so no information
- * is lost.
- */
 function parseCardinality (s: string | undefined): Cardinality {
   if (!s) return DEFAULT_CARDINALITY;
   const m = s.match(/^(\d+|\*)\.\.(\d+|\*)$/);
@@ -241,21 +344,15 @@ function parseCardinality (s: string | undefined): Cardinality {
   return { min, max };
 }
 
-/**
- * Map the operator shorthand to default cardinalities. The operators
- * cannot express optionality, so min defaults to 1 (mandatory). The
- * 'side' tells us which endpoint we're computing for, since `<` is
- * "source is one, target is many" and `>` is the reverse.
- */
 function cardinalityFromOperator (op: string, side: 'source' | 'target'): Cardinality {
   switch (op) {
-    case '>': // source: many, target: one
+    case '>':
       return side === 'source' ? { min: 1, max: '*' } : { min: 1, max: 1 };
-    case '<': // source: one, target: many
+    case '<':
       return side === 'source' ? { min: 1, max: 1 } : { min: 1, max: '*' };
-    case '-': // one-to-one
+    case '-':
       return { min: 1, max: 1 };
-    case '<>': // many-to-many
+    case '<>':
       return { min: 1, max: '*' };
     default:
       return DEFAULT_CARDINALITY;
@@ -271,26 +368,13 @@ const targetCardinality = computed<Cardinality>(() => {
   return cardinalityFromOperator(props.refLayout.operator, 'target');
 });
 
-/* -------------------------------------------------------------------------
- * Display strings (smaller, less prominent than before -- the glyph
- * carries the primary signal now). We still show the original
- * settings string verbatim so users with non-standard cardinalities
- * (e.g. "0..3", "2..5") see the exact value the glyph approximates.
- * ----------------------------------------------------------------------- */
-
 const sourceLabel = computed(() => formatCardinality(props.refLayout.sourceCardinality));
 const targetLabel = computed(() => formatCardinality(props.refLayout.targetCardinality));
 
 function formatCardinality (s?: string): string {
   if (!s) return '';
-  // Don't compact -- show the exact source value, since the glyph
-  // already does the visual shorthand.
   return s;
 }
-
-/* -------------------------------------------------------------------------
- * Colors
- * ----------------------------------------------------------------------- */
 
 const lineColor = computed(() => props.isSelected ? '#2563eb' : '#64748b');
 const textColor = computed(() => props.isSelected ? '#2563eb' : '#94a3b8');
