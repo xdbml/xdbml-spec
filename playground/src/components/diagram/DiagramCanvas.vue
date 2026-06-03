@@ -37,8 +37,11 @@
         </defs>
 
         <!-- Containers (drawn first so entities render on top).
-             Clicking anywhere on a container's body or header band
-             selects it. Selection thickens the outline. -->
+             Clicking the body (dashed border area) selects the
+             container. Mousedown on the title bar starts a drag that
+             translates the container and all its member entities
+             together; if no movement occurs (< 2 px), the drag ends as
+             a selection click instead. Selection thickens the outline. -->
         <g
           v-for="container in diagram.containers"
           :key="container.id"
@@ -64,8 +67,8 @@
             :height="32"
             :fill="container.accentColor"
             rx="6"
-            style="cursor: pointer;"
-            @click.stop="onContainerClick(container.name, $event)"
+            style="cursor: grab;"
+            @mousedown.stop="onContainerDragStart(container.name, $event)"
           />
           <rect
             :x="container.bounds.x"
@@ -73,8 +76,8 @@
             :width="container.bounds.width"
             height="16"
             :fill="container.accentColor"
-            style="cursor: pointer;"
-            @click.stop="onContainerClick(container.name, $event)"
+            style="cursor: grab;"
+            @mousedown.stop="onContainerDragStart(container.name, $event)"
           />
           <text
             :x="container.bounds.x + 12"
@@ -855,6 +858,132 @@ function onDragEnd (): void {
     // No drag actually happened (< 2px movement): treat as a click on
     // the entity header and emit a selection event.
     onEntityHeaderClick(final.entityId);
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Container drag interaction
+ *
+ * Mousedown on a container's title bar starts a drag that translates
+ * the container AND all its member entities together. The container's
+ * own bounds aren't stored anywhere -- in `applyUserPositions`, the
+ * container's rectangle is recomputed as the bounding box of its
+ * members. So a container drag just means: apply the same (dx, dy) to
+ * every member's userPositions entry. The container's visible position
+ * follows automatically.
+ *
+ * Math:
+ *   dxPx        = clientX - startClientX
+ *   dxSvg       = dxPx / startZoom
+ *   for each member entity:
+ *     newPos.x  = startMemberPos.x + clampedDxSvg
+ *     newPos.y  = startMemberPos.y + clampedDySvg
+ *
+ * Clamping keeps the container rigid: rather than clamping each
+ * member's coordinate to non-negative independently (which would let
+ * some members stop while others kept moving, warping the container),
+ * we clamp the DELTA based on the member nearest the origin at drag
+ * start. Once any member would hit x=0 (or y=0), the entire container
+ * stops moving in that axis.
+ *
+ * Click vs drag: same 2 px threshold as entity drag. Mouseup without
+ * movement fires container selection instead of persisting.
+ *
+ * Empty containers (zero members) are a no-op: there's nothing to
+ * translate. Selection still works via the no-movement branch.
+ * ----------------------------------------------------------------------- */
+
+interface ContainerDragState {
+  containerName: string;
+  /** Each member entity's position at drag start, keyed by entity id. */
+  startMemberPositions: Map<string, { x: number; y: number }>;
+  /** Smallest X and Y across members; used to clamp the delta so the
+   *  container can't extend into negative canvas space. */
+  minMemberX: number;
+  minMemberY: number;
+  startClientX: number;
+  startClientY: number;
+  startZoom: number;
+  moved: boolean;
+}
+
+let containerDragState: ContainerDragState | null = null;
+
+function onContainerDragStart (containerName: string, e: MouseEvent): void {
+  // Only respond to primary-button presses.
+  if (e.button !== 0) return;
+  const members = diagram.value.entities.filter((ent) => ent.containerName === containerName);
+  const startMemberPositions = new Map<string, { x: number; y: number }>();
+  let minMemberX = Infinity;
+  let minMemberY = Infinity;
+  for (const m of members) {
+    startMemberPositions.set(m.id, { x: m.bounds.x, y: m.bounds.y });
+    if (m.bounds.x < minMemberX) minMemberX = m.bounds.x;
+    if (m.bounds.y < minMemberY) minMemberY = m.bounds.y;
+  }
+  // If the container has no members, there's nothing to translate.
+  // We still set up the state so a no-movement mouseup fires the
+  // selection click, but skip the document-level move listener.
+  containerDragState = {
+    containerName,
+    startMemberPositions,
+    minMemberX: members.length > 0 ? minMemberX : 0,
+    minMemberY: members.length > 0 ? minMemberY : 0,
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    startZoom: zoom.value,
+    moved: false,
+  };
+  document.addEventListener('mousemove', onContainerDragMove);
+  document.addEventListener('mouseup', onContainerDragEnd);
+  // Cursor + text-selection suppression for the duration of the drag.
+  document.body.style.userSelect = 'none';
+  document.body.style.cursor = 'grabbing';
+}
+
+function onContainerDragMove (e: MouseEvent): void {
+  if (!containerDragState) return;
+  const dxPx = e.clientX - containerDragState.startClientX;
+  const dyPx = e.clientY - containerDragState.startClientY;
+  if (!containerDragState.moved && Math.abs(dxPx) < 2 && Math.abs(dyPx) < 2) return;
+  containerDragState.moved = true;
+
+  const requestedDx = dxPx / containerDragState.startZoom;
+  const requestedDy = dyPx / containerDragState.startZoom;
+  // Don't let the container extend into negative canvas space: clamp
+  // the delta so the nearest-to-origin member never crosses 0. If
+  // requestedDx is positive (moving right), no clamping needed; if
+  // negative (moving left), clamp to at most -minMemberX (i.e., the
+  // amount that puts the leftmost member exactly at x=0).
+  const clampedDx = Math.max(-containerDragState.minMemberX, requestedDx);
+  const clampedDy = Math.max(-containerDragState.minMemberY, requestedDy);
+
+  // Update every member entity's position in a single Map mutation so
+  // the reactive recompute fires once and the container's bounds (and
+  // visual position) follow as one rigid block.
+  const next = new Map(userPositions.value);
+  for (const [entityId, startPos] of containerDragState.startMemberPositions) {
+    next.set(entityId, {
+      x: startPos.x + clampedDx,
+      y: startPos.y + clampedDy,
+    });
+  }
+  userPositions.value = next;
+}
+
+function onContainerDragEnd (): void {
+  document.removeEventListener('mousemove', onContainerDragMove);
+  document.removeEventListener('mouseup', onContainerDragEnd);
+  document.body.style.userSelect = '';
+  document.body.style.cursor = '';
+  const final = containerDragState;
+  containerDragState = null;
+  if (final?.moved) {
+    persistUserPositions();
+  } else if (final) {
+    // No drag actually happened: treat as a click and select the
+    // container, same as the body-rect click handler does.
+    emit('select', { kind: 'container', containerName: final.containerName });
   }
 }
 
