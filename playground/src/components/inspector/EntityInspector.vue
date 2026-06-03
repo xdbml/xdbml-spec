@@ -19,7 +19,7 @@
     </InspectorSection>
 
     <InspectorSection title="Settings">
-      <SettingsTable :settings="entity.settings" />
+      <SettingsTable :settings="standardSettings" />
     </InspectorSection>
 
     <InspectorSection title="Note">
@@ -56,9 +56,25 @@ defineEmits<{
   'edit-source': [span: Span];
 }>();
 
+// Settings table excludes the `note` setting because notes render
+// below in their own Note section; showing them twice would be
+// redundant. (Field-level Inspector applies the same filter.)
+const standardSettings = computed(() =>
+  props.entity.settings.filter((s) => s.name !== 'note'),
+);
+
+// Entity-level notes can come from two sources: a `Note: '...'` block
+// inside the entity body (the canonical syntax) or a `[note: '...']`
+// setting on the entity declaration line. Prefer the body block when
+// both exist (since the body block can be triple-quoted and multi-line,
+// it tends to carry the richer note); fall back to the setting otherwise.
 const noteBody = computed(() => {
   for (const item of props.entity.body) {
     if (item.kind === 'NoteBlock') return (item as NoteBlock).body;
+  }
+  const noteSetting = props.entity.settings.find((s) => s.name === 'note');
+  if (noteSetting && noteSetting.value && noteSetting.value.kind === 'StringValue') {
+    return noteSetting.value.value;
   }
   return '';
 });

@@ -130,12 +130,17 @@ const flagBadges = computed(() => {
 
 // Split settings into "standard" and "AI-readiness / custom" buckets.
 // Flag-only settings (rendered as badges above) are excluded from both
-// tables to avoid redundancy.
+// tables to avoid redundancy. The `note` setting is also excluded
+// from `standardSettings` because it renders below in its own Note
+// section (via `noteBody` -> NoteDisplay); duplicating it in the
+// Settings table would surface the same content twice.
 const FLAG_SETTING_NAMES = new Set(['pk', 'primary key', 'unique', 'not null', 'increment', 'null']);
 
 const standardSettings = computed(() =>
   props.field.settings.filter(
-    (s) => !FLAG_SETTING_NAMES.has(s.name) && !s.name.startsWith('x_'),
+    (s) => s.name !== 'note'
+      && !FLAG_SETTING_NAMES.has(s.name)
+      && !s.name.startsWith('x_'),
   ),
 );
 

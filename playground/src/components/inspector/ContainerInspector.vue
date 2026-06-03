@@ -12,7 +12,7 @@
     </InspectorSection>
 
     <InspectorSection title="Settings">
-      <SettingsTable :settings="container.settings" />
+      <SettingsTable :settings="standardSettings" />
     </InspectorSection>
 
     <InspectorSection title="Note">
@@ -46,9 +46,24 @@ const entityCount = computed(() =>
   props.container.body.filter((b) => b.kind === 'EntityDeclaration').length,
 );
 
+// Settings table excludes the `note` setting because notes render
+// below in their own Note section; showing them twice would be
+// redundant. (Field- and entity-level Inspectors apply the same filter.)
+const standardSettings = computed(() =>
+  props.container.settings.filter((s) => s.name !== 'note'),
+);
+
+// Container-level notes can come from two sources: a `Note: '...'`
+// block inside the container body (the canonical syntax) or a
+// `[note: '...']` setting on the container declaration line. Prefer
+// the body block when both exist; fall back to the setting otherwise.
 const noteBody = computed(() => {
   for (const item of props.container.body) {
     if (item.kind === 'NoteBlock') return (item as NoteBlock).body;
+  }
+  const noteSetting = props.container.settings.find((s) => s.name === 'note');
+  if (noteSetting && noteSetting.value && noteSetting.value.kind === 'StringValue') {
+    return noteSetting.value.value;
   }
   return '';
 });
