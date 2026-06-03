@@ -1,17 +1,6 @@
 <template>
   <g :stroke="color" :fill="color" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Optional-participation ring (○). Drawn first because the bar
-         lines sit just past it. -->
-    <circle
-      v-if="min === 0"
-      :cx="RING_CX"
-      cy="0"
-      :r="RING_R"
-      fill="white"
-      stroke-width="1.25"
-    />
-
-    <!-- "Exactly one" perpendicular bar (║). Drawn at BAR_X. -->
+    <!-- "Exactly one" perpendicular bar at BAR_X (closest to entity). -->
     <line
       v-if="max === 1"
       :x1="BAR_X"
@@ -22,11 +11,9 @@
       fill="none"
     />
 
-    <!-- "Many" crow's foot (≺). Three lines fanning from a single
-         apex on the curve OUT toward the entity. The apex sits
-         farther from the entity (at FOOT_APEX_X), and the three tips
-         spread out perpendicular on the entity-facing side (at
-         FOOT_TIP_X, closer to the entity). The "opening" of the V
+    <!-- "Many" crow's foot. Three lines fanning from an apex (at
+         FOOT_APEX_X, further from the entity) toward three tips (at
+         FOOT_TIP_X, closer to the entity). The opening of the V
          faces the entity, the way ER convention requires. -->
     <template v-if="max === '*'">
       <!-- Top line of the foot -->
@@ -57,6 +44,18 @@
         fill="none"
       />
     </template>
+
+    <!-- Optional-participation ring at RING_CX (further from entity).
+         Drawn last so it sits on top of the line stroke. White fill
+         so it visually punches a hole through the line. -->
+    <circle
+      v-if="min === 0"
+      :cx="RING_CX"
+      cy="0"
+      :r="RING_R"
+      fill="white"
+      stroke-width="1.25"
+    />
   </g>
 </template>
 
@@ -66,36 +65,42 @@
  *
  * Drawn in local coordinates where (0,0) is the anchor point on the
  * entity edge and positive x extends AWAY from the entity along the
- * curve. The parent component applies a `scale(-1, 1)` transform when
- * the anchor is on the left side of an entity, so the glyph code only
- * has to handle the "right side" case.
+ * line. The parent component applies a transform when the anchor is
+ * on a different edge (mirroring for left, rotation for top/bottom)
+ * so the glyph code only has to handle the "right side" case.
  *
  * Glyph layout (positive x = away from entity):
  *
- *     0   3      8    11           18
- *     │   │      │    │             │
- *  ───●───○──────║────┤≻─────────── curve →
- *     │   ring   bar   crow's foot
- *     anchor    (max=1) (max=*, opens toward entity)
+ *     0    4     8         14
+ *     │    │     │          │
+ *  ───●────║─────┤≻─────────○──── line →
+ *     │    bar   crow's foot ring
+ *     │    (max=1) (max=*)  (min=0)
+ *     anchor
  *
- *   - Ring (○) at x=6 if min=0
- *   - Bar (║) at x=11 if max=1
- *   - Crow's foot: tips at x=11 (entity side), apex at x=18 (curve side)
- *     if max=*. The opening of the V faces the entity, per ER
- *     convention -- the "many" symbol points AT the entity it
- *     constrains, not away from it.
+ *   - Bar (║) at x=4: drawn if max=1 ("exactly one" cap)
+ *   - Crow's-foot tips at x=1, apex at x=8: drawn if max=*. The fan
+ *     opens TOWARD the entity (tips closer than apex), per the ER
+ *     convention that "many" symbols point AT the entity.
+ *   - Ring (○) at x=14: drawn if min=0 (optional participation)
  *
- * Each piece is conditional, so the four standard cases produce:
+ * The four standard cardinalities produce:
  *
- *   exactly one   (1, 1):  ───────║───
- *   zero or one   (0, 1):  ───○───║───
- *   one or many   (1, *):  ─────┤≻──
- *   zero or many  (0, *):  ───○─┤≻──
+ *   exactly one   (1, 1):  ────║──────────
+ *   zero or one   (0, 1):  ────║─────○───      (bar near entity, ring further)
+ *   one or many   (1, *):  ─┤≻───────────      (foot near entity)
+ *   zero or many  (0, *):  ─┤≻────────○──      (foot near entity, ring further)
  *
- * The component is intentionally minimal: no animations, no
- * interactivity (clicks are handled by the parent ref-line's hit
- * area). Stroke width and color come from the parent so the whole
- * line + glyph turns blue uniformly on selection.
+ * This follows the long-standing ER notation convention: the
+ * "shape" of cardinality (one vs. many) sits adjacent to the
+ * entity it constrains, while the optional-participation ring
+ * stands further out along the line. Earlier versions of this
+ * glyph had the ring closer than the bar/foot, which was visually
+ * unusual; this layout matches Chen / Information Engineering
+ * tools (Lucidchart, ERwin, dbdiagram.io, DataGrip).
+ *
+ * Stroke width and color come from the parent so the whole line +
+ * glyph turns blue uniformly on selection.
  */
 
 defineProps<{
@@ -106,15 +111,20 @@ defineProps<{
 
 /* -------------------------------------------------------------------------
  * Layout constants (in SVG units, which scale with diagram zoom).
+ *
+ * The convention here is: smaller x = closer to the entity. Larger x
+ * = further from the entity along the line. The bar and crow's foot
+ * sit at small x (closest to the entity); the optional-participation
+ * ring sits at larger x (further away).
  * ----------------------------------------------------------------------- */
 
-const RING_CX = 6;
-const RING_R  = 2.5;
-
-const BAR_X            = 11;
+const BAR_X            = 4;
 const BAR_HALF_HEIGHT  = 5;
 
-const FOOT_APEX_X = 18;  // apex sits farther from the entity (curve side)
-const FOOT_TIP_X  = 11;  // tips fan out closer to the entity
+const FOOT_TIP_X  = 1;   // tips touch the entity edge
+const FOOT_APEX_X = 8;   // apex sits further along the line
 const FOOT_SPREAD = 5;
+
+const RING_CX = 14;
+const RING_R  = 2.5;
 </script>

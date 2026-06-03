@@ -213,6 +213,14 @@ function chooseSides (src: EntityLayout, tgt: EntityLayout): { sourceSide: Side;
  * field (or the header midline if no field). For top/bottom anchors,
  * the X coordinate is the entity's horizontal center; top and bottom
  * edges don't expose field-row positions.
+ *
+ * The fieldName from a Ref can be a dotted path (e.g.
+ * `line_items.sku` when the Ref targets a field inside an array).
+ * The layout's row paths include synthetic intermediate segments
+ * (e.g. `line_items.[line_item].sku` -- the `[line_item]` is the
+ * synthesized array-element row). We strip those synthetic segments
+ * before comparing, so the user-facing dotted path resolves to the
+ * leaf row even when there's a structural intermediate between them.
  */
 function anchorOnSide (entity: EntityLayout, side: Side, fieldName: string | undefined): Anchor {
   const left = entity.bounds.x;
@@ -226,7 +234,7 @@ function anchorOnSide (entity: EntityLayout, side: Side, fieldName: string | und
     case 'right': {
       let y = entity.bounds.y + ENTITY_HEADER_HEIGHT / 2;
       if (fieldName) {
-        const field = entity.fields.find((f) => f.name === fieldName);
+        const field = findFieldRow(entity, fieldName);
         if (field) {
           y = entity.bounds.y + field.rowY + ROW_HEIGHT / 2;
         }
@@ -238,6 +246,52 @@ function anchorOnSide (entity: EntityLayout, side: Side, fieldName: string | und
     case 'bottom':
       return { x: centerX, y: bottom, side };
   }
+}
+
+/**
+ * Find the layout row corresponding to a Ref's field path.
+ *
+ * Three resolution strategies, applied in order:
+ *
+ *   1. Exact match on the row's path. Handles all cases where the
+ *      path the Ref author wrote matches the layout's path verbatim
+ *      (e.g. simple top-level fields).
+ *
+ *   2. Match after stripping synthetic intermediate segments from
+ *      the layout row's path. The layout emits synthetic rows for
+ *      array elements (`[name]`), polymorphism alternatives
+ *      (`{name}`), and map keys/values/items (`<key>`, `<value>`,
+ *      `<item>`). The user-written Ref path skips these structural
+ *      intermediaries. Comparing the stripped path catches that.
+ *
+ *   3. Fall back to leaf-name match for single-segment fieldNames
+ *      (the common case of a top-level field). This is what the
+ *      previous version always did.
+ *
+ * Returns the matched FieldLayout row, or undefined if no row matches.
+ */
+function findFieldRow (entity: EntityLayout, fieldName: string) {
+  // Strategy 1: exact path match.
+  const exact = entity.fields.find((f) => f.path === fieldName);
+  if (exact) return exact;
+
+  // Strategy 2: strip synthetic segments from each row's path and compare.
+  // Synthetic segments are bracketed: [name], {name}, <name>.
+  for (const f of entity.fields) {
+    const stripped = f.path
+      .split('.')
+      .filter((seg) => !/^[\[\{<].*[\]\}>]$/.test(seg))
+      .join('.');
+    if (stripped === fieldName) return f;
+  }
+
+  // Strategy 3: single-segment leaf-name match.
+  if (!fieldName.includes('.')) {
+    const leaf = entity.fields.find((f) => f.name === fieldName);
+    if (leaf) return leaf;
+  }
+
+  return undefined;
 }
 
 /**
