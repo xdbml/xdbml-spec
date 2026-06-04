@@ -271,6 +271,56 @@ Container mixed {
     },
   },
 
+  {
+    name: 'Inspector resolves a View as an entity-kind selection',
+    source: `xdbml: 0.1
+Container reporting {
+  View customer_summary [materialized: true] {
+    Note: 'Daily aggregate of customer balances.'
+    source_query: 'SELECT id FROM customers'
+    customer_id int [pk]
+  }
+}
+`,
+    check: ({ ast }) => {
+      const resolved = resolveSelection(ast, {
+        kind: 'entity',
+        entityId: 'reporting.customer_summary',
+      });
+      assertTrue(resolved !== null, 'view selection resolves');
+      assertEq(resolved!.kind, 'entity', 'resolves to entity-kind');
+      if (resolved!.kind !== 'entity') return;
+      assertEq(resolved!.node.kind, 'ViewDeclaration', 'underlying node is a ViewDeclaration');
+      assertEq(resolved!.node.name, 'customer_summary', 'view name preserved');
+      assertTrue(resolved!.container !== null, 'container association preserved');
+      assertEq(resolved!.container!.name, 'reporting', 'container name preserved');
+    },
+  },
+
+  {
+    name: 'Inspector resolves a field inside a View',
+    source: `xdbml: 0.1
+Container reporting {
+  View customer_summary {
+    customer_id   int           [pk]
+    total_balance decimal(19,2) [not null]
+  }
+}
+`,
+    check: ({ ast }) => {
+      const resolved = resolveSelection(ast, {
+        kind: 'field',
+        entityId: 'reporting.customer_summary',
+        path: 'total_balance',
+      });
+      assertTrue(resolved !== null, 'field inside view resolves');
+      assertEq(resolved!.kind, 'field', 'resolves to field-kind');
+      if (resolved!.kind !== 'field') return;
+      assertEq(resolved!.node.name, 'total_balance', 'field name correct');
+      assertEq(resolved!.entity.kind, 'ViewDeclaration', 'parent is a ViewDeclaration');
+    },
+  },
+
   /* ---- Name alignment (commit acca7cd) ------------------------------- */
   //
   // The alignment fix lives in EntityCard.vue's nameLeftEdge() at the

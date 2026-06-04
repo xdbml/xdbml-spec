@@ -71,6 +71,7 @@ import type {
   FieldDeclaration,
   Span,
   TypeExpression,
+  ViewDeclaration,
 } from '@xdbml/parse';
 
 import InspectorSection   from './InspectorSection.vue';
@@ -81,7 +82,7 @@ import EditInSourceButton from './EditInSourceButton.vue';
 const props = defineProps<{
   field: FieldDeclaration;
   ancestors: readonly FieldDeclaration[];
-  entity: EntityDeclaration;
+  entity: EntityDeclaration | ViewDeclaration;
   container: ContainerDeclaration | null;
 }>();
 

@@ -35,10 +35,21 @@ import type {
   RefDeclaration,
   TypeDeclaration,
   TypeExpression,
+  ViewDeclaration,
   XDbmlDocument,
 } from '@xdbml/parse';
 
 import type { Selection } from './selection';
+
+/**
+ * Inspector treats Entity and View declarations as the same kind of
+ * thing for navigation purposes: both have a name, settings, a body
+ * containing FieldDeclarations, and a span. The two AST node types
+ * are structurally close enough that a single union prop covers
+ * both, with view-specific UI (source-query rendering) gated by a
+ * `kind === 'ViewDeclaration'` check.
+ */
+export type EntityOrView = EntityDeclaration | ViewDeclaration;
 
 /**
  * The resolved nodes for a selection. The shape varies by selection
@@ -46,12 +57,12 @@ import type { Selection } from './selection';
  */
 export type ResolvedSelection =
   | { kind: 'container'; node: ContainerDeclaration }
-  | { kind: 'entity';    node: EntityDeclaration; container: ContainerDeclaration | null }
+  | { kind: 'entity';    node: EntityOrView; container: ContainerDeclaration | null }
   | {
       kind: 'field';
       node: FieldDeclaration;
       ancestors: readonly FieldDeclaration[];
-      entity: EntityDeclaration;
+      entity: EntityOrView;
       container: ContainerDeclaration | null;
     }
   | { kind: 'ref'; node: RefDeclaration; index: number }
@@ -139,7 +150,7 @@ function resolveRef (doc: XDbmlDocument, refId: string): ResolvedSelection {
  * ----------------------------------------------------------------------- */
 
 interface EntityFinding {
-  entity: EntityDeclaration;
+  entity: EntityOrView;
   container: ContainerDeclaration | null;
 }
 
@@ -147,6 +158,11 @@ function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null
   // entityId is either "containerName.entityName" (when in a container)
   // or just "entityName" (for top-level orphan entities). Split on the
   // last dot since neither name contains dots.
+  //
+  // Both EntityDeclaration and ViewDeclaration are matched -- they're
+  // treated as the same kind of thing for inspector navigation; the
+  // EntityInspector renders both, with a Source-query section gated
+  // on whether the node kind is ViewDeclaration.
   const dotIdx = entityId.lastIndexOf('.');
   if (dotIdx > 0) {
     const cname = entityId.slice(0, dotIdx);
@@ -154,14 +170,14 @@ function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null
     for (const stmt of doc.statements) {
       if (stmt.kind !== 'ContainerDeclaration' || stmt.name !== cname) continue;
       for (const item of stmt.body) {
-        if (item.kind === 'EntityDeclaration' && item.name === ename) {
+        if ((item.kind === 'EntityDeclaration' || item.kind === 'ViewDeclaration') && item.name === ename) {
           return { entity: item, container: stmt };
         }
       }
     }
   }
   for (const stmt of doc.statements) {
-    if (stmt.kind === 'EntityDeclaration' && stmt.name === entityId) {
+    if ((stmt.kind === 'EntityDeclaration' || stmt.kind === 'ViewDeclaration') && stmt.name === entityId) {
       return { entity: stmt, container: null };
     }
   }
@@ -194,7 +210,7 @@ function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null
  * version could open a sub-inspector for the alternative's type.
  */
 function traverseFieldPath (
-  entity: EntityDeclaration,
+  entity: EntityOrView,
   segments: readonly string[],
   typeTable: ReadonlyMap<string, TypeDeclaration>,
 ): { field: FieldDeclaration; ancestors: readonly FieldDeclaration[] } | null {

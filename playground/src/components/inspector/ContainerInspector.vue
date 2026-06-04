@@ -7,7 +7,10 @@
         <dt class="font-medium text-gray-500">Name</dt>
         <dd class="text-gray-900 font-mono break-all">{{ container.name }}</dd>
         <dt class="font-medium text-gray-500">Members</dt>
-        <dd class="text-gray-900">{{ entityCount }} entit{{ entityCount === 1 ? 'y' : 'ies' }}</dd>
+        <dd class="text-gray-900">
+          {{ entityCount }} {{ entityCount === 1 ? 'member' : 'members' }}
+          <span v-if="memberBreakdown" class="text-gray-500">({{ memberBreakdown }})</span>
+        </dd>
       </dl>
     </InspectorSection>
 
@@ -43,8 +46,31 @@ defineEmits<{
 }>();
 
 const entityCount = computed(() =>
-  props.container.body.filter((b) => b.kind === 'EntityDeclaration').length,
+  props.container.body.filter(
+    (b) => b.kind === 'EntityDeclaration' || b.kind === 'ViewDeclaration',
+  ).length,
 );
+
+/**
+ * If a container has both entity and view members, surface the split:
+ * "3 members (2 tables, 1 view)". When all members are the same kind,
+ * suppress the breakdown to avoid clutter.
+ */
+const memberBreakdown = computed(() => {
+  let entities = 0;
+  let views = 0;
+  for (const b of props.container.body) {
+    if (b.kind === 'EntityDeclaration') entities += 1;
+    else if (b.kind === 'ViewDeclaration') views += 1;
+  }
+  if (entities > 0 && views > 0) {
+    const e = `${entities} ${entities === 1 ? 'table' : 'tables'}`;
+    const v = `${views} ${views === 1 ? 'view' : 'views'}`;
+    return `${e}, ${v}`;
+  }
+  if (entities === 0 && views > 0) return `${views} ${views === 1 ? 'view' : 'views'}`;
+  return '';
+});
 
 // Settings table excludes the `note` setting because notes render
 // below in their own Note section; showing them twice would be

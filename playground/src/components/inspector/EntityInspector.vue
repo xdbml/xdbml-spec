@@ -3,7 +3,7 @@
     <InspectorSection title="Identification">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt class="font-medium text-gray-500">Keyword</dt>
-        <dd class="text-gray-900 font-mono">{{ entity.keyword }}</dd>
+        <dd class="text-gray-900 font-mono">{{ keywordLabel }}</dd>
         <dt class="font-medium text-gray-500">Name</dt>
         <dd class="text-gray-900 font-mono break-all">{{ entity.name }}</dd>
         <dt v-if="container" class="font-medium text-gray-500">Container</dt>
@@ -26,6 +26,15 @@
       <NoteDisplay :body="noteBody" />
     </InspectorSection>
 
+    <!-- Views surface their source_query so users can see the SQL that
+         defines the view without leaving the inspector. Tables don't
+         have this section. The block is rendered verbatim with
+         monospace font; preserve whitespace so multi-line queries
+         keep their original formatting. -->
+    <InspectorSection v-if="sourceQueryBody" title="Source query">
+      <pre class="text-[11px] leading-relaxed font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded px-2 py-1.5 overflow-x-auto whitespace-pre max-h-[40vh] overflow-y-auto">{{ sourceQueryBody }}</pre>
+    </InspectorSection>
+
     <div class="px-3 pb-3">
       <EditInSourceButton @click="$emit('edit-source', entity.span)" />
     </div>
@@ -40,6 +49,7 @@ import type {
   FieldDeclaration,
   NoteBlock,
   Span,
+  ViewDeclaration,
 } from '@xdbml/parse';
 
 import InspectorSection   from './InspectorSection.vue';
@@ -48,13 +58,25 @@ import NoteDisplay        from './NoteDisplay.vue';
 import EditInSourceButton from './EditInSourceButton.vue';
 
 const props = defineProps<{
-  entity: EntityDeclaration;
+  entity: EntityDeclaration | ViewDeclaration;
   container: ContainerDeclaration | null;
 }>();
 
 defineEmits<{
   'edit-source': [span: Span];
 }>();
+
+/**
+ * Views don't have a `keyword` field in the AST (their kind alone
+ * identifies them). Display "View" as the keyword label for them so
+ * the Identification block reads consistently regardless of whether
+ * we're showing an Entity (with its specific keyword like Table or
+ * Collection) or a View.
+ */
+const keywordLabel = computed(() => {
+  if (props.entity.kind === 'ViewDeclaration') return 'View';
+  return (props.entity as EntityDeclaration).keyword;
+});
 
 // Settings table excludes the `note` setting because notes render
 // below in their own Note section; showing them twice would be
@@ -63,11 +85,12 @@ const standardSettings = computed(() =>
   props.entity.settings.filter((s) => s.name !== 'note'),
 );
 
-// Entity-level notes can come from two sources: a `Note: '...'` block
-// inside the entity body (the canonical syntax) or a `[note: '...']`
-// setting on the entity declaration line. Prefer the body block when
-// both exist (since the body block can be triple-quoted and multi-line,
-// it tends to carry the richer note); fall back to the setting otherwise.
+// Entity/View-level notes can come from two sources: a `Note: '...'`
+// block inside the body (the canonical syntax) or a `[note: '...']`
+// setting on the declaration line. Prefer the body block when both
+// exist (since the body block can be triple-quoted and multi-line,
+// it tends to carry the richer note); fall back to the setting
+// otherwise.
 const noteBody = computed(() => {
   for (const item of props.entity.body) {
     if (item.kind === 'NoteBlock') return (item as NoteBlock).body;
@@ -77,6 +100,22 @@ const noteBody = computed(() => {
     return noteSetting.value.value;
   }
   return '';
+});
+
+/**
+ * Concatenated source_query content for Views. Returns the empty
+ * string for Entities and for Views without any SourceQueryItem in
+ * their body. If a View happens to declare multiple source_query
+ * blocks (the AST allows it), they're joined with a blank-line
+ * separator so all of them remain visible.
+ */
+const sourceQueryBody = computed(() => {
+  if (props.entity.kind !== 'ViewDeclaration') return '';
+  const parts: string[] = [];
+  for (const item of props.entity.body) {
+    if (item.kind === 'SourceQueryItem') parts.push(item.query);
+  }
+  return parts.join('\n\n').trim();
 });
 
 const fieldStats = computed(() => {
