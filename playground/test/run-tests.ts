@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parse } from '../../parser/src/index.ts';
 import type { XDbmlDocument } from '../../parser/src/index.ts';
-import { buildDiagram } from '../src/components/diagram/layout.ts';
+import { buildDiagram, applyUserPositions } from '../src/components/diagram/layout.ts';
 import type { DiagramModel } from '../src/components/diagram/layout.ts';
 import { resolveSelection } from '../src/components/inspector/ast-lookup.ts';
 
@@ -284,6 +284,47 @@ Table products {
       assertEq(resolved!.node.name, 'amount', 'correct field');
       assertEq(resolved!.ancestors.length, 1, 'one ancestor (price)');
       assertEq(resolved!.ancestors[0].name, 'price', 'ancestor is price');
+    },
+  },
+
+  /* ---- Container sizing consistency (commit fix-pending) ------------ */
+  //
+  // The auto-layout in buildDiagram and the recompute path in
+  // applyUserPositions must agree on container bounds for the same
+  // member positions. They previously differed by CONTAINER_PADDING
+  // (24 pixels) in height: auto-layout left zero bottom padding while
+  // the recompute correctly accounted for both top and bottom. The
+  // visible symptom was a 24-pixel jump in container height the first
+  // time any entity was dragged inside the container, because the
+  // rendering path switched from auto-layout to recompute.
+
+  {
+    name: 'auto-layout and applyUserPositions produce identical container bounds',
+    source: `xdbml: 0.1
+Container core {
+  Table users {
+    id    int [pk]
+    email varchar
+  }
+  Table posts {
+    id        int [pk]
+    author_id int
+  }
+}
+`,
+    check: ({ ast }) => {
+      const base = buildDiagram(ast);
+      // Force recompute path by passing entities' current positions.
+      const positions = new Map<string, { x: number; y: number }>();
+      for (const e of base.entities) positions.set(e.id, { x: e.bounds.x, y: e.bounds.y });
+      const recomputed = applyUserPositions(base, positions);
+      assertTrue(base.containers.length === 1, 'one container');
+      const autoBounds = base.containers[0].bounds;
+      const recompBounds = recomputed.containers[0].bounds;
+      assertEq(autoBounds.x, recompBounds.x, 'container x matches');
+      assertEq(autoBounds.y, recompBounds.y, 'container y matches');
+      assertEq(autoBounds.width, recompBounds.width, 'container width matches');
+      assertEq(autoBounds.height, recompBounds.height, 'container height matches');
     },
   },
 

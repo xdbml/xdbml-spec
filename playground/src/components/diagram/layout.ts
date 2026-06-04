@@ -312,7 +312,18 @@ export function buildDiagram (
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
 
-    const containerHeight = (entityCursorY - innerTop) + CONTAINER_PADDING + CONTAINER_HEADER_HEIGHT
+    // Container height = header band + top padding + entity content +
+    // bottom padding. After the entity loop, `entityCursorY` points
+    // one ENTITY_GAP_Y past the last entity's bottom (because the loop
+    // adds the gap unconditionally). Subtract that trailing gap when
+    // computing the content extent. The factor of 2 on
+    // CONTAINER_PADDING covers both top and bottom symmetrically;
+    // earlier versions of this formula had only one CONTAINER_PADDING
+    // term, which left the bottom edge flush with the last entity
+    // (zero bottom padding) and made the container 24 pixels shorter
+    // than the equivalent bounds produced by `applyUserPositions`.
+    // Now both paths agree.
+    const containerHeight = (entityCursorY - innerTop) + CONTAINER_PADDING * 2 + CONTAINER_HEADER_HEIGHT
       - (containerEntities.length > 0 ? ENTITY_GAP_Y : 0);
 
     const containerLayout: ContainerLayout = {
