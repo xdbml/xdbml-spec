@@ -226,6 +226,51 @@ Table payments {
     },
   },
 
+  /* ---- Views (issue: views ignored, container appears empty) ------- */
+  //
+  // View declarations should produce diagram entities the same way
+  // Table declarations do, including when they sit inside a Container.
+  // Earlier versions of the layout ignored ViewDeclaration entirely,
+  // so a container with only views (financial-services' `reporting`)
+  // rendered empty.
+
+  {
+    name: 'View declarations appear in the diagram as flagged entities',
+    source: `xdbml: 0.1
+Container reporting {
+  View customer_summary {
+    customer_id int [pk]
+    total_balance decimal(19,2)
+  }
+}
+`,
+    check: ({ diagram }) => {
+      const view = diagram.entities.find((e) => e.name === 'customer_summary');
+      assertTrue(view !== undefined, 'view entity is laid out');
+      assertEq(view!.isView, true, 'view is flagged as isView');
+      assertEq(view!.keyword, 'View', 'keyword is "View"');
+      assertEq(view!.containerName, 'reporting', 'view belongs to its container');
+      assertEq(view!.fields.length, 2, 'view fields are rendered as rows');
+    },
+  },
+
+  {
+    name: 'Tables in a mixed container are NOT flagged as views',
+    source: `xdbml: 0.1
+Container mixed {
+  Table operational { id int [pk] }
+  View derived { id int [pk] }
+}
+`,
+    check: ({ diagram }) => {
+      const table = diagram.entities.find((e) => e.name === 'operational');
+      const view = diagram.entities.find((e) => e.name === 'derived');
+      assertTrue(table !== undefined && view !== undefined, 'both entities present');
+      assertEq(table!.isView, false, 'table is not isView');
+      assertEq(view!.isView, true, 'view is isView');
+    },
+  },
+
   /* ---- Name alignment (commit acca7cd) ------------------------------- */
   //
   // The alignment fix lives in EntityCard.vue's nameLeftEdge() at the

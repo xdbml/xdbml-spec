@@ -2,7 +2,9 @@
   <g>
     <!-- Card background. Stroke thickens and turns blue when this
          entity is the current selection (entity itself or one of its
-         fields). -->
+         fields). For Views, the border is dashed rather than solid, to
+         signal at a glance that the rectangle is a derived/computed
+         relation rather than an authoritative table. -->
     <rect
       :x="entity.bounds.x"
       :y="entity.bounds.y"
@@ -12,6 +14,7 @@
       fill="white"
       :stroke="isSelected ? '#2563eb' : '#94a3b8'"
       :stroke-width="isSelected ? 2 : 1"
+      :stroke-dasharray="entity.isView ? '6 3' : undefined"
       filter="url(#entity-shadow)"
     />
 
@@ -46,8 +49,33 @@
         :fill="headerFill"
       />
 
+      <!-- Eye icon for Views. Sits at the left of the header band, just
+           before the entity name. An outer ellipse + a small filled
+           pupil. Same white as the header text. The name's X position
+           shifts to make room (see nameLeftX below). -->
+      <g
+        v-if="entity.isView"
+        style="pointer-events: none;"
+      >
+        <ellipse
+          :cx="entity.bounds.x + 18"
+          :cy="entity.bounds.y + 16"
+          rx="8"
+          ry="5"
+          fill="none"
+          stroke="white"
+          stroke-width="1.4"
+        />
+        <circle
+          :cx="entity.bounds.x + 18"
+          :cy="entity.bounds.y + 16"
+          r="2"
+          fill="white"
+        />
+      </g>
+
       <text
-        :x="entity.bounds.x + 12"
+        :x="nameLeftX"
         :y="entity.bounds.y + 20"
         fill="white"
         font-size="13"
@@ -240,6 +268,8 @@
  *     forwards this to App.vue as a field selection. Carets stop
  *     propagation so caret clicks don't trigger this.
  */
+import { computed } from 'vue';
+
 import type { EntityLayout, FieldLayout } from './layout';
 import type { Selection } from '@/components/inspector/selection';
 
@@ -296,6 +326,14 @@ const headerFill = ((): string => {
       return '#334155';
   }
 })();
+
+// X coordinate for the entity-name text in the header. Views render
+// an eye icon at the left of the header, so the name shifts right to
+// make room. Regular entities have the name at the standard 12-px
+// inset.
+const nameLeftX = computed(() => {
+  return props.entity.bounds.x + (props.entity.isView ? 32 : 12);
+});
 
 interface Badge { label: string; color: string }
 

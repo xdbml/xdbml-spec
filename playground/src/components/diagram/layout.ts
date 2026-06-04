@@ -40,6 +40,7 @@ import type {
   Setting,
   TypeDeclaration,
   TypeExpression,
+  ViewDeclaration,
   XDbmlDocument,
 } from '@xdbml/parse';
 
@@ -71,10 +72,17 @@ export interface ContainerLayout {
 export interface EntityLayout {
   id: string;
   name: string;
-  /** e.g. 'Entity' | 'Table' | 'Collection' | 'Record' */
+  /** e.g. 'Entity' | 'Table' | 'Collection' | 'Record' | 'View' */
   keyword: string;
   /** Container name this entity belongs to, or undefined if free-floating. */
   containerName?: string;
+  /**
+   * True for View declarations. Views are laid out exactly like entities
+   * (same field rows, same header, same bounding box), but the renderer
+   * uses dashed border strokes and an eye icon to mark them visually as
+   * derived/non-authoritative.
+   */
+  isView: boolean;
   fields: FieldLayout[];
   bounds: Rect;
 }
@@ -256,21 +264,33 @@ export function buildDiagram (
 ): DiagramModel {
   if (!doc) return emptyDiagram();
 
-  // Collect entities, grouped by container.
-  const entitiesByContainer = new Map<string | undefined, EntityDeclaration[]>();
+  // Collect entities and views, grouped by container. Both produce
+  // EntityLayout rows in the diagram; views are flagged so the
+  // renderer can apply the dashed border + eye icon distinction. The
+  // EntityLike adapter normalizes them into a single shape so the
+  // downstream layout code doesn't need to branch on declaration kind.
+  const entitiesByContainer = new Map<string | undefined, EntityLike[]>();
   const containers: ContainerDeclaration[] = [];
 
   for (const stmt of doc.statements) {
     if (stmt.kind === 'ContainerDeclaration') {
       containers.push(stmt);
-      const list: EntityDeclaration[] = [];
+      const list: EntityLike[] = [];
       for (const item of stmt.body) {
-        if (item.kind === 'EntityDeclaration') list.push(item);
+        if (item.kind === 'EntityDeclaration') {
+          list.push(asEntityLike(item));
+        } else if (item.kind === 'ViewDeclaration') {
+          list.push(viewAsEntityLike(item));
+        }
       }
       entitiesByContainer.set(stmt.name, list);
     } else if (stmt.kind === 'EntityDeclaration') {
       const existing = entitiesByContainer.get(undefined) ?? [];
-      existing.push(stmt);
+      existing.push(asEntityLike(stmt));
+      entitiesByContainer.set(undefined, existing);
+    } else if (stmt.kind === 'ViewDeclaration') {
+      const existing = entitiesByContainer.get(undefined) ?? [];
+      existing.push(viewAsEntityLike(stmt));
       entitiesByContainer.set(undefined, existing);
     }
   }
@@ -424,8 +444,43 @@ function emptyDiagram (): DiagramModel {
  * Entity layout
  * ----------------------------------------------------------------------- */
 
+/**
+ * Internal adapter that lets the layout code treat EntityDeclarations
+ * and ViewDeclarations uniformly. The two AST shapes have different
+ * `body` item unions, but the layout only ever inspects items whose
+ * `kind === 'FieldDeclaration'` -- and FieldDeclaration is in both.
+ *
+ * `isView` is propagated to the resulting EntityLayout so the renderer
+ * can apply the visual distinction (dashed border, eye icon) while the
+ * geometry pipeline stays identical for both.
+ */
+interface EntityLike {
+  name: string;
+  keyword: string;
+  body: ReadonlyArray<{ kind: string }>;
+  isView: boolean;
+}
+
+function asEntityLike (entity: EntityDeclaration): EntityLike {
+  return {
+    name: entity.name,
+    keyword: entity.keyword,
+    body: entity.body,
+    isView: false,
+  };
+}
+
+function viewAsEntityLike (view: ViewDeclaration): EntityLike {
+  return {
+    name: view.name,
+    keyword: 'View',
+    body: view.body,
+    isView: true,
+  };
+}
+
 function buildEntityLayout (
-  entity: EntityDeclaration,
+  entity: EntityLike,
   x: number,
   y: number,
   containerName: string | undefined,
@@ -680,7 +735,7 @@ function buildEntityLayout (
 
   for (const item of entity.body) {
     if (item.kind !== 'FieldDeclaration') continue;
-    emitField(item, 0, '', new Set<string>());
+    emitField(item as FieldDeclaration, 0, '', new Set<string>());
   }
 
   const height = ENTITY_HEADER_HEIGHT + (fields.length * ROW_HEIGHT) + 4;
@@ -689,6 +744,7 @@ function buildEntityLayout (
     name: entity.name,
     keyword: entity.keyword,
     containerName,
+    isView: entity.isView,
     fields,
     bounds: { x, y, width: ENTITY_WIDTH, height },
   };
