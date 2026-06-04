@@ -35,6 +35,7 @@ import type {
   ContainerDeclaration,
   EntityDeclaration,
   FieldDeclaration,
+  IndexesBlock,
   RefDeclaration,
   RefValue,
   ScalarType,
@@ -791,6 +792,42 @@ function buildEntityLayout (
   for (const item of entity.body) {
     if (item.kind !== 'FieldDeclaration') continue;
     emitField(item as FieldDeclaration, 0, '', new Set<string>());
+  }
+
+  // Second pass: flag fields that participate in a composite primary
+  // key declared via `indexes { (a, b) [pk] }`. The per-field `[pk]`
+  // setting form is already handled by computeFieldFlags above (it
+  // sees the FieldDeclaration's own settings array). The indexes-block
+  // form is a separate AST node carrying its own settings and field
+  // references, which is invisible from inside a single
+  // FieldDeclaration, so we apply it here where we have visibility
+  // into the whole entity body.
+  //
+  // We only act on index entries that carry a `pk` setting. Plain
+  // indexes (`(a, b)` with no `[pk]`) don't tint the source fields.
+  // Composite-unique indexes don't either; the per-field unique flag
+  // is a stronger signal and we don't want every column in a unique
+  // index to appear unique (which would visually conflict with the
+  // standard "U" badge).
+  for (const item of entity.body) {
+    if (item.kind !== 'IndexesBlock') continue;
+    const indexes = item as IndexesBlock;
+    for (const entry of indexes.entries) {
+      const isPkIndex = entry.settings.some((s) => s.name === 'pk' || s.name === 'primary key');
+      if (!isPkIndex) continue;
+      for (const component of entry.components) {
+        if (component.kind !== 'IndexPathComponent') continue;
+        const componentPath = component.path
+          .filter((seg) => seg.kind === 'PathField')
+          .map((seg) => (seg as { name: string }).name)
+          .join('.');
+        if (!componentPath) continue;
+        // Match the FieldLayout by exact path. For top-level fields
+        // path === name; for nested fields path is dot-joined.
+        const target = fields.find((f) => f.path === componentPath);
+        if (target) target.flags.pk = true;
+      }
+    }
   }
 
   const height = ENTITY_HEADER_HEIGHT + (fields.length * ROW_HEIGHT) + 4;

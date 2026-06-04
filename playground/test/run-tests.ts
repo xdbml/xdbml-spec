@@ -627,6 +627,101 @@ Ref: enrollments.student_id > students.id
     },
   },
 
+  /* ---- Composite PK declared via indexes block --------------------- */
+  //
+  // The other way to declare a composite PK is to list the fields in
+  // an `indexes { (a, b) [pk] }` block rather than marking each field
+  // with its own `[pk]` setting. The layout module needs to look at
+  // the IndexesBlock in addition to per-field settings so this form
+  // also tints the constituent fields yellow.
+  //
+  // The non-pk index forms (unique, plain) must NOT trigger the pk
+  // flag -- otherwise every column in a composite unique index would
+  // get the yellow tint, which would be wrong.
+
+  {
+    name: 'composite PK via indexes block: every constituent field is flagged',
+    source: `xdbml: 0.1
+Table order_items {
+  order_id    int
+  product_id  int
+  quantity    int
+
+  indexes {
+    (order_id, product_id) [pk]
+  }
+}
+`,
+    check: ({ diagram }) => {
+      const e = diagram.entities[0];
+      const pk = e.fields.filter((f) => f.flags.pk).map((f) => f.name);
+      assertEq(pk.length, 2, 'two PK fields from the composite index');
+      assertTrue(pk.includes('order_id'),   'order_id flagged');
+      assertTrue(pk.includes('product_id'), 'product_id flagged');
+      assertEq(e.fields.find((f) => f.name === 'quantity')!.flags.pk, false, 'non-index field stays unflagged');
+    },
+  },
+
+  {
+    name: 'single-column PK via indexes block flags exactly that column',
+    source: `xdbml: 0.1
+Table users {
+  id    int
+  email varchar
+
+  indexes {
+    id [pk]
+  }
+}
+`,
+    check: ({ diagram }) => {
+      const e = diagram.entities[0];
+      assertEq(e.fields.find((f) => f.name === 'id')!.flags.pk, true, 'id flagged');
+      assertEq(e.fields.find((f) => f.name === 'email')!.flags.pk, false, 'email not flagged');
+    },
+  },
+
+  {
+    name: 'non-pk indexes do not flag fields as pk',
+    source: `xdbml: 0.1
+Table users {
+  id    int [pk]
+  email varchar
+  name  varchar
+
+  indexes {
+    (name, email) [unique]
+    email
+  }
+}
+`,
+    check: ({ diagram }) => {
+      const e = diagram.entities[0];
+      assertEq(e.fields.find((f) => f.name === 'id')!.flags.pk,    true,  'id is pk (per-field setting)');
+      assertEq(e.fields.find((f) => f.name === 'email')!.flags.pk, false, 'email NOT pk despite being in a unique index');
+      assertEq(e.fields.find((f) => f.name === 'name')!.flags.pk,  false, 'name NOT pk despite being in a unique index');
+    },
+  },
+
+  {
+    name: 'per-field [pk] and indexes-block [pk] are idempotent',
+    source: `xdbml: 0.1
+Table t {
+  a int [pk]
+  b int
+
+  indexes {
+    (a, b) [pk]
+  }
+}
+`,
+    check: ({ diagram }) => {
+      const e = diagram.entities[0];
+      assertEq(e.fields.find((f) => f.name === 'a')!.flags.pk, true, 'a is pk (both declarations agree)');
+      assertEq(e.fields.find((f) => f.name === 'b')!.flags.pk, true, 'b is pk (from index block)');
+    },
+  },
+
   /* ---- Container sizing consistency (commit fix-pending) ------------ */
   //
   // The auto-layout in buildDiagram and the recompute path in
