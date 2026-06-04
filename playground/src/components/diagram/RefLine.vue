@@ -159,6 +159,16 @@ const path = computed((): RefPath | undefined => {
   const tgt = targetEntity.value;
   if (!src || !tgt) return undefined;
 
+  // Self-reference: source and target are the same entity. The
+  // straight-through orthogonal path would draw a vertical line
+  // through the entity, which is visually degenerate. Instead, loop
+  // out the right side at the source field row, up over the entity,
+  // and back down to the top edge. Standard ER notation for self-refs
+  // (used by Erwin, ER/Studio, and similar tools).
+  if (src.id === tgt.id) {
+    return selfReferencePath(src, props.refLayout.source!.fieldName);
+  }
+
   const { sourceSide, targetSide } = chooseSides(src, tgt);
   const srcAnchor = anchorOnSide(src, sourceSide, props.refLayout.source!.fieldName);
   const tgtAnchor = anchorOnSide(tgt, targetSide, props.refLayout.target!.fieldName);
@@ -174,6 +184,79 @@ const path = computed((): RefPath | undefined => {
     endSide: tgtAnchor.side,
   };
 });
+
+/**
+ * Build the loop path for a self-reference.
+ *
+ *     ┌──── ELBOW_TOP ──────────────┐    ↑
+ *     │                             │   loop sits above the top edge
+ *  ┌──┴──┐                          │    ↓
+ *  │     │                          │
+ *  │ ┌───────────────────────────┐  │
+ *  │ │ entity                    │  │
+ *  │ ├───────────────────────────┤  │
+ *  │ │ id                       ─┘  │
+ *  │ │ ...                          │
+ *  │ │ source_field             ────┘  ← exits right at source row Y
+ *  │ │ ...                          │
+ *  │ └───────────────────────────┘
+ *  │
+ *
+ * Five segments:
+ *
+ *   1. M (sx, sy)          start at right edge, source field row Y
+ *   2. L (sx + EX, sy)     out to the right by ELBOW_X
+ *   3. L (sx + EX, ty - EY) up to the loop height above the top edge
+ *   4. L (tx, ty - EY)     across the top to the target X
+ *   5. L (tx, ty)          drop down to the top edge
+ *
+ * The target X is the entity's horizontal center. The top edge has no
+ * field-row structure (rows run horizontally inside the entity), so
+ * we anchor at center instead of trying to project a row onto it.
+ *
+ * ELBOW_X and ELBOW_TOP are picked to fit inside CANVAS_MARGIN (32 px
+ * in layout.ts), so a self-ref on an entity sitting at the right or
+ * top edge of the auto-layout still draws within the canvas. Larger
+ * values would look better visually but would risk clipping.
+ */
+function selfReferencePath (entity: EntityLayout, sourceFieldName: string | undefined): RefPath {
+  const ELBOW_X = 24;
+  const ELBOW_TOP = 24;
+
+  // Source anchor: right edge, at source field's row Y. Falls back to
+  // header midline if the field name can't be resolved (same fallback
+  // as anchorOnSide).
+  const sx = entity.bounds.x + entity.bounds.width;
+  let sy = entity.bounds.y + ENTITY_HEADER_HEIGHT / 2;
+  if (sourceFieldName) {
+    const field = findFieldRow(entity, sourceFieldName);
+    if (field) sy = entity.bounds.y + field.rowY + ROW_HEIGHT / 2;
+  }
+
+  // Target anchor: top edge, at entity center X.
+  const tx = entity.bounds.x + entity.bounds.width / 2;
+  const ty = entity.bounds.y;
+
+  // Loop corner positions (the "outside" of the loop).
+  const cornerX  = sx + ELBOW_X;       // right turn-up point
+  const cornerY  = ty - ELBOW_TOP;     // top horizontal segment Y
+
+  const d = `M ${sx} ${sy} ` +
+            `L ${cornerX} ${sy} ` +
+            `L ${cornerX} ${cornerY} ` +
+            `L ${tx} ${cornerY} ` +
+            `L ${tx} ${ty}`;
+
+  return {
+    d,
+    startX: sx,
+    startY: sy,
+    startSide: 'right',
+    endX: tx,
+    endY: ty,
+    endSide: 'top',
+  };
+}
 
 /**
  * Decide which edge of each entity the line should attach to, based

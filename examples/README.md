@@ -1,6 +1,6 @@
 ---
 title: Examples
-description: Six reference xDBML schemas covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services. View in browser or download for parser testing.
+description: Seven reference xDBML schemas covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, financial services, and project management. View in browser or download for parser testing.
 ---
 
 # xDBML Examples
@@ -23,6 +23,7 @@ These files serve three audiences:
 | Social graph (LPG)        | Social network        | Neo4j labeled property graph    | [View](./04-social-graph) · <a href="/examples/04-social-graph.xdbml" download="04-social-graph.xdbml">Download</a> |
 | Healthcare (FHIR-style)   | Clinical records      | PostgreSQL                       | [View](./05-healthcare-fhir) · <a href="/examples/05-healthcare-fhir.xdbml" download="05-healthcare-fhir.xdbml">Download</a> |
 | Financial services        | Retail banking        | Snowflake                        | [View](./06-financial-services) · <a href="/examples/06-financial-services.xdbml" download="06-financial-services.xdbml">Download</a> |
+| Project management (self-refs) | Project tracking | PostgreSQL relational           | [View](./07-project-management) · <a href="/examples/07-project-management.xdbml" download="07-project-management.xdbml">Download</a> |
 
 The **View** link opens the rendered example with syntax highlighting and the VitePress theme. The **Download** link serves the raw `.xdbml` file for use with parsers, generators, or your own tooling.
 

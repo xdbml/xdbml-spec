@@ -36,6 +36,7 @@ import type {
   EntityDeclaration,
   FieldDeclaration,
   RefDeclaration,
+  RefValue,
   ScalarType,
   Setting,
   TypeDeclaration,
@@ -392,6 +393,45 @@ export function buildDiagram (
     if (stmt.kind === 'RefDeclaration') {
       refLayouts.push(buildRefLayout(stmt, entityByName, refIndex));
       refIndex += 1;
+    }
+  }
+
+  // Collect inline refs declared as field settings, e.g.
+  //   manager_id int [ref: > employees.id]
+  //
+  // These get parsed as RefValue settings on the FieldDeclaration
+  // rather than as top-level RefDeclaration statements, so the loop
+  // above misses them. We synthesize a RefDeclaration-equivalent for
+  // each and run it through the same buildRefLayout machinery so the
+  // diagram treats them identically to top-level refs.
+  //
+  // Source endpoint is implicit -- it's the field on which the
+  // setting was declared. Target endpoint comes from the RefValue.
+  //
+  // Only top-level FieldDeclarations are walked (i.e. fields directly
+  // inside an entity body). Inline refs declared on nested fields
+  // (inside ObjectType, ArrayType element types, etc.) are skipped
+  // for now; the source-path construction would need to track the
+  // surrounding type context and that's not part of v1.
+  for (const stmt of doc.statements) {
+    if (stmt.kind === 'EntityDeclaration') {
+      collectInlineRefs(stmt, undefined);
+    } else if (stmt.kind === 'ContainerDeclaration') {
+      for (const item of stmt.body) {
+        if (item.kind === 'EntityDeclaration') collectInlineRefs(item, stmt.name);
+      }
+    }
+  }
+
+  function collectInlineRefs (entity: EntityDeclaration, containerName: string | undefined): void {
+    for (const item of entity.body) {
+      if (item.kind !== 'FieldDeclaration') continue;
+      for (const setting of item.settings) {
+        if (!setting.value || setting.value.kind !== 'RefValue') continue;
+        const synth = synthesizeRefFromInline(setting.value, entity.name, item.name, containerName);
+        refLayouts.push(buildRefLayout(synth, entityByName, refIndex));
+        refIndex += 1;
+      }
     }
   }
 
@@ -927,6 +967,62 @@ function buildRefLayout (
     sourceCardinality,
     targetCardinality,
     unresolved: !source || !target,
+  };
+}
+
+/**
+ * Build a RefDeclaration-equivalent from an inline ref setting on a
+ * field, so buildRefLayout can consume it uniformly with top-level
+ * `Ref:` statements.
+ *
+ * Inputs:
+ *   - refValue: the parsed RefValue (operator + target endpoint)
+ *   - entityName: the name of the entity that owns the field
+ *   - fieldName: the name of the field carrying the inline ref setting
+ *   - containerName: the entity's container (or undefined for top-level)
+ *
+ * The synthetic source endpoint is built as a path of PathField
+ * segments naming container -> entity -> field. The target endpoint
+ * is reused verbatim from the inline RefValue (it already has the
+ * right shape).
+ *
+ * Settings is empty. Inline refs don't carry cardinality settings
+ * (the grammar only allows `[ref: > entity.field]`, no separate
+ * `[source: '0..*', target: '1..1']`); the operator alone determines
+ * cardinality, the same way it does for any other operator-only ref.
+ *
+ * Span borrows the RefValue's span. The layout doesn't read it but
+ * future inspector navigation might.
+ */
+function synthesizeRefFromInline (
+  refValue: RefValue,
+  entityName: string,
+  fieldName: string,
+  containerName: string | undefined,
+): RefDeclaration {
+  const sourcePathNames = containerName
+    ? [containerName, entityName, fieldName]
+    : [entityName, fieldName];
+  const sourcePath = sourcePathNames.map((name) => ({
+    kind: 'PathField' as const,
+    name,
+    span: refValue.span,
+  }));
+  return {
+    kind: 'RefDeclaration',
+    spec: {
+      kind: 'RefSpec',
+      source: {
+        kind: 'RefEndpoint',
+        path: sourcePath,
+        span: refValue.span,
+      },
+      operator: refValue.operator,
+      target: refValue.target,
+      span: refValue.span,
+    },
+    settings: [],
+    span: refValue.span,
   };
 }
 

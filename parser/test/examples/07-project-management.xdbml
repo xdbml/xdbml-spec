@@ -1,0 +1,157 @@
+xdbml: 0.1
+
+Project project_management {
+  targets: PostgreSQL
+  Note: '''
+  A project-management schema demonstrating recursive (self-referential)
+  relationships in xDBML. Two entities use self-references: employees,
+  where every employee may have a manager who is also an employee; and
+  tasks, where any task may be a subtask of another task.
+
+  Self-references show up routinely in operational schemas wherever
+  the data has a hierarchical or graph-like structure: org charts,
+  category trees, threaded comments, version chains, account
+  predecessor relationships, and so on. xDBML represents them with
+  the same Ref syntax as any other foreign key; the source and target
+  simply happen to be the same entity.
+
+  This schema would forward-engineer to PostgreSQL with self-joining
+  foreign keys on the same table. Recursive queries (WITH RECURSIVE)
+  are the natural way to traverse the resulting trees: walking up an
+  org chart from a given employee to their reporting line, or
+  collecting all descendants of a parent task.
+  '''
+}
+
+Container project_mgmt [type: schema] {
+  Note: '''
+  A single PostgreSQL schema holding the operational data: people,
+  organizational structure, projects, and the tasks that make up each
+  project. Two of the four tables are self-referential.
+  '''
+
+  Table departments {
+    id    int     [pk, increment]
+    name  varchar [not null,
+                   minLength: 1,
+                   maxLength: 80,
+                   note: 'Department display name; unique within the company.']
+    code  varchar [not null,
+                   unique,
+                   minLength: 2,
+                   maxLength: 8,
+                   note: 'Short identifier used in reports and URLs.']
+
+    indexes {
+      name [unique]
+    }
+  }
+
+  Table employees {
+    id            int       [pk, increment]
+    name          varchar   [not null,
+                             minLength: 1,
+                             maxLength: 120]
+    email         varchar   [not null,
+                             unique,
+                             minLength: 5,
+                             maxLength: 254,
+                             pattern: `^[^@\s]+@[^@\s]+\.[^@\s]+$`]
+    title         varchar   [not null,
+                             maxLength: 80,
+                             note: 'Free-form job title; canonical roles live in a separate table not modeled here.']
+    department_id int       [not null,
+                             note: 'Which department the employee belongs to.']
+    manager_id    int       [note: '''
+                             The employee's direct manager. NULL for the top of
+                             the reporting hierarchy (CEO, board members).
+                             Self-reference: another row in this same
+                             employees table.''']
+    hired_at      timestamp [not null,
+                             default: `CURRENT_TIMESTAMP`,
+                             granularity: second]
+
+    indexes {
+      department_id
+      manager_id
+      email [unique]
+    }
+  }
+
+  Table projects {
+    id          int       [pk, increment]
+    name        varchar   [not null,
+                           minLength: 1,
+                           maxLength: 120]
+    description varchar   [maxLength: 2000]
+    owner_id    int       [not null,
+                           note: 'The employee accountable for delivery.']
+    status      varchar   [not null,
+                           default: 'planning',
+                           enum: ['planning', 'active', 'on_hold', 'completed', 'archived']]
+    started_at  date
+    ended_at    date      [note: 'NULL while the project is still in flight.']
+
+    indexes {
+      owner_id
+      status
+    }
+  }
+
+  Table tasks {
+    id              int       [pk, increment]
+    project_id      int       [not null,
+                               note: 'Every task belongs to exactly one project.']
+    parent_task_id  int       [note: '''
+                               Optional parent task in the same project.
+                               NULL for top-level tasks; non-null for subtasks,
+                               sub-subtasks, and so on. Self-reference: another
+                               row in this same tasks table. Application logic
+                               (or a CHECK constraint) ensures the parent
+                               belongs to the same project.''']
+    title           varchar   [not null,
+                               minLength: 1,
+                               maxLength: 200]
+    assignee_id     int       [note: 'Employee responsible for completing this task; NULL if unassigned.']
+    status          varchar   [not null,
+                               default: 'todo',
+                               enum: ['todo', 'in_progress', 'blocked', 'done', 'cancelled']]
+    estimated_hours decimal(6,2) [note: 'Initial estimate; NULL if not estimated yet.']
+    created_at      timestamp [not null,
+                               default: `CURRENT_TIMESTAMP`,
+                               granularity: second]
+    due_at          timestamp [granularity: second,
+                               note: 'Target completion; NULL if not date-bound.']
+
+    indexes {
+      project_id
+      parent_task_id
+      assignee_id
+      status
+    }
+
+    Note: '''
+    Tasks form a tree per project: a task with parent_task_id = NULL
+    is a top-level task within its project; a task with a non-NULL
+    parent_task_id is a subtask of the referenced task. Tree depth is
+    not constrained by the schema. Queries that need to walk the full
+    subtask tree should use WITH RECURSIVE.
+    '''
+  }
+}
+
+// Relationships
+//
+// Two of the four refs below are self-references. The diagram renders
+// self-refs as a loop out the right side of the source field row and
+// over the top of the entity, distinguishing them visually from
+// regular cross-entity refs.
+
+Ref: project_mgmt.employees.department_id > project_mgmt.departments.id [source: '0..*', target: '1..1']
+Ref: project_mgmt.employees.manager_id    > project_mgmt.employees.id   [source: '0..*', target: '0..1', delete: set_null,
+                                                                          note: 'Self-reference: reporting hierarchy.']
+Ref: project_mgmt.projects.owner_id       > project_mgmt.employees.id   [source: '0..*', target: '1..1']
+Ref: project_mgmt.tasks.project_id        > project_mgmt.projects.id    [source: '0..*', target: '1..1', delete: cascade]
+Ref: project_mgmt.tasks.parent_task_id    > project_mgmt.tasks.id       [source: '0..*', target: '0..1', delete: cascade,
+                                                                          note: 'Self-reference: subtask hierarchy.']
+Ref: project_mgmt.tasks.assignee_id       > project_mgmt.employees.id   [source: '0..*', target: '0..1', delete: set_null]

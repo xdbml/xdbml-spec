@@ -382,6 +382,150 @@ Table products {
     },
   },
 
+  /* ---- Self-references (recursive relationships) -------------------- */
+  //
+  // A Ref whose source and target entity are the same. The diagram
+  // renders these as a loop out the right edge of the source field row
+  // and over the top edge of the entity, rather than the degenerate
+  // vertical line that the regular routing would produce.
+
+  {
+    name: 'self-reference produces a Ref in the diagram',
+    source: `xdbml: 0.1
+Table employees {
+  id          int     [pk]
+  manager_id  int
+}
+Ref: employees.manager_id > employees.id
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 1, 'one ref produced');
+      const r = diagram.refs[0];
+      assertTrue(r.source !== undefined && r.target !== undefined, 'both endpoints resolved');
+      assertEq(r.source!.entityId, r.target!.entityId, 'source and target are the same entity');
+      assertEq(r.source!.fieldName, 'manager_id', 'source field correct');
+      assertEq(r.target!.fieldName, 'id', 'target field correct');
+      assertEq(r.unresolved, false, 'ref is resolved');
+    },
+  },
+
+  {
+    name: 'multiple self-references on separate entities both render',
+    source: `xdbml: 0.1
+Table employees {
+  id          int  [pk]
+  manager_id  int
+}
+Table tasks {
+  id              int  [pk]
+  parent_task_id  int
+}
+Ref: employees.manager_id > employees.id
+Ref: tasks.parent_task_id > tasks.id
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 2, 'two refs produced');
+      for (const r of diagram.refs) {
+        assertEq(r.source!.entityId, r.target!.entityId, 'each ref is a self-reference');
+        assertEq(r.unresolved, false, 'each ref is resolved');
+      }
+    },
+  },
+
+  /* ---- Inline refs ('manager_id int [ref: > entity.id]') ------------- */
+  //
+  // A Ref declared as a setting on a FieldDeclaration rather than as a
+  // top-level Ref: statement. The parser captures it as a RefValue on
+  // the field's settings array; the diagram layout walks those and
+  // synthesizes top-level-Ref-equivalents so they render uniformly.
+  // This is independent of the top-level Ref machinery -- inline refs
+  // can coexist with top-level refs in the same schema.
+
+  {
+    name: 'inline ref on a field is collected as a diagram ref',
+    source: `xdbml: 0.1
+Table users {
+  id  int [pk]
+}
+Table posts {
+  id        int [pk]
+  author_id int [ref: > users.id]
+}
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 1, 'one ref produced from inline');
+      const r = diagram.refs[0];
+      assertTrue(r.source !== undefined && r.target !== undefined, 'both endpoints resolved');
+      assertEq(r.source!.fieldName, 'author_id', 'source field correct');
+      assertEq(r.target!.fieldName, 'id', 'target field correct');
+      assertEq(r.unresolved, false, 'ref is resolved');
+    },
+  },
+
+  {
+    name: 'inline self-reference renders as a diagram ref',
+    source: `xdbml: 0.1
+Table employees {
+  id          int [pk]
+  manager_id  int [ref: > employees.id]
+}
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 1, 'one ref produced');
+      const r = diagram.refs[0];
+      assertEq(r.source!.entityId, r.target!.entityId, 'source and target are the same entity');
+      assertEq(r.source!.fieldName, 'manager_id', 'source field correct');
+      assertEq(r.target!.fieldName, 'id', 'target field correct');
+      assertEq(r.unresolved, false, 'ref is resolved');
+    },
+  },
+
+  {
+    name: 'inline ref on a field inside a container resolves',
+    source: `xdbml: 0.1
+Container blog {
+  Table users { id int [pk] }
+  Table posts {
+    id        int [pk]
+    author_id int [ref: > users.id]
+  }
+}
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 1, 'one ref produced');
+      const r = diagram.refs[0];
+      assertEq(r.source!.entityId, 'blog.posts', 'source entity carries container prefix');
+      assertEq(r.target!.entityId, 'blog.users', 'target entity resolved to qualified name');
+      assertEq(r.unresolved, false, 'ref is resolved');
+    },
+  },
+
+  {
+    name: 'inline ref and top-level ref coexist in the same diagram',
+    source: `xdbml: 0.1
+Table users {
+  id  int [pk]
+}
+Table posts {
+  id        int [pk]
+  author_id int [ref: > users.id]
+}
+Table comments {
+  id      int [pk]
+  post_id int
+}
+Ref: comments.post_id > posts.id
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 2, 'two refs total');
+      const inline = diagram.refs.find((r) => r.source?.fieldName === 'author_id');
+      const toplevel = diagram.refs.find((r) => r.source?.fieldName === 'post_id');
+      assertTrue(inline !== undefined && toplevel !== undefined, 'both refs present');
+      assertEq(inline!.unresolved, false, 'inline ref resolved');
+      assertEq(toplevel!.unresolved, false, 'top-level ref resolved');
+    },
+  },
+
   /* ---- Container sizing consistency (commit fix-pending) ------------ */
   //
   // The auto-layout in buildDiagram and the recompute path in

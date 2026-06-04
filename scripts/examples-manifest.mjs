@@ -50,4 +50,11 @@ export const examples = [
     paradigm:    'Snowflake',
     description: 'A retail banking schema. Demonstrates materialized and virtual views with source queries, complex transaction polymorphism, regulatory compliance tags (PCI, SOX, KYC, AML), and AI-readiness for natural-language reporting queries.',
   },
+  {
+    file:        '07-project-management.xdbml',
+    slug:        '07-project-management',
+    title:       'Project management (self-refs)',
+    paradigm:    'PostgreSQL relational',
+    description: 'A project-management schema demonstrating recursive (self-referential) relationships. Employees report to other employees, tasks have parent tasks; both relationships are self-joins on the same entity, rendered in the diagram as loops out the right edge and over the top.',
+  },
 ];

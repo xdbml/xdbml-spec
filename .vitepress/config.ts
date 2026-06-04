@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 import container from 'markdown-it-container'
 import { buildHelpSidebar, assertHelpIsConsistent } from './help-sidebar'
+import { examples as exampleManifest } from '../scripts/examples-manifest.mjs'
 
 // Load the xDBML TextMate grammar so Shiki can highlight ```xdbml code
 // blocks across the site. The grammar lives in tools/textmate/ and is
@@ -205,17 +206,20 @@ export default defineConfig({
         }
       ],
 
+      // Examples sidebar is derived from scripts/examples-manifest.mjs
+      // so that adding a new example only requires one manifest edit. The
+      // manifest is also consumed by scripts/prepare-examples.mjs (which
+      // generates the viewing-page markdown wrappers) and by the
+      // playground's sample-content service, so all three stay in sync.
       '/examples/': [
         {
           text: 'Examples',
           items: [
-            { text: 'Overview',                  link: '/examples/' },
-            { text: 'Blog (relational)',         link: '/examples/01-blog' },
-            { text: 'E-commerce (polyglot)',     link: '/examples/02-ecommerce' },
-            { text: 'IoT telemetry',             link: '/examples/03-iot-telemetry' },
-            { text: 'Social graph (LPG)',        link: '/examples/04-social-graph' },
-            { text: 'Healthcare (FHIR-style)',   link: '/examples/05-healthcare-fhir' },
-            { text: 'Financial services',        link: '/examples/06-financial-services' },
+            { text: 'Overview', link: '/examples/' },
+            ...exampleManifest.map((ex) => ({
+              text: ex.title,
+              link: `/examples/${ex.slug}`,
+            })),
           ]
         }
       ],
