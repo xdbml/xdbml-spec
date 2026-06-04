@@ -107,6 +107,7 @@
             :key="ref.id"
             :ref-layout="ref"
             :entities="diagram.entities"
+            :containers="diagram.containers"
             :is-selected="isRefSelected(ref.id)"
             @select="onRefClick(ref.id)"
           />

@@ -107,13 +107,14 @@
  */
 import { computed } from 'vue';
 
-import type { EntityLayout, RefLayout } from './layout';
-import { ENTITY_HEADER_HEIGHT, ROW_HEIGHT } from './layout';
+import type { ContainerLayout, EntityLayout, RefLayout } from './layout';
+import { CONTAINER_HEADER_HEIGHT, ENTITY_HEADER_HEIGHT, ROW_HEIGHT } from './layout';
 import CrowFootGlyph from './CrowFootGlyph.vue';
 
 const props = defineProps<{
   refLayout: RefLayout;
   entities: EntityLayout[];
+  containers: ContainerLayout[];
   isSelected: boolean;
 }>();
 
@@ -166,7 +167,14 @@ const path = computed((): RefPath | undefined => {
   // and back down to the top edge. Standard ER notation for self-refs
   // (used by Erwin, ER/Studio, and similar tools).
   if (src.id === tgt.id) {
-    return selfReferencePath(src, props.refLayout.source!.fieldName);
+    // Find the entity's enclosing container, if any, so the loop can
+    // be clamped to stay clear of the container's borders. Entities
+    // without a container (free-floating in the canvas) get the
+    // unclamped geometry.
+    const container = src.containerName
+      ? props.containers.find((c) => c.name === src.containerName)
+      : undefined;
+    return selfReferencePath(src, props.refLayout.source!.fieldName, container);
   }
 
   const { sourceSide, targetSide } = chooseSides(src, tgt);
@@ -205,23 +213,44 @@ const path = computed((): RefPath | undefined => {
  * Five segments:
  *
  *   1. M (sx, sy)          start at right edge, source field row Y
- *   2. L (sx + EX, sy)     out to the right by ELBOW_X
- *   3. L (sx + EX, ty - EY) up to the loop height above the top edge
- *   4. L (tx, ty - EY)     across the top to the target X
+ *   2. L (cornerX, sy)     out to the right, turning up
+ *   3. L (cornerX, cornerY) up to the loop height above the top edge
+ *   4. L (tx, cornerY)     across the top to the target X
  *   5. L (tx, ty)          drop down to the top edge
  *
  * The target X is the entity's horizontal center. The top edge has no
  * field-row structure (rows run horizontally inside the entity), so
  * we anchor at center instead of trying to project a row onto it.
  *
- * ELBOW_X and ELBOW_TOP are picked to fit inside CANVAS_MARGIN (32 px
- * in layout.ts), so a self-ref on an entity sitting at the right or
- * top edge of the auto-layout still draws within the canvas. Larger
- * values would look better visually but would risk clipping.
+ * Loop sizing:
+ *
+ *   - ELBOW_X and ELBOW_TOP set the *desired* loop extent (24 px out
+ *     and 24 px up from the entity edge).
+ *
+ *   - If the entity sits inside a container, cornerX and cornerY are
+ *     clamped to stay SELF_REF_CLEARANCE pixels clear of the
+ *     container's right border and inner-top edge (just below the
+ *     container's title bar). Without this clamp, an entity at the
+ *     top or right of its container produces a loop that touches the
+ *     container's border or title bar, which looks like a rendering
+ *     bug.
+ *
+ *   - Free-floating entities (no container) use the unclamped
+ *     geometry, since CANVAS_MARGIN already provides enough room.
+ *
+ * The clamping reduces loop extent rather than eliminating it: with
+ * CONTAINER_PADDING = 24 px and SELF_REF_CLEARANCE = 8 px, a clamped
+ * loop still has 16 px of extension past the entity (vs. the
+ * unclamped 24 px). That's enough to read clearly as a loop.
  */
-function selfReferencePath (entity: EntityLayout, sourceFieldName: string | undefined): RefPath {
+function selfReferencePath (
+  entity: EntityLayout,
+  sourceFieldName: string | undefined,
+  container: ContainerLayout | undefined,
+): RefPath {
   const ELBOW_X = 24;
   const ELBOW_TOP = 24;
+  const SELF_REF_CLEARANCE = 8;
 
   // Source anchor: right edge, at source field's row Y. Falls back to
   // header midline if the field name can't be resolved (same fallback
@@ -237,9 +266,24 @@ function selfReferencePath (entity: EntityLayout, sourceFieldName: string | unde
   const tx = entity.bounds.x + entity.bounds.width / 2;
   const ty = entity.bounds.y;
 
-  // Loop corner positions (the "outside" of the loop).
-  const cornerX  = sx + ELBOW_X;       // right turn-up point
-  const cornerY  = ty - ELBOW_TOP;     // top horizontal segment Y
+  // Desired loop corner positions (the "outside" of the loop).
+  let cornerX = sx + ELBOW_X;
+  let cornerY = ty - ELBOW_TOP;
+
+  // Clamp to stay clear of the enclosing container's borders. The
+  // container surrounds members with CONTAINER_PADDING (24 px) on
+  // every side, so the loop's natural ELBOW_X = ELBOW_TOP = 24
+  // would push the loop right up against the container's border or
+  // title bar. Pull back by SELF_REF_CLEARANCE to leave breathing room.
+  if (container) {
+    const containerRight = container.bounds.x + container.bounds.width;
+    const maxCornerX = containerRight - SELF_REF_CLEARANCE;
+    if (cornerX > maxCornerX) cornerX = maxCornerX;
+
+    const containerInnerTop = container.bounds.y + CONTAINER_HEADER_HEIGHT;
+    const minCornerY = containerInnerTop + SELF_REF_CLEARANCE;
+    if (cornerY < minCornerY) cornerY = minCornerY;
+  }
 
   const d = `M ${sx} ${sy} ` +
             `L ${cornerX} ${sy} ` +
