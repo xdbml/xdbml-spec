@@ -28,11 +28,14 @@
 
     <!-- Views surface their source_query so users can see the SQL that
          defines the view without leaving the inspector. Tables don't
-         have this section. The block is rendered verbatim with
-         monospace font; preserve whitespace so multi-line queries
-         keep their original formatting. -->
+         have this section. The block is rendered through Prism for
+         token-level syntax highlighting; the `.sql-block` parent
+         class scopes the token styles defined in main.css. v-html is
+         safe here: the SQL string comes from the parsed AST (the user
+         wrote it themselves), Prism HTML-escapes non-token text, and
+         the only emitted markup is `<span class="token …">…</span>`. -->
     <InspectorSection v-if="sourceQueryBody" title="Source query">
-      <pre class="text-[11px] leading-relaxed font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded px-2 py-1.5 overflow-x-auto whitespace-pre max-h-[40vh] overflow-y-auto">{{ sourceQueryBody }}</pre>
+      <pre class="sql-block text-[11px] leading-relaxed font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded px-2 py-1.5 overflow-x-auto whitespace-pre max-h-[40vh] overflow-y-auto"><code v-html="highlightedSourceQuery"></code></pre>
     </InspectorSection>
 
     <div class="px-3 pb-3">
@@ -56,6 +59,7 @@ import InspectorSection   from './InspectorSection.vue';
 import SettingsTable      from './SettingsTable.vue';
 import NoteDisplay        from './NoteDisplay.vue';
 import EditInSourceButton from './EditInSourceButton.vue';
+import { highlightSql }   from './sqlHighlight';
 
 const props = defineProps<{
   entity: EntityDeclaration | ViewDeclaration;
@@ -117,6 +121,15 @@ const sourceQueryBody = computed(() => {
   }
   return parts.join('\n\n').trim();
 });
+
+/**
+ * Pre-highlighted HTML for the source query. Re-runs whenever the view
+ * (or its body) changes, which only happens when the user switches
+ * selection or edits the underlying schema -- not on every render. The
+ * cost of one tokenize pass per change is negligible. Result is fed
+ * to `<code v-html>` to render the colored tokens.
+ */
+const highlightedSourceQuery = computed(() => highlightSql(sourceQueryBody.value));
 
 const fieldStats = computed(() => {
   let total = 0, pk = 0, notNull = 0, nested = 0;

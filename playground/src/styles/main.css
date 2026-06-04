@@ -29,3 +29,25 @@
 .entity-card:hover .entity-card-header {
   filter: brightness(0.98);
 }
+
+/*
+ * SQL syntax-highlighting palette for the inspector's Source query
+ * section. The `.sql-block` parent class scopes these rules so they
+ * apply only to inspector source-query blocks; if Prism gets used
+ * elsewhere later, those usages won't accidentally inherit this
+ * styling. Token names match Prism's standard class scheme so the
+ * SQL grammar's tokenizer output works out of the box.
+ *
+ * Palette is intentionally muted to match the inspector's quiet
+ * gray-on-white aesthetic. Hues borrow loosely from Monaco's default
+ * light theme so the inspector and editor read consistently.
+ */
+.sql-block .token.keyword     { color: #1e40af; font-weight: 600; }
+.sql-block .token.string      { color: #047857; }
+.sql-block .token.number      { color: #b45309; }
+.sql-block .token.boolean     { color: #b45309; }
+.sql-block .token.comment     { color: #6b7280; font-style: italic; }
+.sql-block .token.function    { color: #7c3aed; }
+.sql-block .token.operator    { color: #4b5563; }
+.sql-block .token.punctuation { color: #4b5563; }
+.sql-block .token.variable    { color: #b91c1c; }
