@@ -175,6 +175,14 @@ export interface FieldLocator {
   entityId: string;
   /** May be undefined for paths that target an entity (no specific field). */
   fieldName?: string;
+  /**
+   * For composite-FK form `entity.(a, b, c)`, the full ordered list of
+   * field names. `fieldName` carries the first one (used as the visual
+   * anchor); `compositeFields` is the complete list, used by the
+   * FK-flag-marking step to highlight every constituent field.
+   * Undefined for single-field refs.
+   */
+  compositeFields?: string[];
 }
 
 export interface Rect {
@@ -441,21 +449,28 @@ export function buildDiagram (
   // that row is currently expanded, the badge appears on the leaf. If
   // the row is collapsed, we mark the nearest visible ancestor so the
   // user still sees an FK indicator at the collapsed parent.
+  //
+  // Composite FKs (form `entity.(a, b, c)`) flag every constituent
+  // field, not just the visual anchor: all three fields participate in
+  // the foreign-key constraint and should display the FK badge.
   for (const ref of refLayouts) {
     if (!ref.source || !ref.source.fieldName) continue;
     const entity = entityLayouts.find((e) => e.id === ref.source!.entityId);
     if (!entity) continue;
-    // First try exact name match at any indent (matches dbdiagram.io's
-    // intuition that the "source field" is whatever has that leaf name).
-    let target = entity.fields.find((f) => f.name === ref.source!.fieldName);
-    // Fallback: match by leaf segment of a nested path. Source path
-    // strings here are just the field name; the field name carries no
-    // path info, so this only fires for refs with explicit composite
-    // form. For now, the simple name match is sufficient.
-    if (!target) {
-      target = entity.fields.find((f) => f.path.endsWith(`.${ref.source!.fieldName}`));
+    const sourceFieldNames = ref.source.compositeFields ?? [ref.source.fieldName];
+    for (const sourceFieldName of sourceFieldNames) {
+      // First try exact name match at any indent (matches dbdiagram.io's
+      // intuition that the "source field" is whatever has that leaf name).
+      let target = entity.fields.find((f) => f.name === sourceFieldName);
+      // Fallback: match by leaf segment of a nested path. Source path
+      // strings here are just the field name; the field name carries no
+      // path info, so this only fires for refs with explicit composite
+      // form. For now, the simple name match is sufficient.
+      if (!target) {
+        target = entity.fields.find((f) => f.path.endsWith(`.${sourceFieldName}`));
+      }
+      if (target) target.flags.fk = true;
     }
-    if (target) target.flags.fk = true;
   }
 
   const width = Math.max(cursorX, CANVAS_MARGIN * 2 + 200);
@@ -1048,11 +1063,19 @@ function locateRefEndpoint (
   const fieldSegments = endpoint.path.filter((s) => s.kind === 'PathField') as { name: string }[];
   if (fieldSegments.length === 0) return undefined;
 
+  // For composite refs (`entity.(a, b)`), the entire path IS the entity
+  // name and the field names live in compositeFields. So we allow
+  // matching the full path length as an entity key. For non-composite
+  // refs, the last path segment is the field name, so we cap the
+  // prefix at length - 1 the way we always did.
+  const hasComposite = endpoint.compositeFields !== undefined && endpoint.compositeFields.length > 0;
+  const maxPrefix = hasComposite ? fieldSegments.length : fieldSegments.length - 1;
+
   // Try increasingly long prefixes against the entity name index.
   // E.g. for `blog_app.posts.author_id`, try `blog_app.posts.author_id`
   // (won't match), then `blog_app.posts` (matches), leaving `author_id`
   // as the field name.
-  for (let prefixLen = fieldSegments.length - 1; prefixLen >= 1; prefixLen -= 1) {
+  for (let prefixLen = maxPrefix; prefixLen >= 1; prefixLen -= 1) {
     const entityKey = fieldSegments.slice(0, prefixLen).map((s) => s.name).join('.');
     const entity = entityByName.get(entityKey);
     if (entity) {
@@ -1061,6 +1084,7 @@ function locateRefEndpoint (
       return {
         entityId: entity.id,
         fieldName: fieldName || undefined,
+        compositeFields: hasComposite ? [...endpoint.compositeFields!] : undefined,
       };
     }
   }

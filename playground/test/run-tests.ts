@@ -526,6 +526,107 @@ Ref: comments.post_id > posts.id
     },
   },
 
+  /* ---- Composite primary keys and composite foreign keys ----------- */
+  //
+  // Composite PKs are declared by marking each constituent field
+  // with `[pk]`. Multiple fields with the pk flag form the composite
+  // key; each row renders with the yellow tint (the renderer applies
+  // pk styling per-field independently). The alternative declaration
+  // form `indexes { (a, b) [pk] }` parses but does NOT propagate the
+  // pk flag back to the constituent fields -- that's a known
+  // limitation in the layout module.
+  //
+  // Composite FKs use the `entity.(a, b)` endpoint syntax. The
+  // RefLayout's source field locator carries the visual anchor
+  // (first composite field) plus the full composite list, which
+  // the FK-flag-marking step uses to flag every constituent field.
+
+  {
+    name: 'composite PK: every per-field [pk] flag is preserved',
+    source: `xdbml: 0.1
+Table course_offerings {
+  course_code    varchar [pk]
+  term_code      varchar [pk]
+  section_number int     [pk]
+  instructor_id  int     [not null]
+}
+`,
+    check: ({ diagram }) => {
+      const co = diagram.entities[0];
+      const pkFields = co.fields.filter((f) => f.flags.pk).map((f) => f.name);
+      assertEq(pkFields.length, 3, 'three PK fields');
+      assertTrue(pkFields.includes('course_code'),    'course_code is pk');
+      assertTrue(pkFields.includes('term_code'),      'term_code is pk');
+      assertTrue(pkFields.includes('section_number'), 'section_number is pk');
+      assertEq(co.fields.find((f) => f.name === 'instructor_id')!.flags.pk, false, 'non-PK field unflagged');
+    },
+  },
+
+  {
+    name: 'composite FK resolves and flags every constituent source field',
+    source: `xdbml: 0.1
+Table course_offerings {
+  course_code    varchar [pk]
+  term_code      varchar [pk]
+  section_number int     [pk]
+}
+Table enrollments {
+  course_code    varchar [pk]
+  term_code      varchar [pk]
+  section_number int     [pk]
+  student_id     int     [pk]
+}
+Ref: enrollments.(course_code, term_code, section_number) > course_offerings.(course_code, term_code, section_number)
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 1, 'one composite ref');
+      const r = diagram.refs[0];
+      assertEq(r.unresolved, false, 'composite ref resolves');
+      assertEq(r.source!.fieldName, 'course_code', 'visual anchor is first composite field');
+      assertTrue(r.source!.compositeFields !== undefined, 'compositeFields populated');
+      assertEq(r.source!.compositeFields!.length, 3, 'three source composite fields');
+      assertEq(r.target!.compositeFields!.length, 3, 'three target composite fields');
+
+      // Every constituent source field should have the FK flag set.
+      const enrollments = diagram.entities.find((e) => e.name === 'enrollments')!;
+      const fkFields = enrollments.fields.filter((f) => f.flags.fk).map((f) => f.name);
+      assertTrue(fkFields.includes('course_code'),    'course_code is fk');
+      assertTrue(fkFields.includes('term_code'),      'term_code is fk');
+      assertTrue(fkFields.includes('section_number'), 'section_number is fk');
+      assertEq(enrollments.fields.find((f) => f.name === 'student_id')!.flags.fk, false,
+        'student_id is part of the PK but not part of THIS composite FK');
+    },
+  },
+
+  {
+    name: 'composite FK + simple FK coexist on the same entity',
+    source: `xdbml: 0.1
+Table offerings {
+  a int [pk]
+  b int [pk]
+}
+Table students {
+  id int [pk]
+}
+Table enrollments {
+  a          int [pk]
+  b          int [pk]
+  student_id int [pk]
+}
+Ref: enrollments.(a, b) > offerings.(a, b)
+Ref: enrollments.student_id > students.id
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 2, 'two refs total');
+      const enrollments = diagram.entities.find((e) => e.name === 'enrollments')!;
+      const fkFields = enrollments.fields.filter((f) => f.flags.fk).map((f) => f.name);
+      assertEq(fkFields.length, 3, 'three FK-flagged fields');
+      assertTrue(fkFields.includes('a'),          'a is fk (composite)');
+      assertTrue(fkFields.includes('b'),          'b is fk (composite)');
+      assertTrue(fkFields.includes('student_id'), 'student_id is fk (simple)');
+    },
+  },
+
   /* ---- Container sizing consistency (commit fix-pending) ------------ */
   //
   // The auto-layout in buildDiagram and the recompute path in

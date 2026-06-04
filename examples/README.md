@@ -1,6 +1,6 @@
 ---
 title: Examples
-description: Seven reference xDBML schemas covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, financial services, and project management. View in browser or download for parser testing.
+description: Eight reference xDBML schemas covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, financial services, project management, and a university registrar. View in browser or download for parser testing.
 ---
 
 # xDBML Examples
@@ -24,6 +24,7 @@ These files serve three audiences:
 | Healthcare (FHIR-style)   | Clinical records      | PostgreSQL                       | [View](./05-healthcare-fhir) · <a href="/examples/05-healthcare-fhir.xdbml" download="05-healthcare-fhir.xdbml">Download</a> |
 | Financial services        | Retail banking        | Snowflake                        | [View](./06-financial-services) · <a href="/examples/06-financial-services.xdbml" download="06-financial-services.xdbml">Download</a> |
 | Project management (self-refs) | Project tracking | PostgreSQL relational           | [View](./07-project-management) · <a href="/examples/07-project-management.xdbml" download="07-project-management.xdbml">Download</a> |
+| University registrar (composite keys) | Course enrollment | PostgreSQL relational | [View](./08-university-registrar) · <a href="/examples/08-university-registrar.xdbml" download="08-university-registrar.xdbml">Download</a> |
 
 The **View** link opens the rendered example with syntax highlighting and the VitePress theme. The **Download** link serves the raw `.xdbml` file for use with parsers, generators, or your own tooling.
 

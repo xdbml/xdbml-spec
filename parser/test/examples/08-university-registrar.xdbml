@@ -1,0 +1,182 @@
+xdbml: 0.1
+
+Project university_registrar {
+  targets: PostgreSQL
+  Note: '''
+  A university registrar schema demonstrating composite primary keys
+  and composite foreign keys in xDBML. The registrar tracks students,
+  courses, the specific term-by-term offerings of each course, and
+  the enrollments tying students to those offerings.
+
+  Composite keys are common in operational schemas where natural
+  business identifiers happen to be combinations of values rather
+  than synthetic surrogate IDs. The registrar pattern is canonical:
+  a course offering is uniquely identified by the triple of
+  (course, term, section), and an enrollment by adding the student
+  to that triple. The schema can use either pattern (composite
+  natural keys, or synthetic surrogate IDs with unique constraints
+  on the natural-key tuple); this example uses composite natural
+  keys to keep the demonstration explicit.
+
+  In the playground diagram, multiple primary-key fields render as
+  yellow rows within the entity card. The diagram treats a composite
+  foreign key as a single relationship line anchored on the visual
+  first field, with every constituent source field showing the FK
+  badge.
+
+  This schema would forward-engineer to PostgreSQL using `PRIMARY KEY
+  (a, b, c)` constraints and matching `FOREIGN KEY (a, b, c)
+  REFERENCES other (a, b, c)` declarations.
+  '''
+}
+
+Container registrar [type: schema] {
+  Note: '''
+  Operational data for the university registrar's office. The four
+  reference tables (students, courses, terms, instructors) carry
+  simple surrogate or natural keys. The two transactional tables
+  (course_offerings and enrollments) carry composite primary keys
+  reflecting their multi-dimensional identity, and enrollments
+  carries a composite foreign key back into course_offerings.
+  '''
+
+  Table students {
+    id           int       [pk, increment]
+    student_no   varchar   [not null,
+                            unique,
+                            minLength: 6,
+                            maxLength: 12,
+                            note: 'Registrar-issued student number (e.g., "S2024-00123").']
+    full_name    varchar   [not null,
+                            minLength: 1,
+                            maxLength: 120]
+    email        varchar   [not null,
+                            unique,
+                            minLength: 5,
+                            maxLength: 254,
+                            pattern: `^[^@\s]+@[^@\s]+\.[^@\s]+$`]
+    enrolled_at  date      [not null,
+                            note: 'First-enrolment date used for cohort tracking.']
+
+    indexes {
+      email [unique]
+    }
+  }
+
+  Table courses {
+    code         varchar   [pk,
+                            minLength: 4,
+                            maxLength: 12,
+                            note: 'Catalog code such as "CS-401" or "BIO-220".']
+    title        varchar   [not null,
+                            maxLength: 200]
+    credit_hours decimal(3,1) [not null,
+                               note: 'Typically 1.0, 3.0, or 4.0.']
+    department   varchar   [not null,
+                            maxLength: 60]
+  }
+
+  Table terms {
+    code         varchar   [pk,
+                            minLength: 5,
+                            maxLength: 10,
+                            note: 'e.g., "2026SP", "2026FA", "2027SU".']
+    started_on   date      [not null]
+    ended_on     date      [not null]
+    registration_deadline date [not null]
+  }
+
+  Table instructors {
+    id           int       [pk, increment]
+    full_name    varchar   [not null,
+                            maxLength: 120]
+    department   varchar   [not null,
+                            maxLength: 60]
+  }
+
+  Table course_offerings {
+    course_code     varchar [pk,
+                             minLength: 4,
+                             maxLength: 12,
+                             note: 'First component of the composite key.']
+    term_code       varchar [pk,
+                             minLength: 5,
+                             maxLength: 10,
+                             note: 'Second component of the composite key.']
+    section_number  int     [pk,
+                             note: '''
+                             Third component of the composite key.
+                             A course can run multiple sections per
+                             term (different rooms, instructors, or
+                             schedules); the section number
+                             distinguishes them.''']
+    instructor_id   int     [not null]
+    capacity        int     [not null,
+                             default: 30]
+    room            varchar [maxLength: 40]
+    schedule        varchar [maxLength: 80,
+                             note: 'Human-readable, e.g., "MWF 10:00-10:50".']
+
+    indexes {
+      course_code
+      term_code
+      instructor_id
+    }
+
+    Note: '''
+    Composite primary key: (course_code, term_code, section_number).
+    The three columns together uniquely identify a specific section
+    of a specific course in a specific term. The diagram displays all
+    three as yellow rows.
+    '''
+  }
+
+  Table enrollments {
+    course_code     varchar [pk,
+                             note: 'Inherits from the course_offerings composite key.']
+    term_code       varchar [pk,
+                             note: 'Inherits from the course_offerings composite key.']
+    section_number  int     [pk,
+                             note: 'Inherits from the course_offerings composite key.']
+    student_id      int     [pk,
+                             note: 'The fourth column distinguishes enrollments within an offering.']
+    status          varchar [not null,
+                             default: 'enrolled',
+                             enum: ['enrolled', 'waitlisted', 'dropped', 'completed']]
+    enrolled_on     date    [not null,
+                             default: `CURRENT_DATE`]
+    final_grade     varchar [maxLength: 3,
+                             note: 'NULL until the term ends and grades are submitted.']
+
+    indexes {
+      student_id
+      status
+    }
+
+    Note: '''
+    Composite primary key: (course_code, term_code, section_number,
+    student_id). The first three columns also form a composite
+    foreign key back into course_offerings, ensuring an enrollment
+    can only reference an existing offering.
+    '''
+  }
+}
+
+// Relationships
+//
+// course_offerings -> courses, terms, instructors: simple FKs from
+// the composite key's individual columns into single-column PKs of
+// reference tables.
+Ref: registrar.course_offerings.course_code   > registrar.courses.code        [source: '0..*', target: '1..1']
+Ref: registrar.course_offerings.term_code     > registrar.terms.code          [source: '0..*', target: '1..1']
+Ref: registrar.course_offerings.instructor_id > registrar.instructors.id      [source: '0..*', target: '1..1']
+
+// enrollments -> course_offerings: COMPOSITE foreign key. The three
+// fields (course_code, term_code, section_number) on enrollments
+// together reference the composite primary key of course_offerings.
+// The diagram renders this as a single relationship line, with all
+// three source fields displaying the FK badge.
+Ref: registrar.enrollments.(course_code, term_code, section_number) > registrar.course_offerings.(course_code, term_code, section_number) [source: '0..*', target: '1..1', delete: cascade]
+
+// enrollments -> students: simple FK on student_id.
+Ref: registrar.enrollments.student_id > registrar.students.id [source: '0..*', target: '1..1']

@@ -57,4 +57,11 @@ export const examples = [
     paradigm:    'PostgreSQL relational',
     description: 'A project-management schema demonstrating recursive (self-referential) relationships. Employees report to other employees, tasks have parent tasks; both relationships are self-joins on the same entity, rendered in the diagram as loops out the right edge and over the top.',
   },
+  {
+    file:        '08-university-registrar.xdbml',
+    slug:        '08-university-registrar',
+    title:       'University registrar (composite keys)',
+    paradigm:    'PostgreSQL relational',
+    description: 'A university registrar schema demonstrating composite primary keys and composite foreign keys. Course offerings are uniquely identified by (course, term, section); enrollments by adding the student to that triple. The diagram renders multi-column primary keys as multiple yellow rows and resolves the composite foreign key as a single relationship line with every constituent field showing the FK badge.',
+  },
 ];
