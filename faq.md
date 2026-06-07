@@ -39,7 +39,7 @@ No, and this is by design. xDBML is not the round-trip format between an xDBML t
 
 xDBML carries the parts of that model with meaning across boundaries: structural shape, types, relationships, declarative constraints, classifications, and AI-readiness metadata. Operational and procedural features stay native.
 
-The diagram in the [scope section of the specification](/spec/v0.1#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
+The diagram in the [scope section of the specification](/spec/v0.2#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
 
 What this means in practice:
 
@@ -71,11 +71,21 @@ What xDBML deliberately is NOT is the persistent model artifact that a data mode
 
 ## How does xDBML relate to DBML?
 
-xDBML is a **strict superset of DBML 3.13.6** under Apache License 2.0. Every valid DBML document is a valid xDBML document with identical semantics. To opt into xDBML extensions, add `xdbml: 0.1` at the top of a DBML document.
+xDBML is a **strict superset of DBML 3.13.6** under Apache License 2.0. Every valid DBML document parses correctly under xDBML rules, and every DBML construct (used in a way valid in DBML) means the same thing in xDBML as in DBML. To opt into xDBML extensions, add `xdbml: 0.2` at the top of a DBML document. The version directive selects which semantics apply: a file with no directive is treated as DBML; a file with `xdbml: 0.2` opts into the full xDBML feature set.
 
-xDBML extends DBML with constructs DBML cannot currently express: explicit namespace levels (Containers), nested hierarchical types, structural polymorphism (oneOf/anyOf/allOf), first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
+xDBML extends DBML with constructs DBML cannot currently express: explicit namespace levels (Containers), nested hierarchical types, structural polymorphism (oneOf/anyOf/allOf), first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, scalar Named Types, an enriched module system (`use`/`reuse` with optional clone blocks for file autonomy), and a structured custom-properties mechanism.
 
 DBML's `database_type:` setting is preserved as an alias for single-target schemas; see spec §5.3.
+
+## How do I split a large xDBML schema across multiple files?
+
+Use the **module system** (spec §25). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
+
+Two import modes are supported. Import in full brings every top-level declaration from the source file: `reuse * from './library'`. Selective import names what you want: `reuse { entity products, type Email } from './library'`. Use `as` to rename for clarity or to avoid conflicts.
+
+For autonomy, attach a **clone block** to any directive. The clone embeds the imported content directly in the importing file, so the file parses correctly even if the referenced file is unavailable. Clone blocks suit files delivered to customers, archived, or rendered in browser-based tools where File System Access permission prompts would otherwise be needed. Without clones, the parser opens the referenced file at parse time (DBML-compatible behavior). The author chooses per directive.
+
+A common pattern: a "conformed dimensions" file declares canonical entities (customers, products, dates) used by multiple data products. Each data product imports the canonical entities into its own Container with clone blocks for autonomy. The conformed file is the single source of truth; data products lock the version they depend on via the clone.
 
 ## Is xDBML competing with JSON Schema, OpenAPI, Avro, GraphQL, or SQL DDL?
 
@@ -102,7 +112,7 @@ xDBML generates the schemas these standards reference and consumes nothing they 
 
 ## Who maintains xDBML?
 
-xDBML is currently a draft v0.1 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
+xDBML is currently a draft v0.2 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
 
 ## How can I contribute?
 
@@ -117,7 +127,7 @@ See [contributing](/contributing) for details.
 
 ## When will v1.0 ship?
 
-When v0.1 has been used long enough for the language to stabilize through real-world feedback. The grammar is finalized; the ecosystem is being built; the open questions are about which constructs prove essential and which prove unnecessary as more teams adopt the language. v1.0 will codify what survives that feedback loop.
+When the language has been used long enough through v0.1 and v0.2 to stabilize through real-world feedback. The grammar is finalized; the ecosystem is being built; the open questions are about which constructs prove essential and which prove unnecessary as more teams adopt the language. v1.0 will codify what survives that feedback loop.
 
 ---
 

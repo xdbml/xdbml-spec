@@ -19,7 +19,7 @@ xDBML extends DBML into a unified metadata and semantic modeling language with r
 Here is a complete xDBML document describing an order system. Read it once, top to bottom:
 
 ```xdbml
-xdbml: 0.1
+xdbml: 0.2
 
 Project ecommerce {
   targets: [Oracle, MongoDB]
@@ -273,12 +273,12 @@ xDBML describes shape and declarative metadata. Adjacent standards handle the la
 ## Where to go from here
 
 - **Browse the [FAQ](/faq)** for answers to the questions newcomers most often ask after reading this introduction.
-- **Read the [v0.1 specification](/spec/v0.1)** for the full language reference.
+- **Read the [v0.2 specification](/spec/v0.2)** for the full language reference.
 - **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
 - **Try it in the <a href="/playground/index.html" target="_blank" rel="noopener">playground</a>** -- type or paste xDBML, see rendered the corresponding Entity-Relationship diagram.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** -- the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
-xDBML is a draft v0.1 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
+xDBML is a draft v0.2 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
 
 ---
 

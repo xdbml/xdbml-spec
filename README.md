@@ -20,7 +20,7 @@ xDBML occupies the **schema layer of the modern data stack**. It carries **decla
 
 The same xDBML document feeds an ODCS contract's schema section, an OSI semantic model's underlying tables, a SHACL validator's target shapes, and the SQL DDL that creates them.
 
-xDBML is currently a draft v0.1 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
+xDBML is currently a draft v0.2 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
 
 ## Design philosophy
 
@@ -56,7 +56,8 @@ Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side func
 - [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
-- [`spec/v0.1.md`](./spec/v0.1.md) -- the full v0.1 language specification
+- [`spec/v0.2.md`](./spec/v0.2.md) -- the current v0.2 language specification (adds module system, scalar Named Types, field-level imports)
+- [`spec/v0.1.md`](./spec/v0.1.md) -- the previous v0.1 specification, still supported
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
 - [`playground/`](https://xdbml.org/playground/index.html) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus and [parser/](./parser)

@@ -17,7 +17,7 @@ hero:
       link: /learn/
     - theme: alt
       text: Read the spec
-      link: /spec/v0.1
+      link: /spec/v0.2
     - theme: alt
       text: View on GitHub
       link: https://github.com/xdbml/xdbml-spec
@@ -53,7 +53,7 @@ features:
 
   - icon: 🧬
     title: Strict superset of DBML
-    details: "Every valid DBML 3.13.6 document is a valid xDBML document, but not vice versa. Upgrade in place by adding 'xdbml: 0.1' at the top."
+    details: "Every valid DBML 3.13.6 document is a valid xDBML document, but not vice versa. Upgrade in place by adding 'xdbml: 0.2' at the top."
 
   - icon: 🆓
     title: Open standard
@@ -65,7 +65,7 @@ features:
 ## A first look
 
 ```xdbml
-xdbml: 0.1
+xdbml: 0.2
 
 // Schema spans two storage engines: Oracle for customer master data,
 // MongoDB for order documents. xDBML expresses both in one document
@@ -162,7 +162,7 @@ Operational features (partitions, storage configuration, replication), procedura
 
 - **[Read the 5-minute introduction](/learn/)** for a quick tour of what xDBML does and why it exists
 - **[Browse the FAQ](/faq)** for answers to the questions newcomers most often ask
-- **[Read the v0.1 specification](/spec/v0.1)** for the complete language reference
+- **[Read the v0.2 specification](/spec/v0.2)** for the complete language reference
 - **[Browse the examples](/examples/)** for realistic schemas across e-commerce, IoT, healthcare, social graphs, and financial services
 - <a href="/playground/index.html" target="_blank" rel="noopener"><strong>Try it in the playground</strong></a> by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - **[Review the ANTLR4 grammar](/grammar)** and [**parser**](https://github.com/xdbml/xdbml-spec/tree/main/parser)
@@ -171,7 +171,7 @@ Operational features (partitions, storage configuration, replication), procedura
 
 ## Project status
 
-xDBML is currently a draft v0.1 specification stewarded by [Hackolade](https://hackolade.com), with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0. The path to neutral foundation governance is described in the [governance model](/governance).
+xDBML is currently a draft v0.2 specification stewarded by [Hackolade](https://hackolade.com), with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0. The path to neutral foundation governance is described in the [governance model](/governance).
 
 Feedback from real-world use will shape v1.0. [Open an issue](https://github.com/xdbml/xdbml-spec/issues) with comments, proposals, or questions.
 
