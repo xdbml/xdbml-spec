@@ -23,7 +23,7 @@ node_modules/
 /playground/public/xdbml-*.svg
 
 # VS Code vsix files
-/tools/vscode-extension/xdbml-0.1.1.vsix
+/tools/vscode-extension/xdbml-0.1.0.vsix
 
 # Editor and OS
 .DS_Store
