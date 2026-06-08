@@ -142,6 +142,8 @@ DBML's strength is simplicity and developer accessibility -- the reasons it was 
 
 xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
 
+Enterprise data structures and semantics are trapped in technology-specific formats that GenAI can parse but cannot reliably compare, govern, transform, or reason over across platforms. xDBML provides a compact, open, polyglot, AI-readable schema language that captures the portable meaning of data structures without pretending to replace native implementation formats.
+
 xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dot.notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork. It combines compactness, simplicity, and structure. It is text‑only, declarative, and close to “pseudo‑code”.
 
 The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. The risk is to become another ambitious modeling standard that architects admire and developers avoid. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
