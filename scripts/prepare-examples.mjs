@@ -47,6 +47,23 @@ fs.mkdirSync(publicExamples, { recursive: true });
 
 let copied = 0;
 let generated = 0;
+let removed = 0;
+
+// Build the expected-files sets BEFORE we generate, so we can detect orphans
+// from previous runs. An "orphan" is a file in public/examples/ or a viewing
+// page in examples/ that does not correspond to any current manifest entry.
+// This happens when an example is renamed, removed, or restructured between
+// runs (e.g., the v0.2 module-system refactor renamed 09-modules-consumer
+// to 10-modules-consumer; without cleanup, the old file would linger).
+const expectedPublicFiles = new Set();
+const expectedViewingPages = new Set();
+for (const ex of examples) {
+  expectedPublicFiles.add(ex.file);
+  for (const companion of ex.companionFiles ?? []) {
+    expectedPublicFiles.add(companion);
+  }
+  expectedViewingPages.add(`${ex.slug}.md`);
+}
 
 for (const ex of examples) {
   const srcPath = path.join(examplesSrc, ex.file);
@@ -60,6 +77,21 @@ for (const ex of examples) {
   fs.copyFileSync(srcPath, path.join(publicExamples, ex.file));
   copied++;
 
+  // 1b. Copy any companion files (multi-file examples) into public/examples/
+  // alongside the primary. Companion files are referenced from the primary
+  // file via relative paths (e.g., a module-system consumer's `reuse * from
+  // './conformed-dimensions'` directive); placing them in the same directory
+  // preserves the relative-path semantics for downloads.
+  for (const companion of ex.companionFiles ?? []) {
+    const companionSrc = path.join(examplesSrc, companion);
+    if (!fs.existsSync(companionSrc)) {
+      console.warn(`prepare-examples: skipping companion ${companion} for ${ex.slug} -- source file not found`);
+      continue;
+    }
+    fs.copyFileSync(companionSrc, path.join(publicExamples, companion));
+    copied++;
+  }
+
   // 2. Generate a viewing-page markdown wrapper at /examples/<slug>.md.
   const content = fs.readFileSync(srcPath, 'utf8');
   const md = renderViewingPage(ex, content);
@@ -67,11 +99,45 @@ for (const ex of examples) {
   generated++;
 }
 
+// 2b. Clean up orphan files from previous runs. Only acts on files matching
+// the patterns we own: .xdbml files in public/examples/ and .md files in
+// examples/ that look like manifest-generated viewing pages (NN-something.md).
+// README.md and index.md are never touched.
+function cleanOrphans () {
+  // Orphan .xdbml files in public/examples/
+  if (fs.existsSync(publicExamples)) {
+    for (const f of fs.readdirSync(publicExamples)) {
+      if (!f.endsWith('.xdbml')) continue;
+      if (expectedPublicFiles.has(f)) continue;
+      fs.unlinkSync(path.join(publicExamples, f));
+      console.warn(`prepare-examples: removed orphan public/examples/${f}`);
+      removed++;
+    }
+  }
+
+  // Orphan viewing pages in examples/. Only remove .md files whose name
+  // matches a "NN-slug" pattern -- i.e., the shape this script produces.
+  // README.md, index.md, and any other hand-authored .md stay safe.
+  const generatedNameShape = /^\d{2}-[a-z0-9-]+\.md$/;
+  for (const f of fs.readdirSync(examplesSrc)) {
+    if (!f.endsWith('.md')) continue;
+    if (!generatedNameShape.test(f)) continue;
+    if (expectedViewingPages.has(f)) continue;
+    fs.unlinkSync(path.join(examplesSrc, f));
+    console.warn(`prepare-examples: removed orphan examples/${f}`);
+    removed++;
+  }
+}
+cleanOrphans();
+
 // 3. Rewrite the auto-managed regions of README.md.
 const readmeUpdated = updateReadme();
 
 console.log(`prepare-examples: copied ${copied} raw .xdbml file(s) to public/examples/`);
 console.log(`prepare-examples: generated ${generated} viewing page(s) in examples/`);
+if (removed > 0) {
+  console.log(`prepare-examples: removed ${removed} orphan file(s) from previous runs`);
+}
 console.log(`prepare-examples: README.md ${readmeUpdated ? 'rewritten' : 'already in sync'}`);
 
 
@@ -84,9 +150,26 @@ function renderViewingPage(ex, content) {
   // an example contains a literal "```" (unlikely but defensive).
   const safe = content.replace(/```/g, '`\u200b``');
 
+  // YAML-escape a value so it can be safely used on a `key: <value>` line.
+  // Wraps in double quotes and escapes inner double quotes and backslashes.
+  // Necessary because titles or descriptions may contain colons, hash signs,
+  // brackets, or other YAML-significant characters.
+  const yamlString = (s) =>
+    `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')}"`;
+
+  // Multi-file examples list companion files in a small block above the
+  // download buttons, with their own download/GitHub links.
+  const companionBlock = (ex.companionFiles ?? []).length === 0 ? '' : `
+## Companion files
+
+This example uses additional files referenced by the primary one (via \`reuse\` / \`use\` directives, for instance). Download all files into the same directory to parse the example end to end.
+
+${ex.companionFiles.map((c) => `- [\`${c}\`](/examples/${c}) ([view on GitHub](${githubRepoBlobBase}/${c}))`).join('\n')}
+`;
+
   return `---
-title: ${ex.title}
-description: ${ex.description.replace(/\n/g, ' ').slice(0, 200)}
+title: ${yamlString(ex.title)}
+description: ${yamlString(ex.description.slice(0, 200))}
 ---
 
 # ${ex.title}
@@ -105,7 +188,7 @@ ${ex.description}
     View on GitHub ↗
   </a>
 </div>
-
+${companionBlock}
 ## Source
 
 \`\`\`xdbml

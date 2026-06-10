@@ -632,7 +632,7 @@ Ref: events.OrderPlaced.order_id > orders_store.orders._id
 
 ---
 
-## §13.7 Scalar Named Types (v0.2)
+## §14.7 Scalar Named Types (v0.2)
 
 ### VALID -- scalar Named Type with validation settings
 
@@ -684,7 +684,7 @@ Entity customers {
 
 ---
 
-## §25 Module system (v0.2)
+## §26 Module system (v0.2)
 
 ### VALID -- reuse * (import all) at file scope
 
@@ -900,7 +900,266 @@ xdbml: 0.2
 reuse { project some_project } from './other'
 ```
 
-Expected error: "Project declarations are not importable (§25.4)."
+Expected error: "Project declarations are not importable (§26.4)."
+
+---
+
+## §10 Checks -- entity-level constraints (v0.2)
+
+### VALID -- multi-column check expression
+
+```
+xdbml: 0.2
+
+Entity users {
+  id     int [pk]
+  wealth decimal(15,2)
+  debt   decimal(15,2)
+  checks {
+    `debt + wealth >= 0` [name: 'chk_positive_net_worth']
+  }
+}
+```
+
+### VALID -- multiple checks with and without names
+
+```
+xdbml: 0.2
+
+Entity reservations {
+  id         int  [pk]
+  start_date date
+  end_date   date
+  checks {
+    `start_date <= end_date`        [name: 'chk_valid_date_range']
+    `end_date - start_date <= 30`   [name: 'chk_max_30_days']
+    `start_date >= CURRENT_DATE`
+  }
+}
+```
+
+### VALID -- check with note
+
+```
+xdbml: 0.2
+
+Entity orders {
+  id     int [pk]
+  status varchar
+  shipped_at timestamp
+  checks {
+    `(status != 'shipped') OR (shipped_at IS NOT NULL)` [
+      name: 'chk_shipped_has_timestamp',
+      note: 'A shipped order must record the shipment timestamp.'
+    ]
+  }
+}
+```
+
+### VALID -- entity with both checks and indexes
+
+```
+xdbml: 0.2
+
+Entity inventory {
+  id        int [pk]
+  sku       varchar
+  warehouse varchar
+  qty       int
+  indexes {
+    (sku, warehouse) [unique]
+  }
+  checks {
+    `qty >= 0` [name: 'chk_non_negative_qty']
+  }
+}
+```
+
+### INVALID -- check expression not backtick-wrapped
+
+```
+xdbml: 0.2
+
+Entity users {
+  id     int [pk]
+  wealth decimal(15,2)
+  checks {
+    wealth >= 0
+  }
+}
+```
+
+Expected error: "check expressions must be backtick-wrapped EXPRESSION_LITERAL values."
+
+---
+
+## §11.9 Relationship settings -- inactive and color (v0.2)
+
+### VALID -- inactive flag on Ref
+
+```
+xdbml: 0.2
+
+Entity posts {
+  id      int [pk]
+  user_id int
+}
+
+Entity users {
+  id int [pk]
+}
+
+Ref: posts.user_id > users.id [inactive]
+```
+
+### VALID -- inactive + color + note
+
+```
+xdbml: 0.2
+
+Entity audit_log {
+  id      int [pk]
+  user_id int
+}
+
+Entity users {
+  id int [pk]
+}
+
+Ref: audit_log.user_id > users.id [
+  inactive,
+  color: '#999999',
+  note: 'Historical FK; superseded by audit_ref table'
+]
+```
+
+### VALID -- color alone (active relationship with custom color)
+
+```
+xdbml: 0.2
+
+Entity orders {
+  id          int [pk]
+  customer_id int
+}
+
+Entity customers {
+  id int [pk]
+}
+
+Ref: orders.customer_id > customers.id [color: '#3f51b5']
+```
+
+---
+
+## §16.2 TableGroup color (v0.2)
+
+### VALID -- TableGroup with color and note
+
+```
+xdbml: 0.2
+
+Entity orders { id int [pk] }
+Entity order_lines { id int [pk] }
+Entity invoices { id int [pk] }
+
+TableGroup ecommerce [color: '#3498DB', note: 'Commerce-side entities'] {
+  orders
+  order_lines
+  invoices
+}
+```
+
+### VALID -- TableGroup with only color
+
+```
+xdbml: 0.2
+
+Entity users { id int [pk] }
+Entity sessions { id int [pk] }
+
+TableGroup auth [color: '#FF5722'] {
+  users
+  sessions
+}
+```
+
+---
+
+## §25 Records -- expanded forms (v0.2)
+
+### VALID -- records inside entity (implicit column list, v0.1 syntax)
+
+```
+xdbml: 0.2
+
+Entity users {
+  id    int [pk]
+  name  varchar
+  email varchar
+  records {
+    1, 'Alice', 'alice@example.com'
+    2, 'Bob',   'bob@example.com'
+  }
+}
+```
+
+### VALID -- top-level records with explicit column list
+
+```
+xdbml: 0.2
+
+Entity users {
+  id    int [pk]
+  name  varchar
+  email varchar
+}
+
+records users (id, name, email) {
+  1, 'Alice', 'alice@example.com'
+  2, 'Bob',   'bob@example.com'
+}
+```
+
+### VALID -- top-level records with cross-container reference
+
+```
+xdbml: 0.2
+
+Container core [type: schema] {
+  Entity users {
+    id    int [pk]
+    email varchar
+  }
+}
+
+records core.users (id, email) {
+  1, 'alice@example.com'
+  2, 'bob@example.com'
+}
+```
+
+### VALID -- value forms (string, number, boolean, null, date, enum, backtick)
+
+```
+xdbml: 0.2
+
+Enum Status { active inactive pending }
+
+Entity events {
+  id          int [pk]
+  occurred_at timestamp
+  status      Status
+  is_archived boolean
+  payload     varchar
+  records {
+    1, '2026-06-10T14:30:00Z', Status.active,   true,  'string value'
+    2, '2026-06-11T09:00:00Z', Status.pending,  false, null
+    3, `gen_random_uuid()`,    Status.inactive, null,  '''multi
+line string'''
+  }
+}
+```
 
 ---
 

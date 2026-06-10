@@ -93,6 +93,7 @@ import DBML;  // Holistics upstream grammar
 //     REF                : 'Ref'
 //     ENUM               : 'enum'  (lowercase per DBML convention)
 //     INDEXES            : 'indexes'
+//     CHECKS             : 'checks' (DBML 3.13.6+; required for the §10 checks block)
 //     NOTE               : 'Note'
 //
 // If the upstream DBML grammar evolves and a depended-upon token is renamed,
@@ -625,6 +626,20 @@ indexComponent
     | EXPRESSION_LITERAL
     ;
 
+// ---- §10 Checks block (entity-level constraints; new for v0.2) ------------
+// Mirrors DBML 3.13.6 syntax. Each check is a backtick-wrapped expression
+// (lexed as EXPRESSION_LITERAL) with optional settings (name, note).
+// The block is a peer of indexBlock; both are entity-body alternatives.
+// xDBML treats the expression as an opaque string and does not validate it.
+
+checksBlock
+    : CHECKS LBRACE checkEntry* RBRACE
+    ;
+
+checkEntry
+    : EXPRESSION_LITERAL settingsBlock?
+    ;
+
 // ---- §17.10 Ref definitions (overrides upstream refSpec) ------------------
 // Adds explicit cardinality settings on the Ref. Paths support nested fields.
 
@@ -898,6 +913,14 @@ quotedIdentifier options { caseInsensitive=false; }
 //          * clone-block content (cloneContent) names must match the directive's
 //            import items by name and element type, in any order.
 //          * `xdbml: 0.1` documents may not use module-system constructs.
+//      - entity-level checks block (§10, new in v0.2):
+//          * each check expression is treated as an opaque target-engine
+//            expression; xDBML does not validate the expression syntax.
+//          * the `name:` setting is optional; generators MAY synthesize
+//            a deterministic name when omitted.
+//      - relationship settings (§11.9):
+//          * `inactive` is a flag (no value); a visualization hint, not
+//            a structural change. Parser preserves the flag in the AST.
 //
 // 5. Conflict resolution with upstream DBML. Where xDBML extends a rule
 //    that exists upstream (tableKeyword, fieldPath, refSpec, indexBlock,

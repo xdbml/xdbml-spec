@@ -79,7 +79,7 @@ DBML's `database_type:` setting is preserved as an alias for single-target schem
 
 ## How do I split a large xDBML schema across multiple files?
 
-Use the **module system** (spec §25). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
+Use the **module system** (spec §26). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
 
 Two import modes are supported. Import in full brings every top-level declaration from the source file: `reuse * from './library'`. Selective import names what you want: `reuse { entity products, type Email } from './library'`. Use `as` to rename for clarity or to avoid conflicts.
 

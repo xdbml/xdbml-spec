@@ -24,6 +24,20 @@
 //                 Omit or leave empty when the example doesn't add a new
 //                 generator target worth showcasing (e.g., another postgres
 //                 example among several).
+//   companionFiles - optional list of additional .xdbml files associated with
+//                 the example. Companion files are copied to /public/examples/
+//                 for download alongside the primary file but do not get
+//                 their own viewing pages or manifest entries. The viewing
+//                 page lists companions in a dedicated block.
+//
+//                 Currently unused -- the v0.2 module-system pair
+//                 (09-modules-conformed-dimensions.xdbml and
+//                 10-modules-consumer.xdbml) are each first-class examples
+//                 with their own manifest entries and pages, cross-linking
+//                 via description text. The mechanism remains available for
+//                 future cases where a true asymmetric file pair makes
+//                 sense (e.g., a JSON example with a peer .sample.json
+//                 fixture that isn't worth its own viewing page).
 
 export const examples = [
   {
@@ -112,5 +126,23 @@ export const examples = [
     generators:  [
       { target: 'sql-ddl' },
     ],
+  },
+  {
+    file:        '09-modules-conformed-dimensions.xdbml',
+    slug:        '09-modules-conformed-dimensions',
+    title:       'Module system: conformed dimensions library (v0.2)',
+    domain:      'Enterprise conformed dimensions',
+    paradigm:    'Library file (Snowflake-targeted)',
+    description: 'The library half of a multi-file example pair. Declares canonical enterprise dimensions (Customer, Product, Date) and shared scalar Named Types (Email, CountryCode, CurrencyCode, PhoneE164) intended to be imported by data products via the xDBML v0.2 module system. The file has no `Project` block of its own because its sole purpose is to be reused. This is the file that [10-modules-consumer.xdbml](/examples/10-modules-consumer) imports from via `reuse { ... } from \'./09-modules-conformed-dimensions\'` directives. **Note**: exercises v0.2 features (scalar Named Types §14.7, entity-level checks §10) that the reference parser has not yet implemented; viewing the source works but loading it into the playground currently produces a parse error.',
+    generators:  [],
+  },
+  {
+    file:        '10-modules-consumer.xdbml',
+    slug:        '10-modules-consumer',
+    title:       'Module system: sales data product (v0.2)',
+    domain:      'Sales data product',
+    paradigm:    'Consumer file with module imports',
+    description: 'The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) using the xDBML v0.2 module system. Demonstrates Container-scoped imports (entities become `sales.dim_customer` not `core.dim_customer`), clone blocks with `cloned_at` metadata for file autonomy, multiple imports per directive with one shared clone block, and scalar Named Type imports at file scope. The file is fully self-contained because every `reuse` carries an inline clone; it parses correctly even when the library file is unavailable. **Note**: exercises v0.2 features (module system §26, scalar Named Types §14.7, entity-level checks §10) that the reference parser has not yet implemented; viewing the source works but loading it into the playground currently produces a parse error.',
+    generators:  [],
   },
 ];
