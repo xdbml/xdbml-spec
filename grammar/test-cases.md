@@ -1,6 +1,6 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML v0.1 grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases.
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases and v0.2 additions (module system, scalar Named Types).
 ---
 
 
@@ -632,6 +632,278 @@ Ref: events.OrderPlaced.order_id > orders_store.orders._id
 
 ---
 
+## §13.7 Scalar Named Types (v0.2)
+
+### VALID -- scalar Named Type with validation settings
+
+```
+xdbml: 0.2
+
+Type Email varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+Type CountryCode varchar [pattern: '^[A-Z]{2}$', minLength: 2, maxLength: 2]
+Type Percentage decimal(5,2) [minimum: 0, maximum: 100]
+
+Entity users {
+  id      int [pk]
+  email   Email
+  country CountryCode
+}
+```
+
+### VALID -- scalar Named Type alongside object-shaped Type
+
+```
+xdbml: 0.2
+
+Type Email varchar [pattern: '^[^@]+@[^@]+$']
+Type Address {
+  street  varchar [not null]
+  city    varchar [not null]
+}
+
+Entity customers {
+  id              int [pk]
+  email           Email
+  primary_address Address
+}
+```
+
+### VALID -- scalar Named Type referencing another Type
+
+```
+xdbml: 0.2
+
+Type Email varchar [pattern: '^[^@]+@[^@]+$']
+Type PII_Email Email [tags: ['pii', 'gdpr-subject']]
+
+Entity customers {
+  id    int [pk]
+  email PII_Email
+}
+```
+
+---
+
+## §25 Module system (v0.2)
+
+### VALID -- reuse * (import all) at file scope
+
+```
+xdbml: 0.2
+
+Project app { targets: [PostgreSQL] }
+
+reuse * from './catalog'
+
+Container ordering [type: schema] {
+  Entity orders {
+    id          int [pk]
+    customer_id int
+  }
+}
+```
+
+### VALID -- selective import inside Container body
+
+```
+xdbml: 0.2
+
+Project app { targets: [PostgreSQL] }
+
+Container ordering [type: schema] {
+  reuse { entity core.products, entity core.categories } from './catalog'
+
+  Entity orders {
+    id          int [pk]
+    customer_id int
+  }
+
+  Entity order_lines {
+    order_id   int [ref: > ordering.orders.id]
+    product_id int [ref: > ordering.products.id]
+    quantity   int
+  }
+}
+```
+
+### VALID -- import with clone block
+
+```
+xdbml: 0.2
+
+Project sales_data_product { targets: [Snowflake] }
+
+Container facts [type: schema] {
+  reuse { entity core.dim_customer } from './conformed-dimensions' [cloned_at: '2026-06-06T14:30:00Z'] {
+    Entity dim_customer {
+      id    int     [pk]
+      email varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+    }
+  }
+
+  Entity fact_sales {
+    customer_id int [ref: > facts.dim_customer.id]
+    amount      decimal(10,2)
+  }
+}
+```
+
+### VALID -- aliased import
+
+```
+xdbml: 0.2
+
+Project app { targets: [PostgreSQL] }
+
+Container app [type: schema] {
+  reuse { entity users as auth_users } from './auth'
+  reuse { entity users as billing_users } from './billing'
+
+  Entity sessions {
+    id              int [pk]
+    auth_user_id    int [ref: > app.auth_users.id]
+    billing_user_id int [ref: > app.billing_users.id]
+  }
+}
+```
+
+### VALID -- field-level import at file scope, used as a field type
+
+```
+xdbml: 0.2
+
+Project new_system { targets: [PostgreSQL] }
+
+reuse { field ops.customer_legacy.legacy_email as contact_email } from './legacy-customer' [cloned_at: '2026-06-06T14:30:00Z'] {
+  contact_email varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+}
+
+Container app [type: schema] {
+  Entity new_customer {
+    id            int           [pk]
+    contact_email contact_email
+  }
+}
+```
+
+### VALID -- use (non-transitive) for private internal imports
+
+```
+xdbml: 0.2
+
+use { type InternalAuditFields } from './internal-helpers'
+
+Container ordering [type: schema] {
+  Entity orders {
+    id          int [pk]
+    audit       InternalAuditFields
+    customer_id int
+  }
+}
+```
+
+### VALID -- multi-line and comma-separated equivalence
+
+```
+xdbml: 0.2
+
+// Multi-line form
+reuse {
+  entity products
+  entity categories
+  type Email
+} from './catalog'
+
+// Equivalent comma-separated single-line form
+reuse { entity products, entity categories, type Email } from './catalog'
+```
+
+### VALID -- reference-only directive (no clone block, DBML-compatible)
+
+```
+xdbml: 0.2
+
+Project order_system { targets: [PostgreSQL] }
+
+Container ordering [type: schema] {
+  reuse { entity core.products } from './catalog'
+
+  Entity orders {
+    id          int [pk]
+    customer_id int
+  }
+}
+```
+
+### INVALID -- field import inside Container body
+
+```
+xdbml: 0.2
+
+Container app [type: schema] {
+  reuse { field core.dim_customer.email } from './conformed-dimensions'
+
+  Entity new_customer {
+    id    int [pk]
+    email email
+  }
+}
+```
+
+Expected semantic error: "field imports may only appear at file scope (§25.5)."
+
+### INVALID -- absolute path
+
+```
+xdbml: 0.2
+
+reuse * from '/absolute/path/to/file.xdbml'
+```
+
+Expected error: "import path must begin with './' or '../' (relative paths only in v0.2 phase 1)."
+
+### INVALID -- URL path (deferred to a later phase)
+
+```
+xdbml: 0.2
+
+reuse * from 'https://example.com/schemas/users.xdbml'
+```
+
+Expected error: "URL imports are reserved for a later phase; v0.2 phase 1 supports relative paths only."
+
+### INVALID -- v0.1 file using v0.2-only constructs
+
+```
+xdbml: 0.1
+
+reuse { entity core.products } from './catalog'
+```
+
+Expected error: "the module system (use/reuse directives) requires xdbml: 0.2 or later; this document declares xdbml: 0.1."
+
+### INVALID -- unrecognized element-type slot value
+
+```
+xdbml: 0.2
+
+reuse { widget core.products } from './catalog'
+```
+
+Expected error: "unrecognized element type 'widget'; expected one of: table, entity, collection, record, enum, tablepartial, note, schema, container, tablegroup, type, edge, view, diagramview, field."
+
+### INVALID -- importing Project
+
+```
+xdbml: 0.2
+
+reuse { project some_project } from './other'
+```
+
+Expected error: "Project declarations are not importable (§25.4)."
+
+---
+
 ## Test runner
 
 A reference TypeScript test harness (planned at `grammar/test-runner.ts`) parses each example, captures the resulting AST, and compares it against expected ASTs in `grammar/expected/*.json`. Implementations in other languages can run the same corpus with language-appropriate harnesses.
@@ -646,4 +918,4 @@ PASS  §6.1.001   explicit container with type
 PASS rate: 247/250 (98.8%)
 ```
 
-A conforming v0.1 implementation should achieve 100% pass rate on the published corpus.
+A conforming v0.2 implementation should achieve 100% pass rate on the published corpus, including v0.2 module system and scalar Named Type cases. A v0.1-only implementation should achieve 100% pass rate on the v0.1 subset and produce appropriate errors for v0.2 constructs.

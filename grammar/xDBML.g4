@@ -1,14 +1,23 @@
 /*
- * xDBML v0.1 -- ANTLR4 grammar additions
+ * xDBML v0.2 -- ANTLR4 grammar additions
  *
- * Status:    Draft v0.1 -- pre-stable
+ * Status:    Draft v0.2 -- pre-stable
  * License:   Apache License 2.0
- * Spec:      xDBML Specification v0.1 (xdbml.org/spec/v0.1)
+ * Spec:      xDBML Specification v0.2 (xdbml.org/spec/v0.2)
  * Upstream:  github.com/holistics/dbml (Apache 2.0)
  *
  * This grammar layers xDBML extensions on top of the Holistics DBML
  * ANTLR4 grammar. It declares new tokens, new top-level rules, and
  * a small number of replacements for DBML rules that needed extending.
+ *
+ * v0.2 additions over v0.1:
+ *   - Module system: 'use'/'reuse' directives with optional clone blocks
+ *     at file scope and inside Container bodies. Element-type slot values
+ *     (table, entity, field, type, etc.) are accepted as contextual
+ *     keywords (IDENTIFIER values, validated post-parse).
+ *   - Scalar Named Types: 'Type Name basetype [settings]' form alongside
+ *     the existing 'Type Name { fields }' object-shaped form.
+ *   - New reserved tokens: USE, REUSE, FROM, AS.
  *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
@@ -20,15 +29,17 @@
  * Naming conventions:
  *   - Lowercase rule names = parser rules
  *   - UPPERCASE token names = lexer tokens
- *   - Section comments use //§17.X.Y to reference the spec
+ *   - Section comments use //§N.X.Y to reference the spec
  *
  * Implementation note for parser writers:
  *   This grammar is intentionally permissive at the parse level. Several
  *   constraints (e.g. "tuple positions must be contiguous starting at 0",
  *   "named types cannot shadow builtins", "Ref paths require explicit .[*]
- *   when crossing arrays") are enforced in a semantic-analysis pass that
- *   runs after parse. Keeping the grammar permissive produces clearer
- *   error messages and a smaller grammar surface.
+ *   when crossing arrays", "field imports may not appear in Container
+ *   bodies", "element-type slot must be one of the recognized values")
+ *   are enforced in a semantic-analysis pass that runs after parse.
+ *   Keeping the grammar permissive produces clearer error messages and
+ *   a smaller grammar surface.
  */
 
 grammar xDBML;
@@ -152,6 +163,16 @@ JSON                : 'json' ;
 JSONB               : 'jsonb' ;
 VARIANT             : 'variant' ;
 
+// ---- §25 Module system keywords (new in v0.2) ------------------------------
+// These are reserved in directive positions (the top-level useDirective rule).
+// They remain available as identifiers in other contexts via quoted-identifier
+// escape ("from", "use", etc.) per the spec's standard identifier conventions.
+
+USE                 : 'use' ;
+REUSE               : 'reuse' ;
+FROM                : 'from' ;
+AS                  : 'as' ;
+
 // ---- §17.10 Cardinality operators -----------------------------------------
 // NOTE: The single-character operators '<', '>', '-' are inherited from
 // upstream DBML. The compound '<>' must be lexed as one token, otherwise
@@ -173,6 +194,12 @@ MANY_TO_MANY        : '<>' ;
 LBRACK_STAR         : '[*]' ;        // wildcard array iteration
                                      // Lex as single token to avoid '[' STAR ']' ambiguity
                                      // with array brackets and bracket settings.
+
+// '*' as a standalone token for the import-all form of use/reuse directives
+// (new in v0.2): `use * from './path'`. The longest-match rule ensures
+// '[*]' is still tokenized as LBRACK_STAR before this STAR rule applies
+// to bare '*'.
+STAR                : '*' ;
 
 // ---- §17.1 Comments (already in upstream DBML; declared here for completeness)
 // LINE_COMMENT     : '//' ~[\r\n]* -> skip ;
@@ -225,6 +252,7 @@ topLevelStatement
     | tableGroupDefinition         // upstream DBML
     | diagramViewDefinition        // upstream DBML
     | noteDefinition               // upstream DBML
+    | useDirective                 //§25  (new in v0.2)
     ;
 
 // ---- §17.7 Container ------------------------------------------------------
@@ -245,6 +273,7 @@ containerBody
     | viewDefinition
     | enumDefinition               // enums may be container-scoped
     | noteDefinition
+    | useDirective                 //§25  (new in v0.2; field imports are semantically rejected here)
     | containerSetting             // e.g. replication, location, default_charset
     ;
 
@@ -259,11 +288,87 @@ tableKeyword
     ;
 
 // ---- §17.8 Named type definition ------------------------------------------
+// v0.2 extends Named Types to also support scalar shapes via the
+// `Type Name <baseType> [settings]` form alongside the existing
+// `Type Name { fields }` object-shaped form (§13.7).
 
 typeDefinition
-    : TYPE_KW IDENTIFIER settingsBlock? LBRACE
+    : TYPE_KW IDENTIFIER settingsBlock? LBRACE      // object-shaped (v0.1 form)
         fieldDeclaration*
       RBRACE
+    | TYPE_KW IDENTIFIER typeExpression settingsBlock?   // scalar (v0.2 form)
+    ;
+
+// ---- §25 Module system (new in v0.2) --------------------------------------
+//
+// The useDirective rule covers both `use` and `reuse`, both `*` (import all)
+// and `{ ... }` (selective) forms, optional directive-level settings, and
+// the optional clone block carrying the embedded content.
+//
+// Element-type slot values (`field`, `entity`, `table`, etc.) are accepted
+// as contextual keywords (IDENTIFIER values) rather than reserved tokens.
+// The semantic-analysis pass validates that each elementType matches one of
+// the spec-defined values (§25.3) and applies the placement/scope rules:
+//   - field imports may only appear at file scope (rejected in containerBody)
+//   - useDirective never appears inside Entity/Edge/View/Type bodies
+//   - container/schema imports may only appear at file scope (containers are
+//     top-level constructs)
+//
+// The cloneBlock contains the imported content, which may itself include
+// further useDirective declarations (e.g., a reuse'd barrel file's content).
+
+useDirective
+    : (USE | REUSE) (STAR | importList) FROM STRING_LITERAL
+      settingsBlock?
+      cloneBlock?
+    ;
+
+importList
+    : LBRACE importItem (COMMA? importItem)* RBRACE
+    ;
+
+importItem
+    : elementType importPath (AS IDENTIFIER)?
+    ;
+
+elementType
+    // Contextual keyword: validated post-parse against the recognized set
+    // (table, entity, collection, record, enum, tablepartial, note, schema,
+    // container, tablegroup, type, edge, view, diagramview, field).
+    : IDENTIFIER
+    ;
+
+importPath
+    // Distinct from `qualifiedName` (which requires at least one dot) because
+    // import paths may be bare identifiers (top-level entities, types, enums)
+    // or dotted (container.entity, container.entity.field).
+    : IDENTIFIER (DOT IDENTIFIER)*
+    ;
+
+cloneBlock
+    // Embedded clone content. The contained declarations follow the same
+    // grammar as the corresponding top-level declarations, with one extra
+    // shape: a clone may itself contain useDirective (for cases like a
+    // 'reuse *' on a barrel file whose content includes its own reuses).
+    //
+    // The contained `fieldDeclaration` alternative is what supports
+    // field-level imports (the clone is just the field declaration alone).
+    : LBRACE cloneContent* RBRACE
+    ;
+
+cloneContent
+    : tableDefinition
+    | containerDefinition
+    | typeDefinition
+    | edgeDefinition
+    | viewDefinition
+    | enumDefinition
+    | tablePartialDefinition
+    | tableGroupDefinition
+    | diagramViewDefinition
+    | noteDefinition
+    | fieldDeclaration              // for field-level imports
+    | useDirective                  // nested reuses (barrel-file pattern)
     ;
 
 // ---- §17.11 Edge -----------------------------------------------------------
@@ -755,11 +860,10 @@ quotedIdentifier options { caseInsensitive=false; }
 // ===========================================================================
 //
 // 1. AST construction. The grammar above produces a parse tree that maps
-//    directly to the AST documented in §17.10 (working spec) / §25 (v0.1).
-//    Where the grammar accepts multiple equivalent forms (e.g. tableKeyword
-//    alternatives, jsonKeyword alternatives, dot-prefixed vs JSONPath path
-//    segments), a normalization pass converts to canonical form before
-//    handing off to generators.
+//    directly to the AST documented in §26 (v0.2). Where the grammar accepts
+//    multiple equivalent forms (e.g. tableKeyword alternatives, jsonKeyword
+//    alternatives, dot-prefixed vs JSONPath path segments), a normalization
+//    pass converts to canonical form before handing off to generators.
 //
 // 2. Path normalization. Both `addresses.[0].city` and `addresses[0].city`
 //    parse via the fieldPath rule. The parser preserves the original form
@@ -773,19 +877,34 @@ quotedIdentifier options { caseInsensitive=false; }
 //
 // 4. Semantic constraints enforced post-parse:
 //      - tuple positions must be contiguous starting at 0 (§17.2.4)
-//      - named types cannot shadow built-in type keywords (§17.8.2)
-//      - ref paths require explicit .[*] when crossing an array (§17.6.5)
-//      - polymorphic paths require explicit alternative selectors (§17.6.6)
-//      - cardinality string content must match 'N..M' shape (§17.10.1)
+//      - named types cannot shadow built-in type keywords (§13)
+//      - ref paths require explicit .[*] when crossing an array (§18)
+//      - polymorphic paths require explicit alternative selectors (§19)
+//      - cardinality string content must match 'N..M' shape (§10)
 //      - cross-container refs must resolve to declared containers and entities
-//      - circular type references must form valid cycles (§17.8.4)
+//      - circular type references must form valid cycles (§13)
+//      - module system (§25, new in v0.2):
+//          * elementType slot values must be one of the recognized values
+//            (table, entity, collection, record, enum, tablepartial, note,
+//            schema, container, tablegroup, type, edge, view, diagramview,
+//            field). Other values produce a clear error.
+//          * field-element-type imports may only appear at file scope
+//            (the containerBody alternative for useDirective is rejected
+//            when the import items include `field`).
+//          * container/schema imports may only appear at file scope
+//            (Containers are top-level constructs).
+//          * import paths must start with './' or '../' (relative paths only
+//            in v0.2 phase 1; URLs deferred to a later phase).
+//          * clone-block content (cloneContent) names must match the directive's
+//            import items by name and element type, in any order.
+//          * `xdbml: 0.1` documents may not use module-system constructs.
 //
 // 5. Conflict resolution with upstream DBML. Where xDBML extends a rule
-//    that exists upstream (tableKeyword, fieldPath, refSpec, indexBlock),
-//    the xDBML version replaces the upstream rule wholesale. ANTLR4's
-//    `import` directive does not automatically resolve rule replacements;
-//    a build script generates the merged grammar by composing the upstream
-//    rules with xDBML's overrides.
+//    that exists upstream (tableKeyword, fieldPath, refSpec, indexBlock,
+//    typeDefinition), the xDBML version replaces the upstream rule wholesale.
+//    ANTLR4's `import` directive does not automatically resolve rule
+//    replacements; a build script generates the merged grammar by composing
+//    the upstream rules with xDBML's overrides.
 //
 // 6. Comments. Lexer rules for LINE_COMMENT, BLOCK_COMMENT, and WS are
 //    inherited unchanged from upstream DBML and apply to xDBML documents.
@@ -794,16 +913,19 @@ quotedIdentifier options { caseInsensitive=false; }
 //    EXPERIMENTAL, CONTAINER, SCHEMA, DATABASE, KEYSPACE, NAMESPACE,
 //    DATASET, BUCKET, ENTITY, COLLECTION, RECORD, TYPE_KW, EDGE, VIEW,
 //    OBJECT, STRUCT, TYPE_RECORD, ARRAY, LIST, MAP, DICT, DICTIONARY,
-//    SET, UNION, ONE_OF, ANY_OF, ALL_OF, JSON, JSONB, VARIANT) are
-//    reserved per Appendix A. They are matched before IDENTIFIER by the
-//    lexer's standard longest-match-with-priority rule. To use a reserved
-//    keyword as an entity or field name, wrap it in QUOTED_STRING.
+//    SET, UNION, ONE_OF, ANY_OF, ALL_OF, JSON, JSONB, VARIANT, USE,
+//    REUSE, FROM, AS) are reserved per Appendix A. They are matched before
+//    IDENTIFIER by the lexer's standard longest-match-with-priority rule.
+//    To use a reserved keyword as an entity or field name, wrap it in
+//    QUOTED_STRING.
 //
 // 8. Testing. A conforming parser implementation should:
-//      - Round-trip every example in Appendix C of the v0.1 spec
+//      - Round-trip every example in Appendix C of the v0.2 spec
 //      - Reject malformed documents with line/column error reporting
-//      - Honor version-mismatch behavior per §17.1
-//      - Produce both raw and normalized AST flavors per §17.10.3
+//      - Honor version-mismatch behavior per §4 (v0.1 vs v0.2 features)
+//      - Produce both raw and normalized AST flavors per §26
+//      - Parse v0.1 documents with v0.1 semantics
+//      - Implement module-system parsing per §25 including clone blocks
 //    A reference test corpus is published at github.com/xdbml/xdbml-tests.
 //
 // ===========================================================================
