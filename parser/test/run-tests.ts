@@ -126,7 +126,21 @@ function summarizeDocument (doc: XDbmlDocument): string {
  * ----------------------------------------------------------------------- */
 
 function runInlineTests (): TestResult[] {
-  const cases: { name: string; source: string; assert: (doc: XDbmlDocument) => string | null }[] = [
+  const cases: {
+    name: string;
+    source: string;
+    assert: (doc: XDbmlDocument) => string | null;
+    /**
+     * If true, the test passes when parse() throws, and fails if parse()
+     * succeeds. Used for negative tests where we want to confirm the parser
+     * rejects malformed input. The assert function is not called when
+     * expectError is true (the throw is the success signal). The function
+     * is still required (TS shape consistency); pass a stub that returns
+     * a placeholder error message that the user would see only if the
+     * parser unexpectedly accepted the input.
+     */
+    expectError?: boolean;
+  }[] = [
     {
       name: 'Bare DBML compat: no version header, simple Table',
       source: `Table users {
@@ -350,6 +364,200 @@ Type CustomerId int`,
         if (t.scalarBase.kind !== 'ScalarType' || t.scalarBase.name !== 'int') return 'expected int base';
         if (t.settings.length !== 0) return `expected 0 settings, got ${t.settings.length}`;
         if (t.body.length !== 0) return 'body should be empty';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 entity-level checks block -- single named check',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  wealth decimal(15,2)
+  debt decimal(15,2)
+  checks {
+    \`debt + wealth >= 0\` [name: 'chk_positive_net_worth']
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const checks = e.body.find((b) => b.kind === 'ChecksBlock');
+        if (!checks || checks.kind !== 'ChecksBlock') return 'expected ChecksBlock in entity body';
+        if (checks.entries.length !== 1) return `expected 1 check entry, got ${checks.entries.length}`;
+        const entry = checks.entries[0];
+        if (entry.kind !== 'CheckEntry') return `expected CheckEntry, got ${entry.kind}`;
+        if (entry.expression !== 'debt + wealth >= 0') return `expected expression 'debt + wealth >= 0', got '${entry.expression}'`;
+        if (entry.settings.length !== 1) return `expected 1 setting, got ${entry.settings.length}`;
+        if (entry.settings[0].name !== 'name') return `expected name setting, got ${entry.settings[0].name}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 entity-level checks block -- multiple checks, mixed settings',
+      source: `xdbml: 0.2
+Entity reservations {
+  id int [pk]
+  start_date date
+  end_date date
+  checks {
+    \`start_date <= end_date\` [name: 'chk_valid_date_range']
+    \`end_date - start_date <= 30\` [name: 'chk_max_30_days']
+    \`start_date >= CURRENT_DATE\`
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const checks = e.body.find((b) => b.kind === 'ChecksBlock');
+        if (!checks || checks.kind !== 'ChecksBlock') return 'expected ChecksBlock';
+        if (checks.entries.length !== 3) return `expected 3 check entries, got ${checks.entries.length}`;
+        const [a, b, c] = checks.entries;
+        if (a.expression !== 'start_date <= end_date') return 'wrong first expression';
+        if (a.settings.length !== 1 || a.settings[0].name !== 'name') return 'wrong first settings';
+        if (b.expression !== 'end_date - start_date <= 30') return 'wrong second expression';
+        if (b.settings.length !== 1 || b.settings[0].name !== 'name') return 'wrong second settings';
+        if (c.expression !== 'start_date >= CURRENT_DATE') return 'wrong third expression';
+        if (c.settings.length !== 0) return `expected unsetting check, got ${c.settings.length} settings`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 entity-level checks block coexists with indexes block',
+      source: `xdbml: 0.2
+Entity inventory {
+  id int [pk]
+  sku varchar
+  warehouse varchar
+  qty int
+  indexes {
+    (sku, warehouse) [unique]
+  }
+  checks {
+    \`qty >= 0\` [name: 'chk_non_negative_qty']
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const idx = e.body.find((b) => b.kind === 'IndexesBlock');
+        const checks = e.body.find((b) => b.kind === 'ChecksBlock');
+        if (!idx || idx.kind !== 'IndexesBlock') return 'expected IndexesBlock';
+        if (!checks || checks.kind !== 'ChecksBlock') return 'expected ChecksBlock';
+        if (idx.entries.length !== 1) return 'expected 1 index entry';
+        if (checks.entries.length !== 1) return 'expected 1 check entry';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 entity-level checks block with note setting on check',
+      source: `xdbml: 0.2
+Entity orders {
+  id int [pk]
+  status varchar
+  shipped_at timestamp
+  checks {
+    \`(status != 'shipped') OR (shipped_at IS NOT NULL)\` [
+      name: 'chk_shipped_has_timestamp',
+      note: 'A shipped order must record the shipment timestamp.'
+    ]
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const checks = e.body.find((b) => b.kind === 'ChecksBlock');
+        if (!checks || checks.kind !== 'ChecksBlock') return 'expected ChecksBlock';
+        const entry = checks.entries[0];
+        if (entry.settings.length !== 2) return `expected 2 settings on check, got ${entry.settings.length}`;
+        const names = entry.settings.map((s) => s.name);
+        if (!names.includes('name')) return 'expected name setting';
+        if (!names.includes('note')) return 'expected note setting';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 checks block -- invalid: non-backtick expression rejected',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  wealth decimal(15,2)
+  checks {
+    wealth >= 0
+  }
+}`,
+      assert: (_doc) => 'parse should have failed',
+      expectError: true,
+    },
+    {
+      name: 'v0.2 Ref with inactive flag',
+      source: `xdbml: 0.2
+Entity posts {
+  id int [pk]
+  user_id int
+}
+Entity users {
+  id int [pk]
+}
+Ref: posts.user_id > users.id [inactive]`,
+      assert: (doc) => {
+        const ref = doc.statements.find((s) => s.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected RefDeclaration';
+        if (ref.settings.length !== 1) return `expected 1 setting, got ${ref.settings.length}`;
+        const inactive = ref.settings[0];
+        if (inactive.name !== 'inactive') return `expected inactive setting, got ${inactive.name}`;
+        if (inactive.value !== null) return 'inactive should be a flag (null value)';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 Ref with inactive + color + note (multiple settings)',
+      source: `xdbml: 0.2
+Entity audit_log {
+  id int [pk]
+  user_id int
+}
+Entity users {
+  id int [pk]
+}
+Ref: audit_log.user_id > users.id [
+  inactive,
+  color: '#999999',
+  note: 'Historical FK; superseded by audit_ref table'
+]`,
+      assert: (doc) => {
+        const ref = doc.statements.find((s) => s.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected RefDeclaration';
+        if (ref.settings.length !== 3) return `expected 3 settings, got ${ref.settings.length}`;
+        const names = ref.settings.map((s) => s.name);
+        if (!names.includes('inactive')) return 'expected inactive';
+        if (!names.includes('color')) return 'expected color';
+        if (!names.includes('note')) return 'expected note';
+        const inactive = ref.settings.find((s) => s.name === 'inactive');
+        if (inactive?.value !== null) return 'inactive should still be a flag even mixed with key:value settings';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 TableGroup with color and note settings',
+      source: `xdbml: 0.2
+Entity orders { id int [pk] }
+Entity order_lines { id int [pk] }
+Entity invoices { id int [pk] }
+
+TableGroup ecommerce [color: '#3498DB', note: 'Commerce-side entities'] {
+  orders
+  order_lines
+  invoices
+}`,
+      assert: (doc) => {
+        const tg = doc.statements.find((s) => s.kind === 'TableGroupDeclaration');
+        if (!tg || tg.kind !== 'TableGroupDeclaration') return 'expected TableGroup';
+        if (tg.name !== 'ecommerce') return 'wrong name';
+        if (tg.settings.length !== 2) return `expected 2 settings, got ${tg.settings.length}`;
+        const names = tg.settings.map((s) => s.name);
+        if (!names.includes('color')) return 'expected color';
+        if (!names.includes('note')) return 'expected note';
+        if (tg.members.length !== 3) return `expected 3 members, got ${tg.members.length}`;
         return null;
       },
     },
@@ -708,14 +916,24 @@ Table t {
   for (const c of cases) {
     try {
       const doc = parse(c.source);
-      const err = c.assert(doc);
-      if (err === null) {
-        results.push(ok(c.name));
+      if (c.expectError) {
+        // Parser accepted input that should have been rejected.
+        results.push(fail(c.name, 'expected parse to throw, but it succeeded'));
       } else {
-        results.push(fail(c.name, err));
+        const err = c.assert(doc);
+        if (err === null) {
+          results.push(ok(c.name));
+        } else {
+          results.push(fail(c.name, err));
+        }
       }
     } catch (e) {
-      results.push(fail(c.name, (e as Error).message));
+      if (c.expectError) {
+        // Parser correctly rejected malformed input.
+        results.push(ok(c.name));
+      } else {
+        results.push(fail(c.name, (e as Error).message));
+      }
     }
   }
   return results;

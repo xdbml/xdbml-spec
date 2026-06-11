@@ -15,6 +15,8 @@ import type {
   AnyOfType,
   ArrayType,
   CardinalityOperator,
+  CheckEntry,
+  ChecksBlock,
   ContainerBodyItem,
   ContainerDeclaration,
   ContainerKeyword,
@@ -483,6 +485,8 @@ export class Parser {
         body.push(this.parseNoteBlockOrSetting());
       } else if (k === 'indexes') {
         body.push(this.parseIndexes());
+      } else if (k === 'checks') {
+        body.push(this.parseChecks());
       } else if (k === 'records') {
         // PoC: skip records block for now; it's defined in the spec but not exercised
         // by examples 01-04. Treat as a tolerated body item to keep the parser robust.
@@ -1436,6 +1440,46 @@ export class Parser {
       span: this.spanFrom(start),
     };
     return c;
+  }
+
+  /* ----- Checks (spec §10, new in v0.2) ----- */
+
+  private parseChecks (): ChecksBlock {
+    const start = this.peek().start;
+    this.advance(); // checks
+    this.expect(TokenKind.LBrace, "Expected '{' after checks");
+    const entries: CheckEntry[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      entries.push(this.parseCheckEntry());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing checks");
+    return {
+      kind: 'ChecksBlock',
+      entries,
+      span: this.spanFrom(start),
+    };
+  }
+
+  private parseCheckEntry (): CheckEntry {
+    const start = this.peek().start;
+    const exprTok = this.peek();
+    if (exprTok.kind !== TokenKind.ExpressionLiteral) {
+      throw new ParseError(
+        `Expected backtick-wrapped check expression, got ${exprTok.kind} ${JSON.stringify(exprTok.text)}`,
+        exprTok.start,
+      );
+    }
+    this.advance();
+    // The expression is opaque to xDBML per spec §10.3. The value field of
+    // an ExpressionLiteral token already has the surrounding backticks stripped.
+    const expression = exprTok.value ?? '';
+    const settings = this.maybeSettingsBlock();
+    return {
+      kind: 'CheckEntry',
+      expression,
+      settings,
+      span: this.spanFrom(start),
+    };
   }
 
   /* ----- Settings block ----- */

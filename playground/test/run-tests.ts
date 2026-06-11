@@ -788,10 +788,8 @@ Container core {
 // Each entry is the filename (basename) mapped to a short reason string
 // describing which v0.2 feature is missing in the parser.
 const pendingV02Examples: Record<string, string> = {
-  '09-modules-conformed-dimensions.xdbml':
-    'requires v0.2 entity-level checks block (§10). Scalar Named Types are supported as of parser batch P1.',
   '10-modules-consumer.xdbml':
-    'requires v0.2 module system clone blocks (spec §26.6) and entity-level checks block (§10). Scalar Named Types are supported as of parser batch P1.',
+    'requires v0.2 module system clone blocks (spec §26.6). Scalar Named Types (§14.7) and entity-level checks (§10) are supported as of parser batches P1 and P2.',
 };
 
 // Add one test per bundled example.

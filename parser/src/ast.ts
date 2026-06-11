@@ -130,6 +130,7 @@ export type EntityKeyword = 'Table' | 'Entity' | 'Collection' | 'Record';
 export type EntityBodyItem =
   | FieldDeclaration
   | IndexesBlock
+  | ChecksBlock
   | NoteBlock
   | PartialInjection
   | RecordsBlock;
@@ -468,6 +469,44 @@ export interface IndexExpressionComponent {
   kind: 'IndexExpressionComponent';
   /** Source text inside the backticks, no surrounding backticks */
   expression: string;
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Checks (entity-level constraints; spec §10, new in v0.2)
+ *
+ * Multi-column constraint expressions inside an entity body, a peer of the
+ * indexes block. Each entry is a backtick-wrapped expression in the target
+ * engine's expression language, optionally followed by bracket settings
+ * (`name:` for the constraint name in generated DDL, `note:` for free text).
+ *
+ *     Entity users {
+ *       id     int [pk]
+ *       wealth decimal(15,2)
+ *       debt   decimal(15,2)
+ *       checks {
+ *         `debt + wealth >= 0` [name: 'chk_positive_net_worth']
+ *         `wealth >= 0`
+ *       }
+ *     }
+ *
+ * The expression is treated as an opaque target-engine string. xDBML does
+ * not parse or validate the expression syntax (per spec §10.3). Generators
+ * emit it verbatim or normalize it for the target.
+ * ----------------------------------------------------------------------- */
+
+export interface ChecksBlock {
+  kind: 'ChecksBlock';
+  entries: CheckEntry[];
+  span: Span;
+}
+
+export interface CheckEntry {
+  kind: 'CheckEntry';
+  /** Source text inside the backticks, no surrounding backticks. */
+  expression: string;
+  /** Optional settings -- typically `name:` and/or `note:`. */
+  settings: Setting[];
   span: Span;
 }
 
