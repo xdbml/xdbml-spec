@@ -50,6 +50,8 @@ import type {
   Position,
   ProjectBodyItem,
   ProjectDeclaration,
+  RecordRow,
+  RecordsBlock,
   RefDeclaration,
   RefEndpoint,
   RefSpec,
@@ -62,6 +64,7 @@ import type {
   StringValue,
   TableGroupDeclaration,
   TablePartialDeclaration,
+  TopLevelRecordsDeclaration,
   TopLevelStatement,
   TupleElement,
   TupleType,
@@ -267,6 +270,7 @@ export class Parser {
     if (k === 'tablepartial') return this.parseTablePartial();
     if (k === 'tablegroup') return this.parseTableGroup();
     if (k === 'note') return this.parseNoteDeclaration();
+    if (k === 'records') return this.parseTopLevelRecords();
     throw new ParseError(`Unknown top-level construct: ${t.text}`, t.start);
   }
 
@@ -488,9 +492,7 @@ export class Parser {
       } else if (k === 'checks') {
         body.push(this.parseChecks());
       } else if (k === 'records') {
-        // PoC: skip records block for now; it's defined in the spec but not exercised
-        // by examples 01-04. Treat as a tolerated body item to keep the parser robust.
-        body.push(this.parseRecordsBlockTolerantly());
+        body.push(this.parseRecordsBlock());
       } else if (t.kind === TokenKind.Tilde) {
         body.push(this.parsePartialInjection());
       } else {
@@ -512,24 +514,114 @@ export class Parser {
   }
 
   /**
-   * A tolerant records-block parser. The full grammar is one row per line of
-   * comma-separated values. For the PoC we read until the matching `}` and
-   * stash the raw text as a single row, so the parser doesn't choke on
-   * unusual value forms.
+   * Parse a `records { ... }` block inside an entity body (§25.1, implicit
+   * column list). Values are stored as SettingValue cells; row boundaries
+   * are determined by source line (see `parseRecordRow`).
    */
-  private parseRecordsBlockTolerantly (): EntityBodyItem {
+  private parseRecordsBlock (): RecordsBlock {
     const start = this.peek().start;
     this.advance(); // records
     this.expect(TokenKind.LBrace, "Expected '{' after 'records'");
-    let depth = 1;
-    while (!this.check(TokenKind.EOF) && depth > 0) {
-      const t = this.advance();
-      if (t.kind === TokenKind.LBrace) depth += 1;
-      else if (t.kind === TokenKind.RBrace) depth -= 1;
+    const rows: RecordRow[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      rows.push(this.parseRecordRow());
     }
+    this.expect(TokenKind.RBrace, "Expected '}' closing records");
     return {
       kind: 'RecordsBlock',
-      rows: [],
+      rows,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Top-level records declaration (§25.2, new in v0.2):
+   *
+   *     records users (id, name, email) { ... }
+   *     records core.users (id, name, email) { ... }
+   *
+   * The entity reference can be a bare name or a dotted path for cross-
+   * container references. The column list is required; it tells the
+   * generator which columns each row's values are populating.
+   */
+  private parseTopLevelRecords (): TopLevelRecordsDeclaration {
+    const start = this.peek().start;
+    this.advance(); // records
+    // Entity reference: bare identifier or dotted path (`core.users`).
+    const refStart = this.peek().start;
+    const head = this.expect(TokenKind.Identifier, "Expected entity name after 'records'");
+    let entityRef = head.text;
+    while (this.check(TokenKind.Dot)) {
+      this.advance();
+      const next = this.expect(TokenKind.Identifier, "Expected identifier after '.' in entity reference");
+      entityRef += `.${next.text}`;
+    }
+    // Explicit column list -- required for top-level form.
+    this.expect(TokenKind.LParen, "Expected '(' starting column list after entity reference");
+    const columns: string[] = [];
+    if (!this.check(TokenKind.RParen)) {
+      const first = this.expect(TokenKind.Identifier, 'Expected column name');
+      columns.push(first.text);
+      while (this.match(TokenKind.Comma)) {
+        if (this.check(TokenKind.RParen)) break; // tolerate trailing comma
+        const next = this.expect(TokenKind.Identifier, 'Expected column name after comma');
+        columns.push(next.text);
+      }
+    }
+    this.expect(TokenKind.RParen, "Expected ')' closing column list");
+    // Row body.
+    this.expect(TokenKind.LBrace, "Expected '{' starting records body");
+    const rows: RecordRow[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      rows.push(this.parseRecordRow());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing records body");
+    void refStart; // currently unused but reserved for future improved error reporting
+    return {
+      kind: 'TopLevelRecordsDeclaration',
+      entityRef,
+      columns,
+      rows,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Parse a single row of comma-separated values.
+   *
+   * Row delimiter rule: a comma continues the row only when the next value
+   * is on the same source line as the comma. If the comma is followed by
+   * a token on a later line (or the closing `}`), the comma is treated as
+   * a trailing comma and the row ends. This rule:
+   *
+   *   - Tolerates trailing commas at end of row
+   *   - Supports triple-quoted multi-line string VALUES (the comma after
+   *     the closing `'''` is on the line of the closing triple, and the
+   *     next value sits on that same line)
+   *   - Does NOT support multi-line rows where a row's values are spread
+   *     across multiple source lines connected by commas
+   */
+  private parseRecordRow (): RecordRow {
+    const start = this.peek().start;
+    const values: SettingValue[] = [this.parseSettingValue()];
+    while (this.check(TokenKind.Comma)) {
+      const commaLine = this.peek().start.line;
+      this.advance(); // consume comma
+      // Check what follows the comma. If it's on a later line, treat as trailing.
+      const nextTok = this.peek();
+      if (nextTok.kind === TokenKind.RBrace || nextTok.kind === TokenKind.EOF) {
+        // trailing comma at end of block
+        break;
+      }
+      if (nextTok.start.line > commaLine) {
+        // trailing comma at end of row (next value is on a later line)
+        break;
+      }
+      values.push(this.parseSettingValue());
+    }
+    return {
+      kind: 'RecordRow',
+      values,
       span: this.spanFrom(start),
     };
   }

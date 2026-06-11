@@ -562,6 +562,177 @@ TableGroup ecommerce [color: '#3498DB', note: 'Commerce-side entities'] {
       },
     },
     {
+      name: 'v0.2 records inside entity -- implicit column list',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  name varchar
+  email varchar
+  records {
+    1, 'Alice', 'alice@example.com'
+    2, 'Bob',   'bob@example.com'
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const recs = e.body.find((b) => b.kind === 'RecordsBlock');
+        if (!recs || recs.kind !== 'RecordsBlock') return 'expected RecordsBlock';
+        if (recs.rows.length !== 2) return `expected 2 rows, got ${recs.rows.length}`;
+        for (const row of recs.rows) {
+          if (row.values.length !== 3) return `expected 3 values per row, got ${row.values.length}`;
+        }
+        if (recs.rows[0].values[0].kind !== 'NumberValue') return 'expected NumberValue at [0][0]';
+        if (recs.rows[0].values[1].kind !== 'StringValue') return 'expected StringValue at [0][1]';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 top-level records -- explicit column list',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  name varchar
+  email varchar
+}
+records users (id, name, email) {
+  1, 'Alice', 'alice@example.com'
+  2, 'Bob',   'bob@example.com'
+}`,
+      assert: (doc) => {
+        if (doc.statements.length !== 2) return `expected 2 statements, got ${doc.statements.length}`;
+        const tlr = doc.statements[1];
+        if (tlr.kind !== 'TopLevelRecordsDeclaration') return `expected TopLevelRecordsDeclaration, got ${tlr.kind}`;
+        if (tlr.entityRef !== 'users') return `wrong entityRef: ${tlr.entityRef}`;
+        if (tlr.columns.length !== 3) return `expected 3 columns, got ${tlr.columns.length}`;
+        if (tlr.columns[0] !== 'id') return 'wrong first column';
+        if (tlr.rows.length !== 2) return `expected 2 rows, got ${tlr.rows.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 top-level records -- cross-container reference',
+      source: `xdbml: 0.2
+Container core [type: schema] {
+  Entity users {
+    id int [pk]
+    email varchar
+  }
+}
+records core.users (id, email) {
+  1, 'a@b.com'
+  2, 'c@d.com'
+}`,
+      assert: (doc) => {
+        const tlr = doc.statements.find((s) => s.kind === 'TopLevelRecordsDeclaration');
+        if (!tlr || tlr.kind !== 'TopLevelRecordsDeclaration') return 'expected TopLevelRecordsDeclaration';
+        if (tlr.entityRef !== 'core.users') return `wrong entityRef: ${tlr.entityRef}`;
+        if (tlr.columns.length !== 2) return 'expected 2 columns';
+        if (tlr.rows.length !== 2) return 'expected 2 rows';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 records -- full value-form coverage',
+      source: `xdbml: 0.2
+Enum Status { active inactive pending }
+Entity events {
+  id int [pk]
+  occurred_at timestamp
+  status Status
+  archived boolean
+  payload varchar
+  records {
+    1, '2026-06-10T14:30:00Z', Status.active, true, 'string value'
+    2, '2026-06-11T09:00:00Z', Status.pending, false, null
+    3, \`gen_random_uuid()\`, Status.inactive, null, '''triple
+quoted string'''
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements.find((s) => s.kind === 'EntityDeclaration');
+        if (!e || e.kind !== 'EntityDeclaration') return 'expected entity';
+        const recs = e.body.find((b) => b.kind === 'RecordsBlock');
+        if (!recs || recs.kind !== 'RecordsBlock') return 'expected RecordsBlock';
+        if (recs.rows.length !== 3) return `expected 3 rows, got ${recs.rows.length}`;
+        // Row 1: number, string (date), identifier (enum), boolean (true), string
+        const r1 = recs.rows[0].values;
+        if (r1.length !== 5) return `row 1: expected 5 values, got ${r1.length}`;
+        if (r1[0].kind !== 'NumberValue') return `row 1 [0]: expected NumberValue, got ${r1[0].kind}`;
+        if (r1[1].kind !== 'StringValue') return `row 1 [1]: expected StringValue (ISO date), got ${r1[1].kind}`;
+        if (r1[2].kind !== 'IdentifierValue' || r1[2].value !== 'Status.active') return `row 1 [2]: expected IdentifierValue 'Status.active', got ${r1[2].kind} ${(r1[2] as { value?: string }).value}`;
+        if (r1[3].kind !== 'BooleanValue') return `row 1 [3]: expected BooleanValue, got ${r1[3].kind}`;
+        if (r1[4].kind !== 'StringValue') return `row 1 [4]: expected StringValue, got ${r1[4].kind}`;
+        // Row 2: null appears
+        const r2 = recs.rows[1].values;
+        if (r2[4].kind !== 'NullValue') return `row 2 [4]: expected NullValue, got ${r2[4].kind}`;
+        // Row 3: expression and triple-quoted string
+        const r3 = recs.rows[2].values;
+        if (r3[1].kind !== 'ExpressionValue') return `row 3 [1]: expected ExpressionValue, got ${r3[1].kind}`;
+        if (r3[4].kind !== 'StringValue' || !r3[4].multiline) return `row 3 [4]: expected multiline StringValue, got ${r3[4].kind} multiline=${(r3[4] as { multiline?: boolean }).multiline}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 records -- trailing comma at end of row delimits properly',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  name varchar
+  records {
+    1, 'Alice',
+    2, 'Bob'
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const recs = e.body.find((b) => b.kind === 'RecordsBlock');
+        if (!recs || recs.kind !== 'RecordsBlock') return 'expected RecordsBlock';
+        // Critical: the trailing comma should NOT merge the two rows. We want 2 rows of 2 values each.
+        if (recs.rows.length !== 2) return `trailing comma should NOT merge rows; expected 2 rows, got ${recs.rows.length}`;
+        if (recs.rows[0].values.length !== 2) return `row 1: expected 2 values, got ${recs.rows[0].values.length}`;
+        if (recs.rows[1].values.length !== 2) return `row 2: expected 2 values, got ${recs.rows[1].values.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 records -- negative number value',
+      source: `xdbml: 0.2
+Entity measurements {
+  id int [pk]
+  reading decimal(10,2)
+  records {
+    1, -3.14
+    2, 42.5
+    3, -0.001
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const recs = e.body.find((b) => b.kind === 'RecordsBlock');
+        if (!recs || recs.kind !== 'RecordsBlock') return 'expected RecordsBlock';
+        if (recs.rows.length !== 3) return `expected 3 rows, got ${recs.rows.length}`;
+        const r1v1 = recs.rows[0].values[1];
+        if (r1v1.kind !== 'NumberValue' || r1v1.value !== '-3.14') return `row 1 [1]: expected NumberValue '-3.14', got ${r1v1.kind} ${(r1v1 as { value?: string }).value}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 top-level records -- missing column list rejected',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  name varchar
+}
+records users {
+  1, 'Alice'
+}`,
+      assert: (_doc) => 'parse should have failed (missing column list)',
+      expectError: true,
+    },
+    {
       name: 'Nested object type inside an entity',
       source: `xdbml: 0.1
 Entity orders {

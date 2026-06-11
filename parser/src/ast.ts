@@ -59,7 +59,8 @@ export type TopLevelStatement =
   | RefDeclaration
   | TablePartialDeclaration
   | TableGroupDeclaration
-  | NoteDeclaration;
+  | NoteDeclaration
+  | TopLevelRecordsDeclaration;
 
 /* -------------------------------------------------------------------------
  * Project
@@ -541,10 +542,60 @@ export interface PartialInjection {
  * Records (sample data, §24)
  * ----------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------
+ * Records (spec §25, expanded in v0.2)
+ *
+ * Records declare sample data inline in the schema. Two forms:
+ *
+ *   - Inside an entity body, implicit column list (§25.1):
+ *       records {
+ *         1, 'Alice', 'alice@example.com'
+ *         2, 'Bob',   'bob@example.com'
+ *       }
+ *     Values are assigned to fields in declaration order.
+ *
+ *   - Top-level, explicit column list (§25.2, new in v0.2):
+ *       records users (id, name, email) {
+ *         1, 'Alice', 'alice@example.com'
+ *       }
+ *     Columns not in the list default to null or the field's declared default.
+ *
+ * Each row is a comma-separated list of values on a single source line; rows
+ * are separated by newlines. Trailing commas at end-of-row are tolerated.
+ * Multi-line values are supported via triple-quoted strings (the line check
+ * uses the comma's line vs the next-value's line, so a triple-quoted value
+ * doesn't break row continuation).
+ *
+ * Value forms (§25.4): strings, multi-line strings, numbers, booleans, null,
+ * ISO 8601 dates (lexed as strings), enum values (dotted identifiers like
+ * Status.active), and backtick expressions. We reuse SettingValue for cell
+ * values -- it's a superset (it also covers ListValue and RefValue, which
+ * are unusual in records but not explicitly forbidden by the spec).
+ * ----------------------------------------------------------------------- */
+
 export interface RecordsBlock {
   kind: 'RecordsBlock';
-  /** Raw row values; one inner array per row */
-  rows: string[][];
+  rows: RecordRow[];
+  span: Span;
+}
+
+export interface RecordRow {
+  kind: 'RecordRow';
+  values: SettingValue[];
+  span: Span;
+}
+
+export interface TopLevelRecordsDeclaration {
+  kind: 'TopLevelRecordsDeclaration';
+  /**
+   * The entity being populated. Dotted form for cross-container references
+   * such as `core.users`. Stored as the source-text dotted path; no
+   * resolution is performed at parse time.
+   */
+  entityRef: string;
+  /** The explicit column list. Required for the top-level form. */
+  columns: string[];
+  rows: RecordRow[];
   span: Span;
 }
 
