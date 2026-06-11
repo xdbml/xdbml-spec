@@ -60,7 +60,8 @@ export type TopLevelStatement =
   | TablePartialDeclaration
   | TableGroupDeclaration
   | NoteDeclaration
-  | TopLevelRecordsDeclaration;
+  | TopLevelRecordsDeclaration
+  | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
  * Project
@@ -108,7 +109,8 @@ export type ContainerBodyItem =
   | EdgeDeclaration
   | ViewDeclaration
   | EnumDeclaration
-  | NoteBlock;
+  | NoteBlock
+  | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
  * Entity (Table | Entity | Collection | Record)
@@ -618,6 +620,112 @@ export interface NoteDeclaration {
 export interface NoteBlock {
   kind: 'NoteBlock';
   body: string;
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Module system (spec §26, new in v0.2)
+ *
+ * `use` and `reuse` directives import declarations from another xDBML file.
+ * The directive can appear at file scope or inside a Container body; its
+ * location determines where the imported elements live in the merged AST
+ * (the "directive's location is the placement location" rule, §26.5).
+ *
+ * Each directive may carry an optional clone block embedding the imported
+ * declarations directly in the importing file (§26.6). When a clone block
+ * is present, the parser uses it as authoritative and does not open the
+ * referenced file. When absent, the parser must open the referenced file
+ * (P5 work; P4 only supports clone-present directives).
+ *
+ *     reuse { entity core.dim_customer } from './lib' [cloned_at: '...'] {
+ *       Entity dim_customer { ... }
+ *     }
+ *
+ *     use * from './internal-helpers'   // import-all form (must have clone in P4)
+ *
+ * Following design v2 decision Q-B, the AST is provenance-preserving:
+ * `ModuleImportDirective` nodes carry the imported declarations inside their
+ * `clone.statements` field rather than splicing them into the parent's
+ * statement list. Downstream consumers that want a flat list use a
+ * `flatten()` helper (forthcoming as separate API surface).
+ * ----------------------------------------------------------------------- */
+
+export interface ModuleImportDirective {
+  kind: 'ModuleImportDirective';
+  /**
+   * Directive mode:
+   *   - `'reuse'`: transitive (visible to files that further import this file).
+   *     The recommended default per spec §26.4.
+   *   - `'use'`: non-transitive (private to this file).
+   */
+  mode: 'use' | 'reuse';
+  /** What to import: everything (`*`) or a selective list. */
+  spec: ImportSpec;
+  /**
+   * The relative path string from the `from` clause, with quotes stripped.
+   * Stored as-is; path resolution happens at name-resolution time (P5+).
+   */
+  from: string;
+  /**
+   * Optional metadata settings appearing between `from '...'` and the
+   * clone block. In v0.2 phase 1, only `cloned_at` is defined; the parser
+   * is permissive and stores any settings here.
+   */
+  settings: Setting[];
+  /**
+   * The embedded clone block. When present, this is the authoritative
+   * content for the import. When absent (reference-only directive), the
+   * parser must resolve the `from` path at parse time (P5+).
+   */
+  clone?: CloneBlock;
+  span: Span;
+}
+
+/** Selective vs import-all distinction. */
+export type ImportSpec =
+  | { kind: 'ImportAll' }
+  | { kind: 'ImportList'; items: ImportItem[] };
+
+/**
+ * A single import item in a selective `{ ... }` list:
+ *
+ *     entity core.dim_customer
+ *     type Email as PII_Email
+ *     field core.dim_customer.email
+ *
+ * The element type is one of the keywords from §26.3 (table, entity,
+ * collection, record, enum, tablepartial, note, schema, container,
+ * tablegroup, type, edge, view, diagramview, field). Stored lowercased.
+ *
+ * The source path follows xDBML's standard dotted form. Container.Entity
+ * for an entity inside a Container; Container.Entity.Field for a field.
+ */
+export interface ImportItem {
+  kind: 'ImportItem';
+  /** Lowercased element type keyword. */
+  elementType: string;
+  /** Dotted source path. */
+  sourcePath: string;
+  /** Optional rename in the current file's namespace. */
+  alias?: string;
+  span: Span;
+}
+
+/**
+ * A clone block embedding the imported declarations directly. For non-field
+ * imports the clone contains TopLevelStatement nodes (the natural shape of
+ * an entity, type, container, etc. clone). Field imports are not supported
+ * in P4 -- when they land, this type may grow to a wider union.
+ *
+ * Per spec §26.6, the clone contains exactly the imported declaration(s),
+ * without surrounding wrappers from the source file. For an entity clone
+ * the content is the EntityDeclaration alone (no container wrapper); for a
+ * container clone the content is the ContainerDeclaration including its
+ * intrinsic entities.
+ */
+export interface CloneBlock {
+  kind: 'CloneBlock';
+  statements: TopLevelStatement[];
   span: Span;
 }
 

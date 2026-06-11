@@ -787,10 +787,12 @@ Container core {
 //
 // Each entry is the filename (basename) mapped to a short reason string
 // describing which v0.2 feature is missing in the parser.
-const pendingV02Examples: Record<string, string> = {
-  '10-modules-consumer.xdbml':
-    'requires v0.2 module system clone blocks (spec §26.6). Scalar Named Types (§14.7) and entity-level checks (§10) are supported as of parser batches P1 and P2.',
-};
+//
+// As of parser batch P4 (module system with clone blocks), both bundled
+// v0.2 examples now parse and lay out. The map is intentionally left in
+// place for future v0.2.x or v0.3 work; populate it again when new
+// examples that exercise unimplemented features land.
+const pendingV02Examples: Record<string, string> = {};
 
 // Add one test per bundled example.
 for (const file of readdirSync(examplesDir).filter((f) => f.endsWith('.xdbml')).sort()) {

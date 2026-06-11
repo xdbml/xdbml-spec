@@ -15,7 +15,7 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
-import { parse } from '../src/index.ts';
+import { parse, flatten } from '../src/index.ts';
 import type { XDbmlDocument } from '../src/index.ts';
 import {
   CONTAINER_KEYWORDS,
@@ -731,6 +731,202 @@ records users {
 }`,
       assert: (_doc) => 'parse should have failed (missing column list)',
       expectError: true,
+    },
+    {
+      name: 'v0.2 module-system -- single entity import with clone block',
+      source: `xdbml: 0.2
+reuse { entity core.dim_customer } from './lib' {
+  Entity dim_customer {
+    id int [pk]
+    email varchar
+  }
+}`,
+      assert: (doc) => {
+        const dir = doc.statements[0];
+        if (dir.kind !== 'ModuleImportDirective') return `expected ModuleImportDirective, got ${dir.kind}`;
+        if (dir.mode !== 'reuse') return `expected reuse, got ${dir.mode}`;
+        if (dir.from !== './lib') return `wrong from path: ${dir.from}`;
+        if (dir.spec.kind !== 'ImportList') return `expected ImportList, got ${dir.spec.kind}`;
+        if (dir.spec.items.length !== 1) return `expected 1 item, got ${dir.spec.items.length}`;
+        const item = dir.spec.items[0];
+        if (item.elementType !== 'entity') return `expected entity, got ${item.elementType}`;
+        if (item.sourcePath !== 'core.dim_customer') return `wrong path: ${item.sourcePath}`;
+        if (!dir.clone) return 'expected clone block';
+        if (dir.clone.statements.length !== 1) return `expected 1 clone statement, got ${dir.clone.statements.length}`;
+        if (dir.clone.statements[0].kind !== 'EntityDeclaration') return `expected EntityDeclaration in clone, got ${dir.clone.statements[0].kind}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 module-system -- import-all with clone block',
+      source: `xdbml: 0.2
+reuse * from './lib' {
+  Entity foo {
+    id int [pk]
+  }
+  Entity bar {
+    id int [pk]
+  }
+}`,
+      assert: (doc) => {
+        const dir = doc.statements[0];
+        if (dir.kind !== 'ModuleImportDirective') return 'expected ModuleImportDirective';
+        if (dir.spec.kind !== 'ImportAll') return `expected ImportAll, got ${dir.spec.kind}`;
+        if (!dir.clone) return 'expected clone';
+        if (dir.clone.statements.length !== 2) return `expected 2 clone statements, got ${dir.clone.statements.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 module-system -- use (non-transitive) vs reuse',
+      source: `xdbml: 0.2
+use { type T1 } from './lib1' {
+  Type T1 varchar
+}
+reuse { type T2 } from './lib2' {
+  Type T2 varchar
+}`,
+      assert: (doc) => {
+        if (doc.statements.length !== 2) return `expected 2 directives, got ${doc.statements.length}`;
+        const d1 = doc.statements[0];
+        const d2 = doc.statements[1];
+        if (d1.kind !== 'ModuleImportDirective' || d1.mode !== 'use') return `first should be use, got ${(d1 as { mode?: string }).mode}`;
+        if (d2.kind !== 'ModuleImportDirective' || d2.mode !== 'reuse') return `second should be reuse, got ${(d2 as { mode?: string }).mode}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 module-system -- cloned_at metadata setting',
+      source: `xdbml: 0.2
+reuse { entity X } from './lib' [cloned_at: '2026-06-10T08:00:00Z'] {
+  Entity X {
+    id int [pk]
+  }
+}`,
+      assert: (doc) => {
+        const dir = doc.statements[0];
+        if (dir.kind !== 'ModuleImportDirective') return 'expected ModuleImportDirective';
+        if (dir.settings.length !== 1) return `expected 1 setting, got ${dir.settings.length}`;
+        const s = dir.settings[0];
+        if (s.name !== 'cloned_at') return `expected cloned_at, got ${s.name}`;
+        if (!s.value || s.value.kind !== 'StringValue') return 'expected StringValue';
+        if (s.value.value !== '2026-06-10T08:00:00Z') return `wrong timestamp: ${s.value.value}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 module-system -- multi-item selective import',
+      source: `xdbml: 0.2
+reuse { entity X, entity Y, type T } from './lib' {
+  Entity X { id int [pk] }
+  Entity Y { id int [pk] }
+  Type T varchar
+}`,
+      assert: (doc) => {
+        const dir = doc.statements[0];
+        if (dir.kind !== 'ModuleImportDirective') return 'expected ModuleImportDirective';
+        if (dir.spec.kind !== 'ImportList') return 'expected ImportList';
+        if (dir.spec.items.length !== 3) return `expected 3 items, got ${dir.spec.items.length}`;
+        const kinds = dir.spec.items.map((i) => i.elementType);
+        if (kinds[0] !== 'entity' || kinds[1] !== 'entity' || kinds[2] !== 'type') return `wrong element types: ${kinds.join(', ')}`;
+        if (!dir.clone) return 'expected clone';
+        if (dir.clone.statements.length !== 3) return `expected 3 clone statements, got ${dir.clone.statements.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 module-system -- import with as alias',
+      source: `xdbml: 0.2
+reuse { type Email as PII_Email } from './lib' {
+  Type PII_Email varchar [pattern: '.*@.*']
+}`,
+      assert: (doc) => {
+        const dir = doc.statements[0];
+        if (dir.kind !== 'ModuleImportDirective') return 'expected ModuleImportDirective';
+        if (dir.spec.kind !== 'ImportList') return 'expected ImportList';
+        const item = dir.spec.items[0];
+        if (item.elementType !== 'type') return `wrong elementType: ${item.elementType}`;
+        if (item.sourcePath !== 'Email') return `wrong sourcePath: ${item.sourcePath}`;
+        if (item.alias !== 'PII_Email') return `wrong alias: ${item.alias}`;
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 module-system -- directive inside Container body',
+      source: `xdbml: 0.2
+Container sales [type: schema] {
+  Entity fact_sales {
+    id int [pk]
+  }
+  reuse { entity core.dim_customer } from './lib' {
+    Entity dim_customer {
+      id int [pk]
+    }
+  }
+}`,
+      assert: (doc) => {
+        const c = doc.statements[0];
+        if (c.kind !== 'ContainerDeclaration') return 'expected Container';
+        if (c.body.length !== 2) return `expected 2 body items, got ${c.body.length}`;
+        const dir = c.body[1];
+        if (dir.kind !== 'ModuleImportDirective') return `expected ModuleImportDirective in body[1], got ${dir.kind}`;
+        if (!dir.clone) return 'expected clone';
+        if (dir.clone.statements.length !== 1) return 'expected 1 clone statement';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 module-system -- INVALID: reference-only directive (no clone) rejected in P4',
+      source: `xdbml: 0.2
+reuse { entity X } from './lib'`,
+      assert: (_doc) => 'parse should have failed (reference-only directive)',
+      expectError: true,
+    },
+    {
+      name: 'v0.2 module-system -- INVALID: field imports rejected in P4',
+      source: `xdbml: 0.2
+reuse { field core.dim_customer.email } from './lib'`,
+      assert: (_doc) => 'parse should have failed (field imports not yet supported)',
+      expectError: true,
+    },
+    {
+      name: 'v0.2 module-system -- INVALID: unknown element type rejected',
+      source: `xdbml: 0.2
+reuse { project foo } from './lib' {}`,
+      assert: (_doc) => 'parse should have failed (project not importable)',
+      expectError: true,
+    },
+    {
+      name: 'v0.2 module-system -- flatten() helper removes module directives',
+      source: `xdbml: 0.2
+Container sales [type: schema] {
+  Entity local_fact {
+    id int [pk]
+  }
+  reuse { entity X } from './lib' {
+    Entity dim_X {
+      id int [pk]
+    }
+  }
+}
+reuse * from './lib2' {
+  Type TopLevelType varchar
+  Enum Status { active inactive }
+}`,
+      assert: (doc) => {
+        // Apply the flatten helper and check the result.
+        const flat = flatten(doc);
+        // Top-level: Container, Type, Enum (no more ModuleImportDirective at top level).
+        if (flat.statements.length !== 3) return `flat top-level: expected 3, got ${flat.statements.length}`;
+        const kinds = flat.statements.map((s) => s.kind).join(',');
+        if (kinds !== 'ContainerDeclaration,TypeDeclaration,EnumDeclaration') return `wrong flat kinds: ${kinds}`;
+        const c = flat.statements[0];
+        if (c.kind !== 'ContainerDeclaration') return 'first should be Container';
+        // Container body: local_fact and dim_X (no more ModuleImportDirective inside Container).
+        if (c.body.length !== 2) return `flat container body: expected 2, got ${c.body.length}`;
+        if (c.body[0].kind !== 'EntityDeclaration' || c.body[1].kind !== 'EntityDeclaration') return 'expected both to be entities';
+        return null;
+      },
     },
     {
       name: 'Nested object type inside an entity',

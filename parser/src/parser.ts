@@ -17,6 +17,7 @@ import type {
   CardinalityOperator,
   CheckEntry,
   ChecksBlock,
+  CloneBlock,
   ContainerBodyItem,
   ContainerDeclaration,
   ContainerKeyword,
@@ -30,6 +31,8 @@ import type {
   ExpressionValue,
   FieldDeclaration,
   IdentifierValue,
+  ImportItem,
+  ImportSpec,
   IndexComponent,
   IndexEntry,
   IndexesBlock,
@@ -38,6 +41,7 @@ import type {
   JsonType,
   ListValue,
   MapType,
+  ModuleImportDirective,
   NamedTypeReference,
   NoteBlock,
   NoteDeclaration,
@@ -103,6 +107,25 @@ const CONTAINER_KEYWORDS = new Set([
 ]);
 
 const ENTITY_KEYWORDS = new Set(['table', 'entity', 'collection', 'record']);
+
+/**
+ * Element-type keywords accepted in module-system import items
+ * (spec §26.3). Stored lowercased; matching is case-insensitive.
+ *
+ * `field` is recognized but explicitly rejected by parseImportItem in P4
+ * (field-level imports have special declaration-vs-placement semantics
+ * that will land in a later batch).
+ *
+ * `project` is intentionally excluded -- spec §26.1 forbids importing
+ * Project declarations.
+ */
+const IMPORT_ELEMENT_TYPES = new Set([
+  'table', 'entity', 'collection', 'record',
+  'enum', 'tablepartial', 'note',
+  'schema', 'container', 'tablegroup',
+  'type', 'edge', 'view', 'diagramview',
+  'field',
+]);
 
 const STRUCTURAL_TYPE_KEYWORDS = new Set([
   'object', 'struct', 'record', 'array', 'list', 'map', 'dict', 'dictionary',
@@ -271,6 +294,7 @@ export class Parser {
     if (k === 'tablegroup') return this.parseTableGroup();
     if (k === 'note') return this.parseNoteDeclaration();
     if (k === 'records') return this.parseTopLevelRecords();
+    if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
     throw new ParseError(`Unknown top-level construct: ${t.text}`, t.start);
   }
 
@@ -412,6 +436,8 @@ export class Parser {
         body.push(this.parseView());
       } else if (k === 'enum') {
         body.push(this.parseEnum());
+      } else if (k === 'use' || k === 'reuse') {
+        body.push(this.parseModuleDirective('container-body'));
       } else {
         // Unknown line; tolerate as no-op rather than fail the whole parse.
         throw new ParseError(
@@ -626,7 +652,223 @@ export class Parser {
     };
   }
 
-  /* ----- Field declarations ----- */
+  /* ----- Module-system directives (spec §26, new in v0.2) ----- */
+
+  /**
+   * Parse a `use` or `reuse` directive. Called from both the top-level
+   * dispatcher and the Container body dispatcher; the caller indicates
+   * which context via the `context` argument. The context affects which
+   * placements are legal (e.g., field imports must be at file scope) but
+   * does NOT affect the directive's syntactic shape.
+   *
+   * Grammar:
+   *
+   *     ('use' | 'reuse') importSpec 'from' StringLiteral metadataSettings? cloneBlock?
+   *
+   *     importSpec ::= '*'  |  '{' importItem (',' importItem)* '}'
+   *     importItem ::= elementType path ('as' Identifier)?
+   *     elementType ::= 'table' | 'entity' | 'collection' | 'record' |
+   *                     'enum' | 'tablepartial' | 'note' | 'schema' |
+   *                     'container' | 'tablegroup' | 'type' | 'edge' |
+   *                     'view' | 'diagramview' | 'field'
+   *     metadataSettings ::= '[' setting (',' setting)* ']'
+   *     cloneBlock ::= '{' topLevelStatement* '}'
+   */
+  private parseModuleDirective (context: 'file-scope' | 'container-body'): ModuleImportDirective {
+    const start = this.peek().start;
+    const modeTok = this.advance(); // 'use' or 'reuse'
+    const mode: 'use' | 'reuse' = (modeTok.text.toLowerCase() as 'use' | 'reuse');
+
+    // Import spec: '*' or '{ ... }'
+    let spec: ImportSpec;
+    if (this.check(TokenKind.Star)) {
+      this.advance();
+      spec = { kind: 'ImportAll' };
+    } else if (this.check(TokenKind.LBrace)) {
+      this.advance();
+      const items: ImportItem[] = [];
+      // Skip leading whitespace/newlines (already handled by lexer).
+      while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+        items.push(this.parseImportItem(context));
+        if (this.match(TokenKind.Comma)) {
+          // Tolerate trailing comma before the closing brace.
+          continue;
+        } else {
+          break;
+        }
+      }
+      this.expect(TokenKind.RBrace, "Expected '}' closing import item list");
+      if (items.length === 0) {
+        throw new ParseError(
+          `Expected at least one import item between '{' and '}'`,
+          start,
+        );
+      }
+      spec = { kind: 'ImportList', items };
+    } else {
+      const t = this.peek();
+      throw new ParseError(
+        `Expected '*' or '{' after '${mode}', got ${t.kind} ${JSON.stringify(t.text)}`,
+        t.start,
+      );
+    }
+
+    // 'from' keyword
+    if (!isKw(this.peek(), 'from')) {
+      const t = this.peek();
+      throw new ParseError(
+        `Expected 'from' after import spec, got ${t.kind} ${JSON.stringify(t.text)}`,
+        t.start,
+      );
+    }
+    this.advance(); // from
+
+    // The path: a single string literal.
+    const pathTok = this.peek();
+    if (pathTok.kind !== TokenKind.StringLiteral) {
+      throw new ParseError(
+        `Expected string literal path after 'from', got ${pathTok.kind} ${JSON.stringify(pathTok.text)}`,
+        pathTok.start,
+      );
+    }
+    this.advance();
+    const from = pathTok.value ?? '';
+
+    // Optional metadata settings: '[cloned_at: ...]'
+    const settings = this.maybeSettingsBlock();
+
+    // Optional clone block: '{ ...top-level statements... }'
+    let clone: CloneBlock | undefined;
+    if (this.check(TokenKind.LBrace)) {
+      clone = this.parseCloneBlock();
+    }
+
+    // P4 policy: reference-only directives are not yet supported. Reject with
+    // a clear message pointing the user toward the clone-block escape hatch.
+    if (!clone) {
+      throw new ParseError(
+        `Reference-only '${mode}' directive (no clone block) is not yet supported in this parser. ` +
+        `Add a clone block to the directive to make the file self-contained, ` +
+        `or wait for parser batch P5 which adds file resolution.`,
+        start,
+      );
+    }
+
+    return {
+      kind: 'ModuleImportDirective',
+      mode,
+      spec,
+      from,
+      settings,
+      clone,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Parse one import item: an element-type keyword, a dotted source path,
+   * and an optional `as <alias>`.
+   *
+   *     entity core.dim_customer
+   *     type Email
+   *     type Email as PII_Email
+   *     field core.dim_customer.email          (rejected in P4)
+   */
+  private parseImportItem (context: 'file-scope' | 'container-body'): ImportItem {
+    const start = this.peek().start;
+
+    // Element type keyword.
+    const elemTok = this.peek();
+    if (elemTok.kind !== TokenKind.Identifier) {
+      throw new ParseError(
+        `Expected import element type keyword, got ${elemTok.kind} ${JSON.stringify(elemTok.text)}`,
+        elemTok.start,
+      );
+    }
+    const elementType = elemTok.text.toLowerCase();
+    if (!IMPORT_ELEMENT_TYPES.has(elementType)) {
+      throw new ParseError(
+        `Unknown import element type '${elemTok.text}'. ` +
+        `Expected one of: ${Array.from(IMPORT_ELEMENT_TYPES).join(', ')}.`,
+        elemTok.start,
+      );
+    }
+    if (elementType === 'field') {
+      throw new ParseError(
+        `Field-level imports (spec §26.8) are not yet supported in this parser. ` +
+        `They will land in a future batch. For now, import the containing entity ` +
+        `or extract the field into a scalar Named Type (§14.7).`,
+        elemTok.start,
+      );
+    }
+    if (elementType === 'field' && context !== 'file-scope') {
+      // Spec §26.8: field imports must appear at file scope.
+      // (Defensive: also rejected by the global field-disabled check above.)
+      throw new ParseError(
+        `Field-level imports must appear at file scope, not inside a Container body.`,
+        elemTok.start,
+      );
+    }
+    this.advance(); // consume element type keyword
+
+    // Dotted source path.
+    const pathHead = this.expect(
+      TokenKind.Identifier,
+      `Expected source path after '${elementType}'`,
+    );
+    let sourcePath = pathHead.text;
+    while (this.check(TokenKind.Dot)) {
+      this.advance();
+      const next = this.expect(
+        TokenKind.Identifier,
+        `Expected identifier after '.' in source path`,
+      );
+      sourcePath += `.${next.text}`;
+    }
+
+    // Optional 'as <alias>'
+    let alias: string | undefined;
+    if (isKw(this.peek(), 'as')) {
+      this.advance(); // as
+      const aliasTok = this.expect(
+        TokenKind.Identifier,
+        `Expected identifier after 'as'`,
+      );
+      alias = aliasTok.text;
+    }
+
+    return {
+      kind: 'ImportItem',
+      elementType,
+      sourcePath,
+      alias,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Parse a clone block. The block contains zero or more top-level
+   * statements that match the import items by name and element type
+   * (matching is downstream-consumer's job; parser is permissive).
+   *
+   * Per spec §26.6, clone content uses the importing file's vocabulary
+   * (aliases applied) and is parsed under the importing file's xdbml
+   * version directive.
+   */
+  private parseCloneBlock (): CloneBlock {
+    const start = this.peek().start;
+    this.expect(TokenKind.LBrace, "Expected '{' starting clone block");
+    const statements: TopLevelStatement[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      statements.push(this.parseTopLevelStatement());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing clone block");
+    return {
+      kind: 'CloneBlock',
+      statements,
+      span: this.spanFrom(start),
+    };
+  }
 
   /**
    * `field_name typeExpression [settings]` or `"quoted name" typeExpression [settings]`.

@@ -45,6 +45,13 @@ import type {
   ViewDeclaration,
   XDbmlDocument,
 } from '@xdbml/parse';
+// NOTE: type imports above resolve via Vite's `@xdbml/parse` alias in
+// production builds and are erased by node's `--experimental-strip-types`
+// in tests, so the alias doesn't have to resolve at Node runtime. The
+// value import below cannot be erased, so we use the relative path
+// directly. The two routes (alias for Vite, relative for Node) are
+// equivalent and resolve to the same file.
+import { flatten } from '../../../../parser/src/index.ts';
 
 /* -------------------------------------------------------------------------
  * Output shape
@@ -273,6 +280,16 @@ export function buildDiagram (
   collapsedPaths: ReadonlySet<CollapsedKey> = new Set(),
 ): DiagramModel {
   if (!doc) return emptyDiagram();
+
+  // Flatten the AST so module-system directives are replaced by their
+  // clone-block content. The original AST preserves provenance (which
+  // file each declaration came from), but the diagram renderer just
+  // wants a flat view of all renderable entities. Per parser-design v2
+  // Q-B, downstream consumers that don't care about provenance call
+  // `flatten()` at their entry. The original `doc` is unchanged; we
+  // shadow the local binding with the flattened view for the rest of
+  // this function.
+  doc = flatten(doc);
 
   // Collect entities and views, grouped by container. Both produce
   // EntityLayout rows in the diagram; views are flagged so the
