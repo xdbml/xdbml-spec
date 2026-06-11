@@ -292,6 +292,25 @@ export interface JsonType {
 export interface TypeDeclaration {
   kind: 'TypeDeclaration';
   name: string;
+  /**
+   * v0.2 scalar form (spec §14.7): when present, this Type is an alias
+   * for the given type expression rather than an object-shaped record.
+   * Examples:
+   *
+   *     Type Email varchar [pattern: '...', tags: ['pii']]
+   *     Type Percentage decimal(5,2) [minimum: 0, maximum: 100]
+   *
+   * When `scalarBase` is set, `body` is empty and `settings` carries the
+   * full field-level validation surface (pattern, length bounds, range
+   * bounds, AI-readiness tags, notes, x_* custom properties).
+   *
+   * When `scalarBase` is undefined, the Type uses the v0.1 object form
+   * (`Type Name { ...fields }`) and `body` carries the field declarations.
+   *
+   * Both forms can be used in the same file. Consumers that care about
+   * which form was used look at this field.
+   */
+  scalarBase?: TypeExpression;
   settings: Setting[];
   body: (FieldDeclaration | NoteBlock | PartialInjection)[];
   span: Span;

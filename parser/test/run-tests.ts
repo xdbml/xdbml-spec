@@ -212,6 +212,144 @@ Entity customers {
         if (t.kind !== 'TypeDeclaration') return `expected Type, got ${t.kind}`;
         if (t.name !== 'Address') return 'wrong name';
         if (t.body.length !== 2) return 'expected 2 fields';
+        if (t.scalarBase !== undefined) return 'object form should have undefined scalarBase';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 scalar Named Type with validation settings',
+      source: `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii'], note: 'Standard enterprise email']`,
+      assert: (doc) => {
+        const t = doc.statements[0];
+        if (t.kind !== 'TypeDeclaration') return `expected Type, got ${t.kind}`;
+        if (t.name !== 'Email') return 'wrong name';
+        if (!t.scalarBase) return 'expected scalarBase to be set';
+        if (t.scalarBase.kind !== 'ScalarType') return `expected ScalarType, got ${t.scalarBase.kind}`;
+        if (t.scalarBase.name !== 'varchar') return `expected varchar, got ${t.scalarBase.name}`;
+        if (t.body.length !== 0) return 'scalar form should have empty body';
+        if (t.settings.length !== 3) return `expected 3 settings, got ${t.settings.length}`;
+        const setNames = t.settings.map((s) => s.name);
+        if (!setNames.includes('pattern')) return 'expected pattern setting';
+        if (!setNames.includes('tags')) return 'expected tags setting';
+        if (!setNames.includes('note')) return 'expected note setting';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 scalar Named Type with parameterized base (decimal)',
+      source: `xdbml: 0.2
+Type Percentage decimal(5, 2) [minimum: 0, maximum: 100]`,
+      assert: (doc) => {
+        const t = doc.statements[0];
+        if (t.kind !== 'TypeDeclaration') return `expected Type, got ${t.kind}`;
+        if (t.name !== 'Percentage') return 'wrong name';
+        if (!t.scalarBase) return 'expected scalarBase';
+        if (t.scalarBase.kind !== 'ScalarType') return `expected ScalarType, got ${t.scalarBase.kind}`;
+        if (t.scalarBase.name !== 'decimal') return `expected decimal, got ${t.scalarBase.name}`;
+        if (!t.scalarBase.params || t.scalarBase.params.length !== 2) {
+          return `expected 2 params, got ${t.scalarBase.params?.length}`;
+        }
+        if (t.scalarBase.params[0] !== '5' || t.scalarBase.params[1] !== '2') {
+          return `expected (5, 2), got (${t.scalarBase.params.join(', ')})`;
+        }
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 scalar Named Type referencing another Type (PII_Email Email)',
+      source: `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$']
+Type PII_Email Email [tags: ['pii', 'gdpr-subject']]`,
+      assert: (doc) => {
+        if (doc.statements.length !== 2) return `expected 2 statements, got ${doc.statements.length}`;
+        const t1 = doc.statements[0];
+        const t2 = doc.statements[1];
+        if (t1.kind !== 'TypeDeclaration' || t2.kind !== 'TypeDeclaration') return 'expected 2 Types';
+        if (t2.name !== 'PII_Email') return 'wrong second name';
+        if (!t2.scalarBase) return 'expected scalarBase on PII_Email';
+        // The base `Email` is a reference to a Named Type, which parses as a NamedTypeReference
+        // or as a ScalarType depending on parseTypeExpression's behavior. Either is acceptable
+        // as long as the name resolves to 'Email'. We check both possibilities.
+        const base = t2.scalarBase;
+        if (base.kind === 'ScalarType') {
+          if (base.name !== 'Email') return `expected base Email, got ${base.name}`;
+        } else if (base.kind === 'NamedTypeReference') {
+          if (base.name !== 'Email') return `expected base Email, got ${base.name}`;
+        } else {
+          return `expected ScalarType or NamedTypeReference base, got ${base.kind}`;
+        }
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 scalar Named Type used as a field type in an entity',
+      source: `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+
+Entity users {
+  id int [pk]
+  email Email
+}
+Entity admins {
+  id int [pk]
+  email Email
+}`,
+      assert: (doc) => {
+        if (doc.statements.length !== 3) return `expected 3 statements, got ${doc.statements.length}`;
+        const users = doc.statements[1];
+        if (users.kind !== 'EntityDeclaration' || users.name !== 'users') return 'expected users entity';
+        const emailField = users.body.find((b) => b.kind === 'FieldDeclaration' && b.name === 'email');
+        if (!emailField || emailField.kind !== 'FieldDeclaration') return 'expected email field on users';
+        // Email as a field type is either ScalarType or NamedTypeReference (parseTypeExpression's call)
+        const baseKind = emailField.type.kind;
+        if (baseKind !== 'ScalarType' && baseKind !== 'NamedTypeReference') {
+          return `expected ScalarType or NamedTypeReference, got ${baseKind}`;
+        }
+        if ((emailField.type as { name: string }).name !== 'Email') return 'expected Email type';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 object and scalar Named Type forms coexist in one file',
+      source: `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$']
+Type Address {
+  street varchar [not null]
+  city varchar [not null]
+  zip varchar
+}
+Type CountryCode varchar [minLength: 2, maxLength: 2]
+
+Entity customers {
+  id int [pk]
+  email Email
+  country CountryCode
+  primary_address Address
+}`,
+      assert: (doc) => {
+        if (doc.statements.length !== 4) return `expected 4 statements, got ${doc.statements.length}`;
+        const [emailT, addressT, ccT, customers] = doc.statements;
+        if (emailT.kind !== 'TypeDeclaration' || !emailT.scalarBase) return 'Email should be scalar';
+        if (addressT.kind !== 'TypeDeclaration' || addressT.scalarBase !== undefined) return 'Address should be object form';
+        if (addressT.body.length !== 3) return `Address should have 3 fields, got ${addressT.body.length}`;
+        if (ccT.kind !== 'TypeDeclaration' || !ccT.scalarBase) return 'CountryCode should be scalar';
+        if (customers.kind !== 'EntityDeclaration') return 'expected customers entity';
+        return null;
+      },
+    },
+    {
+      name: 'v0.2 scalar Named Type with no settings (just the base)',
+      source: `xdbml: 0.2
+Type CustomerId int`,
+      assert: (doc) => {
+        const t = doc.statements[0];
+        if (t.kind !== 'TypeDeclaration') return `expected Type, got ${t.kind}`;
+        if (t.name !== 'CustomerId') return 'wrong name';
+        if (!t.scalarBase) return 'expected scalarBase';
+        if (t.scalarBase.kind !== 'ScalarType' || t.scalarBase.name !== 'int') return 'expected int base';
+        if (t.settings.length !== 0) return `expected 0 settings, got ${t.settings.length}`;
+        if (t.body.length !== 0) return 'body should be empty';
         return null;
       },
     },

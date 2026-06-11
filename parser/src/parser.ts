@@ -913,7 +913,58 @@ export class Parser {
     const start = this.peek().start;
     this.advance(); // Type
     const name = this.parseIdentLikeName('type name');
+
+    // After `Type <Name>`, the next token disambiguates the form:
+    //
+    //   { ... }                           v0.1 object form, no pre-body settings
+    //   [ settings ] { ... }              v0.1 object form, pre-body settings (permissive)
+    //   typeExpression                    v0.2 scalar form (spec §14.7)
+    //   typeExpression [ settings ]       v0.2 scalar form with field-level settings
+    //
+    // Note that LBrace and LBracket are distinct from any start-of-type-expression
+    // token (Identifier, scalar/bson type keywords, structural type keywords like
+    // `object`, `array`, `oneOf`, etc.), so the dispatch is unambiguous from
+    // peek(0) alone.
+
+    if (this.check(TokenKind.LBrace)) {
+      // v0.1 object form, no pre-body settings.
+      return this.finishObjectTypeDecl(start, name, /* settings */ []);
+    }
+
+    if (this.check(TokenKind.LBracket)) {
+      // v0.1 object form with pre-body settings (permissive shape; not used in
+      // any current example or spec text but historically accepted).
+      const settings = this.maybeSettingsBlock();
+      return this.finishObjectTypeDecl(start, name, settings);
+    }
+
+    // Anything else is the v0.2 scalar form. parseTypeExpression handles
+    // scalars, BSON types, named-type references, and the parameterized
+    // forms like `decimal(10, 2)`. It also handles structural type
+    // expressions like `array(int)` -- the spec calls this "scalar" because
+    // that's the typical use case, but the syntactic form supports any
+    // type expression as the base.
+    const scalarBase = this.parseTypeExpression();
     const settings = this.maybeSettingsBlock();
+    return {
+      kind: 'TypeDeclaration',
+      name,
+      scalarBase,
+      settings,
+      body: [],
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Finish parsing a v0.1 object-form Type after the name (and optional
+   * pre-body settings) have been consumed. Handles the `{ ...body }` part.
+   */
+  private finishObjectTypeDecl (
+    start: Position,
+    name: string,
+    settings: Setting[],
+  ): TypeDeclaration {
     this.expect(TokenKind.LBrace, "Expected '{' after Type name");
     const body: TypeDeclaration['body'] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
