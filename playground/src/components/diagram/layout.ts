@@ -68,6 +68,15 @@ export interface ContainerLayout {
   target: string;
   /** Color used for the container header band, derived from target. */
   accentColor: string;
+  /**
+   * Ink color (text/icon) for the container header, chosen for contrast
+   * against accentColor. The standard `white` works for all
+   * TARGET_COLORS entries (they're all mid-saturation), but a
+   * user-supplied `[color: '#...']` override might be light enough that
+   * white is unreadable. Computed via YIQ luminance with the same
+   * threshold (160) used for entity headers.
+   */
+  headerInk: 'white' | '#0f172a';
   bounds: Rect;
 }
 
@@ -260,6 +269,33 @@ function colorForTarget (target: string): string {
 }
 
 /**
+ * Pick a readable ink color (white or near-black) for text on a colored
+ * background. Uses the YIQ luminance approximation -- faster than full
+ * WCAG ratios and good enough for two-way choices. The threshold of 160
+ * leans slightly toward preferring white text, matching the equivalent
+ * helper in EntityCard.vue and dbdiagram.io's behavior.
+ *
+ * Returns `'white'` for dark backgrounds, `'#0f172a'` (slate-900) for
+ * light ones. Invalid color strings fall back to white.
+ *
+ * Exported so EntityCard.vue can use the same logic for entity header
+ * text (single source of truth for color-contrast policy).
+ */
+export function readableInk (bg: string): 'white' | '#0f172a' {
+  const hex = bg.startsWith('#') ? bg.slice(1) : bg;
+  const full = hex.length === 3
+    ? hex.split('').map((c) => c + c).join('')
+    : hex;
+  if (full.length !== 6) return 'white';
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return 'white';
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq < 160 ? 'white' : '#0f172a';
+}
+
+/**
  * Identifier for a collapsed row: `${entityId}::${path}`.
  *
  * The path-within-entity is namespaced under the entity id so two
@@ -394,7 +430,16 @@ export function buildDiagram (
   for (const container of containers) {
     const containerEntities = entitiesByContainer.get(container.name) ?? [];
     const target = settingValueAsString(container.settings, 'target') ?? '';
-    const accentColor = colorForTarget(target);
+    // Container header color priority:
+    //   1. Explicit `[color: '#...']` setting on the container (lets users
+    //      override the auto-derived target color, useful when the target
+    //      is unrecognized by TARGET_COLORS or when a project convention
+    //      wants a specific tint regardless of engine).
+    //   2. Color derived from the `target:` setting via TARGET_COLORS.
+    //   3. Neutral slate when neither applies.
+    // This mirrors the entity headerColor / TableGroup color pattern.
+    const ownColor = settingValueAsString(container.settings, 'color');
+    const accentColor = ownColor ?? colorForTarget(target);
 
     const innerLeft = cursorX + CONTAINER_PADDING;
     const innerTop = CANVAS_MARGIN + CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING;
@@ -432,6 +477,7 @@ export function buildDiagram (
       keyword: container.keyword,
       target,
       accentColor,
+      headerInk: readableInk(accentColor),
       bounds: {
         x: cursorX,
         y: CANVAS_MARGIN,

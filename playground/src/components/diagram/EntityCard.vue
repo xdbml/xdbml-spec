@@ -272,6 +272,7 @@
 import { computed } from 'vue';
 
 import type { EntityLayout, FieldLayout } from './layout';
+import { readableInk } from './layout';
 import type { Selection } from '@/components/inspector/selection';
 
 const props = defineProps<{
@@ -333,26 +334,11 @@ const headerFill = ((): string => {
   }
 })();
 
-// Header text color, picked for contrast against headerFill. Both defaults
-// (slate, deep blue) are dark, so white-on-dark works without a check.
-// When a user-defined headerColor is light (e.g., '#FFEB3B' yellow), white
-// text becomes invisible -- so we compute luminance and pick black instead.
-// Uses the YIQ approximation, which is faster and good enough for picking
-// between two ink colors. The threshold of 160 leans slightly toward
-// preferring white text (matches dbdiagram.io's behavior).
-function readableInk (bg: string): 'white' | '#0f172a' {
-  const hex = bg.startsWith('#') ? bg.slice(1) : bg;
-  const full = hex.length === 3
-    ? hex.split('').map((c) => c + c).join('')
-    : hex;
-  if (full.length !== 6) return 'white';
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  if (isNaN(r) || isNaN(g) || isNaN(b)) return 'white';
-  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
-  return yiq < 160 ? 'white' : '#0f172a';
-}
+// Header text color, picked for contrast against headerFill. Uses the
+// shared `readableInk` helper from layout.ts so containers and entity
+// headers apply the same contrast policy. Default headers (slate, deep
+// blue) are dark, so white wins; user-defined light headerColor values
+// (e.g., '#FFEB3B' yellow) automatically switch to dark ink.
 const headerInk = readableInk(headerFill);
 
 // X coordinate for the entity-name text in the header. Views render

@@ -82,7 +82,7 @@
           <text
             :x="container.bounds.x + 12"
             :y="container.bounds.y + 21"
-            fill="white"
+            :fill="container.headerInk"
             font-size="13"
             font-weight="600"
             style="pointer-events: none; user-select: none;"
@@ -91,7 +91,7 @@
             v-if="container.target"
             :x="container.bounds.x + container.bounds.width - 12"
             :y="container.bounds.y + 21"
-            fill="white"
+            :fill="container.headerInk"
             font-size="11"
             text-anchor="end"
             opacity="0.85"
