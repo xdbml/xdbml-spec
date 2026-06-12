@@ -45,13 +45,6 @@ import type {
   ViewDeclaration,
   XDbmlDocument,
 } from '@xdbml/parse';
-// NOTE: type imports above resolve via Vite's `@xdbml/parse` alias in
-// production builds and are erased by node's `--experimental-strip-types`
-// in tests, so the alias doesn't have to resolve at Node runtime. The
-// value import below cannot be erased, so we use the relative path
-// directly. The two routes (alias for Vite, relative for Node) are
-// equivalent and resolve to the same file.
-import { flatten } from '../../../../parser/src/index.ts';
 
 /* -------------------------------------------------------------------------
  * Output shape
@@ -92,6 +85,15 @@ export interface EntityLayout {
    * derived/non-authoritative.
    */
   isView: boolean;
+  /**
+   * Color for the entity's header band, as a CSS color string (typically
+   * a hex value like `#3498db`). Resolved in `buildDiagram` by checking,
+   * in priority order: (1) the entity's own `headercolor` setting,
+   * (2) a `color` setting on a `TableGroup` whose `members` includes this
+   * entity. If neither applies, the field is undefined and the renderer
+   * falls back to its default keyword-based coloring.
+   */
+  headerColor?: string;
   fields: FieldLayout[];
   bounds: Rect;
 }
@@ -281,16 +283,6 @@ export function buildDiagram (
 ): DiagramModel {
   if (!doc) return emptyDiagram();
 
-  // Flatten the AST so module-system directives are replaced by their
-  // clone-block content. The original AST preserves provenance (which
-  // file each declaration came from), but the diagram renderer just
-  // wants a flat view of all renderable entities. Per parser-design v2
-  // Q-B, downstream consumers that don't care about provenance call
-  // `flatten()` at their entry. The original `doc` is unchanged; we
-  // shadow the local binding with the flattened view for the rest of
-  // this function.
-  doc = flatten(doc);
-
   // Collect entities and views, grouped by container. Both produce
   // EntityLayout rows in the diagram; views are flagged so the
   // renderer can apply the dashed border + eye icon distinction. The
@@ -338,6 +330,61 @@ export function buildDiagram (
     }
   }
 
+  // Build a map from entity-id -> color from TableGroup membership.
+  //
+  // DBML/xDBML TableGroups support a `color:` setting (xDBML v0.2 §16.2)
+  // that visually groups a set of entities, typically by tinting their
+  // header bars. The convention matches dbdiagram.io: a TableGroup's
+  // members inherit the group's color on their entity headers, and an
+  // individual `[headercolor: '#...']` setting on an entity overrides
+  // the group color.
+  //
+  // The map is keyed by the entity's resolved ID (`container.entity` or
+  // `entity`). TableGroup `members` are listed by name in the source, and
+  // may use bare or qualified form: a member `dim_customer` matches both
+  // an unqualified `dim_customer` and a `sales.dim_customer` (when there
+  // is exactly one entity with that bare name). When two entities share
+  // a bare name across containers, the bare reference is ambiguous and
+  // we skip the assignment for correctness -- the user must qualify.
+  const tableGroupColors = new Map<string, string>();
+  {
+    // First, build a map from bare-name -> qualified IDs to resolve
+    // bare member references unambiguously.
+    const idsByBareName = new Map<string, string[]>();
+    for (const [containerName, entities] of entitiesByContainer) {
+      for (const e of entities) {
+        const id = containerName ? `${containerName}.${e.name}` : e.name;
+        const list = idsByBareName.get(e.name) ?? [];
+        list.push(id);
+        idsByBareName.set(e.name, list);
+      }
+    }
+    for (const stmt of doc.statements) {
+      if (stmt.kind !== 'TableGroupDeclaration') continue;
+      const color = settingValueAsString(stmt.settings, 'color');
+      if (!color) continue;
+      for (const member of stmt.members) {
+        // Member can be `entity` or `container.entity`. Try qualified
+        // form first; if the member contains a dot, it's already qualified.
+        let resolvedId: string | undefined;
+        if (member.includes('.')) {
+          // Qualified reference: take as-is.
+          resolvedId = member;
+        } else {
+          // Bare reference: resolve via the bare-name map. Skip if
+          // ambiguous (multiple entities with this name).
+          const candidates = idsByBareName.get(member);
+          if (candidates && candidates.length === 1) {
+            resolvedId = candidates[0];
+          }
+        }
+        if (resolvedId && !tableGroupColors.has(resolvedId)) {
+          tableGroupColors.set(resolvedId, color);
+        }
+      }
+    }
+  }
+
   // Place each container's entities in a vertical column.
   const entityLayouts: EntityLayout[] = [];
   const containerLayouts: ContainerLayout[] = [];
@@ -354,7 +401,13 @@ export function buildDiagram (
     let entityCursorY = innerTop;
 
     for (const entity of containerEntities) {
-      const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable);
+      const entityId = `${container.name}.${entity.name}`;
+      // Header color priority: entity's own [headercolor: '#...'] >
+      // TableGroup membership color > undefined (renderer uses its
+      // default keyword-based tinting).
+      const ownColor = settingValueAsString(entity.settings, 'headercolor');
+      const headerColor = ownColor ?? tableGroupColors.get(entityId);
+      const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable, headerColor);
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
@@ -396,7 +449,9 @@ export function buildDiagram (
   if (orphans.length > 0) {
     let entityCursorY = CANVAS_MARGIN;
     for (const entity of orphans) {
-      const layout = buildEntityLayout(entity, cursorX, entityCursorY, undefined, collapsedPaths, typeTable);
+      const ownColor = settingValueAsString(entity.settings, 'headercolor');
+      const headerColor = ownColor ?? tableGroupColors.get(entity.name);
+      const layout = buildEntityLayout(entity, cursorX, entityCursorY, undefined, collapsedPaths, typeTable, headerColor);
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
@@ -532,6 +587,13 @@ interface EntityLike {
   keyword: string;
   body: ReadonlyArray<{ kind: string }>;
   isView: boolean;
+  /**
+   * Settings on the underlying EntityDeclaration / ViewDeclaration. The
+   * diagram layout reads a few specific keys (e.g., `headercolor`) but
+   * passes the whole array so callers can inspect any setting. Open
+   * vocabulary -- the parser is permissive about setting names.
+   */
+  settings: ReadonlyArray<Setting>;
 }
 
 function asEntityLike (entity: EntityDeclaration): EntityLike {
@@ -540,6 +602,7 @@ function asEntityLike (entity: EntityDeclaration): EntityLike {
     keyword: entity.keyword,
     body: entity.body,
     isView: false,
+    settings: entity.settings,
   };
 }
 
@@ -549,6 +612,7 @@ function viewAsEntityLike (view: ViewDeclaration): EntityLike {
     keyword: 'View',
     body: view.body,
     isView: true,
+    settings: view.settings,
   };
 }
 
@@ -559,6 +623,7 @@ function buildEntityLayout (
   containerName: string | undefined,
   collapsedPaths: ReadonlySet<CollapsedKey>,
   typeTable: ReadonlyMap<string, TypeDeclaration>,
+  headerColor: string | undefined,
 ): EntityLayout {
   const entityId = containerName ? `${containerName}.${entity.name}` : entity.name;
   const fields: FieldLayout[] = [];
@@ -854,6 +919,7 @@ function buildEntityLayout (
     keyword: entity.keyword,
     containerName,
     isView: entity.isView,
+    headerColor,
     fields,
     bounds: { x, y, width: ENTITY_WIDTH, height },
   };
@@ -1149,7 +1215,7 @@ function locateRefEndpoint (
  * Settings helpers
  * ----------------------------------------------------------------------- */
 
-function settingValueAsString (settings: Setting[], name: string): string | undefined {
+function settingValueAsString (settings: ReadonlyArray<Setting>, name: string): string | undefined {
   const s = settings.find((x) => x.name === name);
   if (!s || !s.value) return undefined;
   switch (s.value.kind) {

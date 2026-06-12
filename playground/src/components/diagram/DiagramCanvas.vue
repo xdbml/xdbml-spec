@@ -999,7 +999,7 @@ function onContainerDragEnd (): void {
  * ----------------------------------------------------------------------- */
 
 const diagram = computed(() => {
-  const base = buildDiagram(parser.ast, collapsedPaths.value);
+  const base = buildDiagram(parser.flatAst, collapsedPaths.value);
   return applyUserPositions(base, userPositions.value as UserPositions);
 });
 

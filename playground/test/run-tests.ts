@@ -28,7 +28,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parse } from '../../parser/src/index.ts';
+import { parse, flatten } from '../../parser/src/index.ts';
 import type { XDbmlDocument } from '../../parser/src/index.ts';
 import { buildDiagram, applyUserPositions } from '../src/components/diagram/layout.ts';
 import type { DiagramModel } from '../src/components/diagram/layout.ts';
@@ -757,7 +757,7 @@ Container core {
 }
 `,
     check: ({ ast }) => {
-      const base = buildDiagram(ast);
+      const base = buildDiagram(flatten(ast));
       // Force recompute path by passing entities' current positions.
       const positions = new Map<string, { x: number; y: number }>();
       for (const e of base.entities) positions.set(e.id, { x: e.bounds.x, y: e.bounds.y });
@@ -855,8 +855,11 @@ for (const t of tests) {
   const source = typeof t.source === 'function' ? t.source() : t.source;
   try {
     const ast = parse(source);
-    const diagram = buildDiagram(ast);
-    t.check({ ast, diagram });
+    // Mirror what the playground's parserStore does: flatten the AST so
+    // module-system clone-block content is visible to buildDiagram and
+    // (in the inspector) ast-lookup.
+    const diagram = buildDiagram(flatten(ast));
+    t.check({ ast: flatten(ast), diagram });
     // The test passed. If it was marked as pending, that's notable -- the
     // parser has caught up and the entry should be removed from the pending
     // list. Surface this prominently so it doesn't go unnoticed.

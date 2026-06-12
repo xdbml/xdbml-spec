@@ -51,8 +51,9 @@
 
       <!-- Eye icon for Views. Sits at the left of the header band, just
            before the entity name. An outer ellipse + a small filled
-           pupil. Same white as the header text. The name's X position
-           shifts to make room (see nameLeftX below). -->
+           pupil. Same ink color as the header text (resolved for
+           contrast against headerFill). The name's X position shifts
+           to make room (see nameLeftX below). -->
       <g
         v-if="entity.isView"
         style="pointer-events: none;"
@@ -63,21 +64,21 @@
           rx="8"
           ry="5"
           fill="none"
-          stroke="white"
+          :stroke="headerInk"
           stroke-width="1.4"
         />
         <circle
           :cx="entity.bounds.x + 18"
           :cy="entity.bounds.y + 16"
           r="2"
-          fill="white"
+          :fill="headerInk"
         />
       </g>
 
       <text
         :x="nameLeftX"
         :y="entity.bounds.y + 20"
-        fill="white"
+        :fill="headerInk"
         font-size="13"
         font-weight="600"
         style="pointer-events: none; user-select: none;"
@@ -85,7 +86,7 @@
       <text
         :x="entity.bounds.x + entity.bounds.width - 12"
         :y="entity.bounds.y + 20"
-        fill="white"
+        :fill="headerInk"
         font-size="10"
         text-anchor="end"
         opacity="0.85"
@@ -315,9 +316,14 @@ function onHeaderMouseDown (e: MouseEvent): void {
 const headerHeight = 32;
 const INDENT_PX = 14;
 
-// MongoDB-style entities get a different header tint so polyglot
-// schemas read distinctly even when not inside a container.
+// Header band fill. Priority:
+//   1. The entity's resolved `headerColor` from layout (entity's own
+//      `[headercolor: '#...']` setting, or its TableGroup's `color`).
+//   2. Keyword-based default (MongoDB-style Collection/Record get a
+//      distinctive blue; others fall back to slate). This keeps the
+//      polyglot read distinct when there's no explicit color.
 const headerFill = ((): string => {
+  if (props.entity.headerColor) return props.entity.headerColor;
   switch (props.entity.keyword) {
     case 'Collection':
     case 'Record':
@@ -326,6 +332,28 @@ const headerFill = ((): string => {
       return '#334155';
   }
 })();
+
+// Header text color, picked for contrast against headerFill. Both defaults
+// (slate, deep blue) are dark, so white-on-dark works without a check.
+// When a user-defined headerColor is light (e.g., '#FFEB3B' yellow), white
+// text becomes invisible -- so we compute luminance and pick black instead.
+// Uses the YIQ approximation, which is faster and good enough for picking
+// between two ink colors. The threshold of 160 leans slightly toward
+// preferring white text (matches dbdiagram.io's behavior).
+function readableInk (bg: string): 'white' | '#0f172a' {
+  const hex = bg.startsWith('#') ? bg.slice(1) : bg;
+  const full = hex.length === 3
+    ? hex.split('').map((c) => c + c).join('')
+    : hex;
+  if (full.length !== 6) return 'white';
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return 'white';
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq < 160 ? 'white' : '#0f172a';
+}
+const headerInk = readableInk(headerFill);
 
 // X coordinate for the entity-name text in the header. Views render
 // an eye icon at the left of the header, so the name shifts right to

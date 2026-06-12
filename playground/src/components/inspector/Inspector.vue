@@ -117,7 +117,7 @@ const emit = defineEmits<{
 const parser = useParserStore();
 
 const resolved = computed<ResolvedSelection>(() =>
-  resolveSelection(parser.ast, props.selection),
+  resolveSelection(parser.flatAst, props.selection),
 );
 
 const kindLabel = computed(() => {
