@@ -16,6 +16,11 @@
  *     nodes have been replaced by their clone-block content. Useful for
  *     downstream consumers that don't care about module provenance.
  *
+ *   resolveNames(doc): ResolutionResult
+ *     Run the name-resolution pass. Returns a symbol table for queries
+ *     and a list of diagnostics (unresolved references, name conflicts).
+ *     The AST is not mutated. Flattens the input internally.
+ *
  * The parser is DBML-3.13.6 compatible: a document without an `xdbml: ...`
  * version header still parses, and DBML constructs are preserved.
  */
@@ -25,6 +30,14 @@ export { tokenize, TokenKind, LexError } from './lexer.ts';
 export type { Token } from './lexer.ts';
 export { parse, Parser, ParseError } from './parser.ts';
 export { flatten } from './module-resolver.ts';
+export { resolveNames, SymbolTable } from './name-resolver.ts';
+export type {
+  Diagnostic,
+  DiagnosticCode,
+  ResolutionResult,
+  SymbolEntry,
+  SymbolKind,
+} from './name-resolver.ts';
 export {
   xdbmlLanguageConfig,
   xdbmlMonarchTokensProvider,

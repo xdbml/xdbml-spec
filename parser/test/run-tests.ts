@@ -15,7 +15,7 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
-import { parse, flatten } from '../src/index.ts';
+import { parse, flatten, resolveNames } from '../src/index.ts';
 import type { ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
   CONTAINER_KEYWORDS,
@@ -1241,6 +1241,319 @@ reuse { entity Y } from './other' {
         },
       };
     })(),
+    /* -------------------------------------------------------------------
+     * P6: Name resolution
+     * -----------------------------------------------------------------
+     * These tests exercise the `resolveNames(doc)` pass. Each test
+     * parses a small source, runs resolveNames, and asserts on the
+     * resulting diagnostics list and symbol table.
+     * ----------------------------------------------------------------- */
+    {
+      name: 'P6: clean schema produces no diagnostics',
+      source: `xdbml: 0.2
+Type Email varchar [pattern: '.*@.*']
+Entity users {
+  id int [pk]
+  email Email
+}
+Entity posts {
+  id int [pk]
+  user_id int
+}
+Ref: posts.user_id > users.id`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected 0 diagnostics, got ${r.diagnostics.length}: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        if (r.symbols.size !== 3) return `expected 3 symbols, got ${r.symbols.size}`;
+        if (!r.symbols.lookup('Email')) return 'expected Email in symbol table';
+        if (!r.symbols.lookup('users')) return 'expected users in symbol table';
+        if (!r.symbols.lookup('posts')) return 'expected posts in symbol table';
+        return null;
+      },
+    },
+    {
+      name: 'P6: unresolved named type produces unresolved-type diagnostic',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  email NoSuchType
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 1) return `expected 1 diagnostic, got ${r.diagnostics.length}`;
+        const d = r.diagnostics[0];
+        if (d.code !== 'unresolved-type') return `wrong code: ${d.code}`;
+        if (!d.message.includes('NoSuchType')) return `message should mention NoSuchType`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: built-in scalar/BSON types do not produce diagnostics',
+      source: `xdbml: 0.2
+Entity assorted {
+  i int
+  j integer
+  k bigint
+  s varchar
+  d decimal(10,2)
+  ts timestamp
+  u uuid
+  oid objectId
+  b boolean
+  j2 jsonb
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected 0 diagnostics (all builtins), got ${r.diagnostics.length}: ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: unresolved FK entity produces unresolved-entity diagnostic',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+}
+Ref: nonexistent.id > users.id`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 1) return `expected 1 diagnostic, got ${r.diagnostics.length}`;
+        const d = r.diagnostics[0];
+        if (d.code !== 'unresolved-entity') return `wrong code: ${d.code}`;
+        if (!d.message.includes('nonexistent')) return `should mention nonexistent`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: unresolved FK field produces unresolved-field diagnostic',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+}
+Entity posts {
+  id int [pk]
+  user_id int
+}
+Ref: posts.no_such_field > users.id`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const codes = r.diagnostics.map((d) => d.code);
+        if (!codes.includes('unresolved-field')) return `expected unresolved-field diagnostic, got codes: ${codes.join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: duplicate declaration produces diagnostic',
+      source: `xdbml: 0.2
+Entity users { id int [pk] }
+Entity users { id int [pk] }`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const dupes = r.diagnostics.filter((d) => d.code === 'duplicate-declaration');
+        if (dupes.length !== 1) return `expected 1 duplicate-declaration diagnostic, got ${dupes.length}`;
+        // Symbol table still has the FIRST declaration (later one dropped).
+        if (r.symbols.size !== 1) return `expected 1 symbol after dedup, got ${r.symbols.size}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: unresolved TableGroup member produces diagnostic',
+      source: `xdbml: 0.2
+Entity foo { id int [pk] }
+TableGroup mygroup {
+  foo
+  nonexistent_table
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 1) return `expected 1 diagnostic, got ${r.diagnostics.length}`;
+        const d = r.diagnostics[0];
+        if (d.code !== 'unresolved-tablegroup-member') return `wrong code: ${d.code}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: TablePartial injection resolution',
+      source: `xdbml: 0.2
+TablePartial timestamps {
+  created_at timestamp
+  updated_at timestamp
+}
+Entity users {
+  id int [pk]
+  ~timestamps
+}
+Entity bad {
+  id int [pk]
+  ~missing_partial
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const partials = r.diagnostics.filter((d) => d.code === 'unresolved-partial');
+        if (partials.length !== 1) return `expected 1 unresolved-partial diagnostic, got ${partials.length}: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        if (!partials[0].message.includes('missing_partial')) return 'should mention missing_partial';
+        return null;
+      },
+    },
+    {
+      name: 'P6: forward reference (Type declared after use)',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  email Email
+}
+Type Email varchar [pattern: '.*@.*']`,
+      assert: (doc) => {
+        // Two-pass resolution should resolve forward references cleanly.
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `forward ref should resolve cleanly, got ${r.diagnostics.length} diagnostics: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: cross-container FK reference resolves',
+      source: `xdbml: 0.2
+Container core [type: schema] {
+  Entity users {
+    id int [pk]
+  }
+}
+Container app [type: schema] {
+  Entity posts {
+    id int [pk]
+    user_id int
+  }
+}
+Ref: app.posts.user_id > core.users.id`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `cross-container FK should resolve cleanly, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: nested-field FK (array wildcard in path) resolves to entity',
+      source: `xdbml: 0.2
+Entity orders {
+  id int [pk]
+  line_items array [
+    object {
+      sku varchar
+      qty int
+    }
+  ]
+}
+Entity products {
+  sku varchar [pk]
+}
+Ref: orders.line_items.[*].sku > products.sku`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `nested-field FK should resolve, got: ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: top-level records entity must exist',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  name varchar
+}
+records nonexistent (id, name) {
+  1, 'Alice'
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const recs = r.diagnostics.filter((d) => d.code === 'unresolved-records-entity');
+        if (recs.length !== 1) return `expected unresolved-records-entity, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: top-level records column must be a field of the entity',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+  name varchar
+}
+records users (id, name, no_such_column) {
+  1, 'Alice', 'x'
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const cols = r.diagnostics.filter((d) => d.code === 'unresolved-records-column');
+        if (cols.length !== 1) return `expected unresolved-records-column, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: SymbolTable lookup APIs return correct entries',
+      source: `xdbml: 0.2
+Container core [type: schema] {
+  Entity dim_customer { id int [pk] }
+  Entity dim_product { id int [pk] }
+}
+Entity standalone { id int [pk] }`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        // Qualified lookup
+        const dc = r.symbols.lookup('core.dim_customer');
+        if (!dc || dc.kind !== 'entity') return 'expected core.dim_customer entity';
+        if (dc.containerName !== 'core') return `wrong containerName: ${dc.containerName}`;
+        // Bare lookup (unambiguous)
+        const sa = r.symbols.lookupBare('standalone');
+        if (!sa) return 'expected standalone bare lookup';
+        // Bare lookup (unique even though in container)
+        const dp = r.symbols.lookupBare('dim_product');
+        if (!dp) return 'expected dim_product bare lookup (unique across containers)';
+        return null;
+      },
+    },
+    {
+      name: 'P6: cloned entities (via module system) appear in symbol table',
+      source: `xdbml: 0.2
+reuse { entity core.dim_customer } from './lib' {
+  Entity dim_customer {
+    id int [pk]
+    email varchar
+  }
+}
+Entity local_fact {
+  id int [pk]
+  customer_id int
+}
+Ref: local_fact.customer_id > dim_customer.id`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        // The cloned dim_customer should be in the symbol table (flatten merges it).
+        const dc = r.symbols.lookupBare('dim_customer');
+        if (!dc) return 'expected cloned dim_customer in symbol table';
+        // The FK to dim_customer.id should resolve (no diagnostics).
+        if (r.diagnostics.length !== 0) return `expected 0 diagnostics, got: ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: inline ref setting on field resolves',
+      source: `xdbml: 0.2
+Entity users {
+  id int [pk]
+}
+Entity posts {
+  id int [pk]
+  user_id int [ref: > users.id]
+  bad_id int [ref: > nonexistent.id]
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        // Should produce exactly 1 diagnostic: the unresolved nonexistent.
+        if (r.diagnostics.length !== 1) return `expected 1, got ${r.diagnostics.length}: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        if (r.diagnostics[0].code !== 'unresolved-entity') return `wrong code: ${r.diagnostics[0].code}`;
+        if (!r.diagnostics[0].message.includes('nonexistent')) return 'should mention nonexistent';
+        return null;
+      },
+    },
     {
       name: 'Nested object type inside an entity',
       source: `xdbml: 0.1

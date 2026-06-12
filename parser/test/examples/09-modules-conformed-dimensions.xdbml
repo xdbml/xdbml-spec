@@ -1,0 +1,159 @@
+// =============================================================================
+//  CONFORMED DIMENSIONS LIBRARY  (09-modules-conformed-dimensions.xdbml)
+// =============================================================================
+//
+//  Canonical dimension entities and shared scalar Named Types used across
+//  multiple data products. This file is intended to be imported by consumer
+//  files via the xDBML v0.2 module system; it has no Project block of its
+//  own because its sole purpose is to be reused. The paired consumer example
+//  that imports from this file is 10-modules-consumer.xdbml.
+//
+//  v0.2 features exercised:
+//    - Scalar Named Types (spec §14.7): `Type Email varchar [...]`
+//    - Entity-level checks block (§10): `checks { `expr` [name: ...] }`
+//    - `color:` setting on TableGroup (§16.2)
+//    - Quoted hex color strings (`'#0a7d3f'`)
+//
+//  NOTE: until the reference parser implements the above v0.2 features,
+//  this file will not parse cleanly in the playground. The test runner
+//  marks it as PENDING rather than FAIL so the build stays green.
+//
+//  Governance:
+//    - Owner:  Data Governance team (data-governance@example.com)
+//    - SLA:    Schema changes follow the conformed-dimensions RFC process
+//    - Cadence: Reviewed quarterly; deprecations announced one quarter ahead
+//
+//  Consumers should pin the version they depend on via clone blocks (so the
+//  consumer file remains parseable even when this file is unavailable) and
+//  refresh on a deliberate schedule rather than on every parse.
+//
+// =============================================================================
+
+xdbml: 0.2
+
+
+// -----------------------------------------------------------------------------
+//  Shared scalar Named Types
+// -----------------------------------------------------------------------------
+//
+//  These scalar Named Types carry the canonical validation surface for
+//  enterprise-wide value shapes. Importing them gives a data product the
+//  same validation behavior as every other data product without re-deriving
+//  the regex or constraint by hand.
+
+Type Email varchar [
+  pattern: '^[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}$',
+  maxLength: 320,
+  tags: ['pii', 'gdpr-subject'],
+  note: 'Enterprise email format. RFC 5321 envelope limit 320 characters. Tagged as PII for downstream classification.'
+]
+
+Type CountryCode varchar [
+  pattern: '^[A-Z]{2}$',
+  minLength: 2,
+  maxLength: 2,
+  note: 'ISO 3166-1 alpha-2 two-letter country code (uppercase).'
+]
+
+Type CurrencyCode varchar [
+  pattern: '^[A-Z]{3}$',
+  minLength: 3,
+  maxLength: 3,
+  note: 'ISO 4217 three-letter currency code (uppercase). For example: USD, EUR, JPY.'
+]
+
+Type PhoneE164 varchar [
+  pattern: '^\\+[1-9]\\d{1,14}$',
+  maxLength: 16,
+  tags: ['pii'],
+  note: 'E.164 international phone format. Leading + and country code required.'
+]
+
+
+// -----------------------------------------------------------------------------
+//  Container: conformed dimensions
+// -----------------------------------------------------------------------------
+//
+//  The `core` Container holds the canonical dimensional entities. Naming
+//  follows the enterprise data-warehouse convention `dim_<noun>`; the table
+//  comment describes the entity's grain (one row per ...) and any non-obvious
+//  policies that consumers must respect.
+
+Container core [type: schema, note: 'Conformed dimensions. Stable, governed.'] {
+
+  Entity dim_customer [
+    note: 'One row per customer. Grain: customer_id. SCD type 2 history is kept in a sibling fact_customer_scd table not exposed here.'
+  ] {
+    id           int           [pk, increment]
+    customer_key varchar       [unique, not null, note: 'External identifier (CRM customer code).']
+    email        Email         [unique, not null]
+    phone        PhoneE164
+    country      CountryCode   [not null]
+    created_at   timestamp     [not null]
+    is_active    boolean       [not null, default: true]
+
+    indexes {
+      (country, is_active) [name: 'idx_customer_country_active']
+    }
+
+    checks {
+      `(is_active = false) OR (email IS NOT NULL)`
+        [name: 'chk_active_customer_has_email',
+         note: 'Active customers must have a contactable email.']
+    }
+  }
+
+  Entity dim_product [
+    note: 'One row per SKU. Grain: product_id. Discontinued SKUs are retained for historical-fact joins; is_active flag drives current-period reports.'
+  ] {
+    id           int           [pk, increment]
+    sku          varchar       [unique, not null, note: 'Stock-keeping unit; 12-character alphanumeric per Merchandising standard.']
+    name         varchar       [not null]
+    category     varchar       [not null]
+    list_price   decimal(10,2) [not null, check: `list_price >= 0`]
+    currency     CurrencyCode  [not null, default: 'USD']
+    is_active    boolean       [not null, default: true]
+    launched_at  date
+    discontinued_at date
+
+    indexes {
+      category   [name: 'idx_product_category']
+      (category, is_active) [name: 'idx_product_category_active']
+    }
+
+    checks {
+      `(discontinued_at IS NULL) OR (discontinued_at >= launched_at)`
+        [name: 'chk_product_discontinue_after_launch']
+    }
+  }
+
+  Entity dim_date [
+    note: 'Calendar dimension. Grain: one row per calendar day from 2020-01-01 through 2049-12-31. Populated by the dim_date_generator job.'
+  ] {
+    date_key       int           [pk, note: 'YYYYMMDD integer for join performance.']
+    full_date      date          [unique, not null]
+    year           int           [not null]
+    quarter        int           [not null, check: `quarter BETWEEN 1 AND 4`]
+    month          int           [not null, check: `month BETWEEN 1 AND 12`]
+    day_of_month   int           [not null, check: `day_of_month BETWEEN 1 AND 31`]
+    day_of_week    int           [not null, check: `day_of_week BETWEEN 1 AND 7`, note: '1 = Monday, 7 = Sunday (ISO 8601).']
+    is_weekend     boolean       [not null]
+    is_holiday     boolean       [not null, default: false]
+    fiscal_year    int           [not null]
+    fiscal_quarter int           [not null, check: `fiscal_quarter BETWEEN 1 AND 4`]
+  }
+}
+
+
+// -----------------------------------------------------------------------------
+//  TableGroup: visualization
+// -----------------------------------------------------------------------------
+
+TableGroup conformed_core [
+  color: '#0a7d3f',
+  note: 'The conformed dimensions. Stable interface; all consumer data products depend on these.'
+] {
+  dim_customer
+  dim_product
+  dim_date
+}
