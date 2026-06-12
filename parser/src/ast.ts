@@ -816,3 +816,52 @@ export interface RefValue {
   target: RefEndpoint;
   span: Span;
 }
+
+/* -------------------------------------------------------------------------
+ * Parse options (new in v0.2 / parser batch P5)
+ *
+ * Configuration for `parse()`. Optional; omitting the options object keeps
+ * the parser fully self-contained (only clone-block-bearing module directives
+ * resolve; reference-only directives fail with the P4 error).
+ *
+ * When `readFile` is provided, the parser can resolve reference-only
+ * `use`/`reuse` directives by opening the referenced file and synthesizing
+ * a clone block from its matching declarations. The Node test runner passes
+ * `fs.readFileSync`; the playground (browser) intentionally does NOT provide
+ * one, keeping clone blocks as the only authoritative form there.
+ * ----------------------------------------------------------------------- */
+
+export interface ParseOptions {
+  /**
+   * The absolute or canonical path of the file being parsed. Used as the
+   * base directory for relative `from './...'` paths in `use`/`reuse`
+   * directives. If undefined, relative paths in directives can only be
+   * resolved when they're already absolute (rare). For files loaded via
+   * `readFile`, the parser passes the resolved path automatically.
+   */
+  filePath?: string;
+
+  /**
+   * Synchronous file reader. Called by the parser when it needs to resolve
+   * a reference-only module directive. The argument is an absolute path
+   * (the parser has already resolved the relative `from` clause against the
+   * importer's `filePath`). The function should return the source text of
+   * the file at that path, or throw if the file is missing or unreadable.
+   *
+   * If absent, reference-only directives fall back to the P4 rejection
+   * with a clear "no resolver available" message. Clone-block-bearing
+   * directives still work without a resolver because their content is
+   * embedded in the importing file.
+   */
+  readFile?: (absolutePath: string) => string;
+
+  /**
+   * Maximum recursion depth when resolving directives. Each `from` traversal
+   * deepens the stack by one; circular imports trigger the cycle-detection
+   * path BEFORE this counter increases (cycles produce a parsed directive
+   * with an empty clone, not a depth-limit error). The default (8) is
+   * generous for realistic module graphs and small enough to keep the
+   * stack bounded under pathological inputs.
+   */
+  maxDepth?: number;
+}

@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
 import { parse, flatten } from '../src/index.ts';
-import type { XDbmlDocument } from '../src/index.ts';
+import type { ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
   CONTAINER_KEYWORDS,
   ENTITY_KEYWORDS,
@@ -140,6 +140,13 @@ function runInlineTests (): TestResult[] {
      * parser unexpectedly accepted the input.
      */
     expectError?: boolean;
+    /**
+     * Optional ParseOptions passed to parse() for this case. Used by P5
+     * tests that need a `readFile` resolver to test cross-file imports.
+     * Most tests omit this and parse self-contained sources with the
+     * default 1-argument form.
+     */
+    options?: ParseOptions;
   }[] = [
     {
       name: 'Bare DBML compat: no version header, simple Table',
@@ -876,7 +883,7 @@ Container sales [type: schema] {
       },
     },
     {
-      name: 'v0.2 module-system -- INVALID: reference-only directive (no clone) rejected in P4',
+      name: 'v0.2 module-system -- reference-only directive (no clone, no readFile) rejected',
       source: `xdbml: 0.2
 reuse { entity X } from './lib'`,
       assert: (_doc) => 'parse should have failed (reference-only directive)',
@@ -928,6 +935,312 @@ reuse * from './lib2' {
         return null;
       },
     },
+    /* -------------------------------------------------------------------
+     * P5: cross-file module resolution
+     * -----------------------------------------------------------------
+     * These tests use in-memory file maps so they're hermetic (no real
+     * file I/O). The `readFile` callback is constructed per test and
+     * supplied via the new `options` field on the case object.
+     * ----------------------------------------------------------------- */
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+Type CountryCode varchar [minLength: 2, maxLength: 2]
+Container core [type: schema] {
+  Entity dim_customer {
+    id int [pk]
+    email Email
+    country CountryCode
+  }
+}`,
+      };
+      return {
+        name: 'P5: reference-only directive resolves via readFile (basic case)',
+        source: `xdbml: 0.2
+reuse { type Email, type CountryCode } from './lib'
+reuse { entity core.dim_customer } from './lib'`,
+        options: {
+          filePath: '/test/consumer.xdbml',
+          readFile: (p: string) => {
+            if (!(p in files)) throw new Error(`not found: ${p}`);
+            return files[p];
+          },
+        },
+        assert: (doc) => {
+          if (doc.statements.length !== 2) return `expected 2 statements, got ${doc.statements.length}`;
+          const [d1, d2] = doc.statements;
+          if (d1.kind !== 'ModuleImportDirective' || !d1.clone) return 'd1 should have clone';
+          if (d1.clone.statements.length !== 2) return `d1 clone: expected 2, got ${d1.clone.statements.length}`;
+          const t1 = d1.clone.statements[0];
+          const t2 = d1.clone.statements[1];
+          if (t1.kind !== 'TypeDeclaration' || t1.name !== 'Email') return `expected TypeDeclaration Email, got ${t1.kind} ${(t1 as { name?: string }).name}`;
+          if (t2.kind !== 'TypeDeclaration' || t2.name !== 'CountryCode') return 'expected TypeDeclaration CountryCode';
+          if (d2.kind !== 'ModuleImportDirective' || !d2.clone) return 'd2 should have clone';
+          const e = d2.clone.statements[0];
+          if (e.kind !== 'EntityDeclaration' || e.name !== 'dim_customer') return `expected EntityDeclaration dim_customer, got ${e.kind}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$']
+Type CountryCode varchar
+Entity foo { id int [pk] }`,
+      };
+      return {
+        name: 'P5: ImportAll resolves all top-level non-Project declarations',
+        source: `xdbml: 0.2
+reuse * from './lib'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected ModuleImportDirective with clone';
+          if (dir.clone.statements.length !== 3) return `expected 3 clone statements, got ${dir.clone.statements.length}`;
+          const kinds = dir.clone.statements.map((s) => s.kind);
+          if (kinds.filter((k) => k === 'TypeDeclaration').length !== 2) return `expected 2 Types, got: ${kinds.join(',')}`;
+          if (kinds.filter((k) => k === 'EntityDeclaration').length !== 1) return `expected 1 Entity, got: ${kinds.join(',')}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Project lib_project {
+  database_type: 'PostgreSQL'
+}
+Entity X { id int [pk] }`,
+      };
+      return {
+        name: 'P5: ImportAll skips ProjectDeclaration (spec §26.4)',
+        source: `xdbml: 0.2
+reuse * from './lib'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          if (dir.clone.statements.length !== 1) return `expected 1 (Project skipped), got ${dir.clone.statements.length}`;
+          if (dir.clone.statements[0].kind !== 'EntityDeclaration') return 'expected EntityDeclaration';
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$']`,
+      };
+      return {
+        name: 'P5: alias renames extracted declaration',
+        source: `xdbml: 0.2
+reuse { type Email as PII_Email } from './lib'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          const t = dir.clone.statements[0];
+          if (t.kind !== 'TypeDeclaration') return 'expected TypeDeclaration';
+          if (t.name !== 'PII_Email') return `expected name PII_Email after alias, got ${t.name}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Container core [type: schema] {
+  Entity dim_customer { id int [pk] }
+  Entity dim_product { id int [pk] }
+}`,
+      };
+      return {
+        name: 'P5: cross-container reference (container.entity dotted path)',
+        source: `xdbml: 0.2
+reuse { entity core.dim_customer, entity core.dim_product } from './lib'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          if (dir.clone.statements.length !== 2) return `expected 2, got ${dir.clone.statements.length}`;
+          const names = dir.clone.statements.map((s) => (s as { name?: string }).name);
+          if (!names.includes('dim_customer') || !names.includes('dim_product')) return `wrong names: ${names.join(', ')}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/cycle-a.xdbml': `xdbml: 0.2
+reuse { entity X } from './cycle-b'
+Entity A_local { id int [pk] }`,
+        '/test/cycle-b.xdbml': `xdbml: 0.2
+reuse { entity A_local } from './cycle-a'
+Entity X { id int [pk] }`,
+      };
+      return {
+        name: 'P5: circular imports do not crash (spec §26.14)',
+        source: files['/test/cycle-a.xdbml'],
+        options: {
+          filePath: '/test/cycle-a.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          // cycle-a's reuse should resolve (cycle-b is not yet in the stack
+          // when cycle-a is parsed at the top level).
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective') return 'expected directive';
+          if (!dir.clone) return 'cycle-a directive should have resolved (cycle-b is reached for the first time here)';
+          if (dir.clone.statements.length !== 1) return `expected 1 X, got ${dir.clone.statements.length}`;
+          if (dir.clone.statements[0].kind !== 'EntityDeclaration') return 'expected EntityDeclaration X';
+          // cycle-a also has its own local entity.
+          const local = doc.statements[1];
+          if (local.kind !== 'EntityDeclaration' || local.name !== 'A_local') return 'expected A_local';
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Entity X { id int [pk] }`,
+      };
+      return {
+        name: 'P5: missing file throws clear error',
+        source: `xdbml: 0.2
+reuse { entity X } from './nonexistent'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => {
+            if (!(p in files)) throw new Error(`file not found: ${p}`);
+            return files[p];
+          },
+        },
+        assert: (_doc) => 'parse should have thrown for missing referenced file',
+        expectError: true,
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Entity X { id int [pk
+}`, // intentionally malformed (missing closing brace + bracket)
+      };
+      return {
+        name: 'P5: parse error in referenced file surfaces with file context',
+        source: `xdbml: 0.2
+reuse { entity X } from './lib'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (_doc) => 'parse should have thrown for malformed referenced file',
+        expectError: true,
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Type Email varchar`,
+      };
+      return {
+        name: 'P5: path with .xdbml extension already attached works',
+        source: `xdbml: 0.2
+reuse { type Email } from './lib.xdbml'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          if (dir.clone.statements.length !== 1) return 'expected 1';
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/sub/lib.xdbml': `xdbml: 0.2
+Type Email varchar`,
+      };
+      return {
+        name: 'P5: parent directory paths (../) resolve correctly',
+        source: `xdbml: 0.2
+reuse { type Email } from '../sub/lib'`,
+        options: {
+          filePath: '/test/other/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          if (dir.clone.statements.length !== 1) return 'expected 1 (path: ../sub/lib must resolve to /test/sub/lib.xdbml)';
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Type A varchar`,
+      };
+      return {
+        name: 'P5: depth limit triggers when maxDepth exceeded',
+        source: `xdbml: 0.2
+reuse { type A } from './lib'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          maxDepth: 0, // any resolution attempt is one level deep
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (_doc) => 'parse should have thrown for depth limit',
+        expectError: true,
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Entity X { id int [pk] }`,
+      };
+      return {
+        name: 'P5: mixed -- some directives have inline clone, others reference-only',
+        source: `xdbml: 0.2
+reuse { entity X } from './lib'
+reuse { entity Y } from './other' {
+  Entity Y { id int [pk] }
+}`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          if (doc.statements.length !== 2) return 'expected 2 directives';
+          const d1 = doc.statements[0];
+          const d2 = doc.statements[1];
+          if (d1.kind !== 'ModuleImportDirective' || !d1.clone) return 'd1 should have clone (resolved from file)';
+          if (d2.kind !== 'ModuleImportDirective' || !d2.clone) return 'd2 should have clone (inline)';
+          // Both reach their targets; d2 didn't need readFile since its clone is inline.
+          if ((d1.clone.statements[0] as { name?: string }).name !== 'X') return 'd1 should clone X';
+          if ((d2.clone.statements[0] as { name?: string }).name !== 'Y') return 'd2 should clone Y';
+          return null;
+        },
+      };
+    })(),
     {
       name: 'Nested object type inside an entity',
       source: `xdbml: 0.1
@@ -1282,7 +1595,7 @@ Table t {
   const results: TestResult[] = [];
   for (const c of cases) {
     try {
-      const doc = parse(c.source);
+      const doc = parse(c.source, c.options ?? {});
       if (c.expectError) {
         // Parser accepted input that should have been rejected.
         results.push(fail(c.name, 'expected parse to throw, but it succeeded'));

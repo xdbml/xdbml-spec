@@ -49,6 +49,7 @@ import type {
   ObjectType,
   OneOfType,
   PartialInjection,
+  ParseOptions,
   PathSegment,
   PolymorphicAlternative,
   Position,
@@ -85,6 +86,8 @@ import {
   TokenKind,
   tokenize,
 } from './lexer.ts';
+import { resolveImport } from './module-resolver.ts';
+import type { ParseFn } from './module-resolver.ts';
 
 export class ParseError extends Error {
   position: Position;
@@ -170,9 +173,43 @@ function canonEntityKw (raw: string): EntityKeyword {
 export class Parser {
   private tokens: Token[];
   private idx = 0;
+  /**
+   * Parse-time options (v0.2 / P5+). Carries the importer's filePath, the
+   * optional readFile resolver, and the maxDepth bound. Used by
+   * parseModuleDirective to resolve reference-only directives. May be an
+   * empty object when no options were supplied (the public `parse(source)`
+   * 1-arg form).
+   */
+  private options: ParseOptions;
+  /**
+   * The set of file paths currently being parsed in the resolution chain.
+   * Used for cycle detection: when resolving a directive whose `from` path
+   * is already in this set, the parser produces an empty clone for that
+   * directive rather than recursing (matching spec §26.14: cycles are
+   * allowed; name resolution handles them). The set is passed by reference
+   * across recursive parse() calls so all transitive levels see it.
+   *
+   * The set contains the resolved ABSOLUTE paths (post-readFile-key path
+   * computation), not the source-text `from` strings, so two directives
+   * that name the same file via different relative paths still collide.
+   */
+  private resolutionStack: ReadonlySet<string>;
+  /**
+   * Current recursion depth. Incremented before each recursive parse(),
+   * compared against options.maxDepth. Reaching the limit throws.
+   */
+  private depth: number;
 
-  constructor (tokens: Token[]) {
+  constructor (
+    tokens: Token[],
+    options: ParseOptions = {},
+    resolutionStack: ReadonlySet<string> = new Set(),
+    depth = 0,
+  ) {
     this.tokens = tokens;
+    this.options = options;
+    this.resolutionStack = resolutionStack;
+    this.depth = depth;
   }
 
   /* ----- low-level token helpers ----- */
@@ -743,16 +780,69 @@ export class Parser {
       clone = this.parseCloneBlock();
     }
 
-    // P4 policy: reference-only directives are not yet supported. Reject with
-    // a clear message pointing the user toward the clone-block escape hatch.
+    // P5: if no inline clone block, attempt to resolve the referenced file
+    // using the supplied readFile callback. If no callback was supplied
+    // (the bare `parse(source)` 1-arg form), fall back to the P4 rejection.
+    let resolvedPath: string | undefined;
+    let resolutionCycle = false;
     if (!clone) {
-      throw new ParseError(
-        `Reference-only '${mode}' directive (no clone block) is not yet supported in this parser. ` +
-        `Add a clone block to the directive to make the file self-contained, ` +
-        `or wait for parser batch P5 which adds file resolution.`,
-        start,
-      );
+      if (this.options.readFile) {
+        // Build the directive shape we need to pass to the resolver. We
+        // haven't finalized the AST node yet (we need its `clone` field),
+        // so we pass a partial directive that has all the fields resolveImport
+        // reads (from, span, mode).
+        const partial: ModuleImportDirective = {
+          kind: 'ModuleImportDirective',
+          mode,
+          spec,
+          from,
+          settings,
+          span: this.spanFrom(start),
+        };
+        const result = resolveImport(
+          partial,
+          this.options,
+          this.resolutionStack,
+          this.depth,
+          recursiveParse,
+        );
+        switch (result.kind) {
+          case 'resolved':
+            clone = result.clone;
+            resolvedPath = result.resolvedPath;
+            break;
+          case 'cycle':
+            // Per spec §26.14, cycles are allowed; the parser produces a
+            // directive with no clone, and name resolution (P6+) is
+            // expected to bridge the cycle. We leave clone undefined.
+            resolvedPath = result.resolvedPath;
+            resolutionCycle = true;
+            break;
+          case 'no-resolver':
+            // Shouldn't reach this branch because we already checked
+            // readFile above, but treat it as the P4 rejection
+            // defensively rather than silently producing an unresolved
+            // directive.
+            throw new ParseError(
+              `Reference-only '${mode}' directive (no clone block) could not be resolved: ` +
+              `no readFile resolver was supplied in ParseOptions.`,
+              start,
+            );
+        }
+      } else {
+        // P4 fallback: no clone, no resolver. Reject with the original
+        // message pointing to the clone-block escape hatch.
+        throw new ParseError(
+          `Reference-only '${mode}' directive (no clone block) cannot be resolved: ` +
+          `no readFile resolver was supplied in ParseOptions. ` +
+          `Either provide a ParseOptions.readFile callback when calling parse(), ` +
+          `or add an inline clone block to the directive to make the file self-contained.`,
+          start,
+        );
+      }
     }
+
+    void resolvedPath; void resolutionCycle; // currently unused; reserved for future provenance metadata
 
     return {
       kind: 'ModuleImportDirective',
@@ -2071,7 +2161,49 @@ export class Parser {
  * Public API
  * ----------------------------------------------------------------------- */
 
-export function parse (source: string): XDbmlDocument {
+/**
+ * Parse xDBML source.
+ *
+ * - 1-argument form `parse(source)` parses self-contained documents (any
+ *   module directive must carry an inline clone block; reference-only
+ *   directives throw).
+ * - 2-argument form `parse(source, options)` accepts a `readFile`
+ *   resolver for cross-file `use`/`reuse` directives and a `filePath`
+ *   identifying the source for relative-path resolution. See
+ *   `ParseOptions` for the full shape.
+ *
+ * The function is fully synchronous. Async file loading and incremental
+ * resolution are intentionally out of scope -- callers needing async I/O
+ * should pre-load their module graph and supply a `readFile` callback
+ * that returns from an in-memory map.
+ */
+export function parse (source: string, options: ParseOptions = {}): XDbmlDocument {
   const tokens = tokenize(source);
-  return new Parser(tokens).parseDocument();
+  // The initial resolution stack contains the importer's own file path
+  // (so a file that tries to reuse itself triggers cycle detection at
+  // the outer level too). If no filePath is provided, the stack is empty.
+  const initialStack = new Set<string>();
+  if (options.filePath) initialStack.add(options.filePath);
+  return new Parser(tokens, options, initialStack, 0).parseDocument();
 }
+
+/**
+ * Internal `ParseFn` used by the module resolver to recursively parse a
+ * referenced file. Threads the resolution stack and depth so cycle
+ * detection and the depth limit cover the full transitive graph.
+ *
+ * NOTE: this is the recursive entry point invoked by `resolveImport()`.
+ * It differs from the public `parse()` in two ways: (1) it takes the
+ * full resolution-stack / depth context, and (2) it doesn't re-add
+ * options.filePath to the stack (the caller already did so when
+ * widening the stack with the resolved path of the referenced file).
+ */
+const recursiveParse: ParseFn = (
+  source: string,
+  options: ParseOptions,
+  resolutionStack: ReadonlySet<string>,
+  depth: number,
+): XDbmlDocument => {
+  const tokens = tokenize(source);
+  return new Parser(tokens, options, resolutionStack, depth).parseDocument();
+};

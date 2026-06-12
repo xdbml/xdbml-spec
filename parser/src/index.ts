@@ -3,8 +3,10 @@
  *
  * Public API:
  *
- *   parse(source): XDbmlDocument
- *     Parse an xDBML document. Returns a fully-typed AST.
+ *   parse(source, options?): XDbmlDocument
+ *     Parse an xDBML document. Returns a fully-typed AST. Passing
+ *     `options.readFile` enables cross-file `use`/`reuse` resolution
+ *     (see ParseOptions for details).
  *
  *   tokenize(source): Token[]
  *     Tokenize the source without parsing. Useful for syntax highlighting.
