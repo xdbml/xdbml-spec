@@ -24,9 +24,9 @@ import {
 import { defineStore } from 'pinia';
 import { debounce } from 'lodash-es';
 import {
-  LexError, ParseError, parse, tokenize, flatten,
+  LexError, ParseError, parse, tokenize, flatten, resolveNames,
 } from '@xdbml/parse';
-import type { Token, XDbmlDocument } from '@xdbml/parse';
+import type { Diagnostic, Token, XDbmlDocument } from '@xdbml/parse';
 
 import logger from '@/utils/logger';
 import type { ParserError } from '@/types';
@@ -150,8 +150,16 @@ export const useParserStore = defineStore('parser', () => {
       try {
         const parsed = parse(source);
         ast.value = parsed;
-        flatAst.value = flatten(parsed);
-        errors.value = [];
+        const flat = flatten(parsed);
+        flatAst.value = flat;
+        // Run name resolution as a separate pass. Failures here are
+        // SEMANTIC, not syntactic -- the AST is still well-formed
+        // and downstream rendering (diagram, inspector) keeps working.
+        // The user just sees red squigglies on the offending references
+        // and entries in the diagnostics panel. The resolver is cheap
+        // enough to run on every keystroke alongside the parser.
+        const resolution = resolveNames(parsed);
+        errors.value = resolution.diagnostics.map(resolverDiagnosticToParserError);
       } catch (e) {
         if (e instanceof ParseError) {
           ast.value = undefined;
@@ -168,6 +176,7 @@ export const useParserStore = defineStore('parser', () => {
       flatAst.value = undefined;
       errors.value = [{
         code: -1,
+        severity: 'error',
         message: err instanceof Error ? err.message : 'Unexpected error',
         location: {
           line: 1,
@@ -214,6 +223,7 @@ export const useParserStore = defineStore('parser', () => {
 function lexErrorToParserError (e: LexError): ParserError {
   return {
     code: 1,
+    severity: 'error',
     message: e.message,
     location: {
       line: e.position.line,
@@ -229,6 +239,7 @@ function lexErrorToParserError (e: LexError): ParserError {
 function parseErrorToParserError (e: ParseError): ParserError {
   return {
     code: 2,
+    severity: 'error',
     message: e.message,
     location: {
       line: e.position.line,
@@ -237,6 +248,33 @@ function parseErrorToParserError (e: ParseError): ParserError {
     endLocation: {
       line: e.position.line,
       column: e.position.column + 1,
+    },
+  };
+}
+
+/**
+ * Convert a resolver Diagnostic (with `span`, string `code`, explicit
+ * severity) to the UI-facing ParserError shape. The Span gives us the
+ * exact range, so Monaco can underline only the offending construct
+ * rather than a single character.
+ */
+function resolverDiagnosticToParserError (d: Diagnostic): ParserError {
+  return {
+    code: d.code,
+    severity: d.severity,
+    message: d.message,
+    location: {
+      line: d.span.start.line,
+      column: d.span.start.column,
+    },
+    endLocation: {
+      // Monaco expects endColumn STRICTLY > startColumn, otherwise the
+      // marker is invisible. Spans from the parser are inclusive on
+      // start, exclusive on end -- so end.column is already correct
+      // for Monaco. We still guard with max() in case a diagnostic
+      // ever carries a degenerate zero-width span.
+      line: d.span.end.line,
+      column: Math.max(d.span.end.column, d.span.start.column + 1),
     },
   };
 }

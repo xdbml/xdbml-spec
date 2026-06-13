@@ -6,14 +6,14 @@
     <button
       type="button"
       class="h-8 px-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors flex-shrink-0"
-      :class="{ 'cursor-pointer': errorCount > 0, 'cursor-default': errorCount === 0 }"
-      :disabled="errorCount === 0"
+      :class="{ 'cursor-pointer': totalCount > 0, 'cursor-default': totalCount === 0 }"
+      :disabled="totalCount === 0"
       @click="toggle"
     >
       <div class="flex items-center gap-2">
         <!-- Caret only shown when there's something to expand into. -->
         <svg
-          v-if="errorCount > 0"
+          v-if="totalCount > 0"
           viewBox="0 0 12 12"
           class="w-3 h-3 text-gray-500 transition-transform"
           :class="{ 'rotate-90': bodyVisible }"
@@ -44,11 +44,11 @@
             {{ warningCount }} {{ warningCount === 1 ? 'warning' : 'warnings' }}
           </span>
         </template>
-        <span v-if="errorCount === 0 && warningCount === 0" class="text-xs text-gray-400">
+        <span v-if="totalCount === 0" class="text-xs text-gray-400">
           No issues
         </span>
       </div>
-      <span v-if="errorCount > 0" class="text-[10px] text-gray-400">
+      <span v-if="totalCount > 0" class="text-[10px] text-gray-400">
         {{ bodyVisible ? 'Click to collapse' : 'Click to expand' }}
       </span>
     </button>
@@ -56,21 +56,32 @@
     <!-- Body: list of diagnostics. Scrollable internally so a wall of
          errors doesn't push the diagram off-screen. -->
     <div
-      v-if="bodyVisible && errorCount > 0"
+      v-if="bodyVisible && totalCount > 0"
       class="border-t border-gray-100 overflow-y-auto"
       :style="{ maxHeight: BODY_MAX_HEIGHT_PX + 'px' }"
     >
       <ul class="divide-y divide-gray-50">
         <li
-          v-for="(err, i) in sortedErrors"
+          v-for="(err, i) in sortedDiagnostics"
           :key="i"
           class="flex items-start gap-3 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors"
           @click="onErrorClick(err)"
         >
-          <!-- Severity icon. All diagnostics today are errors; warnings
-               will arrive with the semantic-analysis pass and the panel
-               is shaped to handle them already. -->
-          <span class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 flex-shrink-0 mt-0.5">
+          <!-- Severity icon: red 'x' for errors, amber '!' for warnings.
+               Drives the styling per-row so a mixed list (some errors,
+               some warnings) reads at a glance. -->
+          <span
+            v-if="err.severity === 'warning'"
+            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 flex-shrink-0 mt-0.5"
+          >
+            <svg viewBox="0 0 8 8" class="w-2.5 h-2.5">
+              <path d="M4 1v3.5M4 6v0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span
+            v-else
+            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 flex-shrink-0 mt-0.5"
+          >
             <svg viewBox="0 0 8 8" class="w-2.5 h-2.5">
               <path d="M2 2l4 4M6 2l-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
@@ -80,8 +91,15 @@
             <div class="text-xs text-gray-900 leading-snug break-words">
               {{ err.message }}
             </div>
-            <div class="text-[10px] text-gray-500 mt-0.5 font-mono">
-              Line {{ err.location.line }}, column {{ err.location.column }}
+            <div class="text-[10px] text-gray-500 mt-0.5 font-mono flex items-center gap-2">
+              <span>Line {{ err.location.line }}, column {{ err.location.column }}</span>
+              <!-- Stable code (e.g. 'unresolved-type'). Helps users learn
+                   the vocabulary and lets them search the docs/FAQ for it.
+                   Numeric codes (lex/parse internals) stay hidden. -->
+              <span
+                v-if="typeof err.code === 'string'"
+                class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600"
+              >{{ err.code }}</span>
             </div>
           </div>
         </li>
@@ -131,25 +149,22 @@ const parser = useParserStore();
 
 const BODY_MAX_HEIGHT_PX = 200;
 
-const sortedErrors = computed<readonly ParserError[]>(() => {
-  // Sort by line then column. The parser usually emits them in source
-  // order already, but defensively sort here in case future error
-  // sources add to the list out of order.
+const sortedDiagnostics = computed<readonly ParserError[]>(() => {
+  // Sort by line then column. The resolver emits in walk order which
+  // doesn't always match source order; sort defensively so the panel
+  // reads top-to-bottom of the file.
   return [...parser.errors].sort((a, b) => {
     if (a.location.line !== b.location.line) return a.location.line - b.location.line;
     return a.location.column - b.location.column;
   });
 });
 
-const errorCount = computed(() => sortedErrors.value.length);
-
-// Warnings are split out for future semantic-analysis output. Today all
-// diagnostics arrive as errors. The shape is here so the UI doesn't
-// have to change when warnings land.
-const warningCount = computed(() => 0);
+const errorCount = computed(() => sortedDiagnostics.value.filter((d) => d.severity === 'error').length);
+const warningCount = computed(() => sortedDiagnostics.value.filter((d) => d.severity === 'warning').length);
+const totalCount = computed(() => sortedDiagnostics.value.length);
 
 function toggle (): void {
-  if (errorCount.value === 0) return;
+  if (totalCount.value === 0) return;
   emit('update:bodyVisible', !props.bodyVisible);
 }
 

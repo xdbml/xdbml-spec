@@ -17,13 +17,22 @@ export function setMonacoMarkers (
   errors: readonly ParserError[],
 ): void {
   const markers: monaco.editor.IMarkerData[] = errors.map((e) => ({
-    severity: monaco.MarkerSeverity.Error,
+    // Error vs Warning -- driven by the diagnostic's own severity rather
+    // than hardcoded. Lex/parse failures arrive as 'error' (the AST is
+    // unusable); resolver diagnostics are 'error' today but the panel
+    // and marker layer are shape-ready for warnings.
+    severity: e.severity === 'warning'
+      ? monaco.MarkerSeverity.Warning
+      : monaco.MarkerSeverity.Error,
     message: e.message,
     startLineNumber: e.location.line,
     startColumn: e.location.column,
     endLineNumber: e.endLocation.line,
     endColumn: Math.max(e.endLocation.column, e.location.column + 1),
-    code: e.code === -1 ? undefined : String(e.code),
+    // The code field shows up in Monaco's hover tooltip. Resolver
+    // diagnostics use stable string codes (e.g., 'unresolved-type');
+    // lex/parse use numeric codes (1, 2). Both render fine.
+    code: typeof e.code === 'number' && e.code === -1 ? undefined : String(e.code),
   }));
   monaco.editor.setModelMarkers(model, XDBML_LANGUAGE_ID, markers);
 }

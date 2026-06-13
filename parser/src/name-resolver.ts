@@ -47,6 +47,7 @@ import type {
   PathSegment,
   Position,
   RefEndpoint,
+  Span,
   TopLevelStatement,
   TypeDeclaration,
   TypeExpression,
@@ -118,12 +119,18 @@ export type DiagnosticCode =
  * A single resolution diagnostic. Severity is currently always `error`,
  * but the field is included to leave room for future warnings (e.g.,
  * style concerns like "redundant alias matches original name").
+ *
+ * Position is given as a Span (start + end) rather than a single Position
+ * so editor integrations (Monaco markers, LSP servers) can underline the
+ * exact offending construct rather than guessing where the squiggle
+ * should end. Each diagnostic's span corresponds to an AST node's own
+ * span (a field's type expression, a path endpoint, an entity name).
  */
 export interface Diagnostic {
   severity: 'error' | 'warning';
   code: DiagnosticCode;
   message: string;
-  position: Position;
+  span: Span;
 }
 
 /**
@@ -270,36 +277,36 @@ function addTopLevelDeclaration (
 ): void {
   switch (stmt.kind) {
     case 'EntityDeclaration':
-      addEntry(stmt.name, undefined, 'entity', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'entity', stmt, stmt.span, entries, diagnostics, seen);
       return;
     case 'TypeDeclaration':
-      addEntry(stmt.name, undefined, 'type', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'type', stmt, stmt.span, entries, diagnostics, seen);
       return;
     case 'EnumDeclaration':
-      addEntry(stmt.name, undefined, 'enum', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'enum', stmt, stmt.span, entries, diagnostics, seen);
       return;
     case 'EdgeDeclaration':
-      addEntry(stmt.name, undefined, 'edge', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'edge', stmt, stmt.span, entries, diagnostics, seen);
       return;
     case 'ViewDeclaration':
-      addEntry(stmt.name, undefined, 'view', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'view', stmt, stmt.span, entries, diagnostics, seen);
       return;
     case 'ContainerDeclaration': {
-      addEntry(stmt.name, undefined, 'container', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'container', stmt, stmt.span, entries, diagnostics, seen);
       // Walk container body for nested entities, edges, views, enums.
       for (const body of stmt.body) {
         switch (body.kind) {
           case 'EntityDeclaration':
-            addEntry(body.name, stmt.name, 'entity', body, body.span.start, entries, diagnostics, seen);
+            addEntry(body.name, stmt.name, 'entity', body, body.span, entries, diagnostics, seen);
             break;
           case 'EdgeDeclaration':
-            addEntry(body.name, stmt.name, 'edge', body, body.span.start, entries, diagnostics, seen);
+            addEntry(body.name, stmt.name, 'edge', body, body.span, entries, diagnostics, seen);
             break;
           case 'ViewDeclaration':
-            addEntry(body.name, stmt.name, 'view', body, body.span.start, entries, diagnostics, seen);
+            addEntry(body.name, stmt.name, 'view', body, body.span, entries, diagnostics, seen);
             break;
           case 'EnumDeclaration':
-            addEntry(body.name, stmt.name, 'enum', body, body.span.start, entries, diagnostics, seen);
+            addEntry(body.name, stmt.name, 'enum', body, body.span, entries, diagnostics, seen);
             break;
           // NoteBlock and ModuleImportDirective contribute no symbols.
           default:
@@ -309,14 +316,14 @@ function addTopLevelDeclaration (
       return;
     }
     case 'TableGroupDeclaration':
-      addEntry(stmt.name, undefined, 'tablegroup', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'tablegroup', stmt, stmt.span, entries, diagnostics, seen);
       return;
     case 'TablePartialDeclaration':
-      addEntry(stmt.name, undefined, 'tablepartial', stmt, stmt.span.start, entries, diagnostics, seen);
+      addEntry(stmt.name, undefined, 'tablepartial', stmt, stmt.span, entries, diagnostics, seen);
       return;
     case 'NoteDeclaration':
       if (stmt.name) {
-        addEntry(stmt.name, undefined, 'note', stmt, stmt.span.start, entries, diagnostics, seen);
+        addEntry(stmt.name, undefined, 'note', stmt, stmt.span, entries, diagnostics, seen);
       }
       return;
     // No symbols contributed by Project, Ref, top-level Records, ModuleImportDirective.
@@ -330,7 +337,7 @@ function addEntry (
   containerName: string | undefined,
   kind: SymbolKind,
   declaration: SymbolEntry['declaration'],
-  position: Position,
+  span: Span,
   entries: SymbolEntry[],
   diagnostics: Diagnostic[],
   seen: Set<string>,
@@ -343,7 +350,7 @@ function addEntry (
       code: 'duplicate-declaration',
       message: `Duplicate ${kind} declaration '${qualifiedName}'. ` +
         `Each ${kind} must have a unique qualified name within its scope.`,
-      position,
+      span,
     });
     return;
   }
@@ -354,7 +361,7 @@ function addEntry (
     containerName,
     kind,
     declaration,
-    position,
+    position: span.start,
   });
 }
 
@@ -403,7 +410,7 @@ function resolveTopLevel (
       return;
     case 'TableGroupDeclaration':
       for (const member of stmt.members) {
-        resolveTableGroupMember(member, stmt.span.start, symbols, diagnostics);
+        resolveTableGroupMember(member, stmt.span, symbols, diagnostics);
       }
       return;
     case 'TopLevelRecordsDeclaration': {
@@ -413,7 +420,7 @@ function resolveTopLevel (
           severity: 'error',
           code: 'unresolved-records-entity',
           message: `Top-level records declaration refers to unknown entity '${stmt.entityRef}'.`,
-          position: stmt.span.start,
+          span: stmt.span,
         });
       } else {
         // Validate each column is a field of the entity.
@@ -427,7 +434,7 @@ function resolveTopLevel (
               severity: 'error',
               code: 'unresolved-records-column',
               message: `Records column '${col}' is not a field of entity '${stmt.entityRef}'.`,
-              position: stmt.span.start,
+              span: stmt.span,
             });
           }
         }
@@ -463,7 +470,7 @@ function resolveEntityBody (
             severity: 'error',
             code: 'unresolved-partial',
             message: `Partial injection '~${item.partialName}' does not resolve to a TablePartial declaration.`,
-            position: item.span.start,
+            span: item.span,
           });
         }
         break;
@@ -530,7 +537,7 @@ function resolveTypeExpression (
             severity: 'error',
             code: 'unresolved-type',
             message: `Type '${expr.name}' is not a built-in type or declared Named Type.`,
-            position: expr.span.start,
+            span: expr.span,
           });
         }
       }
@@ -542,7 +549,7 @@ function resolveTypeExpression (
           severity: 'error',
           code: 'unresolved-type',
           message: `Named type '${expr.name}' is not declared.`,
-          position: expr.span.start,
+          span: expr.span,
         });
       }
       return;
@@ -562,7 +569,7 @@ function resolveTypeExpression (
               severity: 'error',
               code: 'unresolved-partial',
               message: `Partial injection '~${field.partialName}' does not resolve to a TablePartial declaration.`,
-              position: field.span.start,
+              span: field.span,
             });
           }
         }
@@ -693,7 +700,7 @@ function resolveRefSpec (
       severity: 'error',
       code: 'unresolved-entity',
       message: `Foreign-key endpoint references unknown entity '${guess}'.`,
-      position: endpoint.span.start,
+      span: endpoint.span,
     });
     return;
   }
@@ -713,7 +720,7 @@ function resolveRefSpec (
             severity: 'error',
             code: 'unresolved-field',
             message: `Field '${fname}' is not declared on entity '${entity.qualifiedName}'.`,
-            position: endpoint.span.start,
+            span: endpoint.span,
           });
         }
       }
@@ -730,7 +737,7 @@ function resolveRefSpec (
       severity: 'error',
       code: 'invalid-nested-path',
       message: `Foreign-key path on entity '${entity.qualifiedName}' starts with a non-field segment; expected a field name first.`,
-      position: topSeg.span.start,
+      span: topSeg.span,
     });
     return;
   }
@@ -742,7 +749,7 @@ function resolveRefSpec (
       severity: 'error',
       code: 'unresolved-field',
       message: `Field '${topSeg.name}' is not declared on entity '${entity.qualifiedName}'.`,
-      position: topSeg.span.start,
+      span: topSeg.span,
     });
     return;
   }
@@ -768,7 +775,7 @@ function resolveRefSpec (
         severity: 'error',
         code: 'invalid-nested-path',
         message: `Cannot apply composite fields (${endpoint.compositeFields!.join(', ')}) at this point in the path; the navigated type is not an object.`,
-        position: endpoint.span.start,
+        span: endpoint.span,
       });
       return;
     }
@@ -778,7 +785,7 @@ function resolveRefSpec (
           severity: 'error',
           code: 'unresolved-field',
           message: `Field '${fname}' is not declared at the FK endpoint's nested object type.`,
-          position: endpoint.span.start,
+          span: endpoint.span,
         });
       }
     }
@@ -857,7 +864,7 @@ function stepIntoType (
           severity: 'error',
           code: 'invalid-nested-path',
           message: `Cannot navigate field '${seg.name}' through ${current.kind}; use [*] (array/set), [N] (tuple), or [key] (map) before naming a field.`,
-          position: seg.span.start,
+          span: seg.span,
         });
         return undefined;
       }
@@ -869,7 +876,7 @@ function stepIntoType (
           severity: 'error',
           code: 'unresolved-field',
           message: `Field '${seg.name}' is not declared on the nested object type.`,
-          position: seg.span.start,
+          span: seg.span,
         });
         return undefined;
       }
@@ -887,7 +894,7 @@ function stepIntoType (
             severity: 'error',
             code: 'invalid-nested-path',
             message: `Array uses the alias 'name type' form which does not expose a navigable element type for further path traversal.`,
-            position: seg.span.start,
+            span: seg.span,
           });
           return undefined;
         }
@@ -900,7 +907,7 @@ function stepIntoType (
         severity: 'error',
         code: 'invalid-nested-path',
         message: `Array wildcard [*] is only valid on array or set types, not ${current.kind}.`,
-        position: seg.span.start,
+        span: seg.span,
       });
       return undefined;
     }
@@ -915,7 +922,7 @@ function stepIntoType (
             severity: 'error',
             code: 'invalid-nested-path',
             message: `Tuple has no element at position [${seg.index}].`,
-            position: seg.span.start,
+            span: seg.span,
           });
           return undefined;
         }
@@ -925,7 +932,7 @@ function stepIntoType (
         severity: 'error',
         code: 'invalid-nested-path',
         message: `Numeric index [${seg.index}] is only valid on array or tuple types, not ${current.kind}.`,
-        position: seg.span.start,
+        span: seg.span,
       });
       return undefined;
     }
@@ -937,7 +944,7 @@ function stepIntoType (
         severity: 'error',
         code: 'invalid-nested-path',
         message: `Map key [${seg.key}] is only valid on map types, not ${current.kind}.`,
-        position: seg.span.start,
+        span: seg.span,
       });
       return undefined;
     }
@@ -1019,7 +1026,7 @@ function extractFieldNamesFromType (
 
 function resolveTableGroupMember (
   member: string,
-  position: Position,
+  span: Span,
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
 ): void {
@@ -1029,7 +1036,7 @@ function resolveTableGroupMember (
       severity: 'error',
       code: 'unresolved-tablegroup-member',
       message: `TableGroup member '${member}' does not resolve to an entity.`,
-      position,
+      span,
     });
   }
 }
