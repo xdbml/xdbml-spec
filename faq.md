@@ -87,6 +87,21 @@ For autonomy, attach a **clone block** to any directive. The clone embeds the im
 
 A common pattern: a "conformed dimensions" file declares canonical entities (customers, products, dates) used by multiple data products. Each data product imports the canonical entities into its own Container with clone blocks for autonomy. The conformed file is the single source of truth; data products lock the version they depend on via the clone.
 
+## Can I use xDBML and the playground instead of a data modeling tool?
+
+No. xDBML is a format, not a data modeling tool, and the <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> is a demonstrator for the language, not an IDE. Both are well-suited to learning xDBML, prototyping small schemas, sharing a schema in chat or a pull request, and feeding schemas to and from AI assistants. None of that adds up to a substitute for a purpose-built enterprise data modeling tool.
+
+The work that enterprise data modeling tools do, and that xDBML deliberately does not:
+
+- **Reverse-engineering from live systems.** Modern data modeling tools introspect dozens of database engines, message buses, document stores, and metadata catalogs, then produce a coherent model. xDBML is what can come out of that process for portable consumption; it is not the engine that performs the introspection.
+- **Forward-engineering with full target fidelity.** A data modeling tool generates Oracle DDL with partitions, tablespaces, indexes with vendor-specific options, sequences, triggers, materialized views, and PL/SQL; MongoDB validators with collection-level options; Avro schemas with vendor extensions; and so on. xDBML carries only what is portable across targets -- the declarative shape and meaning. Vendor-specific operational features live in the tool's native model.
+- **Schema evolution and impact analysis.** Compare two versions of a model, see what changed, understand the blast radius of a rename, generate migration DDL. Data modeling tools do this with diff engines that know about referential integrity, column-order semantics, and engine-specific upgrade paths.
+- **Governance and catalog integration.** Lineage, glossary linkage, classification propagation, policy enforcement, ownership and stewardship workflows, audit trails, approval gates. xDBML carries metadata that integrates with these systems; it does not implement them.
+- **Documentation and collaboration at scale.** Generated HTML reports, data dictionaries with custom layouts, multi-user editing, comments, review workflows, role-based access. xDBML files read cleanly in Git, but a team of architects working across hundreds or thousands of entities needs a tool, not a directory.
+- **Diagram authoring.** The playground renders xDBML and lets you arrange it for a demo or a tutorial; real data modeling work needs sophisticated automatic layout, multiple notation styles (Crow's foot, IDEF1X, UML), abstraction layers (conceptual, logical, physical), focus diagrams, and the ability to print and embed.
+
+Tools like ER/Studio, Erwin Data Modeler, and Hackolade exist because all of the above are hard, valuable, and worth paying for. xDBML's role is to be the open, portable, AI-readable format that connects them to humans, AI assistants, governance platforms, and code, not to compete with them.
+
 ## Is xDBML competing with JSON Schema, OpenAPI, Avro, GraphQL, or SQL DDL?
 
 No. Each of those serves a specific consumer in a specific context:
