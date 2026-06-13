@@ -1453,6 +1453,162 @@ Ref: orders.line_items.[*].sku > products.sku`,
         return null;
       },
     },
+    /* -------------------------------------------------------------------
+     * P6-nested: deep nested-field FK validation
+     *
+     * The walker now follows path segments INTO field type expressions,
+     * dereferencing Named Types and stepping through arrays/sets/maps/
+     * tuples/objects. These tests exercise both happy paths and the
+     * structural-failure modes (typos, missing [*], etc.).
+     * ----------------------------------------------------------------- */
+    {
+      name: 'P6-nested: typo in nested field name emits unresolved-field',
+      source: `xdbml: 0.2
+Entity orders {
+  id int [pk]
+  line_items array [
+    object {
+      sku varchar
+      qty int
+    }
+  ]
+}
+Entity products { sku varchar [pk] }
+Ref: orders.line_items.[*].skuu > products.sku`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const fieldDiags = r.diagnostics.filter((d) => d.code === 'unresolved-field');
+        if (fieldDiags.length !== 1) return `expected 1 unresolved-field, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        if (!fieldDiags[0].message.includes('skuu')) return `should mention skuu, got: ${fieldDiags[0].message}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6-nested: navigating into array without [*] is invalid',
+      source: `xdbml: 0.2
+Entity orders {
+  id int [pk]
+  items array [
+    object {
+      sku varchar
+    }
+  ]
+}
+Entity products { sku varchar [pk] }
+Ref: orders.items.sku > products.sku`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const structDiags = r.diagnostics.filter((d) => d.code === 'invalid-nested-path');
+        if (structDiags.length !== 1) return `expected 1 invalid-nested-path, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6-nested: navigating through object-form Named Type works',
+      source: `xdbml: 0.2
+Type Address {
+  street varchar
+  city varchar
+}
+Entity orders {
+  id int [pk]
+  ship Address
+}
+Entity zips { code varchar [pk] }
+Ref: orders.ship.street > zips.code`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `should resolve through Named Type, got: ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6-nested: navigating past scalar Named Type is invalid',
+      source: `xdbml: 0.2
+Type Email varchar [pattern: '.*@.*']
+Entity users {
+  id int [pk]
+  email Email
+}
+Entity foo { x varchar [pk] }
+Ref: users.email.something > foo.x`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const structDiags = r.diagnostics.filter((d) => d.code === 'invalid-nested-path');
+        if (structDiags.length !== 1) return `expected 1 invalid-nested-path, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6-nested: map key access through map[varchar, object] navigates value type',
+      source: `xdbml: 0.2
+Entity user_settings {
+  id int [pk]
+  prefs map [
+    varchar,
+    object {
+      enabled boolean
+      weight int
+    }
+  ]
+}
+Entity flags { value boolean [pk] }
+Ref: user_settings.prefs.['theme'].enabled > flags.value`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `map key access should resolve, got: ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6-nested: composite endpoint at nested level validates both fields',
+      source: `xdbml: 0.2
+Entity orders {
+  id int [pk]
+  line_items array [
+    object {
+      sku varchar
+      qty int
+      price decimal(10,2)
+    }
+  ]
+}
+Entity products {
+  sku varchar [pk]
+  price_band int [pk]
+}
+Ref: orders.line_items.[*].(sku, qty) > products.(sku, price_band)`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `nested composite should resolve, got: ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6-nested: cycle in Named Types hits depth limit and bails silently',
+      source: `xdbml: 0.2
+Type A B
+Type B A
+Entity foo {
+  id int [pk]
+  a A
+}
+Entity bar { x int [pk] }
+Ref: foo.a.something > bar.x`,
+      assert: (doc) => {
+        // The walker should hit MAX_TYPE_WALK_DEPTH and bail without
+        // emitting a noisy diagnostic chain. The field-type resolver
+        // (which runs separately) handles the actual "Type A references
+        // Type B" name resolution; we just need to make sure the FK
+        // walker doesn't crash or emit spam.
+        const r = resolveNames(doc);
+        // It's OK if there's an unresolved-type from the field-type pass.
+        // What we DON'T want is many duplicated invalid-nested-path errors.
+        const nestedSpam = r.diagnostics.filter((d) => d.code === 'invalid-nested-path');
+        if (nestedSpam.length > 1) return `cycle should not spam invalid-nested-path; got ${nestedSpam.length}`;
+        return null;
+      },
+    },
     {
       name: 'P6: top-level records entity must exist',
       source: `xdbml: 0.2

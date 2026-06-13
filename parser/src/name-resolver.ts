@@ -43,6 +43,8 @@ import type {
   EntityDeclaration,
   EnumDeclaration,
   FieldDeclaration,
+  ObjectType,
+  PathSegment,
   Position,
   RefEndpoint,
   TopLevelStatement,
@@ -109,7 +111,8 @@ export type DiagnosticCode =
   | 'unresolved-tablegroup-member'
   | 'unresolved-records-entity'
   | 'unresolved-records-column'
-  | 'empty-import';
+  | 'empty-import'
+  | 'invalid-nested-path';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -617,64 +620,66 @@ function resolveRefSpec (
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
 ): void {
-  // Extract the leading run of PathField segments from the endpoint path.
-  // Non-field segments (PathArrayIndex, PathArrayWildcard, PathMapKey)
-  // mark a transition into nested-field navigation; nothing past those
-  // can be part of the entity name.
-  const fieldSegments: string[] = [];
+  // Foreign-key endpoint resolution proceeds in four phases:
+  //
+  //   PHASE 1  Find the entity. The entity is the longest leading run of
+  //            PathField segments that resolves to a declared entity.
+  //
+  //   PHASE 2  Compute the post-entity path -- the segments that name a
+  //            field on the entity and (optionally) navigate into the
+  //            field's type. Includes any non-PathField segments (array
+  //            wildcards, indices, map keys) that follow.
+  //
+  //   PHASE 3  Validate the top-level field exists on the entity.
+  //
+  //   PHASE 4  If more segments remain, walk the field's type expression
+  //            consuming one segment at a time. Composite endpoints
+  //            (`(f1, f2)`) get validated against whichever type the walk
+  //            lands on (the entity itself, or a nested object).
+  //
+  // The walker handles ObjectType field access, Array/Set wildcards and
+  // indices, Map key access, Tuple positional access, and Named Type
+  // dereferencing (with a depth limit to break cycles).
+
+  // PHASE 1: collect leading PathField run.
+  const leadingFields: string[] = [];
   for (const seg of endpoint.path) {
     if (seg.kind === 'PathField') {
-      fieldSegments.push(seg.name);
+      leadingFields.push(seg.name);
     } else {
-      // Stop at the first non-field segment.
+      // Stop at the first non-field segment -- nothing past it can be
+      // part of the entity name.
       break;
     }
   }
+  if (leadingFields.length === 0) return;
 
-  // Composite endpoints: `customers.(id, country_code)` -- the WHOLE
-  // path is the entity reference, and compositeFields lists the fields.
-  if (endpoint.compositeFields && endpoint.compositeFields.length > 0) {
-    const entityPath = fieldSegments.join('.');
-    const entity = resolveEntityRef(entityPath, symbols);
-    if (!entity) {
-      diagnostics.push({
-        severity: 'error',
-        code: 'unresolved-entity',
-        message: `Foreign-key endpoint references unknown entity '${entityPath}'.`,
-        position: endpoint.span.start,
-      });
-      return;
-    }
-    if (entity.declaration.kind === 'EntityDeclaration') {
-      const fieldNameSet = collectFieldNames(entity.declaration);
-      for (const fname of endpoint.compositeFields) {
-        if (!fieldNameSet.has(fname)) {
-          diagnostics.push({
-            severity: 'error',
-            code: 'unresolved-field',
-            message: `Field '${fname}' is not declared on entity '${entityPath}'.`,
-            position: endpoint.span.start,
-          });
-        }
-      }
-    }
-    return;
-  }
+  const hasComposite = !!(endpoint.compositeFields && endpoint.compositeFields.length > 0);
+  const hasNonFieldTail = endpoint.path.length > leadingFields.length;
 
-  // Simple endpoint: `a.b.c.d` could be "entity a.b.c, field d" or
-  // "entity a.b, field c (then nested .d)" or "entity a, field b
-  // (then nested .c.d)". Try longest entity prefix first; the longest
-  // prefix that resolves to a declared entity wins.
-  if (fieldSegments.length < 2) {
-    // Need at least one entity segment and one field segment.
-    return;
+  // Decide how many leading PathFields could form the entity. If there
+  // are non-field segments after the leading run (e.g., `[*]`), the
+  // entity must end at least one PathField before, because navigation
+  // through array/map/etc. can only begin AFTER a field has been
+  // selected. If there are no non-field segments and no composite
+  // (the simple `a.b.c` case), the entity is everything except the last
+  // segment. With composite and no nested tail, the entity can be the
+  // ENTIRE leading run -- composite fields are listed separately.
+  let maxEntityLen: number;
+  if (hasNonFieldTail) {
+    maxEntityLen = leadingFields.length - 1;
+  } else if (hasComposite) {
+    maxEntityLen = leadingFields.length;
+  } else {
+    maxEntityLen = leadingFields.length - 1;
   }
-  // Try the longest prefix as the entity, then progressively shorter
-  // prefixes until we find a match (or run out).
+  if (maxEntityLen < 1) return;
+
+  // PHASE 1 (cont'd): longest-prefix entity match.
   let entity: SymbolEntry | undefined;
   let entityPrefixLen = 0;
-  for (let len = fieldSegments.length - 1; len >= 1; len -= 1) {
-    const candidate = fieldSegments.slice(0, len).join('.');
+  for (let len = maxEntityLen; len >= 1; len -= 1) {
+    const candidate = leadingFields.slice(0, len).join('.');
     const found = resolveEntityRef(candidate, symbols);
     if (found) {
       entity = found;
@@ -683,32 +688,99 @@ function resolveRefSpec (
     }
   }
   if (!entity) {
-    // Use the most natural-looking guess (everything except the last
-    // segment) as the unresolved entity name for the diagnostic.
-    const guessEntity = fieldSegments.slice(0, -1).join('.');
+    const guess = leadingFields.slice(0, maxEntityLen).join('.');
     diagnostics.push({
       severity: 'error',
       code: 'unresolved-entity',
-      message: `Foreign-key endpoint references unknown entity '${guessEntity}'.`,
+      message: `Foreign-key endpoint references unknown entity '${guess}'.`,
       position: endpoint.span.start,
     });
     return;
   }
-  // The first segment AFTER the entity prefix is the top-level field
-  // name (the field on the entity itself). Subsequent segments are
-  // nested-field navigation, which the resolver doesn't validate
-  // (would require walking through type expressions). For P6 we only
-  // check the top-level field name.
-  if (entity.declaration.kind === 'EntityDeclaration') {
-    const topFieldName = fieldSegments[entityPrefixLen];
-    const fieldNameSet = collectFieldNames(entity.declaration);
-    if (!fieldNameSet.has(topFieldName)) {
+  if (entity.declaration.kind !== 'EntityDeclaration') return;
+
+  // PHASE 2: compute the post-entity portion of endpoint.path.
+  const remaining = endpoint.path.slice(entityPrefixLen);
+
+  // Special case: path is JUST the entity (no remaining segments). With
+  // composite, validate composite fields against the entity body.
+  if (remaining.length === 0) {
+    if (hasComposite) {
+      const fieldNameSet = collectFieldNames(entity.declaration);
+      for (const fname of endpoint.compositeFields!) {
+        if (!fieldNameSet.has(fname)) {
+          diagnostics.push({
+            severity: 'error',
+            code: 'unresolved-field',
+            message: `Field '${fname}' is not declared on entity '${entity.qualifiedName}'.`,
+            position: endpoint.span.start,
+          });
+        }
+      }
+    }
+    return;
+  }
+
+  // PHASE 3: the first remaining segment is the top-level field name.
+  const topSeg = remaining[0];
+  if (topSeg.kind !== 'PathField') {
+    // E.g., entity followed immediately by `[*]`. Structurally invalid
+    // because navigation can only begin after a field selection.
+    diagnostics.push({
+      severity: 'error',
+      code: 'invalid-nested-path',
+      message: `Foreign-key path on entity '${entity.qualifiedName}' starts with a non-field segment; expected a field name first.`,
+      position: topSeg.span.start,
+    });
+    return;
+  }
+  const topField = entity.declaration.body.find(
+    (item) => item.kind === 'FieldDeclaration' && item.name === topSeg.name,
+  ) as FieldDeclaration | undefined;
+  if (!topField) {
+    diagnostics.push({
+      severity: 'error',
+      code: 'unresolved-field',
+      message: `Field '${topSeg.name}' is not declared on entity '${entity.qualifiedName}'.`,
+      position: topSeg.span.start,
+    });
+    return;
+  }
+
+  // PHASE 4: walk the field's type for any further segments.
+  let finalType: TypeExpression | undefined = topField.type;
+  if (remaining.length > 1) {
+    const nested = remaining.slice(1);
+    finalType = walkTypePath(topField.type, nested, symbols, diagnostics, 0);
+    // walkTypePath returns undefined on error (and has already emitted
+    // a diagnostic). Continue to composite validation only when the walk
+    // succeeded.
+    if (!finalType) return;
+  }
+
+  // Composite endpoint: validate composite fields against the final type.
+  if (hasComposite) {
+    const compositeFieldNames = extractFieldNamesFromType(finalType, symbols);
+    if (!compositeFieldNames) {
+      // The final type isn't an object-shaped type, so composite-field
+      // validation can't apply. Emit a structural diagnostic.
       diagnostics.push({
         severity: 'error',
-        code: 'unresolved-field',
-        message: `Field '${topFieldName}' is not declared on entity '${entity.qualifiedName}'.`,
+        code: 'invalid-nested-path',
+        message: `Cannot apply composite fields (${endpoint.compositeFields!.join(', ')}) at this point in the path; the navigated type is not an object.`,
         position: endpoint.span.start,
       });
+      return;
+    }
+    for (const fname of endpoint.compositeFields!) {
+      if (!compositeFieldNames.has(fname)) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'unresolved-field',
+          message: `Field '${fname}' is not declared at the FK endpoint's nested object type.`,
+          position: endpoint.span.start,
+        });
+      }
     }
   }
 }
@@ -717,6 +789,230 @@ function collectFieldNames (entity: EntityDeclaration): Set<string> {
   const names = new Set<string>();
   for (const item of entity.body) {
     if (item.kind === 'FieldDeclaration') names.add(item.name);
+  }
+  return names;
+}
+
+/* -------------------------------------------------------------------------
+ * Type-path navigation (nested-field FK validation)
+ *
+ * Given a starting `TypeExpression` and a sequence of `PathSegment`s,
+ * walk the type structure consuming one segment at a time. Each segment
+ * shapes how we advance:
+ *
+ *   PathField              -> requires an ObjectType; selects the named field
+ *   PathArrayWildcard [*]  -> requires Array/Set; advances to the element type
+ *   PathArrayIndex [N]     -> Array (-> element), Tuple (-> position N's type)
+ *   PathMapKey [k]         -> requires MapType; advances to the value type
+ *
+ * Named Types are dereferenced on entry (a `ScalarType` whose name isn't
+ * a built-in or a `NamedTypeReference` -> look up in the symbol table;
+ * if a scalar Named Type, deref to its base; if an object Named Type,
+ * synthesize an ObjectType wrapping its body). A depth limit breaks
+ * pathological cycles (`Type A B; Type B A`).
+ *
+ * On structural failure (wrong shape for the segment) or unresolved
+ * names, the walker emits a diagnostic and returns undefined. On success
+ * it returns the type after consuming all segments.
+ * ----------------------------------------------------------------------- */
+
+const MAX_TYPE_WALK_DEPTH = 16;
+
+function walkTypePath (
+  startType: TypeExpression,
+  segments: ReadonlyArray<PathSegment>,
+  symbols: SymbolTable,
+  diagnostics: Diagnostic[],
+  depth: number,
+): TypeExpression | undefined {
+  let current: TypeExpression = startType;
+  for (const seg of segments) {
+    const next = stepIntoType(current, seg, symbols, diagnostics, depth);
+    if (!next) return undefined;
+    current = next;
+  }
+  return current;
+}
+
+function stepIntoType (
+  current: TypeExpression,
+  seg: PathSegment,
+  symbols: SymbolTable,
+  diagnostics: Diagnostic[],
+  depth: number,
+): TypeExpression | undefined {
+  // Dereference Named Types up front so the segment-kind switch below
+  // operates on the structural form.
+  const resolved = dereferenceNamedType(current, symbols, depth);
+  if (!resolved) return undefined; // depth limit hit (or unresolved Named Type)
+  current = resolved;
+
+  switch (seg.kind) {
+    case 'PathField': {
+      // Field access is only meaningful on ObjectType. Other shapes
+      // (array/map/set/tuple) require an explicit element-access segment
+      // first ([*], [N], [key]).
+      if (current.kind !== 'ObjectType') {
+        diagnostics.push({
+          severity: 'error',
+          code: 'invalid-nested-path',
+          message: `Cannot navigate field '${seg.name}' through ${current.kind}; use [*] (array/set), [N] (tuple), or [key] (map) before naming a field.`,
+          position: seg.span.start,
+        });
+        return undefined;
+      }
+      const field = current.fields.find(
+        (f) => f.kind === 'FieldDeclaration' && f.name === seg.name,
+      ) as FieldDeclaration | undefined;
+      if (!field) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'unresolved-field',
+          message: `Field '${seg.name}' is not declared on the nested object type.`,
+          position: seg.span.start,
+        });
+        return undefined;
+      }
+      return field.type;
+    }
+    case 'PathArrayWildcard': {
+      if (current.kind === 'ArrayType') {
+        if (!current.elementType) {
+          // `array [name type]` form -- the element type lives elsewhere
+          // (elementName + elementSettings). For walker purposes, treat
+          // the array as having an opaque element and stop walking
+          // further by returning undefined silently (no diagnostic; this
+          // is a v0.2 shape the spec calls out as alias-only).
+          diagnostics.push({
+            severity: 'error',
+            code: 'invalid-nested-path',
+            message: `Array uses the alias 'name type' form which does not expose a navigable element type for further path traversal.`,
+            position: seg.span.start,
+          });
+          return undefined;
+        }
+        return current.elementType;
+      }
+      if (current.kind === 'SetType') {
+        return current.elementType;
+      }
+      diagnostics.push({
+        severity: 'error',
+        code: 'invalid-nested-path',
+        message: `Array wildcard [*] is only valid on array or set types, not ${current.kind}.`,
+        position: seg.span.start,
+      });
+      return undefined;
+    }
+    case 'PathArrayIndex': {
+      if (current.kind === 'ArrayType') {
+        return current.elementType;
+      }
+      if (current.kind === 'TupleType') {
+        const elem = current.elements.find((e) => e.position === seg.index);
+        if (!elem) {
+          diagnostics.push({
+            severity: 'error',
+            code: 'invalid-nested-path',
+            message: `Tuple has no element at position [${seg.index}].`,
+            position: seg.span.start,
+          });
+          return undefined;
+        }
+        return elem.type;
+      }
+      diagnostics.push({
+        severity: 'error',
+        code: 'invalid-nested-path',
+        message: `Numeric index [${seg.index}] is only valid on array or tuple types, not ${current.kind}.`,
+        position: seg.span.start,
+      });
+      return undefined;
+    }
+    case 'PathMapKey': {
+      if (current.kind === 'MapType') {
+        return current.valueType;
+      }
+      diagnostics.push({
+        severity: 'error',
+        code: 'invalid-nested-path',
+        message: `Map key [${seg.key}] is only valid on map types, not ${current.kind}.`,
+        position: seg.span.start,
+      });
+      return undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Resolve a TypeExpression to its structural form by chasing through
+ * Named Type references. Returns the resolved type, or undefined when
+ * the depth limit is hit (cycle) or the Named Type doesn't exist (in
+ * which case the field-type resolver has already emitted a diagnostic
+ * elsewhere -- we silently fail here to avoid duplicate errors).
+ *
+ * For object-form Named Types, synthesizes an ObjectType wrapping the
+ * Type's body so callers can navigate via PathField uniformly.
+ */
+function dereferenceNamedType (
+  type: TypeExpression,
+  symbols: SymbolTable,
+  depth: number,
+): TypeExpression | undefined {
+  if (depth > MAX_TYPE_WALK_DEPTH) return undefined;
+
+  // ScalarType might be a Named Type reference (parser ambiguity).
+  // NamedTypeReference always is.
+  let name: string | undefined;
+  if (type.kind === 'ScalarType' && !isBuiltinType(type.name)) {
+    name = type.name;
+  } else if (type.kind === 'NamedTypeReference') {
+    name = type.name;
+  } else {
+    // Already a structural form.
+    return type;
+  }
+
+  const sym = symbols.lookup(name) ?? symbols.lookupBare(name);
+  if (!sym || sym.kind !== 'type' || sym.declaration.kind !== 'TypeDeclaration') {
+    // Unresolved -- the field-type pass will diagnose this. Return
+    // undefined so the walker bails without emitting a duplicate error.
+    return undefined;
+  }
+  const td = sym.declaration;
+  if (td.scalarBase) {
+    // Scalar Named Type -- recurse through to the base.
+    return dereferenceNamedType(td.scalarBase, symbols, depth + 1);
+  }
+  // Object-form Named Type. Synthesize an ObjectType so the walker can
+  // navigate its fields uniformly. The span points at the Type
+  // declaration; segment-level positions remain correct because we don't
+  // use the synthetic ObjectType's span for diagnostics.
+  const synthesized: ObjectType = {
+    kind: 'ObjectType',
+    keyword: 'object',
+    fields: td.body,
+    span: td.span,
+  };
+  return synthesized;
+}
+
+/**
+ * Get the set of declared field names on a type, dereferencing Named
+ * Types as needed. Returns undefined when the type isn't an object-shaped
+ * type at all (composite-field validation can't apply).
+ */
+function extractFieldNamesFromType (
+  type: TypeExpression,
+  symbols: SymbolTable,
+): Set<string> | undefined {
+  const resolved = dereferenceNamedType(type, symbols, 0);
+  if (!resolved || resolved.kind !== 'ObjectType') return undefined;
+  const names = new Set<string>();
+  for (const f of resolved.fields) {
+    if (f.kind === 'FieldDeclaration') names.add(f.name);
   }
   return names;
 }
