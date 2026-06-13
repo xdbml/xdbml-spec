@@ -1711,6 +1711,292 @@ Entity posts {
       },
     },
     {
+      name: 'P7 field-imports: clone-block scalar field lifts to a Named Type',
+      source: `xdbml: 0.2
+reuse { field core.dim_customer.email } from './lib' {
+  email varchar [pattern: '^[^@]+@[^@]+$']
+}
+
+Entity users {
+  id int [pk]
+  user_email email
+}`,
+      assert: (doc) => {
+        const flat = flatten(doc);
+        const td = flat.statements.find((s) => s.kind === 'TypeDeclaration' && s.name === 'email');
+        if (!td || td.kind !== 'TypeDeclaration') return 'expected synthesized Type email';
+        if (!td.scalarBase) return 'expected scalarBase';
+        if (td.scalarBase.kind !== 'ScalarType' || td.scalarBase.name !== 'varchar') return 'wrong scalarBase';
+        if (td.settings.length !== 1 || td.settings[0].name !== 'pattern') return 'pattern setting should carry over';
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected 0 diagnostics, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P7 field-imports: clone-block alias renames the synthesized Type',
+      source: `xdbml: 0.2
+reuse { field core.dim_customer.email as PIIEmail } from './lib' {
+  PIIEmail varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+}
+
+Entity users {
+  id int [pk]
+  user_email PIIEmail
+}`,
+      assert: (doc) => {
+        const flat = flatten(doc);
+        const td = flat.statements.find((s) => s.kind === 'TypeDeclaration');
+        if (!td || td.kind !== 'TypeDeclaration') return 'expected a Type';
+        if (td.name !== 'PIIEmail') return `expected PIIEmail, got ${td.name}`;
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `unexpected diagnostics: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P7 field-imports: clone-block object-form field lifts to object Named Type',
+      source: `xdbml: 0.2
+reuse { field core.dim_customer.address } from './lib' {
+  address object {
+    street varchar
+    city varchar
+  }
+}
+
+Entity orders {
+  id int [pk]
+  ship address
+}
+
+Entity cities { name varchar [pk] }
+Ref: orders.ship.city > cities.name`,
+      assert: (doc) => {
+        const flat = flatten(doc);
+        const td = flat.statements.find((s) => s.kind === 'TypeDeclaration' && s.name === 'address');
+        if (!td || td.kind !== 'TypeDeclaration') return 'expected Type address';
+        if (td.scalarBase) return 'object-form Type should have undefined scalarBase';
+        if (td.body.length !== 2) return `expected 2 body fields, got ${td.body.length}`;
+        const r = resolveNames(doc);
+        // The Ref through orders.ship.city should resolve cleanly.
+        if (r.diagnostics.length !== 0) return `unexpected diagnostics: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P7 field-imports: mixed directive (field + type in one import)',
+      source: `xdbml: 0.2
+reuse { type Color, field core.cat.weight_grams } from './lib' {
+  Type Color varchar
+  weight_grams int
+}
+
+Entity products {
+  id int [pk]
+  primary_color Color
+  weight weight_grams
+}`,
+      assert: (doc) => {
+        const flat = flatten(doc);
+        const types = flat.statements.filter((s) => s.kind === 'TypeDeclaration');
+        if (types.length !== 2) return `expected 2 Types after flatten, got ${types.length}`;
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `unexpected diagnostics: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'P7 field-imports: file-scope only -- rejected inside Container body',
+      source: `xdbml: 0.2
+Container app {
+  reuse { field core.X.email } from './lib' {
+    email varchar
+  }
+}`,
+      expectError: true,
+    },
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Container core {
+  Entity dim_customer {
+    id int [pk]
+    email varchar [pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+    country varchar
+  }
+}`,
+      };
+      return {
+        name: 'P7 field-imports: reference-only resolves via readFile (basic)',
+        source: `xdbml: 0.2
+reuse { field core.dim_customer.email } from './lib'
+
+Entity users {
+  id int [pk]
+  user_email email
+}`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          if (dir.clone.statements.length !== 1) return `expected 1 clone statement, got ${dir.clone.statements.length}`;
+          const fd = dir.clone.statements[0];
+          if (fd.kind !== 'FieldDeclaration') return `expected FieldDeclaration in clone, got ${fd.kind}`;
+          if (fd.name !== 'email') return `expected name 'email', got '${fd.name}'`;
+          // Pattern setting should have been carried over from the source field.
+          if (!fd.settings.some((s) => s.name === 'pattern')) return 'expected pattern setting on cloned field';
+          // After flatten + resolve, no diagnostics.
+          const r = resolveNames(doc);
+          if (r.diagnostics.length !== 0) return `unexpected diagnostics: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Container core {
+  Entity dim_customer {
+    id int [pk]
+    email varchar [pattern: '^[^@]+@[^@]+$']
+  }
+}`,
+      };
+      return {
+        name: 'P7 field-imports: reference-only with alias renames the cloned field',
+        source: `xdbml: 0.2
+reuse { field core.dim_customer.email as CanonicalEmail } from './lib'
+
+Entity users {
+  id int [pk]
+  user_email CanonicalEmail
+}`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          const fd = dir.clone.statements[0];
+          if (fd.kind !== 'FieldDeclaration' || fd.name !== 'CanonicalEmail') return `expected aliased name CanonicalEmail, got ${(fd as { name?: string }).name}`;
+          const r = resolveNames(doc);
+          if (r.diagnostics.length !== 0) return `unexpected diagnostics: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Container core {
+  Entity dim_customer {
+    id int [pk]
+    address object {
+      street varchar
+      city varchar [maxLength: 50]
+    }
+  }
+}`,
+      };
+      return {
+        name: 'P7 field-imports: reference-only nested path through ObjectType',
+        source: `xdbml: 0.2
+reuse { field core.dim_customer.address.city as cityType } from './lib'
+
+Entity orders {
+  id int [pk]
+  ship_city cityType
+}`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          const fd = dir.clone.statements[0];
+          if (fd.kind !== 'FieldDeclaration' || fd.name !== 'cityType') return `expected cityType, got ${(fd as { name?: string }).name}`;
+          if (!fd.settings.some((s) => s.name === 'maxlength')) return 'expected maxLength setting from nested source field';
+          const r = resolveNames(doc);
+          if (r.diagnostics.length !== 0) return `unexpected diagnostics: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Type Address {
+  street varchar
+  city varchar [maxLength: 50]
+}
+Container core {
+  Entity dim_customer {
+    id int [pk]
+    home Address
+  }
+}`,
+      };
+      return {
+        name: 'P7 field-imports: reference-only nested path through Named Type deref',
+        source: `xdbml: 0.2
+reuse { field core.dim_customer.home.city as cityType } from './lib'
+
+Entity orders {
+  id int [pk]
+  ship_city cityType
+}`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected directive with clone';
+          if (dir.clone.statements.length !== 1) return `expected 1 clone statement, got ${dir.clone.statements.length}`;
+          const fd = dir.clone.statements[0];
+          if (fd.kind !== 'FieldDeclaration') return `expected FieldDeclaration, got ${fd.kind}`;
+          if (fd.name !== 'cityType') return `expected cityType (post-alias), got '${fd.name}'`;
+          // The Type's maxLength on `city` should carry across the deref.
+          if (!fd.settings.some((s) => s.name === 'maxlength')) return 'expected maxLength to survive Named-Type deref';
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const files: Record<string, string> = {
+        '/test/lib.xdbml': `xdbml: 0.2
+Container core {
+  Entity dim_customer {
+    id int [pk]
+    email varchar
+  }
+}`,
+      };
+      return {
+        name: 'P7 field-imports: reference-only with missing field path -- silent skip',
+        source: `xdbml: 0.2
+reuse { field core.dim_customer.no_such_field } from './lib'`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          // Per spec §26.13: failures are silent at module resolution.
+          // The directive's clone block exists but is empty.
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective') return 'expected directive';
+          if (!dir.clone) return 'expected (empty) clone block';
+          if (dir.clone.statements.length !== 0) return `expected 0 statements (silent skip), got ${dir.clone.statements.length}`;
+          return null;
+        },
+      };
+    })(),
+    {
       name: 'Nested object type inside an entity',
       source: `xdbml: 0.1
 Entity orders {

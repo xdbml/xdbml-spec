@@ -725,7 +725,17 @@ export interface ImportItem {
  */
 export interface CloneBlock {
   kind: 'CloneBlock';
-  statements: TopLevelStatement[];
+  /**
+   * Statements that the importing file pulls in from the source. Most are
+   * top-level shapes (Entity, Type, Enum, Container, etc.). The one
+   * exception is `FieldDeclaration`: when the parent directive imports
+   * one or more fields via `field <path>` items (spec §26.8), each field
+   * appears here as a bare FieldDeclaration with no entity wrapper.
+   * The `flatten()` pass lifts each bare field into a synthetic
+   * TypeDeclaration at file scope so downstream consumers see a normal
+   * Named Type.
+   */
+  statements: (TopLevelStatement | FieldDeclaration)[];
   span: Span;
 }
 

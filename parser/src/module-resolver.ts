@@ -25,13 +25,18 @@ import type {
   ContainerBodyItem,
   ContainerDeclaration,
   EntityDeclaration,
+  FieldDeclaration,
   ImportItem,
   ImportSpec,
   ModuleImportDirective,
+  ObjectType,
   ParseOptions,
   TopLevelStatement,
+  TypeDeclaration,
+  TypeExpression,
   XDbmlDocument,
 } from './ast.ts';
+import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 
 /**
  * Produce a new XDbmlDocument with all module-system directives replaced
@@ -49,6 +54,12 @@ import type {
  * semantically invalid per the spec and would surface as a downstream
  * type error rather than being caught here.
  *
+ * Field-level imports (spec §26.8) get a special transform: the clone
+ * block holds a bare `FieldDeclaration`, which `flatten()` lifts into a
+ * synthetic `TypeDeclaration` at file scope. Downstream consumers see
+ * a normal Named Type and can use it as a field type without learning
+ * about the field-import construct.
+ *
  * Provenance information is lost in the flattened view. Consumers that
  * want to know where each declaration came from should walk the original
  * (non-flattened) AST instead.
@@ -65,9 +76,17 @@ export function flatten (doc: XDbmlDocument): XDbmlDocument {
 }
 
 function flattenTopLevel (
-  stmt: TopLevelStatement,
+  stmt: TopLevelStatement | FieldDeclaration,
   out: TopLevelStatement[],
 ): void {
+  if (stmt.kind === 'FieldDeclaration') {
+    // A bare FieldDeclaration only appears at the top level via the field-
+    // import path -- the parser only accepts it inside a clone block. Lift
+    // it to a synthetic TypeDeclaration so the name behaves like a Named
+    // Type for any downstream consumer (resolver, code generator, etc).
+    out.push(synthesizeTypeFromField(stmt));
+    return;
+  }
   if (stmt.kind === 'ModuleImportDirective') {
     // Replace the directive with its clone-block content. Each inner
     // statement is itself flattened (a clone may itself contain Containers
@@ -86,6 +105,46 @@ function flattenTopLevel (
   }
   // All other top-level statement kinds pass through unchanged.
   out.push(stmt);
+}
+
+/**
+ * Lift a bare FieldDeclaration (from a field-import clone block) into a
+ * synthetic TypeDeclaration. The synthesized Type takes the field's name
+ * (or alias, since the clone block already has the post-alias name) and
+ * its full settings array.
+ *
+ *   - For SCALAR fields (any TypeExpression that isn't ObjectType): the
+ *     Type is in scalar form with `scalarBase = field.type`. Equivalent
+ *     to the v0.2 scalar-Named-Type form (spec §14.7).
+ *
+ *   - For OBJECT-typed fields (`field foo object { ... }`): the Type is
+ *     in object form with `body = field.type.fields`. Equivalent to the
+ *     v0.1 object-Named-Type form (spec §14).
+ *
+ * Other type shapes (Array, Map, Set, Tuple, Union, polymorphic types)
+ * are valid as `scalarBase` of a Type and pass through unchanged. The
+ * "scalar" in `scalarBase` is a historical name; functionally it means
+ * "the base TypeExpression this Named Type aliases."
+ */
+function synthesizeTypeFromField (field: FieldDeclaration): TypeDeclaration {
+  if (field.type.kind === 'ObjectType') {
+    return {
+      kind: 'TypeDeclaration',
+      name: field.name,
+      scalarBase: undefined,
+      settings: field.settings,
+      body: field.type.fields,
+      span: field.span,
+    };
+  }
+  return {
+    kind: 'TypeDeclaration',
+    name: field.name,
+    scalarBase: field.type,
+    settings: field.settings,
+    body: [],
+    span: field.span,
+  };
 }
 
 function flattenContainer (c: ContainerDeclaration): ContainerDeclaration {
@@ -262,14 +321,20 @@ export function resolveImport (
  * Items not found in the source produce nothing (silent for P5; a
  * future name-resolution pass should diagnose unresolved imports).
  */
-function extractImports (spec: ImportSpec, sourceDoc: XDbmlDocument): TopLevelStatement[] {
+function extractImports (
+  spec: ImportSpec,
+  sourceDoc: XDbmlDocument,
+): (TopLevelStatement | FieldDeclaration)[] {
   if (spec.kind === 'ImportAll') {
+    // ImportAll never matches field imports (the `*` form is for top-level
+    // declarations only per spec §26.2). Return the source's top-level
+    // statements minus Project.
     return sourceDoc.statements
       .filter((s) => s.kind !== 'ProjectDeclaration')
       .map((s) => s); // shallow-clone-able; we don't mutate them
   }
   // ImportList: process each item.
-  const out: TopLevelStatement[] = [];
+  const out: (TopLevelStatement | FieldDeclaration)[] = [];
   for (const item of spec.items) {
     const found = findImportTarget(item, sourceDoc);
     if (found) {
@@ -309,15 +374,30 @@ function extractImports (spec: ImportSpec, sourceDoc: XDbmlDocument): TopLevelSt
  *       TablePartialDeclaration with matching name (top-level only).
  *   - 'note':
  *       NoteDeclaration with matching name (top-level only).
+ *   - 'field':
+ *       FieldDeclaration found by walking a dotted path through
+ *       containers, entities, and nested type expressions (object types,
+ *       arrays via [*]/[N], maps via ['key'], tuples via [N]). Returned
+ *       as a bare FieldDeclaration; the caller wraps it in a CloneBlock
+ *       and `flatten()` later lifts it to a synthetic TypeDeclaration.
  *
- * `field` imports are not supported in P5 (rejected at parse time).
+ * The return type is widened to include `FieldDeclaration` solely for
+ * the field-import case; for every other element type the returned shape
+ * is a `TopLevelStatement`.
  */
 function findImportTarget (
   item: ImportItem,
   doc: XDbmlDocument,
-): TopLevelStatement | undefined {
+): TopLevelStatement | FieldDeclaration | undefined {
   const path = item.sourcePath;
   const segments = path.split('.');
+
+  // Field imports go through their own walker. The path can be deeper
+  // than `container.entity.field` -- the walker handles nested objects,
+  // array wildcards, etc.
+  if (item.elementType === 'field') {
+    return findFieldTarget(segments, doc);
+  }
 
   // Entity-shaped items: support container.entity dotted form.
   if (
@@ -450,6 +530,192 @@ function findImportTarget (
 }
 
 /**
+ * Walk a dotted path through containers, entities, and (optionally) nested
+ * object types to find a FieldDeclaration in a referenced source document.
+ * Returns undefined when any segment fails to resolve.
+ *
+ * Path shapes accepted (per spec §26.8):
+ *   - `entity.field`                    -- top-level entity
+ *   - `container.entity.field`          -- container-qualified entity
+ *   - `entity.field.sub`                -- nested via ObjectType
+ *   - `container.entity.field.sub.leaf` -- container + nested
+ *
+ * Bracketed segments (`[*]`, `[N]`, `['key']`) are not supported because
+ * the parser's ImportItem path grammar accepts only dotted identifiers.
+ * A field whose source is reached only through an array or map element
+ * needs to be re-declared as a Named Type at the source side instead.
+ *
+ * Named Type dereferencing: when walking a path like
+ * `entity.field.subfield` where `field`'s type is a Named Type defined
+ * in the source document, the walker looks up the Type and continues
+ * the walk through its body. Cycle detection caps recursion at depth 8
+ * (deep enough for realistic nesting, shallow enough that a malformed
+ * cyclic type declaration can't hang the parser).
+ */
+function findFieldTarget (
+  segments: string[],
+  doc: XDbmlDocument,
+): FieldDeclaration | undefined {
+  if (segments.length < 2) return undefined;
+
+  // -- Step 1: identify the entity and how many leading segments it consumed.
+  let entity: EntityDeclaration | undefined;
+  let entityPrefixLen = 0;
+
+  // Try 2-segment: container.entity (only if we have room for at least
+  // one field segment after).
+  if (segments.length >= 3) {
+    const container = doc.statements.find(
+      (s) => s.kind === 'ContainerDeclaration' && s.name === segments[0],
+    );
+    if (container && container.kind === 'ContainerDeclaration') {
+      const ent = container.body.find(
+        (b) => b.kind === 'EntityDeclaration' && b.name === segments[1],
+      );
+      if (ent && ent.kind === 'EntityDeclaration') {
+        entity = ent;
+        entityPrefixLen = 2;
+      }
+    }
+  }
+
+  // Try 1-segment: top-level entity (declared outside any Container).
+  if (!entity) {
+    const topLevel = doc.statements.find(
+      (s) => s.kind === 'EntityDeclaration' && s.name === segments[0],
+    );
+    if (topLevel && topLevel.kind === 'EntityDeclaration') {
+      entity = topLevel;
+      entityPrefixLen = 1;
+    }
+  }
+
+  // Try 1-segment: bare entity name with unique match across containers.
+  // (Ambiguous bare names -- entity X exists in multiple containers --
+  // return undefined to force the importer to qualify the path.)
+  if (!entity) {
+    const matches: EntityDeclaration[] = [];
+    for (const stmt of doc.statements) {
+      if (stmt.kind === 'ContainerDeclaration') {
+        for (const item of stmt.body) {
+          if (item.kind === 'EntityDeclaration' && item.name === segments[0]) {
+            matches.push(item);
+          }
+        }
+      }
+    }
+    if (matches.length === 1) {
+      entity = matches[0];
+      entityPrefixLen = 1;
+    }
+  }
+
+  if (!entity) return undefined;
+
+  // -- Step 2: find the top-level field on the entity.
+  const fieldSegments = segments.slice(entityPrefixLen);
+  if (fieldSegments.length === 0) return undefined;
+
+  let currentField: FieldDeclaration | undefined;
+  for (const item of entity.body) {
+    if (item.kind === 'FieldDeclaration' && item.name === fieldSegments[0]) {
+      currentField = item;
+      break;
+    }
+  }
+  if (!currentField) return undefined;
+
+  // If no more segments, we're done.
+  if (fieldSegments.length === 1) return currentField;
+
+  // -- Step 3: walk nested segments through object-typed fields.
+  // Build a local Named-Type table from the source doc so the walker
+  // can dereference scalar-Named-Type and object-form Named Types when
+  // a path crosses a Named Type boundary.
+  const typeTable = new Map<string, TypeDeclaration>();
+  for (const s of doc.statements) {
+    if (s.kind === 'TypeDeclaration') typeTable.set(s.name, s);
+  }
+
+  return walkObjectFieldPath(currentField, fieldSegments.slice(1), typeTable);
+}
+
+/**
+ * Walk through remaining path segments, each step expecting the current
+ * field's type to be an ObjectType (directly or after Named Type deref)
+ * and looking up the next segment as a field name in that object.
+ */
+function walkObjectFieldPath (
+  startField: FieldDeclaration,
+  remaining: string[],
+  typeTable: Map<string, TypeDeclaration>,
+): FieldDeclaration | undefined {
+  let current = startField;
+  for (const seg of remaining) {
+    const objType = derefToObject(current.type, typeTable, 0);
+    if (!objType) return undefined;
+    let next: FieldDeclaration | undefined;
+    for (const item of objType.fields) {
+      if (item.kind === 'FieldDeclaration' && item.name === seg) {
+        next = item;
+        break;
+      }
+    }
+    if (!next) return undefined;
+    current = next;
+  }
+  return current;
+}
+
+const BUILTIN_TYPE_NAMES = new Set<string>([
+  ...SCALAR_TYPES.map((t) => t.toLowerCase()),
+  ...BSON_TYPES.map((t) => t.toLowerCase()),
+]);
+
+/**
+ * Dereference a TypeExpression to an ObjectType when possible. Returns
+ * undefined when the expression is a builtin scalar, an array/map/tuple
+ * (which the ImportItem path grammar can't navigate into), or a Named
+ * Type that the source document doesn't declare.
+ *
+ * `depth` guards against cyclic Named-Type chains (e.g., `Type A B`,
+ * `Type B A`). Realistic schemas won't approach the limit; the cap is
+ * defensive.
+ */
+function derefToObject (
+  type: TypeExpression,
+  typeTable: Map<string, TypeDeclaration>,
+  depth: number,
+): ObjectType | undefined {
+  if (depth > 8) return undefined;
+  if (type.kind === 'ObjectType') return type;
+  if (type.kind !== 'ScalarType') return undefined;
+
+  // ScalarType might be a builtin or a reference to a declared Named
+  // Type -- the parser doesn't distinguish them at parse time. If the
+  // name matches a builtin, no Named-Type deref is possible.
+  if (BUILTIN_TYPE_NAMES.has(type.name.toLowerCase())) return undefined;
+
+  const td = typeTable.get(type.name);
+  if (!td) return undefined;
+
+  // Object-form Named Type: body holds the fields directly.
+  if (!td.scalarBase && td.body.length > 0) {
+    return {
+      kind: 'ObjectType',
+      keyword: 'object',
+      fields: td.body,
+      span: td.span,
+    };
+  }
+  // Scalar-form Named Type: recurse into the base.
+  if (td.scalarBase) {
+    return derefToObject(td.scalarBase, typeTable, depth + 1);
+  }
+  return undefined;
+}
+
+/**
  * Apply the alias from an import item by renaming the extracted declaration.
  * If no alias is present, returns the declaration unchanged.
  *
@@ -457,34 +723,37 @@ function findImportTarget (
  * everything else intact. References inside the declaration (e.g., field
  * type expressions that name other Types) keep their original names --
  * the user is expected to ensure aliases don't break internal references.
+ *
+ * Field imports are aliased the same way: the bare FieldDeclaration's
+ * `name` field becomes the alias. The synthesized TypeDeclaration that
+ * `flatten()` produces will then carry the alias as its Named Type name.
  */
 function applyAlias (
-  stmt: TopLevelStatement,
+  stmt: TopLevelStatement | FieldDeclaration,
   item: ImportItem,
-): TopLevelStatement {
+): TopLevelStatement | FieldDeclaration {
   if (!item.alias) return stmt;
-  // Most declaration kinds have a `name` field. The ones that don't
-  // (PartialInjection, certain VersionDeclarations) don't appear at
-  // the top level. We narrow by kind and rebuild the typed object.
   switch (stmt.kind) {
     case 'EntityDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'TypeDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'EnumDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'EdgeDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'ViewDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'ContainerDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'TableGroupDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'TablePartialDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
     case 'NoteDeclaration':
-      return { ...stmt, name: item.alias } as TopLevelStatement;
+      return { ...stmt, name: item.alias };
+    case 'FieldDeclaration':
+      return { ...stmt, name: item.alias };
     default:
       return stmt;
   }

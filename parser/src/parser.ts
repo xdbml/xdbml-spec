@@ -883,19 +883,14 @@ export class Parser {
         elemTok.start,
       );
     }
-    if (elementType === 'field') {
-      throw new ParseError(
-        `Field-level imports (spec §26.8) are not yet supported in this parser. ` +
-        `They will land in a future batch. For now, import the containing entity ` +
-        `or extract the field into a scalar Named Type (§14.7).`,
-        elemTok.start,
-      );
-    }
     if (elementType === 'field' && context !== 'file-scope') {
-      // Spec §26.8: field imports must appear at file scope.
-      // (Defensive: also rejected by the global field-disabled check above.)
+      // Spec §26.8: field imports must appear at file scope. Inside a
+      // Container body, the field's eventual placement (as a Named Type)
+      // would have no meaningful container scope -- field imports are
+      // always lifted to file scope by flatten(), regardless of where
+      // the directive sits.
       throw new ParseError(
-        `Field-level imports must appear at file scope, not inside a Container body.`,
+        `Field-level imports must appear at file scope, not inside a Container body (spec §26.8).`,
         elemTok.start,
       );
     }
@@ -937,20 +932,34 @@ export class Parser {
   }
 
   /**
-   * Parse a clone block. The block contains zero or more top-level
-   * statements that match the import items by name and element type
-   * (matching is downstream-consumer's job; parser is permissive).
+   * Parse a clone block. The block contains zero or more declarations
+   * that match the import items by name and element type (matching is
+   * downstream-consumer's job; the parser is permissive).
    *
    * Per spec §26.6, clone content uses the importing file's vocabulary
-   * (aliases applied) and is parsed under the importing file's xdbml
-   * version directive.
+   * (aliases already applied) and is parsed under the importing file's
+   * xdbml version directive.
+   *
+   * Most clone-block content uses TopLevelStatement shapes (Entity, Type,
+   * Container, etc.). The exception is field imports (§26.8): when the
+   * directive imports one or more fields via `field <path>` items, the
+   * clone block holds each field as a bare FieldDeclaration with no entity
+   * wrapper. The dispatch below checks whether the next token starts a
+   * known top-level keyword and falls through to FieldDeclaration when
+   * it doesn't.
    */
   private parseCloneBlock (): CloneBlock {
     const start = this.peek().start;
     this.expect(TokenKind.LBrace, "Expected '{' starting clone block");
-    const statements: TopLevelStatement[] = [];
+    const statements: (TopLevelStatement | FieldDeclaration)[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
-      statements.push(this.parseTopLevelStatement());
+      if (this.isCloneTopLevelStart()) {
+        statements.push(this.parseTopLevelStatement());
+      } else {
+        // Bare field declaration -- the field-import case. Per spec §26.6
+        // the field appears without an entity wrapper.
+        statements.push(this.parseFieldDeclaration());
+      }
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing clone block");
     return {
@@ -958,6 +967,37 @@ export class Parser {
       statements,
       span: this.spanFrom(start),
     };
+  }
+
+  /**
+   * Lookahead helper: does the current token start a top-level statement?
+   *
+   * Used by parseCloneBlock to dispatch between "this is a top-level
+   * declaration" (Entity, Type, Container, etc.) and "this is a bare
+   * field declaration" (for field imports). A field declaration starts
+   * with an identifier followed by a type expression; a top-level
+   * statement starts with one of the known top-level keywords.
+   *
+   * Mirrors the dispatch in parseTopLevelStatement(). If we add new
+   * top-level constructs there, this set should grow in parallel.
+   */
+  private isCloneTopLevelStart (): boolean {
+    const k = kw(this.peek());
+    if (k === null) return false;
+    if (k === 'project') return true;
+    if (CONTAINER_KEYWORDS.has(k)) return true;
+    if (ENTITY_KEYWORDS.has(k)) return true;
+    if (k === 'type') return true;
+    if (k === 'edge') return true;
+    if (k === 'view') return true;
+    if (k === 'enum') return true;
+    if (k === 'ref') return true;
+    if (k === 'tablepartial') return true;
+    if (k === 'tablegroup') return true;
+    if (k === 'note') return true;
+    if (k === 'records') return true;
+    if (k === 'use' || k === 'reuse') return true;
+    return false;
   }
 
   /**
