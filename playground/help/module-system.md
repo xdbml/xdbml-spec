@@ -7,7 +7,7 @@ description: How the v0.2 module system lets one xDBML file reuse entities and p
 
 If you've ever had to copy the same `dim_customer` entity into five data marts -- and keep all five copies in sync as the definition evolves -- the v0.2 **module system** is for you. A `use` or `reuse` directive at the top of a file (or inside a Container) declares that this file pulls in named declarations from another file. The headline payoff is **canonical entities and reusable parts of entities, defined once, used many places**.
 
-The module system also handles Types, enums, table groups, views, edges, and table partials, but consistent **entity definitions across multiple downstream consumers** is the value most teams care about. The rest of this page walks the patterns, then explains how the playground handles directives in particular.
+The module system also handles individual fields, Types, enums, table groups, views, edges, and table partials, but consistent **entity definitions across multiple downstream consumers** is the value most teams care about. The rest of this page walks the patterns, then explains how the playground handles directives in particular.
 
 ## What you can reuse across files
 
@@ -71,6 +71,47 @@ Entity products {
 ```
 
 This is genuine sharing of common field clusters: if `audit_fields` gains a `tenant_id` later, every entity that splices it in gets the new field automatically. The TablePartial is the single source of truth for what an "audited entity" looks like across the organization.
+
+### Individual fields, via field-level imports
+
+A **field-level import** brings a single field's complete shape -- its type, validation settings, default values, notes, and AI-readiness tags -- from one file into another. The imported name becomes a usable type at file scope; you place fields of that shape wherever you need them.
+
+```xdbml
+// In conformed-dimensions.xdbml
+Container core {
+  Entity dim_customer {
+    id      int     [pk]
+    email   varchar [pattern: '^[^@]+@[^@]+$', maxLength: 320, tags: ['pii']]
+    country varchar
+  }
+}
+```
+
+```xdbml
+// In any consumer
+reuse { field core.dim_customer.email } from '../conformed-dimensions' { ... }
+
+Entity audit_log {
+  id           bigint [pk]
+  actor_email  email           // gets the pattern, length bound, and pii tag
+  action       varchar
+  occurred_at  timestamp
+}
+
+Entity newsletter_subscribers {
+  id       bigint [pk]
+  address  email   [unique]    // same validation surface, plus a placement-level setting
+}
+```
+
+The pattern shines when:
+- The validation you want to reuse already exists inline on a field somewhere; extracting it as a standalone Type would be a refactor of the source schema
+- The source schema is owned by another team and you can't (or don't want to) edit it to expose Types
+- You want to track the canonical entity definitions without forking them
+
+Nested paths work too. A path like `field core.dim_customer.address.city` walks into an object-typed `address` field on `dim_customer` and imports its `city` field as a top-level shape. Aliases (`as canonical_email`) rename the imported name; per-placement settings (`[unique]` above) layer onto the imported shape's settings without replacing them.
+
+Field-level imports MUST appear at file scope -- they cannot sit inside a Container body, because the synthesized Named Type they produce lives at file scope regardless of where the directive sits. See [spec §26.8](/spec/v0.2#_26-8-field-level-imports) for the full grammar and resolution rules.
 
 ### Types and other top-level declarations
 
@@ -196,7 +237,7 @@ Project declarations are excluded because two `Project` declarations in the same
 
 **use versus reuse.** The two keywords are semantically equivalent at the parser level. The intent the spec captures: `use` suggests "I depend on this but I'm not republishing it"; `reuse` suggests "I'm pulling this into my namespace and treating it as mine." Pick whichever reads more naturally; tooling treats them identically.
 
-**Where directives may live.** File-scope directives appear at the top level. Entity imports may also appear inside a Container body, where the imported entity becomes a member of that Container. Top-level declarations (Type, Enum, TableGroup, TablePartial, View, Edge, Note) are imported at file scope only. Directives MAY NOT appear inside Entity, Edge, View, or Type bodies.
+**Where directives may live.** File-scope directives appear at the top level. Entity imports may also appear inside a Container body, where the imported entity becomes a member of that Container. Imports of top-level declarations (Type, Enum, TableGroup, TablePartial, View, Edge, Note) and of individual fields (§26.8) must appear at file scope. Directives MAY NOT appear inside Entity, Edge, View, or Type bodies.
 
 **Cycles are allowed.** If A imports from B and B imports from A, the parser breaks the cycle by leaving the back-edge directive's clone block undefined. Spec §26.14 makes this explicit: cycles compile, but the back-edge produces nothing.
 
