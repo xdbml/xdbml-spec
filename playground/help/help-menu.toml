@@ -99,6 +99,9 @@ slug  = "loading-examples"
 title = "Open and save files"
 slug  = "open-and-save-files"
 [[nodes.children]]
+title = "Module system: use and reuse"
+slug  = "module-system"
+[[nodes.children]]
 title = "Sharing via URL"
 slug  = "sharing-via-url"
 [[nodes.children]]
