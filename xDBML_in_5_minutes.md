@@ -11,7 +11,7 @@ xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-
 
 xDBML is a strict superset of [DBML](https://dbml.dbdiagram.io), extended for the data shapes DBML can't: nested objects, sub-documents, maps, structs, records, arrays, lists, sets, tuples, polymorphism, named reusable types, JSON columns with known schema, target-native vocabulary (MongoDB collections, Avro records, Cassandra keyspaces), property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
 
-xDBML extends DBML into a unified metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange.
+xDBML extends DBML into a unified metadata and semantic data modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange.
 
 
 ## The first 60 seconds
@@ -116,7 +116,7 @@ xDBML  ──── generators ─────────┼─→ Avro / Parqu
                                 └─→ ODCS schema section
 ```
 
-But more importantly: **xDBML is the markup that AI assistants and modeling tools use to describe schemas.** When you ask Claude, ChatGPT, Gemini, Grok, Llama, Mistral AI, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
+But more importantly: **xDBML is the markup that AI assistants and data modeling tools use to describe schemas.** When you ask Claude, ChatGPT, Gemini, Grok, Llama, Mistral AI, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
 
 The same schema you author by hand is the schema your AI assistant can extend, refactor, and round-trip back to you. The same schema you generate from MongoDB can be lifted to Oracle, validated as JSON Schema, or wrapped in an ODCS contract.
 
@@ -250,13 +250,13 @@ xDBML describes the **structural and semantic layer** of data: entities, fields,
 
 ![xDBML scope diagram](/diagrams/xdbml-scope.svg)
 
-The tool-to-target round-trip -- the one between a modeling tool and an actual database -- happens in **native DDL or schema**, not in xDBML. The tool understands each target's complete capability surface (partitioning, sharding, tablespaces, PL/SQL, triggers, advanced constraints, identity columns, replication, refresh schedules) and preserves it in its own canonical model. xDBML carries the parts of that model that have meaning across boundaries: across engines, across tools, across humans and AI.
+The tool-to-target round-trip -- the one between a data modeling tool and an actual database -- happens in **native DDL or schema**, not in xDBML. The tool understands each target's complete capability surface (partitioning, sharding, tablespaces, PL/SQL, triggers, advanced constraints, identity columns, replication, refresh schedules) and preserves it in its own canonical model. xDBML carries the parts of that model that have meaning across boundaries: across engines, across tools, across humans and AI.
 
 Trying to import Oracle DDL into xDBML and re-export it as Oracle DDL preserving operational features is a misuse of the standard. The tool-to-target conversation should happen in native DDL throughout. xDBML is for a different conversation entirely.
 
 The following are *not* xDBML's job:
 
-- **Engine operational features.** Partitioning strategies, sharding configuration, tablespaces, storage models, replication topology, materialized view refresh schedules, clustering keys, time-travel configuration. These stay native to each target and live in the modeling tool's representation.
+- **Engine operational features.** Partitioning strategies, sharding configuration, tablespaces, storage models, replication topology, materialized view refresh schedules, clustering keys, time-travel configuration. These stay native to each target and live in the data modeling tool's representation.
 - **Procedural code.** PL/SQL, T-SQL, stored procedures, triggers, server-side functions, computed columns with engine-specific functions. xDBML expresses declarative shape and metadata, not behavior.
 - **Identity and sequencing details.** IDENTITY columns, sequences, auto-increment configuration. xDBML can declare a field as a primary key with auto-generation; the exact sequence configuration is engine-specific.
 - **Wire-protocol and evolution rules.** Avro schema evolution rules, Protobuf reserved fields, GraphQL federation directives, OpenAPI endpoints (xDBML describes the *types*, not the *operations*).

@@ -140,13 +140,13 @@ A single document declares the schema across two storage engines: an Oracle rela
 
 DBML's strength is simplicity and developer accessibility -- the reasons it was adopted in the first place. 
 
-xDBML extends DBML into a true metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
+xDBML extends DBML into a true metadata and semantic data modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly.
 
 Enterprise data structures and semantics are trapped in technology-specific formats that GenAI can parse but cannot reliably compare, govern, transform, or reason over across platforms. xDBML provides a compact, open, polyglot, AI-readable schema language that captures the portable meaning of data structures without pretending to replace native implementation formats.
 
 xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-mediated schema interchange**. The language matches the way modern LLMs already describe schemas: nested structures are first-class, polymorphism uses the same vocabulary as JSON Schema, paths into nested fields use unambiguous dot.notation, and every construct accepts settings that let natural-language queries resolve to canonical schema elements without guesswork. It combines compactness, simplicity, and structure. It is text‑only, declarative, and close to “pseudo‑code”.
 
-The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. The risk is to become another ambitious modeling standard that architects admire and developers avoid. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
+The discipline is to avoid the trap of standards which started with similar ambitions and lost mainstream developer appeal through over-engineering. The risk is to become another ambitious data modeling standard that architects admire and developers avoid. xDBML aims to be the foundation for next-generation data modeling and AI-aware metadata -- one that teams actually choose to write by hand, not just generate from heavier sources.
 
 xDBML is born to solve the same frustrations DBML was designed for -- difficulty building a mental big picture, opaque field meanings, ER diagrams and DDL that are hard to read and usually outdated -- and the additional pains DBML cannot solve: AI-readiness metadata for LLMs and governance platforms, LLM-portable schemas without target lock-in, nested structures and polymorphism as first-class constructs, schema drift across polyglot stacks, and property-bearing graph edges. See the [FAQ](/faq) for the full positioning.
 
@@ -156,7 +156,7 @@ xDBML describes the **structural and semantic layer** of data: entities, fields,
 
 ![xDBML scope diagram](/diagrams/xdbml-scope.svg)
 
-xDBML is **not** the round-trip format between a modeling tool and a target technology. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands the target's complete capability surface (partitioning, sharding, tablespaces, replication, PL/SQL, triggers, identity columns, advanced constraints, refresh schedules) and preserves it in the tool's own canonical model. xDBML carries the parts of that model with meaning across boundaries.
+xDBML is **not** the round-trip format between a data modeling tool and a target technology. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands the target's complete capability surface (partitioning, sharding, tablespaces, replication, PL/SQL, triggers, identity columns, advanced constraints, refresh schedules) and preserves it in the tool's own canonical model. xDBML carries the parts of that model with meaning across boundaries.
 
 Operational features (partitions, storage configuration, replication), procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage.
 
