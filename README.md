@@ -22,13 +22,13 @@ xDBML occupies the **schema layer of the modern data stack**. It carries **decla
 
 The same xDBML document feeds an ODCS contract's schema section, an OSI semantic model's underlying tables, a SHACL validator's target shapes, and the SQL DDL that creates them.
 
-xDBML is currently a draft v0.1 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
+xDBML is currently a draft v0.2 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
 
 ## Design philosophy
 
-xDBML is the evolution of DBML from a lightweight schema-diagram language into a true metadata and semantic modeling language. Where DBML excels at simplicity and developer accessibility -- strengths that drove its adoption -- xDBML targets the additional needs of metadata-as-code, semantic grounding for AI, governance integration, and model-driven engineering, with richer support for validation rules, semantics, cardinality, annotations, and AI-friendly metadata.
+xDBML is the evolution of DBML from a lightweight schema-diagram language into a true metadata and semantic data modeling language. Where DBML excels at simplicity and developer accessibility -- strengths that drove its adoption -- xDBML targets the additional needs of metadata-as-code, semantic grounding for AI, governance integration, and model-driven engineering, with richer support for validation rules, semantics, cardinality, annotations, and AI-friendly metadata.
 
-The hardest design constraint on xDBML is not what to add, but what to leave out. Other standards started with similar ambitions and lost mainstream developer appeal through over-engineering -- piling up features until the cost of authoring exceeded the benefit.  The risk is to become another ambitious modeling standard that architects admire and developers avoid. 
+The hardest design constraint on xDBML is not what to add, but what to leave out. Other standards started with similar ambitions and lost mainstream developer appeal through over-engineering -- piling up features until the cost of authoring exceeded the benefit.  The risk is to become another ambitious data modeling standard that architects admire and developers avoid. 
 
 xDBML aims to preserve DBML's readability and Git-friendly simplicity while adding the constructs the polyglot, AI-aware era requires. Every proposed extension is weighed against that constraint; constructs that would push xDBML toward XML-Schema complexity are deferred, simplified, or declined.
 
@@ -53,12 +53,15 @@ xDBML is **not** the round-trip format between an xDBML tool or xDBML-compatible
 
 Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage.
 
+xDBML is a format, not a data modeling tool. The [playground at xdbml.org](https://xdbml.org/playground/index.html) demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
+
 ## Where to go next
 
 - [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
-- [`spec/v0.1.md`](./spec/v0.1.md) -- the full v0.1 language specification
+- [`spec/v0.2.md`](./spec/v0.2.md) -- the current v0.2 language specification (adds module system, scalar Named Types, field-level imports)
+- [`spec/v0.1.md`](./spec/v0.1.md) -- the previous v0.1 specification, still supported
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
 - [`playground/`](https://xdbml.org/playground/index.html) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus and [parser/](./parser)

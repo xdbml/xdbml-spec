@@ -121,9 +121,10 @@ export default defineConfig({
       },
       { text: 'Specification',
         items: [
-          { text: 'All versions',   link: '/spec/' },
-          { text: 'v0.1 (draft)',   link: '/spec/v0.1' },
-          { text: 'Grammar',         link: '/grammar/' },
+          { text: 'All versions',          link: '/spec/' },
+          { text: 'v0.2 (current draft)',  link: '/spec/v0.2' },
+          { text: 'v0.1 (superseded)',     link: '/spec/v0.1' },
+          { text: 'Grammar',                link: '/grammar/' },
         ]
       },
       // Playground is a standalone Vue app, NOT a VitePress page.
@@ -172,7 +173,8 @@ export default defineConfig({
           text: 'Specification',
           items: [
             { text: 'All versions',           link: '/spec/' },
-            { text: 'v0.1 (current draft)',   link: '/spec/v0.1' },
+            { text: 'v0.2 (current draft)',   link: '/spec/v0.2' },
+            { text: 'v0.1 (superseded)',      link: '/spec/v0.1' },
           ]
         },
         {

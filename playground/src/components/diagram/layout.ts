@@ -68,6 +68,15 @@ export interface ContainerLayout {
   target: string;
   /** Color used for the container header band, derived from target. */
   accentColor: string;
+  /**
+   * Ink color (text/icon) for the container header, chosen for contrast
+   * against accentColor. The standard `white` works for all
+   * TARGET_COLORS entries (they're all mid-saturation), but a
+   * user-supplied `[color: '#...']` override might be light enough that
+   * white is unreadable. Computed via YIQ luminance with the same
+   * threshold (160) used for entity headers.
+   */
+  headerInk: 'white' | '#0f172a';
   bounds: Rect;
 }
 
@@ -85,6 +94,15 @@ export interface EntityLayout {
    * derived/non-authoritative.
    */
   isView: boolean;
+  /**
+   * Color for the entity's header band, as a CSS color string (typically
+   * a hex value like `#3498db`). Resolved in `buildDiagram` by checking,
+   * in priority order: (1) the entity's own `headercolor` setting,
+   * (2) a `color` setting on a `TableGroup` whose `members` includes this
+   * entity. If neither applies, the field is undefined and the renderer
+   * falls back to its default keyword-based coloring.
+   */
+  headerColor?: string;
   fields: FieldLayout[];
   bounds: Rect;
 }
@@ -251,6 +269,33 @@ function colorForTarget (target: string): string {
 }
 
 /**
+ * Pick a readable ink color (white or near-black) for text on a colored
+ * background. Uses the YIQ luminance approximation -- faster than full
+ * WCAG ratios and good enough for two-way choices. The threshold of 160
+ * leans slightly toward preferring white text, matching the equivalent
+ * helper in EntityCard.vue and dbdiagram.io's behavior.
+ *
+ * Returns `'white'` for dark backgrounds, `'#0f172a'` (slate-900) for
+ * light ones. Invalid color strings fall back to white.
+ *
+ * Exported so EntityCard.vue can use the same logic for entity header
+ * text (single source of truth for color-contrast policy).
+ */
+export function readableInk (bg: string): 'white' | '#0f172a' {
+  const hex = bg.startsWith('#') ? bg.slice(1) : bg;
+  const full = hex.length === 3
+    ? hex.split('').map((c) => c + c).join('')
+    : hex;
+  if (full.length !== 6) return 'white';
+  const r = parseInt(full.slice(0, 2), 16);
+  const g = parseInt(full.slice(2, 4), 16);
+  const b = parseInt(full.slice(4, 6), 16);
+  if (isNaN(r) || isNaN(g) || isNaN(b)) return 'white';
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq < 160 ? 'white' : '#0f172a';
+}
+
+/**
  * Identifier for a collapsed row: `${entityId}::${path}`.
  *
  * The path-within-entity is namespaced under the entity id so two
@@ -321,6 +366,61 @@ export function buildDiagram (
     }
   }
 
+  // Build a map from entity-id -> color from TableGroup membership.
+  //
+  // DBML/xDBML TableGroups support a `color:` setting (xDBML v0.2 §16.2)
+  // that visually groups a set of entities, typically by tinting their
+  // header bars. The convention matches dbdiagram.io: a TableGroup's
+  // members inherit the group's color on their entity headers, and an
+  // individual `[headercolor: '#...']` setting on an entity overrides
+  // the group color.
+  //
+  // The map is keyed by the entity's resolved ID (`container.entity` or
+  // `entity`). TableGroup `members` are listed by name in the source, and
+  // may use bare or qualified form: a member `dim_customer` matches both
+  // an unqualified `dim_customer` and a `sales.dim_customer` (when there
+  // is exactly one entity with that bare name). When two entities share
+  // a bare name across containers, the bare reference is ambiguous and
+  // we skip the assignment for correctness -- the user must qualify.
+  const tableGroupColors = new Map<string, string>();
+  {
+    // First, build a map from bare-name -> qualified IDs to resolve
+    // bare member references unambiguously.
+    const idsByBareName = new Map<string, string[]>();
+    for (const [containerName, entities] of entitiesByContainer) {
+      for (const e of entities) {
+        const id = containerName ? `${containerName}.${e.name}` : e.name;
+        const list = idsByBareName.get(e.name) ?? [];
+        list.push(id);
+        idsByBareName.set(e.name, list);
+      }
+    }
+    for (const stmt of doc.statements) {
+      if (stmt.kind !== 'TableGroupDeclaration') continue;
+      const color = settingValueAsString(stmt.settings, 'color');
+      if (!color) continue;
+      for (const member of stmt.members) {
+        // Member can be `entity` or `container.entity`. Try qualified
+        // form first; if the member contains a dot, it's already qualified.
+        let resolvedId: string | undefined;
+        if (member.includes('.')) {
+          // Qualified reference: take as-is.
+          resolvedId = member;
+        } else {
+          // Bare reference: resolve via the bare-name map. Skip if
+          // ambiguous (multiple entities with this name).
+          const candidates = idsByBareName.get(member);
+          if (candidates && candidates.length === 1) {
+            resolvedId = candidates[0];
+          }
+        }
+        if (resolvedId && !tableGroupColors.has(resolvedId)) {
+          tableGroupColors.set(resolvedId, color);
+        }
+      }
+    }
+  }
+
   // Place each container's entities in a vertical column.
   const entityLayouts: EntityLayout[] = [];
   const containerLayouts: ContainerLayout[] = [];
@@ -330,14 +430,29 @@ export function buildDiagram (
   for (const container of containers) {
     const containerEntities = entitiesByContainer.get(container.name) ?? [];
     const target = settingValueAsString(container.settings, 'target') ?? '';
-    const accentColor = colorForTarget(target);
+    // Container header color priority:
+    //   1. Explicit `[color: '#...']` setting on the container (lets users
+    //      override the auto-derived target color, useful when the target
+    //      is unrecognized by TARGET_COLORS or when a project convention
+    //      wants a specific tint regardless of engine).
+    //   2. Color derived from the `target:` setting via TARGET_COLORS.
+    //   3. Neutral slate when neither applies.
+    // This mirrors the entity headerColor / TableGroup color pattern.
+    const ownColor = settingValueAsString(container.settings, 'color');
+    const accentColor = ownColor ?? colorForTarget(target);
 
     const innerLeft = cursorX + CONTAINER_PADDING;
     const innerTop = CANVAS_MARGIN + CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING;
     let entityCursorY = innerTop;
 
     for (const entity of containerEntities) {
-      const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable);
+      const entityId = `${container.name}.${entity.name}`;
+      // Header color priority: entity's own [headercolor: '#...'] >
+      // TableGroup membership color > undefined (renderer uses its
+      // default keyword-based tinting).
+      const ownColor = settingValueAsString(entity.settings, 'headercolor');
+      const headerColor = ownColor ?? tableGroupColors.get(entityId);
+      const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable, headerColor);
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
@@ -362,6 +477,7 @@ export function buildDiagram (
       keyword: container.keyword,
       target,
       accentColor,
+      headerInk: readableInk(accentColor),
       bounds: {
         x: cursorX,
         y: CANVAS_MARGIN,
@@ -379,7 +495,9 @@ export function buildDiagram (
   if (orphans.length > 0) {
     let entityCursorY = CANVAS_MARGIN;
     for (const entity of orphans) {
-      const layout = buildEntityLayout(entity, cursorX, entityCursorY, undefined, collapsedPaths, typeTable);
+      const ownColor = settingValueAsString(entity.settings, 'headercolor');
+      const headerColor = ownColor ?? tableGroupColors.get(entity.name);
+      const layout = buildEntityLayout(entity, cursorX, entityCursorY, undefined, collapsedPaths, typeTable, headerColor);
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
@@ -515,6 +633,13 @@ interface EntityLike {
   keyword: string;
   body: ReadonlyArray<{ kind: string }>;
   isView: boolean;
+  /**
+   * Settings on the underlying EntityDeclaration / ViewDeclaration. The
+   * diagram layout reads a few specific keys (e.g., `headercolor`) but
+   * passes the whole array so callers can inspect any setting. Open
+   * vocabulary -- the parser is permissive about setting names.
+   */
+  settings: ReadonlyArray<Setting>;
 }
 
 function asEntityLike (entity: EntityDeclaration): EntityLike {
@@ -523,6 +648,7 @@ function asEntityLike (entity: EntityDeclaration): EntityLike {
     keyword: entity.keyword,
     body: entity.body,
     isView: false,
+    settings: entity.settings,
   };
 }
 
@@ -532,6 +658,7 @@ function viewAsEntityLike (view: ViewDeclaration): EntityLike {
     keyword: 'View',
     body: view.body,
     isView: true,
+    settings: view.settings,
   };
 }
 
@@ -542,6 +669,7 @@ function buildEntityLayout (
   containerName: string | undefined,
   collapsedPaths: ReadonlySet<CollapsedKey>,
   typeTable: ReadonlyMap<string, TypeDeclaration>,
+  headerColor: string | undefined,
 ): EntityLayout {
   const entityId = containerName ? `${containerName}.${entity.name}` : entity.name;
   const fields: FieldLayout[] = [];
@@ -837,6 +965,7 @@ function buildEntityLayout (
     keyword: entity.keyword,
     containerName,
     isView: entity.isView,
+    headerColor,
     fields,
     bounds: { x, y, width: ENTITY_WIDTH, height },
   };
@@ -1132,7 +1261,7 @@ function locateRefEndpoint (
  * Settings helpers
  * ----------------------------------------------------------------------- */
 
-function settingValueAsString (settings: Setting[], name: string): string | undefined {
+function settingValueAsString (settings: ReadonlyArray<Setting>, name: string): string | undefined {
   const s = settings.find((x) => x.name === name);
   if (!s || !s.value) return undefined;
   switch (s.value.kind) {

@@ -175,6 +175,7 @@ export const SETTING_FLAGS = [
   'not',
   'required',
   'increment',
+  'inactive',          // v0.2 §11.9: Ref flag for visualization-only deactivation
 ] as const;
 
 export const SETTING_KEYS = [
@@ -187,7 +188,6 @@ export const SETTING_KEYS = [
   'headercolor',
   'as',
   'check',
-  'inactive',
   // xDBML-specific
   'type',
   'target',
@@ -231,12 +231,15 @@ export const SETTING_KEYS = [
   // Referential actions
   'delete',
   'update',
-  // Index entries
+  // Block keywords (entity-body or top-level)
   'indexes',
+  'checks',           // v0.2 §10: entity-level checks block
   // Container settings
   'replication',
   'location',
   'default_charset',
+  // Module system (v0.2 §26)
+  'cloned_at',        // v0.2 directive setting: ISO 8601 timestamp on a use/reuse directive
 ] as const;
 
 /* -------------------------------------------------------------------------
@@ -264,4 +267,30 @@ export const GRANULARITY_VALUES = [
 export const DIRECTIVE_KEYWORDS = [
   'xdbml',
   'experimental',
+] as const;
+
+/* -------------------------------------------------------------------------
+ * Module-system keywords  (v0.2, spec §26)
+ *
+ * The keywords that introduce a module-system directive:
+ *
+ *     reuse { entity X, type Y as Z } from './path' [cloned_at: '...'] { ... }
+ *     use * from './path'
+ *
+ * `use` and `reuse` start the directive; `from` precedes the path
+ * literal; `as` appears inside the import-item list when renaming.
+ *
+ * `as` is also a contextual keyword in upstream DBML (`Table users as u`
+ * for aliasing), so it's already implicitly highlighted via its
+ * presence in SETTING_KEYS; including it here as well doesn't change
+ * behavior but documents the module-system role.
+ *
+ * Highlighted with the scope `keyword.control.module.xdbml`.
+ * ----------------------------------------------------------------------- */
+
+export const MODULE_KEYWORDS = [
+  'use',
+  'reuse',
+  'from',
+  'as',
 ] as const;

@@ -109,6 +109,7 @@ function main () {
   // happen first.
   const placeholders = {
     __DIRECTIVE_KEYWORDS__:        'DIRECTIVE_KEYWORDS',
+    __MODULE_KEYWORDS__:           'MODULE_KEYWORDS',
     __DECLARATION_KEYWORDS__:      'DECLARATION_KEYWORDS',
     __CONTAINER_KEYWORDS__:        'CONTAINER_KEYWORDS',
     __ENTITY_KEYWORDS__:           'ENTITY_KEYWORDS',

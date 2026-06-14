@@ -10,6 +10,7 @@
   "patterns": [
     { "include": "#comments" },
     { "include": "#directives" },
+    { "include": "#module-directives" },
     { "include": "#settings-block" },
     { "include": "#strings" },
     { "include": "#numbers" },
@@ -48,6 +49,16 @@
             "1": { "name": "keyword.control.directive.xdbml" },
             "3": { "name": "punctuation.separator.key-value.xdbml" }
           }
+        }
+      ]
+    },
+
+    "module-directives": {
+      "comment": "v0.2 module system (spec §26): `use` / `reuse ... from '...'` directives, plus the `as` alias keyword. Matched as standalone words anywhere; TextMate cannot disambiguate context cheaply, but these keywords are rare outside their proper position so false positives are minimal. The `as` keyword also serves DBML table-aliasing (`Table users as u`) for which the same scope is appropriate.",
+      "patterns": [
+        {
+          "name": "keyword.control.module.xdbml",
+          "match": "\\b((?i:__MODULE_KEYWORDS__))\\b"
         }
       ]
     },

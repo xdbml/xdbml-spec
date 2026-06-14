@@ -15,6 +15,9 @@ import type {
   AnyOfType,
   ArrayType,
   CardinalityOperator,
+  CheckEntry,
+  ChecksBlock,
+  CloneBlock,
   ContainerBodyItem,
   ContainerDeclaration,
   ContainerKeyword,
@@ -28,6 +31,8 @@ import type {
   ExpressionValue,
   FieldDeclaration,
   IdentifierValue,
+  ImportItem,
+  ImportSpec,
   IndexComponent,
   IndexEntry,
   IndexesBlock,
@@ -36,6 +41,7 @@ import type {
   JsonType,
   ListValue,
   MapType,
+  ModuleImportDirective,
   NamedTypeReference,
   NoteBlock,
   NoteDeclaration,
@@ -43,11 +49,14 @@ import type {
   ObjectType,
   OneOfType,
   PartialInjection,
+  ParseOptions,
   PathSegment,
   PolymorphicAlternative,
   Position,
   ProjectBodyItem,
   ProjectDeclaration,
+  RecordRow,
+  RecordsBlock,
   RefDeclaration,
   RefEndpoint,
   RefSpec,
@@ -60,6 +69,7 @@ import type {
   StringValue,
   TableGroupDeclaration,
   TablePartialDeclaration,
+  TopLevelRecordsDeclaration,
   TopLevelStatement,
   TupleElement,
   TupleType,
@@ -76,6 +86,8 @@ import {
   TokenKind,
   tokenize,
 } from './lexer.ts';
+import { resolveImport } from './module-resolver.ts';
+import type { ParseFn } from './module-resolver.ts';
 
 export class ParseError extends Error {
   position: Position;
@@ -98,6 +110,25 @@ const CONTAINER_KEYWORDS = new Set([
 ]);
 
 const ENTITY_KEYWORDS = new Set(['table', 'entity', 'collection', 'record']);
+
+/**
+ * Element-type keywords accepted in module-system import items
+ * (spec §26.3). Stored lowercased; matching is case-insensitive.
+ *
+ * `field` is recognized but explicitly rejected by parseImportItem in P4
+ * (field-level imports have special declaration-vs-placement semantics
+ * that will land in a later batch).
+ *
+ * `project` is intentionally excluded -- spec §26.1 forbids importing
+ * Project declarations.
+ */
+const IMPORT_ELEMENT_TYPES = new Set([
+  'table', 'entity', 'collection', 'record',
+  'enum', 'tablepartial', 'note',
+  'schema', 'container', 'tablegroup',
+  'type', 'edge', 'view', 'diagramview',
+  'field',
+]);
 
 const STRUCTURAL_TYPE_KEYWORDS = new Set([
   'object', 'struct', 'record', 'array', 'list', 'map', 'dict', 'dictionary',
@@ -142,9 +173,43 @@ function canonEntityKw (raw: string): EntityKeyword {
 export class Parser {
   private tokens: Token[];
   private idx = 0;
+  /**
+   * Parse-time options (v0.2 / P5+). Carries the importer's filePath, the
+   * optional readFile resolver, and the maxDepth bound. Used by
+   * parseModuleDirective to resolve reference-only directives. May be an
+   * empty object when no options were supplied (the public `parse(source)`
+   * 1-arg form).
+   */
+  private options: ParseOptions;
+  /**
+   * The set of file paths currently being parsed in the resolution chain.
+   * Used for cycle detection: when resolving a directive whose `from` path
+   * is already in this set, the parser produces an empty clone for that
+   * directive rather than recursing (matching spec §26.14: cycles are
+   * allowed; name resolution handles them). The set is passed by reference
+   * across recursive parse() calls so all transitive levels see it.
+   *
+   * The set contains the resolved ABSOLUTE paths (post-readFile-key path
+   * computation), not the source-text `from` strings, so two directives
+   * that name the same file via different relative paths still collide.
+   */
+  private resolutionStack: ReadonlySet<string>;
+  /**
+   * Current recursion depth. Incremented before each recursive parse(),
+   * compared against options.maxDepth. Reaching the limit throws.
+   */
+  private depth: number;
 
-  constructor (tokens: Token[]) {
+  constructor (
+    tokens: Token[],
+    options: ParseOptions = {},
+    resolutionStack: ReadonlySet<string> = new Set(),
+    depth = 0,
+  ) {
     this.tokens = tokens;
+    this.options = options;
+    this.resolutionStack = resolutionStack;
+    this.depth = depth;
   }
 
   /* ----- low-level token helpers ----- */
@@ -265,6 +330,8 @@ export class Parser {
     if (k === 'tablepartial') return this.parseTablePartial();
     if (k === 'tablegroup') return this.parseTableGroup();
     if (k === 'note') return this.parseNoteDeclaration();
+    if (k === 'records') return this.parseTopLevelRecords();
+    if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
     throw new ParseError(`Unknown top-level construct: ${t.text}`, t.start);
   }
 
@@ -406,6 +473,8 @@ export class Parser {
         body.push(this.parseView());
       } else if (k === 'enum') {
         body.push(this.parseEnum());
+      } else if (k === 'use' || k === 'reuse') {
+        body.push(this.parseModuleDirective('container-body'));
       } else {
         // Unknown line; tolerate as no-op rather than fail the whole parse.
         throw new ParseError(
@@ -483,10 +552,10 @@ export class Parser {
         body.push(this.parseNoteBlockOrSetting());
       } else if (k === 'indexes') {
         body.push(this.parseIndexes());
+      } else if (k === 'checks') {
+        body.push(this.parseChecks());
       } else if (k === 'records') {
-        // PoC: skip records block for now; it's defined in the spec but not exercised
-        // by examples 01-04. Treat as a tolerated body item to keep the parser robust.
-        body.push(this.parseRecordsBlockTolerantly());
+        body.push(this.parseRecordsBlock());
       } else if (t.kind === TokenKind.Tilde) {
         body.push(this.parsePartialInjection());
       } else {
@@ -508,29 +577,428 @@ export class Parser {
   }
 
   /**
-   * A tolerant records-block parser. The full grammar is one row per line of
-   * comma-separated values. For the PoC we read until the matching `}` and
-   * stash the raw text as a single row, so the parser doesn't choke on
-   * unusual value forms.
+   * Parse a `records { ... }` block inside an entity body (§25.1, implicit
+   * column list). Values are stored as SettingValue cells; row boundaries
+   * are determined by source line (see `parseRecordRow`).
    */
-  private parseRecordsBlockTolerantly (): EntityBodyItem {
+  private parseRecordsBlock (): RecordsBlock {
     const start = this.peek().start;
     this.advance(); // records
     this.expect(TokenKind.LBrace, "Expected '{' after 'records'");
-    let depth = 1;
-    while (!this.check(TokenKind.EOF) && depth > 0) {
-      const t = this.advance();
-      if (t.kind === TokenKind.LBrace) depth += 1;
-      else if (t.kind === TokenKind.RBrace) depth -= 1;
+    const rows: RecordRow[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      rows.push(this.parseRecordRow());
     }
+    this.expect(TokenKind.RBrace, "Expected '}' closing records");
     return {
       kind: 'RecordsBlock',
-      rows: [],
+      rows,
       span: this.spanFrom(start),
     };
   }
 
-  /* ----- Field declarations ----- */
+  /**
+   * Top-level records declaration (§25.2, new in v0.2):
+   *
+   *     records users (id, name, email) { ... }
+   *     records core.users (id, name, email) { ... }
+   *
+   * The entity reference can be a bare name or a dotted path for cross-
+   * container references. The column list is required; it tells the
+   * generator which columns each row's values are populating.
+   */
+  private parseTopLevelRecords (): TopLevelRecordsDeclaration {
+    const start = this.peek().start;
+    this.advance(); // records
+    // Entity reference: bare identifier or dotted path (`core.users`).
+    const refStart = this.peek().start;
+    const head = this.expect(TokenKind.Identifier, "Expected entity name after 'records'");
+    let entityRef = head.text;
+    while (this.check(TokenKind.Dot)) {
+      this.advance();
+      const next = this.expect(TokenKind.Identifier, "Expected identifier after '.' in entity reference");
+      entityRef += `.${next.text}`;
+    }
+    // Explicit column list -- required for top-level form.
+    this.expect(TokenKind.LParen, "Expected '(' starting column list after entity reference");
+    const columns: string[] = [];
+    if (!this.check(TokenKind.RParen)) {
+      const first = this.expect(TokenKind.Identifier, 'Expected column name');
+      columns.push(first.text);
+      while (this.match(TokenKind.Comma)) {
+        if (this.check(TokenKind.RParen)) break; // tolerate trailing comma
+        const next = this.expect(TokenKind.Identifier, 'Expected column name after comma');
+        columns.push(next.text);
+      }
+    }
+    this.expect(TokenKind.RParen, "Expected ')' closing column list");
+    // Row body.
+    this.expect(TokenKind.LBrace, "Expected '{' starting records body");
+    const rows: RecordRow[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      rows.push(this.parseRecordRow());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing records body");
+    void refStart; // currently unused but reserved for future improved error reporting
+    return {
+      kind: 'TopLevelRecordsDeclaration',
+      entityRef,
+      columns,
+      rows,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Parse a single row of comma-separated values.
+   *
+   * Row delimiter rule: a comma continues the row only when the next value
+   * is on the same source line as the comma. If the comma is followed by
+   * a token on a later line (or the closing `}`), the comma is treated as
+   * a trailing comma and the row ends. This rule:
+   *
+   *   - Tolerates trailing commas at end of row
+   *   - Supports triple-quoted multi-line string VALUES (the comma after
+   *     the closing `'''` is on the line of the closing triple, and the
+   *     next value sits on that same line)
+   *   - Does NOT support multi-line rows where a row's values are spread
+   *     across multiple source lines connected by commas
+   */
+  private parseRecordRow (): RecordRow {
+    const start = this.peek().start;
+    const values: SettingValue[] = [this.parseSettingValue()];
+    while (this.check(TokenKind.Comma)) {
+      const commaLine = this.peek().start.line;
+      this.advance(); // consume comma
+      // Check what follows the comma. If it's on a later line, treat as trailing.
+      const nextTok = this.peek();
+      if (nextTok.kind === TokenKind.RBrace || nextTok.kind === TokenKind.EOF) {
+        // trailing comma at end of block
+        break;
+      }
+      if (nextTok.start.line > commaLine) {
+        // trailing comma at end of row (next value is on a later line)
+        break;
+      }
+      values.push(this.parseSettingValue());
+    }
+    return {
+      kind: 'RecordRow',
+      values,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /* ----- Module-system directives (spec §26, new in v0.2) ----- */
+
+  /**
+   * Parse a `use` or `reuse` directive. Called from both the top-level
+   * dispatcher and the Container body dispatcher; the caller indicates
+   * which context via the `context` argument. The context affects which
+   * placements are legal (e.g., field imports must be at file scope) but
+   * does NOT affect the directive's syntactic shape.
+   *
+   * Grammar:
+   *
+   *     ('use' | 'reuse') importSpec 'from' StringLiteral metadataSettings? cloneBlock?
+   *
+   *     importSpec ::= '*'  |  '{' importItem (',' importItem)* '}'
+   *     importItem ::= elementType path ('as' Identifier)?
+   *     elementType ::= 'table' | 'entity' | 'collection' | 'record' |
+   *                     'enum' | 'tablepartial' | 'note' | 'schema' |
+   *                     'container' | 'tablegroup' | 'type' | 'edge' |
+   *                     'view' | 'diagramview' | 'field'
+   *     metadataSettings ::= '[' setting (',' setting)* ']'
+   *     cloneBlock ::= '{' topLevelStatement* '}'
+   */
+  private parseModuleDirective (context: 'file-scope' | 'container-body'): ModuleImportDirective {
+    const start = this.peek().start;
+    const modeTok = this.advance(); // 'use' or 'reuse'
+    const mode: 'use' | 'reuse' = (modeTok.text.toLowerCase() as 'use' | 'reuse');
+
+    // Import spec: '*' or '{ ... }'
+    let spec: ImportSpec;
+    if (this.check(TokenKind.Star)) {
+      this.advance();
+      spec = { kind: 'ImportAll' };
+    } else if (this.check(TokenKind.LBrace)) {
+      this.advance();
+      const items: ImportItem[] = [];
+      // Skip leading whitespace/newlines (already handled by lexer).
+      while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+        items.push(this.parseImportItem(context));
+        if (this.match(TokenKind.Comma)) {
+          // Tolerate trailing comma before the closing brace.
+          continue;
+        } else {
+          break;
+        }
+      }
+      this.expect(TokenKind.RBrace, "Expected '}' closing import item list");
+      if (items.length === 0) {
+        throw new ParseError(
+          `Expected at least one import item between '{' and '}'`,
+          start,
+        );
+      }
+      spec = { kind: 'ImportList', items };
+    } else {
+      const t = this.peek();
+      throw new ParseError(
+        `Expected '*' or '{' after '${mode}', got ${t.kind} ${JSON.stringify(t.text)}`,
+        t.start,
+      );
+    }
+
+    // 'from' keyword
+    if (!isKw(this.peek(), 'from')) {
+      const t = this.peek();
+      throw new ParseError(
+        `Expected 'from' after import spec, got ${t.kind} ${JSON.stringify(t.text)}`,
+        t.start,
+      );
+    }
+    this.advance(); // from
+
+    // The path: a single string literal.
+    const pathTok = this.peek();
+    if (pathTok.kind !== TokenKind.StringLiteral) {
+      throw new ParseError(
+        `Expected string literal path after 'from', got ${pathTok.kind} ${JSON.stringify(pathTok.text)}`,
+        pathTok.start,
+      );
+    }
+    this.advance();
+    const from = pathTok.value ?? '';
+
+    // Optional metadata settings: '[cloned_at: ...]'
+    const settings = this.maybeSettingsBlock();
+
+    // Optional clone block: '{ ...top-level statements... }'
+    let clone: CloneBlock | undefined;
+    if (this.check(TokenKind.LBrace)) {
+      clone = this.parseCloneBlock();
+    }
+
+    // P5: if no inline clone block, attempt to resolve the referenced file
+    // using the supplied readFile callback. If no callback was supplied
+    // (the bare `parse(source)` 1-arg form), fall back to the P4 rejection.
+    let resolvedPath: string | undefined;
+    let resolutionCycle = false;
+    if (!clone) {
+      if (this.options.readFile) {
+        // Build the directive shape we need to pass to the resolver. We
+        // haven't finalized the AST node yet (we need its `clone` field),
+        // so we pass a partial directive that has all the fields resolveImport
+        // reads (from, span, mode).
+        const partial: ModuleImportDirective = {
+          kind: 'ModuleImportDirective',
+          mode,
+          spec,
+          from,
+          settings,
+          span: this.spanFrom(start),
+        };
+        const result = resolveImport(
+          partial,
+          this.options,
+          this.resolutionStack,
+          this.depth,
+          recursiveParse,
+        );
+        switch (result.kind) {
+          case 'resolved':
+            clone = result.clone;
+            resolvedPath = result.resolvedPath;
+            break;
+          case 'cycle':
+            // Per spec §26.14, cycles are allowed; the parser produces a
+            // directive with no clone, and name resolution (P6+) is
+            // expected to bridge the cycle. We leave clone undefined.
+            resolvedPath = result.resolvedPath;
+            resolutionCycle = true;
+            break;
+          case 'no-resolver':
+            // Shouldn't reach this branch because we already checked
+            // readFile above, but treat it as the P4 rejection
+            // defensively rather than silently producing an unresolved
+            // directive.
+            throw new ParseError(
+              `Reference-only '${mode}' directive (no clone block) could not be resolved: ` +
+              `no readFile resolver was supplied in ParseOptions.`,
+              start,
+            );
+        }
+      } else {
+        // P4 fallback: no clone, no resolver. Reject with the original
+        // message pointing to the clone-block escape hatch.
+        throw new ParseError(
+          `Reference-only '${mode}' directive (no clone block) cannot be resolved: ` +
+          `no readFile resolver was supplied in ParseOptions. ` +
+          `Either provide a ParseOptions.readFile callback when calling parse(), ` +
+          `or add an inline clone block to the directive to make the file self-contained.`,
+          start,
+        );
+      }
+    }
+
+    void resolvedPath; void resolutionCycle; // currently unused; reserved for future provenance metadata
+
+    return {
+      kind: 'ModuleImportDirective',
+      mode,
+      spec,
+      from,
+      settings,
+      clone,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Parse one import item: an element-type keyword, a dotted source path,
+   * and an optional `as <alias>`.
+   *
+   *     entity core.dim_customer
+   *     type Email
+   *     type Email as PII_Email
+   *     field core.dim_customer.email          (rejected in P4)
+   */
+  private parseImportItem (context: 'file-scope' | 'container-body'): ImportItem {
+    const start = this.peek().start;
+
+    // Element type keyword.
+    const elemTok = this.peek();
+    if (elemTok.kind !== TokenKind.Identifier) {
+      throw new ParseError(
+        `Expected import element type keyword, got ${elemTok.kind} ${JSON.stringify(elemTok.text)}`,
+        elemTok.start,
+      );
+    }
+    const elementType = elemTok.text.toLowerCase();
+    if (!IMPORT_ELEMENT_TYPES.has(elementType)) {
+      throw new ParseError(
+        `Unknown import element type '${elemTok.text}'. ` +
+        `Expected one of: ${Array.from(IMPORT_ELEMENT_TYPES).join(', ')}.`,
+        elemTok.start,
+      );
+    }
+    if (elementType === 'field' && context !== 'file-scope') {
+      // Spec §26.8: field imports must appear at file scope. Inside a
+      // Container body, the field's eventual placement (as a Named Type)
+      // would have no meaningful container scope -- field imports are
+      // always lifted to file scope by flatten(), regardless of where
+      // the directive sits.
+      throw new ParseError(
+        `Field-level imports must appear at file scope, not inside a Container body (spec §26.8).`,
+        elemTok.start,
+      );
+    }
+    this.advance(); // consume element type keyword
+
+    // Dotted source path.
+    const pathHead = this.expect(
+      TokenKind.Identifier,
+      `Expected source path after '${elementType}'`,
+    );
+    let sourcePath = pathHead.text;
+    while (this.check(TokenKind.Dot)) {
+      this.advance();
+      const next = this.expect(
+        TokenKind.Identifier,
+        `Expected identifier after '.' in source path`,
+      );
+      sourcePath += `.${next.text}`;
+    }
+
+    // Optional 'as <alias>'
+    let alias: string | undefined;
+    if (isKw(this.peek(), 'as')) {
+      this.advance(); // as
+      const aliasTok = this.expect(
+        TokenKind.Identifier,
+        `Expected identifier after 'as'`,
+      );
+      alias = aliasTok.text;
+    }
+
+    return {
+      kind: 'ImportItem',
+      elementType,
+      sourcePath,
+      alias,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Parse a clone block. The block contains zero or more declarations
+   * that match the import items by name and element type (matching is
+   * downstream-consumer's job; the parser is permissive).
+   *
+   * Per spec §26.6, clone content uses the importing file's vocabulary
+   * (aliases already applied) and is parsed under the importing file's
+   * xdbml version directive.
+   *
+   * Most clone-block content uses TopLevelStatement shapes (Entity, Type,
+   * Container, etc.). The exception is field imports (§26.8): when the
+   * directive imports one or more fields via `field <path>` items, the
+   * clone block holds each field as a bare FieldDeclaration with no entity
+   * wrapper. The dispatch below checks whether the next token starts a
+   * known top-level keyword and falls through to FieldDeclaration when
+   * it doesn't.
+   */
+  private parseCloneBlock (): CloneBlock {
+    const start = this.peek().start;
+    this.expect(TokenKind.LBrace, "Expected '{' starting clone block");
+    const statements: (TopLevelStatement | FieldDeclaration)[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      if (this.isCloneTopLevelStart()) {
+        statements.push(this.parseTopLevelStatement());
+      } else {
+        // Bare field declaration -- the field-import case. Per spec §26.6
+        // the field appears without an entity wrapper.
+        statements.push(this.parseFieldDeclaration());
+      }
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing clone block");
+    return {
+      kind: 'CloneBlock',
+      statements,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Lookahead helper: does the current token start a top-level statement?
+   *
+   * Used by parseCloneBlock to dispatch between "this is a top-level
+   * declaration" (Entity, Type, Container, etc.) and "this is a bare
+   * field declaration" (for field imports). A field declaration starts
+   * with an identifier followed by a type expression; a top-level
+   * statement starts with one of the known top-level keywords.
+   *
+   * Mirrors the dispatch in parseTopLevelStatement(). If we add new
+   * top-level constructs there, this set should grow in parallel.
+   */
+  private isCloneTopLevelStart (): boolean {
+    const k = kw(this.peek());
+    if (k === null) return false;
+    if (k === 'project') return true;
+    if (CONTAINER_KEYWORDS.has(k)) return true;
+    if (ENTITY_KEYWORDS.has(k)) return true;
+    if (k === 'type') return true;
+    if (k === 'edge') return true;
+    if (k === 'view') return true;
+    if (k === 'enum') return true;
+    if (k === 'ref') return true;
+    if (k === 'tablepartial') return true;
+    if (k === 'tablegroup') return true;
+    if (k === 'note') return true;
+    if (k === 'records') return true;
+    if (k === 'use' || k === 'reuse') return true;
+    return false;
+  }
 
   /**
    * `field_name typeExpression [settings]` or `"quoted name" typeExpression [settings]`.
@@ -913,7 +1381,58 @@ export class Parser {
     const start = this.peek().start;
     this.advance(); // Type
     const name = this.parseIdentLikeName('type name');
+
+    // After `Type <Name>`, the next token disambiguates the form:
+    //
+    //   { ... }                           v0.1 object form, no pre-body settings
+    //   [ settings ] { ... }              v0.1 object form, pre-body settings (permissive)
+    //   typeExpression                    v0.2 scalar form (spec §14.7)
+    //   typeExpression [ settings ]       v0.2 scalar form with field-level settings
+    //
+    // Note that LBrace and LBracket are distinct from any start-of-type-expression
+    // token (Identifier, scalar/bson type keywords, structural type keywords like
+    // `object`, `array`, `oneOf`, etc.), so the dispatch is unambiguous from
+    // peek(0) alone.
+
+    if (this.check(TokenKind.LBrace)) {
+      // v0.1 object form, no pre-body settings.
+      return this.finishObjectTypeDecl(start, name, /* settings */ []);
+    }
+
+    if (this.check(TokenKind.LBracket)) {
+      // v0.1 object form with pre-body settings (permissive shape; not used in
+      // any current example or spec text but historically accepted).
+      const settings = this.maybeSettingsBlock();
+      return this.finishObjectTypeDecl(start, name, settings);
+    }
+
+    // Anything else is the v0.2 scalar form. parseTypeExpression handles
+    // scalars, BSON types, named-type references, and the parameterized
+    // forms like `decimal(10, 2)`. It also handles structural type
+    // expressions like `array(int)` -- the spec calls this "scalar" because
+    // that's the typical use case, but the syntactic form supports any
+    // type expression as the base.
+    const scalarBase = this.parseTypeExpression();
     const settings = this.maybeSettingsBlock();
+    return {
+      kind: 'TypeDeclaration',
+      name,
+      scalarBase,
+      settings,
+      body: [],
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * Finish parsing a v0.1 object-form Type after the name (and optional
+   * pre-body settings) have been consumed. Handles the `{ ...body }` part.
+   */
+  private finishObjectTypeDecl (
+    start: Position,
+    name: string,
+    settings: Setting[],
+  ): TypeDeclaration {
     this.expect(TokenKind.LBrace, "Expected '{' after Type name");
     const body: TypeDeclaration['body'] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
@@ -1387,6 +1906,46 @@ export class Parser {
     return c;
   }
 
+  /* ----- Checks (spec §10, new in v0.2) ----- */
+
+  private parseChecks (): ChecksBlock {
+    const start = this.peek().start;
+    this.advance(); // checks
+    this.expect(TokenKind.LBrace, "Expected '{' after checks");
+    const entries: CheckEntry[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      entries.push(this.parseCheckEntry());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing checks");
+    return {
+      kind: 'ChecksBlock',
+      entries,
+      span: this.spanFrom(start),
+    };
+  }
+
+  private parseCheckEntry (): CheckEntry {
+    const start = this.peek().start;
+    const exprTok = this.peek();
+    if (exprTok.kind !== TokenKind.ExpressionLiteral) {
+      throw new ParseError(
+        `Expected backtick-wrapped check expression, got ${exprTok.kind} ${JSON.stringify(exprTok.text)}`,
+        exprTok.start,
+      );
+    }
+    this.advance();
+    // The expression is opaque to xDBML per spec §10.3. The value field of
+    // an ExpressionLiteral token already has the surrounding backticks stripped.
+    const expression = exprTok.value ?? '';
+    const settings = this.maybeSettingsBlock();
+    return {
+      kind: 'CheckEntry',
+      expression,
+      settings,
+      span: this.spanFrom(start),
+    };
+  }
+
   /* ----- Settings block ----- */
 
   private maybeSettingsBlock (): Setting[] {
@@ -1642,7 +2201,49 @@ export class Parser {
  * Public API
  * ----------------------------------------------------------------------- */
 
-export function parse (source: string): XDbmlDocument {
+/**
+ * Parse xDBML source.
+ *
+ * - 1-argument form `parse(source)` parses self-contained documents (any
+ *   module directive must carry an inline clone block; reference-only
+ *   directives throw).
+ * - 2-argument form `parse(source, options)` accepts a `readFile`
+ *   resolver for cross-file `use`/`reuse` directives and a `filePath`
+ *   identifying the source for relative-path resolution. See
+ *   `ParseOptions` for the full shape.
+ *
+ * The function is fully synchronous. Async file loading and incremental
+ * resolution are intentionally out of scope -- callers needing async I/O
+ * should pre-load their module graph and supply a `readFile` callback
+ * that returns from an in-memory map.
+ */
+export function parse (source: string, options: ParseOptions = {}): XDbmlDocument {
   const tokens = tokenize(source);
-  return new Parser(tokens).parseDocument();
+  // The initial resolution stack contains the importer's own file path
+  // (so a file that tries to reuse itself triggers cycle detection at
+  // the outer level too). If no filePath is provided, the stack is empty.
+  const initialStack = new Set<string>();
+  if (options.filePath) initialStack.add(options.filePath);
+  return new Parser(tokens, options, initialStack, 0).parseDocument();
 }
+
+/**
+ * Internal `ParseFn` used by the module resolver to recursively parse a
+ * referenced file. Threads the resolution stack and depth so cycle
+ * detection and the depth limit cover the full transitive graph.
+ *
+ * NOTE: this is the recursive entry point invoked by `resolveImport()`.
+ * It differs from the public `parse()` in two ways: (1) it takes the
+ * full resolution-stack / depth context, and (2) it doesn't re-add
+ * options.filePath to the stack (the caller already did so when
+ * widening the stack with the resolved path of the referenced file).
+ */
+const recursiveParse: ParseFn = (
+  source: string,
+  options: ParseOptions,
+  resolutionStack: ReadonlySet<string>,
+  depth: number,
+): XDbmlDocument => {
+  const tokens = tokenize(source);
+  return new Parser(tokens, options, resolutionStack, depth).parseDocument();
+};

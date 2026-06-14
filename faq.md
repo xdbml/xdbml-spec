@@ -31,7 +31,7 @@ But xDBML exists because there are additional frustrations DBML cannot address. 
 
 - **Property-bearing graph edges.** Labeled property graph databases (Neo4j, Memgraph, Neptune) and RDF-star treat relationships as first-class with their own properties -- a `KNOWS` edge between two people can carry `since: date` and `intimacy: int`. DBML cannot express this; xDBML's `Edge` construct does.
 
-xDBML inherits DBML's discipline -- avoid the over-engineering trap that has killed previous ambitious modeling standards -- while extending the language to address the additional pains the modern data stack creates.
+xDBML inherits DBML's discipline -- avoid the over-engineering trap that has killed previous ambitious data modeling standards -- while extending the language to address the additional pains the modern data stack creates.
 
 ## Can I round-trip Oracle (or other RDBMS) DDL through xDBML and back without losing anything?
 
@@ -39,7 +39,7 @@ No, and this is by design. xDBML is not the round-trip format between an xDBML t
 
 xDBML carries the parts of that model with meaning across boundaries: structural shape, types, relationships, declarative constraints, classifications, and AI-readiness metadata. Operational and procedural features stay native.
 
-The diagram in the [scope section of the specification](/spec/v0.1#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
+The diagram in the [scope section of the specification](/spec/v0.2#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
 
 What this means in practice:
 
@@ -49,11 +49,11 @@ What this means in practice:
 
 ## Why doesn't xDBML support partitions, storage configuration, or triggers?
 
-These are target-specific operational features. xDBML's job is to describe the declarative shape and meaning of data across all storage technologies -- the parts that make sense in conversations between humans, AI assistants, and tools that span multiple engines. Operational features only make sense in the context of one specific target, and the modeling tool's native representation is where they belong.
+These are target-specific operational features. xDBML's job is to describe the declarative shape and meaning of data across all storage technologies -- the parts that make sense in conversations between humans, AI assistants, and tools that span multiple engines. Operational features only make sense in the context of one specific target, and the data modeling tool's native representation is where they belong.
 
 A schema with Oracle-specific partition strategy is not portable to MongoDB or Avro by definition. xDBML expresses what IS portable -- the shape, the types, the relationships, the semantics -- so that one declarative source can describe schemas across an Oracle relational system, a MongoDB document store, an Avro event stream, and a JSON Schema API contract simultaneously.
 
-If you need to capture partition strategy, sharding configuration, or any other operational feature, that lives in the modeling tool's native format alongside the xDBML projection. The tool generates the target-native DDL with all operational features intact; xDBML is the export channel for the parts that matter across boundaries.
+If you need to capture partition strategy, sharding configuration, or any other operational feature, that lives in the data modeling tool's native format alongside the xDBML projection. The tool generates the target-native DDL with all operational features intact; xDBML is the export channel for the parts that matter across boundaries.
 
 ## Does that make xDBML a logical data model?
 
@@ -65,17 +65,42 @@ The same language constructs serve all three layers, depending on what the autho
 
 - A **logical** xDBML document adds engine-neutral typing, cardinality, declarative constraints, and normalized structure -- still without commitment to a specific target technology. Useful for asking an AI assistant to refine a conceptual draft into a deployable shape, or for cross-team schema design conversations before the engine choice is made.
 
-- A **physical** xDBML document adds explicit `targets:` and per-Container `target:` declarations, engine-specific scalar types (`varchar`, `objectId`, `Decimal128`, `int32`), and engine-native container kinds (`schema`, `database`, `keyspace`, `namespace`). Useful for AI-assisted modeling against one or more concrete engines, or for handing a tool the structural-and-semantic content it needs to forward-engineer.
+- A **physical** xDBML document adds explicit `targets:` and per-Container `target:` declarations, engine-specific scalar types (`varchar`, `objectId`, `Decimal128`, `int32`), and engine-native container kinds (`schema`, `database`, `keyspace`, `namespace`). Useful for AI-assisted data modeling against one or more concrete engines, or for handing a tool the structural-and-semantic content it needs to forward-engineer.
 
-What xDBML deliberately is NOT is the persistent model artifact that a data modeling tool maintains internally. Those tool-native artifacts carry versioning, branching, audit trails, generation metadata, validation history, UI state, and target-specific operational features (partitions, storage, PL/SQL, triggers) -- everything needed to run a working modeling environment. xDBML is what the tool exports from its canonical model when something outside the tool needs to read the schema's structural and semantic content. The two are complementary, not interchangeable.
+What xDBML deliberately is NOT is the persistent model artifact that a data modeling tool maintains internally. Those tool-native artifacts carry versioning, branching, audit trails, generation metadata, validation history, UI state, and target-specific operational features (partitions, storage, PL/SQL, triggers) -- everything needed to run a working data modeling environment. xDBML is what the tool exports from its canonical model when something outside the tool needs to read the schema's structural and semantic content. The two are complementary, not interchangeable.
 
 ## How does xDBML relate to DBML?
 
-xDBML is a **strict superset of DBML 3.13.6** under Apache License 2.0. Every valid DBML document is a valid xDBML document with identical semantics. To opt into xDBML extensions, add `xdbml: 0.1` at the top of a DBML document.
+xDBML is a **strict superset of DBML 3.13.6** under Apache License 2.0. Every valid DBML document parses correctly under xDBML rules, and every DBML construct (used in a way valid in DBML) means the same thing in xDBML as in DBML. To opt into xDBML extensions, add `xdbml: 0.2` at the top of a DBML document. The version directive selects which semantics apply: a file with no directive is treated as DBML; a file with `xdbml: 0.2` opts into the full xDBML feature set.
 
-xDBML extends DBML with constructs DBML cannot currently express: explicit namespace levels (Containers), nested hierarchical types, structural polymorphism (oneOf/anyOf/allOf), first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
+xDBML extends DBML with constructs DBML cannot currently express: explicit namespace levels (Containers), nested hierarchical types, structural polymorphism (oneOf/anyOf/allOf), first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, scalar Named Types, an enriched module system (`use`/`reuse` with optional clone blocks for file autonomy), and a structured custom-properties mechanism.
 
 DBML's `database_type:` setting is preserved as an alias for single-target schemas; see spec §5.3.
+
+## How do I split a large xDBML schema across multiple files?
+
+Use the **module system** (spec §26). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
+
+Two import modes are supported. Import in full brings every top-level declaration from the source file: `reuse * from './library'`. Selective import names what you want: `reuse { entity products, type Email } from './library'`. Use `as` to rename for clarity or to avoid conflicts.
+
+For autonomy, attach a **clone block** to any directive. The clone embeds the imported content directly in the importing file, so the file parses correctly even if the referenced file is unavailable. Clone blocks suit files delivered to customers, archived, or rendered in browser-based tools where File System Access permission prompts would otherwise be needed. Without clones, the parser opens the referenced file at parse time (DBML-compatible behavior). The author chooses per directive.
+
+A common pattern: a "conformed dimensions" file declares canonical entities (customers, products, dates) used by multiple data products. Each data product imports the canonical entities into its own Container with clone blocks for autonomy. The conformed file is the single source of truth; data products lock the version they depend on via the clone.
+
+## Can I use xDBML and the playground instead of a data modeling tool?
+
+No. xDBML is a format, not a data modeling tool, and the <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> is a demonstrator for the language, not an IDE. Both are well-suited to learning xDBML, prototyping small schemas, sharing a schema in chat or a pull request, and feeding schemas to and from AI assistants. None of that adds up to a substitute for a purpose-built enterprise data modeling tool.
+
+The work that enterprise data modeling tools do, and that xDBML deliberately does not:
+
+- **Reverse-engineering from live systems.** Modern data modeling tools introspect dozens of database engines, message buses, document stores, and metadata catalogs, then produce a coherent model. xDBML is what can come out of that process for portable consumption; it is not the engine that performs the introspection.
+- **Forward-engineering with full target fidelity.** A data modeling tool generates Oracle DDL with partitions, tablespaces, indexes with vendor-specific options, sequences, triggers, materialized views, and PL/SQL; MongoDB validators with collection-level options; Avro schemas with vendor extensions; and so on. xDBML carries only what is portable across targets -- the declarative shape and meaning. Vendor-specific operational features live in the tool's native model.
+- **Schema evolution and impact analysis.** Compare two versions of a model, see what changed, understand the blast radius of a rename, generate migration DDL. Data modeling tools do this with diff engines that know about referential integrity, column-order semantics, and engine-specific upgrade paths.
+- **Governance and catalog integration.** Lineage, glossary linkage, classification propagation, policy enforcement, ownership and stewardship workflows, audit trails, approval gates. xDBML carries metadata that integrates with these systems; it does not implement them.
+- **Documentation and collaboration at scale.** Generated HTML reports, data dictionaries with custom layouts, multi-user editing, comments, review workflows, role-based access. xDBML files read cleanly in Git, but a team of architects working across hundreds or thousands of entities needs a tool, not a directory.
+- **Diagram authoring.** The playground renders xDBML and lets you arrange it for a demo or a tutorial; real data modeling work needs sophisticated automatic layout, multiple notation styles (Crow's foot, IDEF1X, UML), abstraction layers (conceptual, logical, physical), focus diagrams, and the ability to print and embed.
+
+Tools like ER/Studio, Erwin Data Modeler, and Hackolade exist because all of the above are hard, valuable, and worth paying for. xDBML's role is to be the open, portable, AI-readable format that connects them to humans, AI assistants, governance platforms, and code, not to compete with them.
 
 ## Is xDBML competing with JSON Schema, OpenAPI, Avro, GraphQL, or SQL DDL?
 
@@ -102,7 +127,7 @@ xDBML generates the schemas these standards reference and consumes nothing they 
 
 ## Who maintains xDBML?
 
-xDBML is currently a draft v0.1 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
+xDBML is currently a draft v0.2 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
 
 ## How can I contribute?
 
@@ -117,7 +142,7 @@ See [contributing](/contributing) for details.
 
 ## When will v1.0 ship?
 
-When v0.1 has been used long enough for the language to stabilize through real-world feedback. The grammar is finalized; the ecosystem is being built; the open questions are about which constructs prove essential and which prove unnecessary as more teams adopt the language. v1.0 will codify what survives that feedback loop.
+When the language has been used long enough through v0.1 and v0.2 to stabilize through real-world feedback. The grammar is finalized; the ecosystem is being built; the open questions are about which constructs prove essential and which prove unnecessary as more teams adopt the language. v1.0 will codify what survives that feedback loop.
 
 ---
 

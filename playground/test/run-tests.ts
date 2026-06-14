@@ -28,7 +28,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parse } from '../../parser/src/index.ts';
+import { parse, flatten } from '../../parser/src/index.ts';
 import type { XDbmlDocument } from '../../parser/src/index.ts';
 import { buildDiagram, applyUserPositions } from '../src/components/diagram/layout.ts';
 import type { DiagramModel } from '../src/components/diagram/layout.ts';
@@ -49,6 +49,15 @@ interface TestCase {
   source: string | (() => string);
   /** Run assertions against the parsed + laid-out result. Throw to fail. */
   check: (ctx: { ast: XDbmlDocument; diagram: DiagramModel }) => void;
+  /**
+   * Optional reason a test is expected to fail. When set, the test still runs;
+   * if it throws, the failure is reported as PENDING rather than FAIL and does
+   * NOT count toward the failure total. If a "pending" test starts passing,
+   * the runner emits a notice -- remove the pendingReason entry once that
+   * happens. Used for v0.2 example files whose features the parser does not
+   * yet implement.
+   */
+  pendingReason?: string;
 }
 
 /* -------------------------------------------------------------------------
@@ -748,7 +757,7 @@ Container core {
 }
 `,
     check: ({ ast }) => {
-      const base = buildDiagram(ast);
+      const base = buildDiagram(flatten(ast));
       // Force recompute path by passing entities' current positions.
       const positions = new Map<string, { x: number; y: number }>();
       for (const e of base.entities) positions.set(e.id, { x: e.bounds.x, y: e.bounds.y });
@@ -770,11 +779,27 @@ Container core {
   // one example doesn't hide failures in the others.
 ];
 
+// Examples that exercise v0.2 features the current parser does not yet
+// implement. These are tracked as PENDING rather than FAIL: the test runs,
+// the failure is shown, but it does not break the build. When the parser
+// adds the relevant feature, remove the entry here -- the test will then
+// PASS (or FAIL legitimately, in which case investigate).
+//
+// Each entry is the filename (basename) mapped to a short reason string
+// describing which v0.2 feature is missing in the parser.
+//
+// As of parser batch P4 (module system with clone blocks), both bundled
+// v0.2 examples now parse and lay out. The map is intentionally left in
+// place for future v0.2.x or v0.3 work; populate it again when new
+// examples that exercise unimplemented features land.
+const pendingV02Examples: Record<string, string> = {};
+
 // Add one test per bundled example.
 for (const file of readdirSync(examplesDir).filter((f) => f.endsWith('.xdbml')).sort()) {
   tests.push({
     name: `bundled example parses and lays out: ${file}`,
     source: () => readFileSync(join(examplesDir, file), 'utf-8'),
+    pendingReason: pendingV02Examples[file],
     check: ({ ast, diagram }) => {
       assertTrue(ast.statements.length > 0, 'has statements');
       assertTrue(diagram.entities.length > 0, 'has at least one entity');
@@ -815,32 +840,64 @@ function findEntity (diagram: DiagramModel, name: string) {
  * Runner
  * ----------------------------------------------------------------------- */
 
+const YELLOW = isTTY ? '\x1b[33m' : '';
+const BLUE   = isTTY ? '\x1b[34m' : '';
+
 let passed = 0;
 let failed = 0;
+let pending = 0;
+let unexpectedlyPassed = 0;
 const failures: { name: string; error: string }[] = [];
+const pendingFailures: { name: string; reason: string; error: string }[] = [];
+const unexpectedPasses: string[] = [];
 
 for (const t of tests) {
   const source = typeof t.source === 'function' ? t.source() : t.source;
   try {
     const ast = parse(source);
-    const diagram = buildDiagram(ast);
-    t.check({ ast, diagram });
-    process.stdout.write(`  ${GREEN}✓${RESET} ${t.name}\n`);
-    passed += 1;
+    // Mirror what the playground's parserStore does: flatten the AST so
+    // module-system clone-block content is visible to buildDiagram and
+    // (in the inspector) ast-lookup.
+    const diagram = buildDiagram(flatten(ast));
+    t.check({ ast: flatten(ast), diagram });
+    // The test passed. If it was marked as pending, that's notable -- the
+    // parser has caught up and the entry should be removed from the pending
+    // list. Surface this prominently so it doesn't go unnoticed.
+    if (t.pendingReason) {
+      process.stdout.write(`  ${BLUE}✓${RESET} ${t.name} ${YELLOW}(was pending; please remove from pendingV02Examples)${RESET}\n`);
+      unexpectedPasses.push(t.name);
+      unexpectedlyPassed += 1;
+    } else {
+      process.stdout.write(`  ${GREEN}✓${RESET} ${t.name}\n`);
+      passed += 1;
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    process.stdout.write(`  ${RED}✗${RESET} ${t.name}\n`);
-    process.stdout.write(`    ${DIM}${msg}${RESET}\n`);
-    failures.push({ name: t.name, error: msg });
-    failed += 1;
+    if (t.pendingReason) {
+      // Expected failure -- v0.2 feature not yet implemented in the parser.
+      // Show the failure clearly so it stays visible as a to-do, but do
+      // not count it toward the failure total.
+      process.stdout.write(`  ${YELLOW}⏳${RESET} ${t.name} ${DIM}(pending)${RESET}\n`);
+      process.stdout.write(`    ${DIM}${msg}${RESET}\n`);
+      process.stdout.write(`    ${DIM}reason: ${t.pendingReason}${RESET}\n`);
+      pendingFailures.push({ name: t.name, reason: t.pendingReason, error: msg });
+      pending += 1;
+    } else {
+      process.stdout.write(`  ${RED}✗${RESET} ${t.name}\n`);
+      process.stdout.write(`    ${DIM}${msg}${RESET}\n`);
+      failures.push({ name: t.name, error: msg });
+      failed += 1;
+    }
   }
 }
 
 process.stdout.write('\n');
+const pendingSuffix = pending > 0 ? `, ${YELLOW}${pending} pending${RESET}` : '';
+const unexpectedSuffix = unexpectedlyPassed > 0 ? `, ${BLUE}${unexpectedlyPassed} unexpectedly passed${RESET}` : '';
 if (failed === 0) {
-  process.stdout.write(`${GREEN}${passed} passed${RESET}, 0 failed\n`);
+  process.stdout.write(`${GREEN}${passed} passed${RESET}, 0 failed${pendingSuffix}${unexpectedSuffix}\n`);
   process.exit(0);
 } else {
-  process.stdout.write(`${GREEN}${passed} passed${RESET}, ${RED}${failed} failed${RESET}\n`);
+  process.stdout.write(`${GREEN}${passed} passed${RESET}, ${RED}${failed} failed${RESET}${pendingSuffix}${unexpectedSuffix}\n`);
   process.exit(1);
 }

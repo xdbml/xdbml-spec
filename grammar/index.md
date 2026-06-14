@@ -22,19 +22,21 @@ The merge between upstream DBML and xDBML overlays is currently handled by a bui
 
 The grammar is **drafted but not yet compile-tested** against the ANTLR4 compiler. Compile-testing is on the roadmap once a maintainer with a Java/Maven environment has cycled through it. Subtle ANTLR-specific issues (token precedence, left-recursion handling, alternative ordering) may be identified during that pass.
 
-The grammar's *design* is stable as of v0.1; the specific token forms may require minor adjustments without affecting the spec's semantics.
+The grammar's *design* is stable as of v0.2; the specific token forms may require minor adjustments without affecting the spec's semantics. v0.2 adds the module system (`use`/`reuse` directives with optional clone blocks), scalar Named Types, and the new reserved tokens `USE`, `REUSE`, `FROM`, `AS`. Field-element-type imports (`field` slot value) and Container-scoped imports are semantically validated post-parse.
 
 ## Implementing a parser
 
 A conforming parser implementation should:
 
-1. Parse every valid xDBML v0.1 document to the AST described in §25 of the specification
-2. Reject malformed documents with informative line/column error reporting
-3. Honor the version declaration per §4.1
-4. Honor the `experimental:` opt-in per §4.2
-5. Normalize implicit forms to canonical AST representations
-6. Preserve declared keyword choices in the raw AST flavor
-7. Compute default cardinality per §10.8 when not explicitly declared
+1. Parse every valid xDBML v0.2 document to the AST described in §26 of the specification
+2. Also parse v0.1 documents with v0.1 semantics (the file's version directive selects)
+3. Reject malformed documents with informative line/column error reporting
+4. Honor the version declaration per §4.1
+5. Honor the `experimental:` opt-in per §4.2
+6. Normalize implicit forms to canonical AST representations
+7. Preserve declared keyword choices in the raw AST flavor
+8. Compute default cardinality per §10.8 when not explicitly declared
+9. Implement the module system per §25 (relative-path imports, clone blocks, name resolution, conflict detection)
 
 Multiple implementations in different language ecosystems are welcome and encouraged. Coordination on AST shape (so generators and importers can be language-agnostic) is discussed in [GitHub issues](https://github.com/xdbml/xdbml-spec/issues) tagged `grammar`.
 

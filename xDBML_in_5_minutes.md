@@ -11,7 +11,7 @@ xDBML is designed from the ground up for **AI-assisted data modeling** and **AI-
 
 xDBML is a strict superset of [DBML](https://dbml.dbdiagram.io), extended for the data shapes DBML can't: nested objects, sub-documents, maps, structs, records, arrays, lists, sets, tuples, polymorphism, named reusable types, JSON columns with known schema, target-native vocabulary (MongoDB collections, Avro records, Cassandra keyspaces), property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
 
-xDBML extends DBML into a unified metadata and semantic modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange.
+xDBML extends DBML into a unified metadata and semantic data modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. It is designed for AI-assisted data modeling and AI-mediated schema interchange.
 
 
 ## The first 60 seconds
@@ -19,7 +19,7 @@ xDBML extends DBML into a unified metadata and semantic modeling language with r
 Here is a complete xDBML document describing an order system. Read it once, top to bottom:
 
 ```xdbml
-xdbml: 0.1
+xdbml: 0.2
 
 Project ecommerce {
   targets: [Oracle, MongoDB]
@@ -116,7 +116,7 @@ xDBML  ──── generators ─────────┼─→ Avro / Parqu
                                 └─→ ODCS schema section
 ```
 
-But more importantly: **xDBML is the markup that AI assistants and modeling tools use to describe schemas.** When you ask Claude, ChatGPT, Gemini, Grok, Llama, Mistral AI, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
+But more importantly: **xDBML is the markup that AI assistants and data modeling tools use to describe schemas.** When you ask Claude, ChatGPT, Gemini, Grok, Llama, Mistral AI, or any modern LLM to "design a schema for X," the model produces nested objects, polymorphic types, foreign-key references, and arrays of records. JSON Schema can express most of these but only for JSON-shaped data; SQL DDL can express tables and constraints but not nested types; Avro can express records but not relational schemas. xDBML is the only mainstream markup that expresses *all* of them, in the same syntax, with the AI-readiness metadata (synonyms, business terms, tags, granularity) that lets natural-language queries resolve to canonical schema elements without guesswork.
 
 The same schema you author by hand is the schema your AI assistant can extend, refactor, and round-trip back to you. The same schema you generate from MongoDB can be lifted to Oracle, validated as JSON Schema, or wrapped in an ODCS contract.
 
@@ -250,13 +250,13 @@ xDBML describes the **structural and semantic layer** of data: entities, fields,
 
 ![xDBML scope diagram](/diagrams/xdbml-scope.svg)
 
-The tool-to-target round-trip -- the one between a modeling tool and an actual database -- happens in **native DDL or schema**, not in xDBML. The tool understands each target's complete capability surface (partitioning, sharding, tablespaces, PL/SQL, triggers, advanced constraints, identity columns, replication, refresh schedules) and preserves it in its own canonical model. xDBML carries the parts of that model that have meaning across boundaries: across engines, across tools, across humans and AI.
+The tool-to-target round-trip -- the one between a data modeling tool and an actual database -- happens in **native DDL or schema**, not in xDBML. The tool understands each target's complete capability surface (partitioning, sharding, tablespaces, PL/SQL, triggers, advanced constraints, identity columns, replication, refresh schedules) and preserves it in its own canonical model. xDBML carries the parts of that model that have meaning across boundaries: across engines, across tools, across humans and AI.
 
 Trying to import Oracle DDL into xDBML and re-export it as Oracle DDL preserving operational features is a misuse of the standard. The tool-to-target conversation should happen in native DDL throughout. xDBML is for a different conversation entirely.
 
 The following are *not* xDBML's job:
 
-- **Engine operational features.** Partitioning strategies, sharding configuration, tablespaces, storage models, replication topology, materialized view refresh schedules, clustering keys, time-travel configuration. These stay native to each target and live in the modeling tool's representation.
+- **Engine operational features.** Partitioning strategies, sharding configuration, tablespaces, storage models, replication topology, materialized view refresh schedules, clustering keys, time-travel configuration. These stay native to each target and live in the data modeling tool's representation.
 - **Procedural code.** PL/SQL, T-SQL, stored procedures, triggers, server-side functions, computed columns with engine-specific functions. xDBML expresses declarative shape and metadata, not behavior.
 - **Identity and sequencing details.** IDENTITY columns, sequences, auto-increment configuration. xDBML can declare a field as a primary key with auto-generation; the exact sequence configuration is engine-specific.
 - **Wire-protocol and evolution rules.** Avro schema evolution rules, Protobuf reserved fields, GraphQL federation directives, OpenAPI endpoints (xDBML describes the *types*, not the *operations*).
@@ -268,17 +268,19 @@ The following are *not* xDBML's job:
 
 xDBML describes shape and declarative metadata. Adjacent standards handle the layers above and below.
 
+xDBML is a format, not a data modeling tool. The <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
+
 ---
 
 ## Where to go from here
 
 - **Browse the [FAQ](/faq)** for answers to the questions newcomers most often ask after reading this introduction.
-- **Read the [v0.1 specification](/spec/v0.1)** for the full language reference.
+- **Read the [v0.2 specification](/spec/v0.2)** for the full language reference.
 - **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
 - **Try it in the <a href="/playground/index.html" target="_blank" rel="noopener">playground</a>** -- type or paste xDBML, see rendered the corresponding Entity-Relationship diagram.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** -- the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
-xDBML is a draft v0.1 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
+xDBML is a draft v0.2 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
 
 ---
 

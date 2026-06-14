@@ -48,6 +48,14 @@ export const TokenKind = {
 
   ArrayWildcard: 'ArrayWildcard', // [*]
 
+  /**
+   * Standalone `*`. Used by v0.2 module-system import-all directives:
+   * `use * from './path'`. Note that `[*]` is a separate token
+   * (ArrayWildcard); this Star token is only produced when the asterisk
+   * appears outside that context.
+   */
+  Star: 'Star',
+
   EOF: 'EOF',
 } as const;
 
@@ -454,6 +462,15 @@ export class Lexer {
       return {
         kind: TokenKind.Tilde,
         text: '~',
+        start,
+        end: this.pos(),
+      };
+    }
+    if (c === '*') {
+      this.advance();
+      return {
+        kind: TokenKind.Star,
+        text: '*',
         start,
         end: this.pos(),
       };

@@ -24,9 +24,9 @@ import {
 import { defineStore } from 'pinia';
 import { debounce } from 'lodash-es';
 import {
-  LexError, ParseError, parse, tokenize,
+  LexError, ParseError, parse, tokenize, flatten, resolveNames,
 } from '@xdbml/parse';
-import type { Token, XDbmlDocument } from '@xdbml/parse';
+import type { Diagnostic, Token, XDbmlDocument } from '@xdbml/parse';
 
 import logger from '@/utils/logger';
 import type { ParserError } from '@/types';
@@ -92,6 +92,26 @@ export const useParserStore = defineStore('parser', () => {
    * large schema is wasteful.
    */
   const ast = shallowRef<XDbmlDocument | undefined>(undefined);
+
+  /**
+   * The flattened AST: a view of the AST where v0.2 `ModuleImportDirective`
+   * nodes have been replaced by their clone-block content (see
+   * `flatten()` from `@xdbml/parse`). Cloned entities, types, etc. appear
+   * here as ordinary top-level statements or container-body items, just
+   * as if they had been written directly in the importing file.
+   *
+   * Most playground components use this rather than `ast` because they
+   * want to render or inspect ALL declarations regardless of whether
+   * they were imported. The original `ast` is also exposed (for any
+   * future tooling that wants to surface provenance) but currently no
+   * consumer uses it.
+   *
+   * When `ast` is undefined (parse failure), `flatAst` is also undefined.
+   * For documents without `use`/`reuse` directives, `flatAst` and `ast`
+   * are structurally identical (flatten is a no-op there).
+   */
+  const flatAst = shallowRef<XDbmlDocument | undefined>(undefined);
+
   const tokens = shallowRef<Token[]>([]);
   const errors = ref<ParserError[]>([]);
   const isLoading = ref(false);
@@ -120,6 +140,7 @@ export const useParserStore = defineStore('parser', () => {
         if (e instanceof LexError) {
           tokens.value = [];
           ast.value = undefined;
+          flatAst.value = undefined;
           errors.value = [lexErrorToParserError(e)];
           return;
         }
@@ -127,11 +148,22 @@ export const useParserStore = defineStore('parser', () => {
       }
 
       try {
-        ast.value = parse(source);
-        errors.value = [];
+        const parsed = parse(source);
+        ast.value = parsed;
+        const flat = flatten(parsed);
+        flatAst.value = flat;
+        // Run name resolution as a separate pass. Failures here are
+        // SEMANTIC, not syntactic -- the AST is still well-formed
+        // and downstream rendering (diagram, inspector) keeps working.
+        // The user just sees red squigglies on the offending references
+        // and entries in the diagnostics panel. The resolver is cheap
+        // enough to run on every keystroke alongside the parser.
+        const resolution = resolveNames(parsed);
+        errors.value = resolution.diagnostics.map(resolverDiagnosticToParserError);
       } catch (e) {
         if (e instanceof ParseError) {
           ast.value = undefined;
+          flatAst.value = undefined;
           errors.value = [parseErrorToParserError(e)];
           return;
         }
@@ -141,8 +173,10 @@ export const useParserStore = defineStore('parser', () => {
       logger.error('Unexpected parsing error', err);
       tokens.value = [];
       ast.value = undefined;
+      flatAst.value = undefined;
       errors.value = [{
         code: -1,
+        severity: 'error',
         message: err instanceof Error ? err.message : 'Unexpected error',
         location: {
           line: 1,
@@ -176,6 +210,7 @@ export const useParserStore = defineStore('parser', () => {
   return {
     content,
     ast,
+    flatAst,
     tokens,
     errors,
     isLoading,
@@ -188,6 +223,7 @@ export const useParserStore = defineStore('parser', () => {
 function lexErrorToParserError (e: LexError): ParserError {
   return {
     code: 1,
+    severity: 'error',
     message: e.message,
     location: {
       line: e.position.line,
@@ -203,6 +239,7 @@ function lexErrorToParserError (e: LexError): ParserError {
 function parseErrorToParserError (e: ParseError): ParserError {
   return {
     code: 2,
+    severity: 'error',
     message: e.message,
     location: {
       line: e.position.line,
@@ -211,6 +248,33 @@ function parseErrorToParserError (e: ParseError): ParserError {
     endLocation: {
       line: e.position.line,
       column: e.position.column + 1,
+    },
+  };
+}
+
+/**
+ * Convert a resolver Diagnostic (with `span`, string `code`, explicit
+ * severity) to the UI-facing ParserError shape. The Span gives us the
+ * exact range, so Monaco can underline only the offending construct
+ * rather than a single character.
+ */
+function resolverDiagnosticToParserError (d: Diagnostic): ParserError {
+  return {
+    code: d.code,
+    severity: d.severity,
+    message: d.message,
+    location: {
+      line: d.span.start.line,
+      column: d.span.start.column,
+    },
+    endLocation: {
+      // Monaco expects endColumn STRICTLY > startColumn, otherwise the
+      // marker is invisible. Spans from the parser are inclusive on
+      // start, exclusive on end -- so end.column is already correct
+      // for Monaco. We still guard with max() in case a diagnostic
+      // ever carries a degenerate zero-width span.
+      line: d.span.end.line,
+      column: Math.max(d.span.end.column, d.span.start.column + 1),
     },
   };
 }

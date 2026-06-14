@@ -15,6 +15,9 @@
       "include": "#directives"
     },
     {
+      "include": "#module-directives"
+    },
+    {
       "include": "#settings-block"
     },
     {
@@ -75,6 +78,15 @@
               "name": "punctuation.separator.key-value.xdbml"
             }
           }
+        }
+      ]
+    },
+    "module-directives": {
+      "comment": "v0.2 module system (spec §26): `use` / `reuse ... from '...'` directives, plus the `as` alias keyword. Matched as standalone words anywhere; TextMate cannot disambiguate context cheaply, but these keywords are rare outside their proper position so false positives are minimal. The `as` keyword also serves DBML table-aliasing (`Table users as u`) for which the same scope is appropriate.",
+      "patterns": [
+        {
+          "name": "keyword.control.module.xdbml",
+          "match": "\\b((?i:reuse|from|use|as))\\b"
         }
       ]
     },
@@ -176,11 +188,11 @@
     },
     "setting-flags": {
       "name": "support.constant.flag.xdbml",
-      "match": "\\b((?i:increment|required|primary|unique|null|key|not|pk))\\b"
+      "match": "\\b((?i:increment|required|inactive|primary|unique|null|key|not|pk))\\b"
     },
     "setting-keys": {
       "comment": "Setting keys appear before a colon. Matched only here inside the settings block.",
-      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|source_database|storage_options|default_charset|database_type|discriminator|minproperties|maxproperties|business_term|source_query|materialized|headercolor|uniqueitems|granularity|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|minlength|maxlength|inactive|minitems|maxitems|synonyms|location|default|targets|pattern|minimum|maximum|indexes|target|source|format|delete|update|color|check|note|name|type|tags|ref|as))\\b(\\s*)(:)",
+      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|source_database|storage_options|default_charset|database_type|discriminator|minproperties|maxproperties|business_term|source_query|materialized|headercolor|uniqueitems|granularity|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|minlength|maxlength|cloned_at|minitems|maxitems|synonyms|location|default|targets|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|note|name|type|tags|ref|as))\\b(\\s*)(:)",
       "captures": {
         "1": {
           "name": "variable.parameter.setting.xdbml"
