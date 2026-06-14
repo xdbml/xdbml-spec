@@ -64,6 +64,10 @@ features:
 
 ## A first look
 
+::: tip 🎮 Try it live in the playground
+<strong><a href="/playground/index.html" target="_blank" rel="noopener">Open the playground at xdbml.org/playground →</a></strong> -- write or paste a schema, see the entity-relationship diagram update as you type, share your work via URL. Runs entirely in your browser; no install, no signup.
+:::
+
 ```xdbml
 xdbml: 0.2
 
