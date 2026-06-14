@@ -27,6 +27,26 @@
  * Worker constructor at runtime.
  */
 
+// Pull in Monaco's icon font (codicon) so fold controls, find/replace icons,
+// scrollbar arrows, and every other built-in UI icon actually render. The
+// `editor.api` ESM entry doesn't include this CSS by default; without this
+// import, Monaco renders icon glyphs as blank spaces. Vite picks up the
+// embedded url('./codicon.ttf') reference and bundles the font as an asset.
+import 'monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css';
+
+// Pull in Monaco's folding contribution. The `editor.api` ESM entry imports
+// only the minimal editor surface (creation, model API, options) and OMITS
+// the editor contributions (folding, find, multi-cursor, parameter hints,
+// etc.) so an app can include just what it needs. Without this import:
+//   - `foldingStrategy: 'indentation'` is silently ignored (no provider)
+//   - no fold ranges are computed
+//   - no fold-control decorations are rendered (no carets in the gutter)
+//   - the `editor.fold` action is unregistered (Ctrl+Shift+[ does nothing)
+// Importing the folding module for its side effects registers the
+// contribution with Monaco's editor framework, after which all of the
+// above work as documented.
+import 'monaco-editor/esm/vs/editor/contrib/folding/browser/folding.js';
+
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 
 // Setting MonacoEnvironment.getWorker is the Monaco-documented way to
