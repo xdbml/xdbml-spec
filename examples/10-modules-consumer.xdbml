@@ -11,6 +11,9 @@
 //    - Module system (§26): `reuse { ... } from './...'` directives
 //    - Clone blocks (§26.6): inline embedded content for file autonomy
 //    - Field-level imports (§26.8): `reuse { field <path> }` for individual fields
+//    - Cross-example complex Type import: `reuse { type Address }` brings the
+//      object-form Named Type Address (with its nested `location` sub-object)
+//      from 02-ecommerce.xdbml into this consumer file's scope
 //    - `cloned_at` metadata (§26.6)
 //    - Container-scoped imports (§26.5): directives inside Container body
 //    - Scalar Named Types (§14.7): imported via `reuse { type Email, ... }`
@@ -48,6 +51,13 @@
 //    - Scalar Named Type import: `reuse { type Email, type CountryCode }`
 //      brings the canonical scalar types into this file, where they then
 //      drive validation on this file's facts.
+//
+//    - Complex (object-form) Type import: `reuse { type Address }` brings
+//      a Named Type whose body holds five string fields and a nested
+//      `location` object with bounded decimal coordinates -- the same
+//      directive shape handles scalar and structured Types uniformly.
+//      The imported Address is placed on `sales.dim_customer.primary_address`
+//      as a consumer-side enhancement to the canonical dimension.
 //
 //    - Field-level import: `reuse { field core.dim_customer.engagement_score }`
 //      brings a single field's full validation surface (numeric bounds, note)
@@ -143,14 +153,15 @@ Container sales [type: schema, target: Snowflake] {
     from './09-modules-conformed-dimensions'
     [cloned_at: '2026-06-10T08:00:00Z']
   {
-    Entity dim_customer [note: 'One row per customer. Cloned from conformed dimensions 2026-06-10.'] {
-      id           int           [pk, increment]
-      customer_key varchar       [unique, not null]
-      email        Email         [unique, not null]
-      phone        PhoneE164
-      country      CountryCode   [not null]
-      created_at   timestamp     [not null]
-      is_active    boolean       [not null, default: true]
+    Entity dim_customer [note: 'One row per customer. Cloned from conformed dimensions 2026-06-10; primary_address added as a sales-mart local extension (consumer-side enhancement of the canonical entity) for geospatial analytics.'] {
+      id              int           [pk, increment]
+      customer_key    varchar       [unique, not null]
+      email           Email         [unique, not null]
+      phone           PhoneE164
+      country         CountryCode   [not null]
+      primary_address Address       [note: 'Default shipping/billing address; the nested location object enables geo-bucket aggregation in fact_sales without requiring a separate dim_geography table.']
+      created_at      timestamp     [not null]
+      is_active       boolean       [not null, default: true]
     }
 
     Entity dim_product [note: 'One row per SKU. Cloned from conformed dimensions 2026-06-10.'] {
@@ -246,6 +257,49 @@ reuse { field core.dim_customer.engagement_score }
   [cloned_at: '2026-06-10T08:00:00Z']
 {
   engagement_score decimal(5,2) [minimum: 0, maximum: 100, note: 'Computed weekly by the customer-360 job; 0 means churned.']
+}
+
+
+// -----------------------------------------------------------------------------
+//  File-scope import: complex (object-form) Named Type from a different file
+//
+//  `Address` is declared in 02-ecommerce.xdbml as a Type with a BODY -- not
+//  a single scalar -- containing five string fields plus a nested `location`
+//  object with bounded decimal coordinates. The module system treats complex
+//  Named Types the same way as scalar ones: imported by the `type` element,
+//  dropped at file scope, usable as a field type wherever needed.
+//
+//  This demonstrates that the same import mechanism handles every variety
+//  of TypeDeclaration -- scalar form (Email, CountryCode above) and object
+//  form (Address below) -- without distinction. The clone block is a
+//  verbatim snapshot of the source Type's full structure, nested objects
+//  and all.
+// -----------------------------------------------------------------------------
+
+reuse { type Address }
+  from './02-ecommerce'
+  [cloned_at: '2026-06-14T10:00:00Z']
+{
+  Type Address {
+    Note: 'Postal address used across customers, orders, and shipping records.'
+
+    street      string [not null, maxLength: 200]
+    city        string [not null, maxLength: 100]
+    state       string [maxLength: 100, note: 'State, province, or region']
+    postal_code string [maxLength: 20, note: 'ZIP, postcode, etc., format varies by country']
+    country     string [not null,
+                        minLength: 2,
+                        maxLength: 2,
+                        default: 'US',
+                        note: 'ISO 3166-1 alpha-2 country code']
+
+    location object {
+      Note: 'Optional geographic centroid for the address; populated by the geocoding service after order entry.'
+
+      latitude  Decimal128 [minimum: -90,  maximum: 90,  note: 'Decimal degrees on the WGS 84 reference ellipsoid; positive = north of equator.']
+      longitude Decimal128 [minimum: -180, maximum: 180, note: 'Decimal degrees; positive = east of prime meridian.']
+    }
+  }
 }
 
 

@@ -55,7 +55,7 @@ export const examples = [
     title:       'E-commerce (polyglot)',
     domain:      'E-commerce',
     paradigm:    'Oracle + MongoDB hybrid',
-    description: 'A polyglot e-commerce schema combining Oracle relational system-of-record with MongoDB document storage. Demonstrates named types, nested arrays of objects, polymorphism with discriminator, BSON scalar types, cross-container relationships with explicit cardinality, and array traversal in foreign-key paths.',
+    description: 'A polyglot e-commerce schema combining Oracle relational system-of-record with MongoDB document storage. Demonstrates named types (including the object-form `Address` Type with a nested `location` sub-object for bounded geographic coordinates), nested arrays of objects, polymorphism with discriminator, BSON scalar types, cross-container relationships with explicit cardinality, and array traversal in foreign-key paths.',
     generators:  [
       { target: 'oracle' },
       { target: 'mongodb' },
@@ -142,7 +142,7 @@ export const examples = [
     title:       'Module system: sales data product (v0.2)',
     domain:      'Sales data product',
     paradigm:    'Consumer file with module imports',
-    description: 'The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) using the xDBML v0.2 module system. Demonstrates the three principal reuse patterns side-by-side: Container-scoped entity imports (entities become `sales.dim_customer` not `core.dim_customer`); file-scope Type imports for the shared scalar types; and a file-scope field-level import (`reuse { field core.dim_customer.engagement_score }`, spec §26.8) that brings a single field\'s validation surface in as a usable type, then placed on `fact_sales.engagement_at_sale` as an SCD snapshot. Every `reuse` carries an inline clone block with `cloned_at` metadata, so the file is fully self-contained -- it parses correctly even when the library file is unavailable.',
+    description: 'The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) and also imports the complex object-form `Address` Type from [02-ecommerce.xdbml](/examples/02-ecommerce). Demonstrates the four principal reuse patterns side-by-side: Container-scoped entity imports (entities become `sales.dim_customer` not `core.dim_customer`); file-scope scalar Type imports for shared validation surfaces (Email, CountryCode, etc.); file-scope complex Type import for the structured `Address` Type with its nested `location` object; and a file-scope field-level import (`reuse { field core.dim_customer.engagement_score }`, spec §26.8) that brings a single field\'s validation surface in as a usable type, placed on `fact_sales.engagement_at_sale` as an SCD snapshot. Address is then placed on `sales.dim_customer.primary_address` as a consumer-side enhancement of the canonical dimension. Every `reuse` carries an inline clone block with `cloned_at` metadata, so the file is fully self-contained -- it parses correctly even when the library files are unavailable.',
     generators:  [],
   },
 ];

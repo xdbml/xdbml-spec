@@ -27,6 +27,9 @@ Type Address {
   Postal address used across customers, orders, and shipping records.
   Uses BSON-native string type so the same Type lowers cleanly to both
   Oracle VARCHAR2(n) and MongoDB string with maxLength constraint.
+  Includes an optional `location` object for geographic centroid -- the
+  nested object form demonstrates that Named Types can carry richly
+  structured payloads, not just scalar shapes.
   '''
 
   street      string [not null, maxLength: 200]
@@ -38,6 +41,17 @@ Type Address {
                       maxLength: 2,
                       default: 'US',
                       note: 'ISO 3166-1 alpha-2 country code']
+
+  location object {
+    Note: 'Optional geographic centroid for the address; populated by the geocoding service after order entry.'
+
+    latitude  Decimal128 [minimum: -90,
+                          maximum: 90,
+                          note: 'Decimal degrees on the WGS 84 reference ellipsoid; positive = north of equator.']
+    longitude Decimal128 [minimum: -180,
+                          maximum: 180,
+                          note: 'Decimal degrees; positive = east of prime meridian.']
+  }
 }
 
 Type MonetaryAmount {

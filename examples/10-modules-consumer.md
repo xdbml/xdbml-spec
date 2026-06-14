@@ -1,13 +1,13 @@
 ---
 title: "Module system: sales data product (v0.2)"
-description: "The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) using the xD"
+description: "The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) and also imp"
 ---
 
 # Module system: sales data product (v0.2)
 
 **File:** `10-modules-consumer.xdbml` &nbsp;·&nbsp; **Target:** Consumer file with module imports
 
-The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) using the xDBML v0.2 module system. Demonstrates Container-scoped imports (entities become `sales.dim_customer` not `core.dim_customer`), clone blocks with `cloned_at` metadata for file autonomy, multiple imports per directive with one shared clone block, and scalar Named Type imports at file scope. The file is fully self-contained because every `reuse` carries an inline clone; it parses correctly even when the library file is unavailable. **Note**: exercises v0.2 features (module system §26, scalar Named Types §14.7, entity-level checks §10) that the reference parser has not yet implemented; viewing the source works but loading it into the playground currently produces a parse error.
+The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) and also imports the complex object-form `Address` Type from [02-ecommerce.xdbml](/examples/02-ecommerce). Demonstrates the four principal reuse patterns side-by-side: Container-scoped entity imports (entities become `sales.dim_customer` not `core.dim_customer`); file-scope scalar Type imports for shared validation surfaces (Email, CountryCode, etc.); file-scope complex Type import for the structured `Address` Type with its nested `location` object; and a file-scope field-level import (`reuse { field core.dim_customer.engagement_score }`, spec §26.8) that brings a single field's validation surface in as a usable type, placed on `fact_sales.engagement_at_sale` as an SCD snapshot. Address is then placed on `sales.dim_customer.primary_address` as a consumer-side enhancement of the canonical dimension. Every `reuse` carries an inline clone block with `cloned_at` metadata, so the file is fully self-contained -- it parses correctly even when the library files are unavailable.
 
 <div style="display: flex; gap: 12px; margin: 24px 0; flex-wrap: wrap;">
   <a href="/examples/10-modules-consumer.xdbml" download="10-modules-consumer.xdbml"
@@ -35,6 +35,10 @@ The consumer half of a multi-file example pair. A sales data mart that imports c
 //  v0.2 features exercised:
 //    - Module system (§26): `reuse { ... } from './...'` directives
 //    - Clone blocks (§26.6): inline embedded content for file autonomy
+//    - Field-level imports (§26.8): `reuse { field <path> }` for individual fields
+//    - Cross-example complex Type import: `reuse { type Address }` brings the
+//      object-form Named Type Address (with its nested `location` sub-object)
+//      from 02-ecommerce.xdbml into this consumer file's scope
 //    - `cloned_at` metadata (§26.6)
 //    - Container-scoped imports (§26.5): directives inside Container body
 //    - Scalar Named Types (§14.7): imported via `reuse { type Email, ... }`
@@ -73,6 +77,19 @@ The consumer half of a multi-file example pair. A sales data mart that imports c
 //      brings the canonical scalar types into this file, where they then
 //      drive validation on this file's facts.
 //
+//    - Complex (object-form) Type import: `reuse { type Address }` brings
+//      a Named Type whose body holds five string fields and a nested
+//      `location` object with bounded decimal coordinates -- the same
+//      directive shape handles scalar and structured Types uniformly.
+//      The imported Address is placed on `sales.dim_customer.primary_address`
+//      as a consumer-side enhancement to the canonical dimension.
+//
+//    - Field-level import: `reuse { field core.dim_customer.engagement_score }`
+//      brings a single field's full validation surface (numeric bounds, note)
+//      from inside dim_customer into this file as a usable type. The fact
+//      table's SCD snapshot field then reuses the dimension's validation
+//      without re-declaring it or extracting it as a separate Type first.
+//
 //    - `reuse` (transitive) is used throughout: if a downstream barrel file
 //      imports this data product, those consumers will see all the imported
 //      declarations transitively. To make imports private, use `use` instead.
@@ -109,16 +126,17 @@ Container sales [type: schema, target: Snowflake] {
   // --------------------------------------------------------------------------
 
   Entity fact_sales [note: 'One row per sale line. Grain: customer_id × product_id × date_key × order_id × line_id.'] {
-    order_id      int           [pk]
-    line_id       int           [pk]
-    customer_id   int           [not null, ref: > sales.dim_customer.id]
-    product_id    int           [not null, ref: > sales.dim_product.id]
-    date_key      int           [not null, ref: > sales.dim_date.date_key]
-    quantity      int           [not null, check: `quantity > 0`]
-    unit_price    decimal(10,2) [not null, check: `unit_price >= 0`]
-    currency      CurrencyCode  [not null, default: 'USD']
-    line_total    decimal(12,2) [not null]
-    discount      decimal(10,2) [default: 0, check: `discount >= 0`]
+    order_id           int              [pk]
+    line_id            int              [pk]
+    customer_id        int              [not null, ref: > sales.dim_customer.id]
+    product_id         int              [not null, ref: > sales.dim_product.id]
+    date_key           int              [not null, ref: > sales.dim_date.date_key]
+    engagement_at_sale engagement_score [note: 'SCD snapshot of dim_customer.engagement_score at sale time. Validation surface (0-100 range) reused from the source via field import.']
+    quantity           int              [not null, check: `quantity > 0`]
+    unit_price         decimal(10,2)    [not null, check: `unit_price >= 0`]
+    currency           CurrencyCode     [not null, default: 'USD']
+    line_total         decimal(12,2)    [not null]
+    discount           decimal(10,2)    [default: 0, check: `discount >= 0`]
 
     indexes {
       (customer_id, date_key) [name: 'idx_sales_customer_date']
@@ -160,14 +178,15 @@ Container sales [type: schema, target: Snowflake] {
     from './09-modules-conformed-dimensions'
     [cloned_at: '2026-06-10T08:00:00Z']
   {
-    Entity dim_customer [note: 'One row per customer. Cloned from conformed dimensions 2026-06-10.'] {
-      id           int           [pk, increment]
-      customer_key varchar       [unique, not null]
-      email        Email         [unique, not null]
-      phone        PhoneE164
-      country      CountryCode   [not null]
-      created_at   timestamp     [not null]
-      is_active    boolean       [not null, default: true]
+    Entity dim_customer [note: 'One row per customer. Cloned from conformed dimensions 2026-06-10; primary_address added as a sales-mart local extension (consumer-side enhancement of the canonical entity) for geospatial analytics.'] {
+      id              int           [pk, increment]
+      customer_key    varchar       [unique, not null]
+      email           Email         [unique, not null]
+      phone           PhoneE164
+      country         CountryCode   [not null]
+      primary_address Address       [note: 'Default shipping/billing address; the nested location object enables geo-bucket aggregation in fact_sales without requiring a separate dim_geography table.']
+      created_at      timestamp     [not null]
+      is_active       boolean       [not null, default: true]
     }
 
     Entity dim_product [note: 'One row per SKU. Cloned from conformed dimensions 2026-06-10.'] {
@@ -237,6 +256,75 @@ reuse { type Email, type CountryCode, type CurrencyCode, type PhoneE164 }
     maxLength: 16,
     tags: ['pii']
   ]
+}
+
+
+// -----------------------------------------------------------------------------
+//  File-scope imports: individual field shape (§26.8)
+//
+//  `engagement_score` is declared inline on dim_customer (not as a separate
+//  Type) but the sales fact wants the same validation surface for its SCD
+//  snapshot. A field-level import brings the field's complete shape -- its
+//  type expression, numeric bounds, and note -- into this file as a usable
+//  type at file scope. `engagement_score` then appears as the type of
+//  `fact_sales.engagement_at_sale` above.
+//
+//  Like the other directives in this file, the clone block makes the import
+//  self-contained: the consumer file parses correctly even when the source
+//  is unavailable. Without the clone block, the parser would call its
+//  `readFile` resolver to navigate `core.dim_customer.engagement_score`
+//  in the referenced file -- the same mechanism the CLI parser and
+//  data-modeling-tool integrations use.
+// -----------------------------------------------------------------------------
+
+reuse { field core.dim_customer.engagement_score }
+  from './09-modules-conformed-dimensions'
+  [cloned_at: '2026-06-10T08:00:00Z']
+{
+  engagement_score decimal(5,2) [minimum: 0, maximum: 100, note: 'Computed weekly by the customer-360 job; 0 means churned.']
+}
+
+
+// -----------------------------------------------------------------------------
+//  File-scope import: complex (object-form) Named Type from a different file
+//
+//  `Address` is declared in 02-ecommerce.xdbml as a Type with a BODY -- not
+//  a single scalar -- containing five string fields plus a nested `location`
+//  object with bounded decimal coordinates. The module system treats complex
+//  Named Types the same way as scalar ones: imported by the `type` element,
+//  dropped at file scope, usable as a field type wherever needed.
+//
+//  This demonstrates that the same import mechanism handles every variety
+//  of TypeDeclaration -- scalar form (Email, CountryCode above) and object
+//  form (Address below) -- without distinction. The clone block is a
+//  verbatim snapshot of the source Type's full structure, nested objects
+//  and all.
+// -----------------------------------------------------------------------------
+
+reuse { type Address }
+  from './02-ecommerce'
+  [cloned_at: '2026-06-14T10:00:00Z']
+{
+  Type Address {
+    Note: 'Postal address used across customers, orders, and shipping records.'
+
+    street      string [not null, maxLength: 200]
+    city        string [not null, maxLength: 100]
+    state       string [maxLength: 100, note: 'State, province, or region']
+    postal_code string [maxLength: 20, note: 'ZIP, postcode, etc., format varies by country']
+    country     string [not null,
+                        minLength: 2,
+                        maxLength: 2,
+                        default: 'US',
+                        note: 'ISO 3166-1 alpha-2 country code']
+
+    location object {
+      Note: 'Optional geographic centroid for the address; populated by the geocoding service after order entry.'
+
+      latitude  Decimal128 [minimum: -90,  maximum: 90,  note: 'Decimal degrees on the WGS 84 reference ellipsoid; positive = north of equator.']
+      longitude Decimal128 [minimum: -180, maximum: 180, note: 'Decimal degrees; positive = east of prime meridian.']
+    }
+  }
 }
 
 
