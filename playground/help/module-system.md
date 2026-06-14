@@ -193,16 +193,17 @@ A common authoring pattern: write the canonical schema with reference-only direc
 
 ## A worked example
 
-Load `09-modules-conformed-dimensions.xdbml` from the **Examples** menu. It defines four conformed dimensions (`dim_customer`, `dim_product`, `dim_date`) inside a `core` Container, plus four scalar Named Types (Email, CountryCode, CurrencyCode, PhoneE164) at file scope. It has no imports of its own -- it's the canonical source.
+Load `09-modules-conformed-dimensions.xdbml` from the **Examples** menu. It defines three conformed dimensions (`dim_customer`, `dim_product`, `dim_date`) inside a `core` Container, plus four scalar Named Types (Email, CountryCode, CurrencyCode, PhoneE164) at file scope. The `dim_customer` entity has an `engagement_score` field declared inline with numeric bounds (0-100) and an explanatory note. It has no imports of its own -- it's the canonical source.
 
-Now load `10-modules-consumer.xdbml`. The file declares a `sales` Container, then uses two `reuse` directives:
+Now load `10-modules-consumer.xdbml`. The file declares a `sales` Container, then uses three `reuse` directives:
 
-- At file scope: `reuse { type Email, type CountryCode, type CurrencyCode, type PhoneE164 } from './lib/conformed-types' { ... }` brings the canonical scalar types into the importer.
-- Inside the `sales` Container body: `reuse { entity core.dim_customer, entity core.dim_product, entity core.dim_date } from '../conformed-dimensions' { ... }` pulls the three canonical dimensions into `sales` as `sales.dim_customer`, `sales.dim_product`, `sales.dim_date`.
+- **Container-scoped entity import**: `reuse { entity core.dim_customer, entity core.dim_product, entity core.dim_date } from './09-modules-conformed-dimensions' { ... }` sits inside the `sales` Container body and pulls the three canonical dimensions into `sales` as `sales.dim_customer`, `sales.dim_product`, `sales.dim_date`.
+- **File-scope Type import**: `reuse { type Email, type CountryCode, type CurrencyCode, type PhoneE164 } from './09-modules-conformed-dimensions' { ... }` brings the canonical scalar types into the importer's namespace.
+- **File-scope field import**: `reuse { field core.dim_customer.engagement_score } from './09-modules-conformed-dimensions' { ... }` brings the engagement-score field's complete validation surface in as a usable type at file scope. The fact-sales entity then declares `engagement_at_sale engagement_score` to record the customer's score AT THE TIME of each sale -- the same shape, the same bounds, no re-declaration.
 
 The diagram shows the `sales` Container holding five entities: two locally-declared fact tables (`fact_sales`, `fact_returns`) plus the three cloned dimensions. The dimensions get a green TableGroup color from `imported_dimensions`; the fact tables get a blue color from `sales_facts`. Click any cloned entity in the diagram: the inspector shows its fields, settings, and notes -- exactly as if the entity had been declared in the consumer file directly.
 
-The fact tables reference the cloned dimensions via foreign keys (`customer_id > dim_customer.id`), and those references resolve cleanly. The cloned entities are first-class citizens in the importing file's namespace.
+The fact tables reference the cloned dimensions via foreign keys (`customer_id > dim_customer.id`), and those references resolve cleanly. The cloned entities and the field-derived `engagement_score` type are first-class citizens in the importing file's namespace.
 
 ## When the parser rejects a reference-only directive
 

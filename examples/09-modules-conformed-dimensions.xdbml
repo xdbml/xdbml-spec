@@ -84,13 +84,14 @@ Container core [type: schema, note: 'Conformed dimensions. Stable, governed.'] {
   Entity dim_customer [
     note: 'One row per customer. Grain: customer_id. SCD type 2 history is kept in a sibling fact_customer_scd table not exposed here.'
   ] {
-    id           int           [pk, increment]
-    customer_key varchar       [unique, not null, note: 'External identifier (CRM customer code).']
-    email        Email         [unique, not null]
-    phone        PhoneE164
-    country      CountryCode   [not null]
-    created_at   timestamp     [not null]
-    is_active    boolean       [not null, default: true]
+    id               int           [pk, increment]
+    customer_key     varchar       [unique, not null, note: 'External identifier (CRM customer code).']
+    email            Email         [unique, not null]
+    phone            PhoneE164
+    country          CountryCode   [not null]
+    created_at       timestamp     [not null]
+    is_active        boolean       [not null, default: true]
+    engagement_score decimal(5,2)  [minimum: 0, maximum: 100, note: 'Computed weekly by the customer-360 job; 0 means churned.']
 
     indexes {
       (country, is_active) [name: 'idx_customer_country_active']
