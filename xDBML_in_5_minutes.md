@@ -16,6 +16,11 @@ xDBML extends DBML into a unified metadata and semantic data modeling language w
 
 ## The first 60 seconds
 
+::: tip 🎮 Try it live in the playground
+<strong><a href="/playground/index.html" target="_blank" rel="noopener">Open the playground at xdbml.org/playground →</a></strong> -- write or paste a schema, see the entity-relationship diagram update as you type, share your work via URL. Runs entirely in your browser; no install, no signup.
+:::
+
+
 Here is a complete xDBML document describing an order system. Read it once, top to bottom:
 
 ```xdbml
