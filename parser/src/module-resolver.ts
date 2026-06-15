@@ -210,7 +210,7 @@ export type ParseFn = (
  *   - `kind: 'resolved'`  -- the file was opened, parsed, and a clone
  *     block was synthesized
  *   - `kind: 'cycle'`     -- the resolution chain already contains this
- *     file; per spec §26.14 cycles are allowed, so we return an empty
+ *     file; per spec §26.15 cycles are allowed, so we return an empty
  *     clone block and let name resolution (P6+) handle the actual
  *     cross-file linking
  *   - `kind: 'no-resolver'` -- no `readFile` was supplied; caller should
@@ -760,7 +760,7 @@ function applyAlias (
 }
 
 /* -------------------------------------------------------------------------
- * Module source classification (spec §25.x, "Remote module sources")
+ * Module source classification (spec §26.14, "Remote module sources")
  *
  * A `from` source is recognized purely by its scheme. A source beginning
  * with 'https://' is a remote (URL) source; anything else is a relative
@@ -772,7 +772,7 @@ function applyAlias (
  * This is pure, synchronous classification. The actual network fetch is
  * delegated to ParseOptions.readFile (the host's resolver). The obligations
  * on a fetcher (SSRF defenses, https-only redirects, size and time limits)
- * live with that resolver, not here; see spec §25.x.5.
+ * live with that resolver, not here; see spec §26.14.5.
  * ----------------------------------------------------------------------- */
 
 /** Raised when a `from` source string is structurally disallowed. */
@@ -863,7 +863,7 @@ export function classifyModuleSource (from: string): ModuleSource {
  *   - A remote (https) source resolves to its normalized href. No '.xdbml'
  *     is appended (a raw-content URL may carry a query string).
  *   - A relative source whose importer is itself a remote module resolves
- *     against the importer's base URL per RFC 3986 (spec §25.x.1). A remote
+ *     against the importer's base URL per RFC 3986 (spec §26.14.1). A remote
  *     module therefore can never reach the local filesystem.
  *   - A relative source with a local importer resolves on the filesystem,
  *     exactly as in v0.2.

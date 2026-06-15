@@ -1093,7 +1093,7 @@ reuse { entity A_local } from './cycle-a'
 Entity X { id int [pk] }`,
       };
       return {
-        name: 'P5: circular imports do not crash (spec §26.14)',
+        name: 'P5: circular imports do not crash (spec §26.15)',
         source: files['/test/cycle-a.xdbml'],
         options: {
           filePath: '/test/cycle-a.xdbml',
@@ -1242,7 +1242,7 @@ reuse { entity Y } from './other' {
       };
     })(),
     /* -------------------------------------------------------------------
-     * v0.3: remote (URL) module sources  (spec §25.x)
+     * v0.3: remote (URL) module sources  (spec §26.14)
      * -----------------------------------------------------------------
      * Hermetic: the in-memory file map is keyed by the resolved key the
      * parser produces (a normalized https href), so no network is touched.

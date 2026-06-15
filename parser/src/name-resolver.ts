@@ -1,5 +1,5 @@
 /**
- * Name resolution pass (spec §26.10 / §26.14, parser batch P6).
+ * Name resolution pass (spec §26.10 / §26.15, parser batch P6).
  *
  * `resolveNames(doc)` walks an xDBML document (the flattened view; clone
  * blocks have been merged) and produces:

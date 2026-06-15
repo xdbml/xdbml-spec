@@ -185,7 +185,7 @@ export class Parser {
    * The set of file paths currently being parsed in the resolution chain.
    * Used for cycle detection: when resolving a directive whose `from` path
    * is already in this set, the parser produces an empty clone for that
-   * directive rather than recursing (matching spec §26.14: cycles are
+   * directive rather than recursing (matching spec §26.15: cycles are
    * allowed; name resolution handles them). The set is passed by reference
    * across recursive parse() calls so all transitive levels see it.
    *
@@ -771,7 +771,7 @@ export class Parser {
     this.advance();
     const from = pathTok.value ?? '';
 
-    // v0.3 §25.x: classify the source string up front so a disallowed form
+    // v0.3 §26.14: classify the source string up front so a disallowed form
     // (non-https scheme, protocol-relative, embedded credentials, bare host)
     // surfaces as a located error pointing at the string itself, regardless
     // of whether a resolver is present.
@@ -825,7 +825,7 @@ export class Parser {
             resolvedPath = result.resolvedPath;
             break;
           case 'cycle':
-            // Per spec §26.14, cycles are allowed; the parser produces a
+            // Per spec §26.15, cycles are allowed; the parser produces a
             // directive with no clone, and name resolution (P6+) is
             // expected to bridge the cycle. We leave clone undefined.
             resolvedPath = result.resolvedPath;

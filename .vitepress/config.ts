@@ -122,7 +122,8 @@ export default defineConfig({
       { text: 'Specification',
         items: [
           { text: 'All versions',          link: '/spec/' },
-          { text: 'v0.2 (current draft)',  link: '/spec/v0.2' },
+          { text: 'v0.3 (current draft)',  link: '/spec/v0.3' },
+          { text: 'v0.2 (superseded)',     link: '/spec/v0.2' },
           { text: 'v0.1 (superseded)',     link: '/spec/v0.1' },
           { text: 'Grammar',                link: '/grammar/' },
         ]
@@ -173,7 +174,8 @@ export default defineConfig({
           text: 'Specification',
           items: [
             { text: 'All versions',           link: '/spec/' },
-            { text: 'v0.2 (current draft)',   link: '/spec/v0.2' },
+            { text: 'v0.3 (current draft)',   link: '/spec/v0.3' },
+            { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },
             { text: 'v0.1 (superseded)',      link: '/spec/v0.1' },
           ]
         },
@@ -264,7 +266,9 @@ export default defineConfig({
           text: 'Specification',
           items: [
             { text: 'All versions',           link: '/spec/' },
-            { text: 'v0.1 (current draft)',   link: '/spec/v0.1' },
+            { text: 'v0.3 (current draft)',   link: '/spec/v0.3' },
+            { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },
+            { text: 'v0.1 (superseded)',      link: '/spec/v0.1' },
           ]
         },
         {

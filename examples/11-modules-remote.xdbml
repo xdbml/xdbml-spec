@@ -5,14 +5,14 @@
 //  Companion to 10-modules-consumer.xdbml. Same sales-data-product domain,
 //  but the conformed-dimension library is imported from its PUBLISHED location
 //  over HTTPS rather than by a local relative path. This exercises the v0.3
-//  remote module-source feature (spec §25.x).
+//  remote module-source feature (spec §26.14).
 //
 //  What changes versus example 10:
 //    - The `from` clause is a raw-content https URL, not a relative path.
 //    - The URL is PINNED to the immutable `v0.2` git tag, not a branch.
 //      Branches are mutable, so the same import could return different content
 //      over time; pinning to a tag (or a commit SHA) keeps the import
-//      reproducible. See spec §25.x.2.
+//      reproducible. See spec §26.14.2.
 //    - Each directive keeps a clone block plus `cloned_at`. The URL records
 //      the canonical source, the clone is the archived snapshot, and
 //      `cloned_at` records when it was taken. The file therefore still parses

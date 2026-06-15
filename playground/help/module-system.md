@@ -240,7 +240,7 @@ Project declarations are excluded because two `Project` declarations in the same
 
 **Where directives may live.** File-scope directives appear at the top level. Entity imports may also appear inside a Container body, where the imported entity becomes a member of that Container. Imports of top-level declarations (Type, Enum, TableGroup, TablePartial, View, Edge, Note) and of individual fields (§26.8) must appear at file scope. Directives MAY NOT appear inside Entity, Edge, View, or Type bodies.
 
-**Cycles are allowed.** If A imports from B and B imports from A, the parser breaks the cycle by leaving the back-edge directive's clone block undefined. Spec §26.14 makes this explicit: cycles compile, but the back-edge produces nothing.
+**Cycles are allowed.** If A imports from B and B imports from A, the parser breaks the cycle by leaving the back-edge directive's clone block undefined. Spec §26.15 makes this explicit: cycles compile, but the back-edge produces nothing.
 
 ## What's NOT included in the playground
 

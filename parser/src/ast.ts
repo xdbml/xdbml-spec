@@ -863,7 +863,7 @@ export interface ParseOptions {
    * Because this reader is synchronous, a host that supports remote sources
    * must return the fetched text from a cache it populated beforehand. The
    * network fetch, and its SSRF / redirect / size / timeout obligations
-   * (spec §25.x.5), live in the host's resolver, not in the parser.
+   * (spec §26.14.5), live in the host's resolver, not in the parser.
    *
    * If absent, reference-only directives fall back to the P4 rejection
    * with a clear "no resolver available" message. Clone-block-bearing
