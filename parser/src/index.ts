@@ -30,6 +30,12 @@ export { tokenize, TokenKind, LexError } from './lexer.ts';
 export type { Token } from './lexer.ts';
 export { parse, Parser, ParseError } from './parser.ts';
 export { flatten } from './module-resolver.ts';
+export {
+  classifyModuleSource,
+  isUrlKey,
+  ModuleSourceError,
+} from './module-resolver.ts';
+export type { ModuleSource } from './module-resolver.ts';
 export { resolveNames, SymbolTable } from './name-resolver.ts';
 export type {
   Diagnostic,

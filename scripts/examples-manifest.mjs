@@ -145,4 +145,13 @@ export const examples = [
     description: 'The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) and also imports the complex object-form `Address` Type from [02-ecommerce.xdbml](/examples/02-ecommerce). Demonstrates the four principal reuse patterns side-by-side: Container-scoped entity imports (entities become `sales.dim_customer` not `core.dim_customer`); file-scope scalar Type imports for shared validation surfaces (Email, CountryCode, etc.); file-scope complex Type import for the structured `Address` Type with its nested `location` object; and a file-scope field-level import (`reuse { field core.dim_customer.engagement_score }`, spec §26.8) that brings a single field\'s validation surface in as a usable type, placed on `fact_sales.engagement_at_sale` as an SCD snapshot. Address is then placed on `sales.dim_customer.primary_address` as a consumer-side enhancement of the canonical dimension. Every `reuse` carries an inline clone block with `cloned_at` metadata, so the file is fully self-contained -- it parses correctly even when the library files are unavailable.',
     generators:  [],
   },
+  {
+    file:        '11-modules-remote.xdbml',
+    slug:        '11-modules-remote',
+    title:       'Module system: remote sources (v0.3)',
+    domain:      'Sales data product',
+    paradigm:    'Consumer file with remote (URL) imports',
+    description: 'A v0.3 variant of the sales data product in [10-modules-consumer.xdbml](/examples/10-modules-consumer), in the same domain so the only difference is where modules come from. Instead of a local relative path, each `reuse` directive imports from the PUBLISHED library over HTTPS, with the URL pinned to the immutable `v0.2` git tag rather than a mutable branch (spec §25.x.2). It demonstrates the remote module-source feature (spec §25.x): a raw-content URL is recognized by its `https://` scheme, while a non-https scheme, a protocol-relative `//host/...` source, a bare host, or credentials embedded in the URL are rejected with a located error. Each directive keeps a clone block plus `cloned_at`, so the URL records the canonical source and the clone is the archived snapshot -- the file parses offline while documenting provenance. A purely live (reference-only) remote import is demonstrated interactively in the playground rather than here, to keep the hermetic example suite network-free.',
+    generators:  [],
+  },
 ];

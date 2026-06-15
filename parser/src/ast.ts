@@ -853,17 +853,24 @@ export interface ParseOptions {
 
   /**
    * Synchronous file reader. Called by the parser when it needs to resolve
-   * a reference-only module directive. The argument is an absolute path
-   * (the parser has already resolved the relative `from` clause against the
-   * importer's `filePath`). The function should return the source text of
-   * the file at that path, or throw if the file is missing or unreadable.
+   * a reference-only module directive. The argument is a resolved, stable
+   * key: an absolute path for local sources, or a normalized `https://` URL
+   * for remote (v0.3) sources (when a directive's `from` is a URL, or a
+   * relative reference inside a remote module resolves to one). The function
+   * should return the source text for that key, or throw if it is missing
+   * or unreadable.
+   *
+   * Because this reader is synchronous, a host that supports remote sources
+   * must return the fetched text from a cache it populated beforehand. The
+   * network fetch, and its SSRF / redirect / size / timeout obligations
+   * (spec §25.x.5), live in the host's resolver, not in the parser.
    *
    * If absent, reference-only directives fall back to the P4 rejection
    * with a clear "no resolver available" message. Clone-block-bearing
    * directives still work without a resolver because their content is
    * embedded in the importing file.
    */
-  readFile?: (absolutePath: string) => string;
+  readFile?: (pathOrUrl: string) => string;
 
   /**
    * Maximum recursion depth when resolving directives. Each `from` traversal

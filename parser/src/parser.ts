@@ -86,7 +86,7 @@ import {
   TokenKind,
   tokenize,
 } from './lexer.ts';
-import { resolveImport } from './module-resolver.ts';
+import { resolveImport, classifyModuleSource, ModuleSourceError } from './module-resolver.ts';
 import type { ParseFn } from './module-resolver.ts';
 
 export class ParseError extends Error {
@@ -770,6 +770,19 @@ export class Parser {
     }
     this.advance();
     const from = pathTok.value ?? '';
+
+    // v0.3 §25.x: classify the source string up front so a disallowed form
+    // (non-https scheme, protocol-relative, embedded credentials, bare host)
+    // surfaces as a located error pointing at the string itself, regardless
+    // of whether a resolver is present.
+    try {
+      classifyModuleSource(from);
+    } catch (e) {
+      if (e instanceof ModuleSourceError) {
+        throw new ParseError(e.message, pathTok.start);
+      }
+      throw e;
+    }
 
     // Optional metadata settings: '[cloned_at: ...]'
     const settings = this.maybeSettingsBlock();

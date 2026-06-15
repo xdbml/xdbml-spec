@@ -1,0 +1,120 @@
+// =============================================================================
+//  SALES DATA PRODUCT -- REMOTE MODULES  (11-modules-remote.xdbml)
+// =============================================================================
+//
+//  Companion to 10-modules-consumer.xdbml. Same sales-data-product domain,
+//  but the conformed-dimension library is imported from its PUBLISHED location
+//  over HTTPS rather than by a local relative path. This exercises the v0.3
+//  remote module-source feature (spec §25.x).
+//
+//  What changes versus example 10:
+//    - The `from` clause is a raw-content https URL, not a relative path.
+//    - The URL is PINNED to the immutable `v0.2` git tag, not a branch.
+//      Branches are mutable, so the same import could return different content
+//      over time; pinning to a tag (or a commit SHA) keeps the import
+//      reproducible. See spec §25.x.2.
+//    - Each directive keeps a clone block plus `cloned_at`. The URL records
+//      the canonical source, the clone is the archived snapshot, and
+//      `cloned_at` records when it was taken. The file therefore still parses
+//      offline; the remote URL documents provenance and lets a tool refresh
+//      the snapshot from source later.
+//
+//  Notes on the URL form:
+//    - Point at the RAW-content host (raw.githubusercontent.com/...), NOT the
+//      human-facing `github.com/.../blob/...` page, which returns HTML.
+//    - Only `https://` is accepted. A non-https scheme, a protocol-relative
+//      `//host/...` source, a bare host like `github.com/owner/repo/...`, or
+//      credentials embedded in the URL are rejected with a located error.
+//    - A purely live import (reference-only, no clone block) is demonstrated
+//      interactively in the playground, where a fetching resolver retrieves
+//      the bytes. It is intentionally not used here so this file stays
+//      parseable offline by the hermetic example suite.
+
+Project sales_live {
+  targets: [Snowflake]
+  Note: '''
+    Live sales mart. Conformed dimensions imported from the published xDBML
+    repository at the pinned `v0.2` tag. Refresh snapshots from the recorded
+    source URL per the conformed-dimensions update SOP.
+  '''
+}
+
+
+// -----------------------------------------------------------------------------
+//  Container: sales facts and the imported date dimension
+// -----------------------------------------------------------------------------
+
+Container sales [type: schema, target: Snowflake] {
+
+  Entity fact_order [
+    note: 'One row per placed order. Grain: order_id.'
+  ] {
+    id              int           [pk, increment]
+    order_date_key  int           [not null, ref: > sales.dim_date.date_key, note: 'Joins the imported calendar dimension.']
+    customer_key    varchar       [not null, note: 'Natural key of the ordering customer.']
+    amount          decimal(12,2) [not null, check: `amount >= 0`]
+    currency        CurrencyCode  [not null, default: 'USD']
+    placed_at       timestamp     [not null]
+  }
+
+  // ---------------------------------------------------------------------------
+  //  Imported dimension (Container-scoped, remote source, clone + cloned_at)
+  // ---------------------------------------------------------------------------
+  //
+  //  Because the directive sits inside `Container sales`, the imported entity
+  //  is placed inside this Container: the source's `core` Container appears in
+  //  the path (`core.dim_date`) but does not survive into this file's
+  //  namespace -- the entity becomes `sales.dim_date` here.
+
+  reuse { entity core.dim_date }
+    from 'https://raw.githubusercontent.com/xdbml/xdbml-spec/v0.2/examples/09-modules-conformed-dimensions.xdbml'
+    [cloned_at: '2026-06-15T00:00:00Z'] {
+      Entity dim_date [
+        note: 'Calendar dimension. Grain: one row per calendar day from 2020-01-01 through 2049-12-31. Populated by the dim_date_generator job.'
+      ] {
+        date_key       int           [pk, note: 'YYYYMMDD integer for join performance.']
+        full_date      date          [unique, not null]
+        year           int           [not null]
+        quarter        int           [not null, check: `quarter BETWEEN 1 AND 4`]
+        month          int           [not null, check: `month BETWEEN 1 AND 12`]
+        day_of_month   int           [not null, check: `day_of_month BETWEEN 1 AND 31`]
+        day_of_week    int           [not null, check: `day_of_week BETWEEN 1 AND 7`, note: '1 = Monday, 7 = Sunday (ISO 8601).']
+        is_weekend     boolean       [not null]
+        is_holiday     boolean       [not null, default: false]
+        fiscal_year    int           [not null]
+        fiscal_quarter int           [not null, check: `fiscal_quarter BETWEEN 1 AND 4`]
+      }
+    }
+}
+
+
+// -----------------------------------------------------------------------------
+//  Imported Named Type (file-scope, remote source, clone + cloned_at)
+// -----------------------------------------------------------------------------
+//
+//  The fact entity above references this by name; xDBML's two-pass name
+//  resolution handles the forward reference.
+
+reuse { type CurrencyCode }
+  from 'https://raw.githubusercontent.com/xdbml/xdbml-spec/v0.2/examples/09-modules-conformed-dimensions.xdbml'
+  [cloned_at: '2026-06-15T00:00:00Z'] {
+    Type CurrencyCode varchar [
+      pattern: '^[A-Z]{3}$',
+      minLength: 3,
+      maxLength: 3,
+      note: 'ISO 4217 three-letter currency code (uppercase). For example: USD, EUR, JPY.'
+    ]
+  }
+
+
+// -----------------------------------------------------------------------------
+//  TableGroup: visualization
+// -----------------------------------------------------------------------------
+
+TableGroup sales_remote [
+  color: '#1976d2',
+  note: 'Local fact plus the date dimension imported from the published library.'
+] {
+  fact_order
+  dim_date
+}

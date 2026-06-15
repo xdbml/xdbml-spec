@@ -1242,6 +1242,164 @@ reuse { entity Y } from './other' {
       };
     })(),
     /* -------------------------------------------------------------------
+     * v0.3: remote (URL) module sources  (spec §25.x)
+     * -----------------------------------------------------------------
+     * Hermetic: the in-memory file map is keyed by the resolved key the
+     * parser produces (a normalized https href), so no network is touched.
+     * ----------------------------------------------------------------- */
+    (() => {
+      const CORE = 'https://raw.githubusercontent.com/acme/schemas/v1.4.0/core.xdbml';
+      const files: Record<string, string> = {
+        [CORE]: `xdbml: 0.2
+Type Email varchar [pattern: '^[^@]+@[^@]+$']
+Entity Customer {
+  id int [pk]
+  email Email
+}`,
+      };
+      return {
+        name: 'v0.3 remote: https source resolves via readFile (URL key)',
+        source: `xdbml: 0.2
+reuse { type Email, entity Customer } from '${CORE}'`,
+        options: {
+          filePath: '/local/consumer.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected resolved directive with clone';
+          const names = dir.clone.statements.map((s) => (s as { name?: string }).name).join(',');
+          if (names !== 'Email,Customer') return `expected Email,Customer got ${names}`;
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const BASE = 'https://raw.githubusercontent.com/acme/schemas/v1.4.0/';
+      const CORE = `${BASE}core.xdbml`;
+      const ENUMS = `${BASE}enums.xdbml`;
+      const files: Record<string, string> = {
+        [CORE]: `xdbml: 0.2
+reuse { type Email } from './enums'
+Entity Customer {
+  id int [pk]
+  email Email
+}`,
+        [ENUMS]: `xdbml: 0.2
+Type Email varchar`,
+      };
+      return {
+        name: 'v0.3 remote: relative ref inside a remote module resolves against its URL base',
+        source: `xdbml: 0.2
+use * from '${CORE}'`,
+        options: {
+          filePath: '/local/entry.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          // CORE's own './enums' must have resolved against the CORE URL base.
+          // flatten() collapses the nested directive; Email should appear.
+          const flat = flatten(doc);
+          const hasEmail = flat.statements.some(
+            (s) => s.kind === 'TypeDeclaration' && (s as { name?: string }).name === 'Email',
+          );
+          if (!hasEmail) return 'expected Email Type to resolve via the remote base URL';
+          const hasCustomer = flat.statements.some(
+            (s) => s.kind === 'EntityDeclaration' && (s as { name?: string }).name === 'Customer',
+          );
+          if (!hasCustomer) return 'expected Customer entity from CORE';
+          return null;
+        },
+      };
+    })(),
+    (() => {
+      const AZ = 'https://dev.azure.com/org/proj/_apis/git/repositories/r/items?path=/core.xdbml&api-version=7.1';
+      const files: Record<string, string> = {
+        // Keyed by the exact normalized href; if the parser wrongly appended
+        // '.xdbml' to the URL, this lookup would miss and the test would fail.
+        [new URL(AZ).href]: `xdbml: 0.2
+Type Money decimal`,
+      };
+      return {
+        name: 'v0.3 remote: no .xdbml appended to a URL source (query string preserved)',
+        source: `xdbml: 0.2
+reuse { type Money } from '${AZ}'`,
+        options: {
+          filePath: '/local/entry.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found (key=${p})`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected resolved directive';
+          if ((dir.clone.statements[0] as { name?: string }).name !== 'Money') return 'expected Money type';
+          return null;
+        },
+      };
+    })(),
+    {
+      name: 'v0.3 remote: INVALID -- http:// scheme rejected',
+      source: `xdbml: 0.2\nuse * from 'http://example.com/core.xdbml'`,
+      options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
+      assert: (_doc) => 'parse should have rejected http:// source',
+      expectError: true,
+    },
+    {
+      name: 'v0.3 remote: INVALID -- file:// scheme rejected',
+      source: `xdbml: 0.2\nuse * from 'file:///etc/core.xdbml'`,
+      options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
+      assert: (_doc) => 'parse should have rejected file:// source',
+      expectError: true,
+    },
+    {
+      name: 'v0.3 remote: INVALID -- protocol-relative source rejected',
+      source: `xdbml: 0.2\nuse * from '//example.com/core.xdbml'`,
+      options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
+      assert: (_doc) => 'parse should have rejected protocol-relative source',
+      expectError: true,
+    },
+    {
+      name: 'v0.3 remote: INVALID -- embedded credentials rejected',
+      source: `xdbml: 0.2\nuse * from 'https://user:token@example.com/core.xdbml'`,
+      options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
+      assert: (_doc) => 'parse should have rejected URL with userinfo',
+      expectError: true,
+    },
+    {
+      name: 'v0.3 remote: INVALID -- bare host (no scheme) rejected',
+      source: `xdbml: 0.2\nuse * from 'github.com/acme/schemas/core.xdbml'`,
+      options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
+      assert: (_doc) => 'parse should have rejected bare host source',
+      expectError: true,
+    },
+    (() => {
+      const A = 'https://h.example/acme/a.xdbml';
+      const B = 'https://h.example/acme/b.xdbml';
+      const files: Record<string, string> = {
+        [A]: `xdbml: 0.2
+reuse { entity Y } from '${B}'
+Entity X { id int [pk] }`,
+        [B]: `xdbml: 0.2
+reuse { entity X } from '${A}'
+Entity Y { id int [pk] }`,
+      };
+      return {
+        name: 'v0.3 remote: import cycle across URLs is handled (no throw)',
+        source: `xdbml: 0.2
+reuse { entity X } from '${A}'`,
+        options: {
+          filePath: '/local/entry.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected entry directive resolved';
+          const x = dir.clone.statements.find((s) => (s as { name?: string }).name === 'X');
+          if (!x) return 'expected entity X in the resolved clone';
+          return null;
+        },
+      };
+    })(),
+    /* -------------------------------------------------------------------
      * P6: Name resolution
      * -----------------------------------------------------------------
      * These tests exercise the `resolveNames(doc)` pass. Each test

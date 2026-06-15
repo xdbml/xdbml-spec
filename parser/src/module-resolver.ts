@@ -759,31 +759,141 @@ function applyAlias (
   }
 }
 
+/* -------------------------------------------------------------------------
+ * Module source classification (spec §25.x, "Remote module sources")
+ *
+ * A `from` source is recognized purely by its scheme. A source beginning
+ * with 'https://' is a remote (URL) source; anything else is a relative
+ * path, resolved exactly as in v0.2. Disallowed forms -- a non-https
+ * scheme, a protocol-relative '//host/...' source, embedded credentials,
+ * or a bare host such as 'github.com/owner/repo/...' -- are rejected here
+ * so the parser can surface a located error at the source string.
+ *
+ * This is pure, synchronous classification. The actual network fetch is
+ * delegated to ParseOptions.readFile (the host's resolver). The obligations
+ * on a fetcher (SSRF defenses, https-only redirects, size and time limits)
+ * live with that resolver, not here; see spec §25.x.5.
+ * ----------------------------------------------------------------------- */
+
+/** Raised when a `from` source string is structurally disallowed. */
+export class ModuleSourceError extends Error {
+  constructor (message: string) {
+    super(message);
+    this.name = 'ModuleSourceError';
+  }
+}
+
+export type ModuleSource =
+  | { kind: 'relative'; from: string }
+  | { kind: 'url'; href: string };
+
+const SCHEME_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
+// A scheme-less first path segment that looks like a public host. Used only
+// to give a clearer error than "file not found" when someone pastes a URL
+// without its scheme. Deliberately conservative: it requires a dot-separated
+// label ending in an alphabetic TLD, so version directories like 'v1.2/...'
+// and ordinary relative roots like 'lib/...' are NOT treated as hosts.
+const BARE_HOST_RE = /^([a-z0-9-]+\.)+[a-z]{2,}$/i;
+
+/** True when a resolved key is a remote (https) URL rather than a path. */
+export function isUrlKey (s: string): boolean {
+  return /^https:\/\//i.test(s);
+}
+
 /**
- * Resolve a relative `from` path against the importer's `filePath`. Returns
- * an absolute (or canonical) path that the caller's `readFile` will see as
- * a stable key.
+ * Classify a directive's `from` source string. Returns a discriminated
+ * union; throws ModuleSourceError for disallowed forms. Pure and sync.
+ */
+export function classifyModuleSource (from: string): ModuleSource {
+  // Protocol-relative: ambiguous (no scheme to resolve against). Rejected.
+  if (from.startsWith('//')) {
+    throw new ModuleSourceError(
+      `Protocol-relative module source ${JSON.stringify(from)} is not allowed; ` +
+      `use an explicit 'https://' URL or a relative path.`,
+    );
+  }
+
+  const schemeMatch = SCHEME_RE.exec(from);
+  if (schemeMatch) {
+    const scheme = schemeMatch[1].toLowerCase();
+    if (scheme !== 'https') {
+      throw new ModuleSourceError(
+        `Module source scheme '${scheme}:' is not allowed; remote sources must use 'https://' ` +
+        `(got ${JSON.stringify(from)}).`,
+      );
+    }
+    let url: URL;
+    try {
+      url = new URL(from);
+    } catch {
+      throw new ModuleSourceError(
+        `Module source ${JSON.stringify(from)} is not a valid 'https://' URL.`,
+      );
+    }
+    if (url.username !== '' || url.password !== '') {
+      throw new ModuleSourceError(
+        `Module source ${JSON.stringify(from)} embeds credentials in the URL, which is not allowed; ` +
+        `supply authentication through the resolver's configuration instead.`,
+      );
+    }
+    return { kind: 'url', href: url.href };
+  }
+
+  // No scheme. Reject an obvious bare host (domain-like first segment
+  // followed by a path) rather than silently treating it as a relative file.
+  const slash = from.indexOf('/');
+  if (slash > 0) {
+    const firstSegment = from.slice(0, slash);
+    if (BARE_HOST_RE.test(firstSegment)) {
+      throw new ModuleSourceError(
+        `Module source ${JSON.stringify(from)} looks like a bare host; ` +
+        `prefix it with 'https://' to use it as a remote source, ` +
+        `or write './${from}' if you really mean a relative path.`,
+      );
+    }
+  }
+
+  return { kind: 'relative', from };
+}
+
+/**
+ * Resolve a `from` source against the importer's `filePath`, returning a
+ * stable key for `readFile` and for cycle detection.
  *
- * Rules:
- *   - If `from` ends with `.xdbml`, use as-is; otherwise append `.xdbml`.
- *   - If `from` starts with `./` or `../`, resolve relative to the directory
- *     of `importerPath`.
- *   - If `from` is otherwise relative (e.g., `lib/foo`), treat as relative
- *     to the importer's directory too.
- *   - If `from` looks absolute (starts with `/`), use as-is.
- *   - If `importerPath` is undefined, return `from` as-is (with `.xdbml`
- *     appended if needed) -- the readFile resolver is expected to handle
- *     any further resolution.
+ *   - A remote (https) source resolves to its normalized href. No '.xdbml'
+ *     is appended (a raw-content URL may carry a query string).
+ *   - A relative source whose importer is itself a remote module resolves
+ *     against the importer's base URL per RFC 3986 (spec §25.x.1). A remote
+ *     module therefore can never reach the local filesystem.
+ *   - A relative source with a local importer resolves on the filesystem,
+ *     exactly as in v0.2.
  *
- * Uses pure JavaScript path manipulation (no node:path) so the same code
- * runs in Node and in the browser. Forward slashes only; Windows paths
+ * Uses pure string / WHATWG-URL manipulation (no node:path) so the same
+ * code runs in Node and the browser. Forward slashes only; Windows paths
  * with backslashes should be normalized before reaching the parser.
  */
 function resolveModulePath (
   fromClause: string,
   importerPath: string | undefined,
 ): string {
-  let withExt = fromClause;
+  const source = classifyModuleSource(fromClause);
+
+  // Remote (URL) source: the normalized href IS the resolution key.
+  if (source.kind === 'url') {
+    return source.href;
+  }
+
+  // Relative source under a remote importer: resolve against its base URL.
+  if (importerPath && isUrlKey(importerPath)) {
+    let rel = source.from;
+    if (!rel.endsWith('.xdbml')) rel = `${rel}.xdbml`;
+    // WHATWG URL resolution normalizes host case and dot-segments, which is
+    // also what we want for the cycle-detection / de-duplication key.
+    return new URL(rel, importerPath).href;
+  }
+
+  // Local relative source (unchanged v0.2 behavior).
+  let withExt = source.from;
   if (!withExt.endsWith('.xdbml')) {
     withExt = `${withExt}.xdbml`;
   }
