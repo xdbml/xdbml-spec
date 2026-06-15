@@ -16,6 +16,11 @@ hero:
       text: Get started in 5 minutes
       link: /learn/
     - theme: alt
+      text: Try it live in the playground
+      link: /playground/index.html
+      target: _blank
+      rel: noopener
+    - theme: alt
       text: Read the spec
       link: /spec/v0.2
     - theme: alt
