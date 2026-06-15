@@ -30,7 +30,7 @@ import type { Diagnostic, Token, XDbmlDocument } from '@xdbml/parse';
 
 import logger from '@/utils/logger';
 import type { ParserError } from '@/types';
-import { DEFAULT_SAMPLE_CONTENT } from '@/services/sample-content';
+import { DEFAULT_SAMPLE_CONTENT, getSampleContentBySlug } from '@/services/sample-content';
 import { decodeShareHash, clearShareHashFromUrl } from '@/services/share';
 
 const STORAGE_KEY = 'xdbml-playground:content';
@@ -73,6 +73,29 @@ function loadInitial (): string {
     }
   } catch (e) {
     logger.warn('URL hash decode failed', e);
+  }
+
+  // A "View in playground" deep link (`?example=<slug>`) opens a named
+  // example directly. Explicit intent, so it wins over the stored working
+  // copy; the param is stripped from the URL afterward so a refresh, or a
+  // later Share, does not carry it.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get('example');
+    if (slug) {
+      const content = getSampleContentBySlug(slug);
+      if (content !== null) {
+        params.delete('example');
+        const qs = params.toString();
+        const base = window.location.href.split('?')[0].split('#')[0];
+        history.replaceState(null, '', base + (qs ? `?${qs}` : '') + window.location.hash);
+        try { localStorage.setItem(STORAGE_KEY, content); } catch { /* best-effort */ }
+        return content;
+      }
+      logger.warn(`Unknown ?example slug: ${slug}`);
+    }
+  } catch (e) {
+    logger.warn('example query-param handling failed', e);
   }
   try {
     const stored = localStorage.getItem(STORAGE_KEY);

@@ -90,3 +90,12 @@ export const DEFAULT_SAMPLE_CONTENT: string =
   SAMPLE_CATEGORIES.find((s) => s.slug === DEFAULT_SAMPLE_SLUG)?.content
   ?? SAMPLE_CATEGORIES[0]?.content
   ?? '';
+
+/**
+ * Look up an example's content by its manifest slug. Returns null when no
+ * example with that slug exists. Used by the "View in playground" deep link
+ * (`?example=<slug>`) so an example viewing page can open directly here.
+ */
+export function getSampleContentBySlug (slug: string): string | null {
+  return SAMPLE_CATEGORIES.find((s) => s.slug === slug)?.content ?? null;
+}

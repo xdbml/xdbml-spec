@@ -183,6 +183,10 @@ ${ex.description}
      style="display: inline-block; padding: 8px 16px; background: var(--vp-c-brand-1); color: white; text-decoration: none; border-radius: 8px; font-weight: 500;">
     ⬇ Download ${ex.file}
   </a>
+  <a href="/playground/index.html?example=${ex.slug}" target="_blank" rel="noopener"
+     style="display: inline-block; padding: 8px 16px; border: 1px solid var(--vp-c-brand-1); color: var(--vp-c-brand-1); text-decoration: none; border-radius: 8px; font-weight: 500;">
+    ▶ View in playground ↗
+  </a>
   <a href="${githubRepoBlobBase}/${ex.file}" target="_blank" rel="noopener"
      style="display: inline-block; padding: 8px 16px; border: 1px solid var(--vp-c-divider); color: var(--vp-c-text-1); text-decoration: none; border-radius: 8px; font-weight: 500;">
     View on GitHub ↗
