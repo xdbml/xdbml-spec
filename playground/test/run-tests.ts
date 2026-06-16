@@ -32,6 +32,8 @@ import { parse, flatten } from '../../parser/src/index.ts';
 import type { XDbmlDocument } from '../../parser/src/index.ts';
 import { buildDiagram, applyUserPositions } from '../src/components/diagram/layout.ts';
 import type { DiagramModel } from '../src/components/diagram/layout.ts';
+import { autoArrange } from '../src/components/diagram/auto-arrange.ts';
+import type { ArrangeStrategy } from '../src/components/diagram/auto-arrange.ts';
 import { resolveSelection } from '../src/components/inspector/ast-lookup.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -769,6 +771,55 @@ Container core {
       assertEq(autoBounds.y, recompBounds.y, 'container y matches');
       assertEq(autoBounds.width, recompBounds.width, 'container width matches');
       assertEq(autoBounds.height, recompBounds.height, 'container height matches');
+    },
+  },
+
+  // Auto-arrange: both strategies must position every entity, produce
+  // finite grid-aligned coordinates, and lay things out without overlap
+  // once applied. A star schema (one fact referencing four dimensions)
+  // exercises the star classifier; the relational path is covered by the
+  // same source under the other strategy.
+  {
+    name: 'auto-arrange positions every entity without overlap (both strategies)',
+    source: `xdbml: 0.1
+Table fact_sales {
+  id int [pk]
+  date_id int [ref: > dim_date.id]
+  product_id int [ref: > dim_product.id]
+  store_id int [ref: > dim_store.id]
+  customer_id int [ref: > dim_customer.id]
+  amount decimal
+}
+Table dim_date { id int [pk] }
+Table dim_product { id int [pk] }
+Table dim_store { id int [pk] }
+Table dim_customer { id int [pk] }
+`,
+    check: ({ ast }) => {
+      const base = buildDiagram(flatten(ast));
+      const overlaps = (a: { x: number; y: number; width: number; height: number },
+        b: { x: number; y: number; width: number; height: number }): boolean =>
+        !(a.x + a.width <= b.x || b.x + b.width <= a.x ||
+          a.y + a.height <= b.y || b.y + b.height <= a.y);
+      for (const strat of ['relational', 'star'] as ArrangeStrategy[]) {
+        const pos = autoArrange(base, strat);
+        for (const e of base.entities) {
+          const p = pos.get(e.id);
+          assertTrue(!!p, `${strat}: ${e.name} has a position`);
+          assertTrue(Number.isFinite(p!.x) && Number.isFinite(p!.y), `${strat}: ${e.name} finite`);
+          assertTrue(p!.x >= 0 && p!.y >= 0, `${strat}: ${e.name} non-negative`);
+          assertTrue(p!.x % 20 === 0 && p!.y % 20 === 0, `${strat}: ${e.name} grid-aligned`);
+        }
+        const applied = applyUserPositions(base, pos);
+        for (let i = 0; i < applied.entities.length; i++) {
+          for (let j = i + 1; j < applied.entities.length; j++) {
+            assertTrue(
+              !overlaps(applied.entities[i].bounds, applied.entities[j].bounds),
+              `${strat}: ${applied.entities[i].name} / ${applied.entities[j].name} do not overlap`,
+            );
+          }
+        }
+      }
     },
   },
 

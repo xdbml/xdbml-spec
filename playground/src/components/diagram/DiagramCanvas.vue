@@ -210,6 +210,37 @@
         title="Reset to 100%"
       >1:1</button>
 
+      <div class="w-px h-5 bg-gray-200 mx-0.5" />
+
+      <!-- Auto-arrange. A small menu of layout strategies; applying one
+           writes positions for every entity (revertible via Reset). -->
+      <div ref="arrangeWrap" class="relative">
+        <button
+          type="button"
+          class="h-7 px-2 flex items-center gap-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          @click="arrangeMenuOpen = !arrangeMenuOpen"
+          title="Auto-arrange the diagram"
+        >
+          Arrange
+          <svg viewBox="0 0 16 16" class="w-2.5 h-2.5"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.75" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div
+          v-if="arrangeMenuOpen"
+          class="absolute bottom-full right-0 mb-1 w-40 py-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+        >
+          <button
+            type="button"
+            class="w-full px-3 py-1.5 flex items-center text-left text-xs text-gray-700 hover:bg-gray-100"
+            @click="arrange('relational')"
+          >Relational</button>
+          <button
+            type="button"
+            class="w-full px-3 py-1.5 flex items-center text-left text-xs text-gray-700 hover:bg-gray-100"
+            @click="arrange('star')"
+          >Star schema</button>
+        </div>
+      </div>
+
       <!-- Reset entity positions to layout default. Only shown when at
            least one position has been overridden, otherwise the button
            would be confusing (nothing to reset). -->
@@ -266,6 +297,8 @@ import EntityCard from './EntityCard.vue';
 import RefLine from './RefLine.vue';
 import { buildDiagram, makeCollapsedKey, applyUserPositions } from './layout';
 import type { UserPositions } from './layout';
+import { autoArrange } from './auto-arrange';
+import type { ArrangeStrategy } from './auto-arrange';
 import type { Selection } from '@/components/inspector/selection';
 
 const parser = useParserStore();
@@ -771,6 +804,40 @@ function resetPositions (): void {
 }
 
 /* -------------------------------------------------------------------------
+ * Auto-arrange
+ *
+ * Computes a position for every entity using a layout strategy and writes
+ * the result into the same `userPositions` map that dragging uses. So an
+ * applied arrangement persists (localStorage) and is reverted by the
+ * existing "Reset positions" button; manual drags afterwards just edit
+ * individual entries. Pressing Arrange again recomputes from the base
+ * auto-layout, overwriting any manual nudges.
+ *
+ * Arrange runs off the *base* diagram (buildDiagram, pre-overlay) so the
+ * strategy sees the natural sizes and refs, not a previously arranged set.
+ * ----------------------------------------------------------------------- */
+
+const GRID_SNAP = 20; // matches the canvas CSS grid pitch (background-size)
+const snapToGrid = (v: number): number => Math.round(v / GRID_SNAP) * GRID_SNAP;
+
+const arrangeMenuOpen = ref(false);
+const arrangeWrap = ref<HTMLElement | null>(null);
+
+function arrange (strategy: ArrangeStrategy): void {
+  const base = buildDiagram(parser.flatAst, collapsedPaths.value);
+  userPositions.value = new Map(autoArrange(base, strategy));
+  persistUserPositions();
+  arrangeMenuOpen.value = false;
+}
+
+// Close the Arrange menu on any click outside its wrapper.
+function onArrangeOutside (e: MouseEvent): void {
+  if (!arrangeMenuOpen.value) return;
+  const el = arrangeWrap.value;
+  if (el && !el.contains(e.target as Node)) arrangeMenuOpen.value = false;
+}
+
+/* -------------------------------------------------------------------------
  * Drag interaction
  *
  * EntityCard emits `drag-start` on header mousedown. We then attach
@@ -854,6 +921,13 @@ function onDragEnd (): void {
   const final = dragState;
   dragState = null;
   if (final?.moved) {
+    // Snap the dropped entity to the grid so orthogonal edges line up.
+    const cur = userPositions.value.get(final.entityId);
+    if (cur) {
+      const next = new Map(userPositions.value);
+      next.set(final.entityId, { x: snapToGrid(cur.x), y: snapToGrid(cur.y) });
+      userPositions.value = next;
+    }
     persistUserPositions();
   } else if (final) {
     // No drag actually happened (< 2px movement): treat as a click on
@@ -980,6 +1054,27 @@ function onContainerDragEnd (): void {
   const final = containerDragState;
   containerDragState = null;
   if (final?.moved) {
+    // Snap the whole container as a rigid block: align its top-left-most
+    // member to the grid, then shift every member by the same correction
+    // so relative offsets within the container are preserved.
+    const next = new Map(userPositions.value);
+    let anchor: { x: number; y: number } | null = null;
+    for (const id of final.startMemberPositions.keys()) {
+      const cur = next.get(id);
+      if (!cur) continue;
+      if (!anchor || cur.x + cur.y < anchor.x + anchor.y) anchor = cur;
+    }
+    if (anchor) {
+      const corrX = snapToGrid(anchor.x) - anchor.x;
+      const corrY = snapToGrid(anchor.y) - anchor.y;
+      if (corrX !== 0 || corrY !== 0) {
+        for (const id of final.startMemberPositions.keys()) {
+          const cur = next.get(id);
+          if (cur) next.set(id, { x: cur.x + corrX, y: cur.y + corrY });
+        }
+        userPositions.value = next;
+      }
+    }
     persistUserPositions();
   } else if (final) {
     // No drag actually happened: treat as a click and select the
@@ -1020,10 +1115,12 @@ onMounted(() => {
   // document while the playground is mounted. Without this, Ctrl+wheel
   // can occasionally zoom the whole page instead of the canvas.
   document.addEventListener('wheel', preventBrowserZoom, { passive: false });
+  document.addEventListener('mousedown', onArrangeOutside);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('wheel', preventBrowserZoom);
+  document.removeEventListener('mousedown', onArrangeOutside);
 });
 
 function preventBrowserZoom (e: WheelEvent): void {
