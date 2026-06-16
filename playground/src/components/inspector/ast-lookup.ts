@@ -30,6 +30,7 @@
 
 import type {
   ContainerDeclaration,
+  EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
   RefDeclaration,
@@ -42,14 +43,13 @@ import type {
 import type { Selection } from './selection';
 
 /**
- * Inspector treats Entity and View declarations as the same kind of
- * thing for navigation purposes: both have a name, settings, a body
- * containing FieldDeclarations, and a span. The two AST node types
- * are structurally close enough that a single union prop covers
- * both, with view-specific UI (source-query rendering) gated by a
- * `kind === 'ViewDeclaration'` check.
+ * Inspector treats Entity, View, and Edge declarations as the same kind
+ * of thing for navigation purposes: each has a name, settings, a body
+ * containing FieldDeclarations, and a span. The node types are
+ * structurally close enough that a single union prop covers them, with
+ * kind-specific UI (a View's source query) gated by a `kind` check.
  */
-export type EntityOrView = EntityDeclaration | ViewDeclaration;
+export type EntityOrView = EntityDeclaration | ViewDeclaration | EdgeDeclaration;
 
 /**
  * The resolved nodes for a selection. The shape varies by selection
@@ -155,6 +155,32 @@ interface EntityFinding {
 }
 
 function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null {
+  // Edge boxes use an `edge:` prefix (then `containerName.edgeName` or
+  // just `edgeName`). Resolve those to the EdgeDeclaration so the
+  // inspector shows the edge's properties.
+  if (entityId.startsWith('edge:')) {
+    const rest = entityId.slice('edge:'.length);
+    const dot = rest.lastIndexOf('.');
+    if (dot > 0) {
+      const cname = rest.slice(0, dot);
+      const ename = rest.slice(dot + 1);
+      for (const stmt of doc.statements) {
+        if (stmt.kind !== 'ContainerDeclaration' || stmt.name !== cname) continue;
+        for (const item of stmt.body) {
+          if (item.kind === 'EdgeDeclaration' && item.name === ename) {
+            return { entity: item, container: stmt };
+          }
+        }
+      }
+    }
+    for (const stmt of doc.statements) {
+      if (stmt.kind === 'EdgeDeclaration' && stmt.name === rest) {
+        return { entity: stmt, container: null };
+      }
+    }
+    return null;
+  }
+
   // entityId is either "containerName.entityName" (when in a container)
   // or just "entityName" (for top-level orphan entities). Split on the
   // last dot since neither name contains dots.

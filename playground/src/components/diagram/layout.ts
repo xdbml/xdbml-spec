@@ -33,6 +33,7 @@
 
 import type {
   ContainerDeclaration,
+  EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
   IndexesBlock,
@@ -54,6 +55,8 @@ export interface DiagramModel {
   containers: ContainerLayout[];
   entities: EntityLayout[];
   refs: RefLayout[];
+  /** Property-bearing relationships, drawn as a box on the line. */
+  edges: EdgeLayout[];
   /** Overall canvas size needed to hold the laid-out content. */
   width: number;
   height: number;
@@ -95,6 +98,13 @@ export interface EntityLayout {
    */
   isView: boolean;
   /**
+   * True for the box that represents a property-bearing Edge. Rendered
+   * with an edge marker; the box sits on the relationship line between
+   * its source and target nodes (see EdgeLayout). Never appears in
+   * `DiagramModel.entities` -- edge boxes live in `DiagramModel.edges`.
+   */
+  isEdge?: boolean;
+  /**
    * Color for the entity's header band, as a CSS color string (typically
    * a hex value like `#3498db`). Resolved in `buildDiagram` by checking,
    * in priority order: (1) the entity's own `headercolor` setting,
@@ -105,6 +115,31 @@ export interface EntityLayout {
   headerColor?: string;
   fields: FieldLayout[];
   bounds: Rect;
+}
+
+/**
+ * A property-bearing relationship (xDBML `Edge`). It connects a source
+ * node to a target node but carries its own attributes, so it can't be a
+ * plain crow's-foot line: it renders as a box (the `box` EntityLayout,
+ * flagged `isEdge`) seated on the line between the two nodes. Cardinality
+ * lives only at the node ends -- the box itself is a pass-through. The
+ * box position is derived from the endpoints (midpoint, with an offset
+ * for self and parallel edges), not stored as a user position.
+ */
+export interface EdgeLayout {
+  id: string;
+  name: string;
+  /** The renderable box (isEdge=true). Holds the edge's properties, or none. */
+  box: EntityLayout;
+  /** True when the edge has no properties -- the box renders collapsed. */
+  collapsed: boolean;
+  sourceEntityId: string;
+  targetEntityId: string;
+  /** Cardinality strings from the edge settings, e.g. '0..*', '1..1'. */
+  sourceCardinality?: string;
+  targetCardinality?: string;
+  /** True when a source/target node could not be resolved. */
+  unresolved: boolean;
 }
 
 export interface FieldLayout {
@@ -228,6 +263,13 @@ export const CONTAINER_PADDING = 24;
 export const CONTAINER_HEADER_HEIGHT = 32;
 export const CONTAINER_GAP_X = 56; // gap between adjacent containers
 export const CANVAS_MARGIN = 32; // outer margin around the whole diagram
+/** Header tint for edge boxes, distinguishing them from node entities. */
+export const EDGE_HEADER_COLOR = '#7c3aed';
+/** Width of a collapsed (propertyless) edge box. */
+export const EDGE_COLLAPSED_WIDTH = 168;
+const EDGE_SELF_GAP = 64;          // horizontal gap from a node to its self-edge box
+const EDGE_PARALLEL_SPREAD = 104;  // perpendicular spread between parallel edges
+const EDGE_SELF_SPREAD = 16;       // vertical gap between stacked self-edge boxes
 
 /* -------------------------------------------------------------------------
  * Target -> accent color
@@ -592,16 +634,138 @@ export function buildDiagram (
     }
   }
 
-  const width = Math.max(cursorX, CANVAS_MARGIN * 2 + 200);
-  const height = maxBottom + CANVAS_MARGIN;
+  // ---- Edges (property-bearing relationships) ----------------------
+  // Collect Edge declarations (top-level and inside containers), build a
+  // box for each (reusing the entity layout machinery), resolve its
+  // source/target nodes, and seat the box on the line between them.
+  const edges: EdgeLayout[] = [];
+  const rawEdges: Array<{ decl: EdgeDeclaration; containerName?: string }> = [];
+  for (const stmt of doc.statements) {
+    if (stmt.kind === 'EdgeDeclaration') {
+      rawEdges.push({ decl: stmt });
+    } else if (stmt.kind === 'ContainerDeclaration') {
+      for (const item of stmt.body) {
+        if (item.kind === 'EdgeDeclaration') rawEdges.push({ decl: item, containerName: stmt.name });
+      }
+    }
+  }
+  const resolveNode = (name: string | undefined, containerName?: string): EntityLayout | undefined => {
+    if (!name) return undefined;
+    if (containerName) {
+      const scoped = entityByName.get(`${containerName}.${name}`);
+      if (scoped) return scoped;
+    }
+    return entityByName.get(name);
+  };
+  for (const { decl, containerName } of rawEdges) {
+    const box = buildEntityLayout(
+      edgeAsEntityLike(decl), 0, 0, containerName, collapsedPaths, typeTable, EDGE_HEADER_COLOR,
+    );
+    box.isEdge = true;
+    box.id = containerName ? `edge:${containerName}.${decl.name}` : `edge:${decl.name}`;
+    const collapsed = box.fields.length === 0;
+    if (collapsed) box.bounds.width = EDGE_COLLAPSED_WIDTH;
+    const src = resolveNode(settingValueAsString(decl.settings, 'source'), containerName);
+    const tgt = resolveNode(settingValueAsString(decl.settings, 'target'), containerName);
+    edges.push({
+      id: box.id,
+      name: decl.name,
+      box,
+      collapsed,
+      sourceEntityId: src?.id ?? '',
+      targetEntityId: tgt?.id ?? '',
+      sourceCardinality: settingValueAsString(decl.settings, 'source_cardinality'),
+      targetCardinality: settingValueAsString(decl.settings, 'target_cardinality'),
+      unresolved: !src || !tgt,
+    });
+  }
+  positionEdges(entityLayouts, edges);
+
+  let width = Math.max(cursorX, CANVAS_MARGIN * 2 + 200);
+  let height = maxBottom + CANVAS_MARGIN;
+  for (const e of edges) {
+    width = Math.max(width, e.box.bounds.x + e.box.bounds.width + CANVAS_MARGIN);
+    height = Math.max(height, e.box.bounds.y + e.box.bounds.height + CANVAS_MARGIN);
+  }
 
   return {
     containers: containerLayouts,
     entities: entityLayouts,
     refs: refLayouts,
+    edges,
     width,
     height,
   };
+}
+
+/**
+ * Seat each edge box on the line between its source and target nodes.
+ *
+ *   - Normal edge: the box centre is the midpoint of the two node
+ *     centres. Parallel edges (same node pair) are spread along the
+ *     perpendicular so their boxes don't stack.
+ *   - Self edge (source === target): the box is parked to the right of
+ *     the node; multiple self-edges stack vertically.
+ *
+ * Positions are clamped to stay within the canvas margin. Mutates each
+ * edge's `box.bounds`.
+ */
+function positionEdges (entities: EntityLayout[], edges: EdgeLayout[]): void {
+  const byId = new Map(entities.map((e) => [e.id, e]));
+
+  // Group by unordered endpoint pair (or by node for self-edges) so
+  // parallel/self edges can be spread apart.
+  const groups = new Map<string, EdgeLayout[]>();
+  for (const edge of edges) {
+    const key = edge.sourceEntityId === edge.targetEntityId
+      ? `self:${edge.sourceEntityId}`
+      : [edge.sourceEntityId, edge.targetEntityId].slice().sort().join('|');
+    const list = groups.get(key) ?? [];
+    list.push(edge);
+    groups.set(key, list);
+  }
+
+  for (const group of groups.values()) {
+    const n = group.length;
+    group.forEach((edge, i) => {
+      const box = edge.box;
+      const src = byId.get(edge.sourceEntityId);
+      const tgt = byId.get(edge.targetEntityId);
+      const offsetIdx = i - (n - 1) / 2;
+
+      if (!src || !tgt) {
+        // Unresolved: park near the origin so it's at least visible.
+        box.bounds.x = CANVAS_MARGIN;
+        box.bounds.y = CANVAS_MARGIN + i * (box.bounds.height + EDGE_SELF_SPREAD);
+        return;
+      }
+
+      let cx: number;
+      let cy: number;
+      if (edge.sourceEntityId === edge.targetEntityId) {
+        // Self edge: park to the right of the node, stacked.
+        cx = src.bounds.x + src.bounds.width + EDGE_SELF_GAP + box.bounds.width / 2;
+        cy = src.bounds.y + src.bounds.height / 2
+          + offsetIdx * (box.bounds.height + EDGE_SELF_SPREAD);
+      } else {
+        const sCx = src.bounds.x + src.bounds.width / 2;
+        const sCy = src.bounds.y + src.bounds.height / 2;
+        const tCx = tgt.bounds.x + tgt.bounds.width / 2;
+        const tCy = tgt.bounds.y + tgt.bounds.height / 2;
+        const dx = tCx - sCx;
+        const dy = tCy - sCy;
+        const len = Math.hypot(dx, dy) || 1;
+        const px = -dy / len; // perpendicular unit
+        const py = dx / len;
+        const off = offsetIdx * EDGE_PARALLEL_SPREAD;
+        cx = (sCx + tCx) / 2 + px * off;
+        cy = (sCy + tCy) / 2 + py * off;
+      }
+
+      box.bounds.x = Math.max(CANVAS_MARGIN, cx - box.bounds.width / 2);
+      box.bounds.y = Math.max(CANVAS_MARGIN, cy - box.bounds.height / 2);
+    });
+  }
 }
 
 function emptyDiagram (): DiagramModel {
@@ -609,6 +773,7 @@ function emptyDiagram (): DiagramModel {
     containers: [],
     entities: [],
     refs: [],
+    edges: [],
     width: 400,
     height: 200,
   };
@@ -659,6 +824,16 @@ function viewAsEntityLike (view: ViewDeclaration): EntityLike {
     body: view.body,
     isView: true,
     settings: view.settings,
+  };
+}
+
+function edgeAsEntityLike (edge: EdgeDeclaration): EntityLike {
+  return {
+    name: edge.name,
+    keyword: 'Edge',
+    body: edge.body,
+    isView: false,
+    settings: edge.settings,
   };
 }
 
@@ -1390,10 +1565,24 @@ export function applyUserPositions (
     if (e.bounds.y + e.bounds.height > canvasMaxY) canvasMaxY = e.bounds.y + e.bounds.height;
   }
 
+  // Re-seat edge boxes against the repositioned nodes. Clone so the base
+  // diagram's edges aren't mutated (the base is reused across renders).
+  const newEdges: EdgeLayout[] = diagram.edges.map((edge) => ({
+    ...edge,
+    box: { ...edge.box, bounds: { ...edge.box.bounds } },
+  }));
+  positionEdges(newEntities, newEdges);
+  for (const edge of newEdges) {
+    const b = edge.box.bounds;
+    if (b.x + b.width > canvasMaxX) canvasMaxX = b.x + b.width;
+    if (b.y + b.height > canvasMaxY) canvasMaxY = b.y + b.height;
+  }
+
   return {
     containers: newContainers,
     entities: newEntities,
     refs: diagram.refs,
+    edges: newEdges,
     width: Math.max(diagram.width, canvasMaxX + CANVAS_MARGIN),
     height: Math.max(diagram.height, canvasMaxY + CANVAS_MARGIN),
   };

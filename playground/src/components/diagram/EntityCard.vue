@@ -75,6 +75,30 @@
         />
       </g>
 
+      <!-- Diamond marker for Edge boxes. Sits where the View eye would,
+           signalling a property-bearing relationship rather than a node. -->
+      <g
+        v-if="entity.isEdge"
+        style="pointer-events: none;"
+      >
+        <path
+          :d="`M ${entity.bounds.x + 18} ${entity.bounds.y + 9} ` +
+              `L ${entity.bounds.x + 25} ${entity.bounds.y + 16} ` +
+              `L ${entity.bounds.x + 18} ${entity.bounds.y + 23} ` +
+              `L ${entity.bounds.x + 11} ${entity.bounds.y + 16} Z`"
+          fill="none"
+          :stroke="headerInk"
+          stroke-width="1.4"
+          stroke-linejoin="round"
+        />
+        <circle
+          :cx="entity.bounds.x + 18"
+          :cy="entity.bounds.y + 16"
+          r="1.8"
+          :fill="headerInk"
+        />
+      </g>
+
       <text
         :x="nameLeftX"
         :y="entity.bounds.y + 20"
@@ -346,7 +370,7 @@ const headerInk = readableInk(headerFill);
 // make room. Regular entities have the name at the standard 12-px
 // inset.
 const nameLeftX = computed(() => {
-  return props.entity.bounds.x + (props.entity.isView ? 32 : 12);
+  return props.entity.bounds.x + (props.entity.isView || props.entity.isEdge ? 32 : 12);
 });
 
 interface Badge { label: string; color: string }

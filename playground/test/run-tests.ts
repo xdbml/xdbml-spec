@@ -855,6 +855,77 @@ Container sales [type: schema] {
     },
   },
 
+  // Edges: property-bearing relationships render as a box on the line.
+  // Each edge resolves its endpoints, flags collapse when it has no
+  // properties, and gets a finite, on-canvas box position.
+  {
+    name: 'edges resolve endpoints, flag collapse, and get positioned',
+    source: `xdbml: 0.1
+Container g [type: keyspace] {
+  Entity Person { id int [pk] }
+  Entity Post { id int [pk] }
+  Edge FOLLOWS [source: Person, target: Person, source_cardinality: '0..*', target_cardinality: '0..*'] {
+    since date
+  }
+  Edge AUTHORED [source: Person, target: Post, source_cardinality: '1..*', target_cardinality: '1..1'] {
+    Note: 'no properties'
+  }
+}
+`,
+    check: ({ ast }) => {
+      const d = buildDiagram(flatten(ast));
+      assertEq(d.edges.length, 2, 'two edges');
+      const follows = d.edges.find((e) => e.name === 'FOLLOWS')!;
+      const authored = d.edges.find((e) => e.name === 'AUTHORED')!;
+      assertTrue(!!follows && !!authored, 'both edges present');
+      assertTrue(!follows.unresolved && !authored.unresolved, 'endpoints resolve');
+      assertEq(follows.sourceEntityId, 'g.Person', 'FOLLOWS source');
+      assertEq(follows.targetEntityId, 'g.Person', 'FOLLOWS is a self-edge');
+      assertEq(authored.sourceEntityId, 'g.Person', 'AUTHORED source');
+      assertEq(authored.targetEntityId, 'g.Post', 'AUTHORED target');
+      assertTrue(!follows.collapsed, 'FOLLOWS has a property, not collapsed');
+      assertTrue(authored.collapsed, 'AUTHORED has no properties, collapsed');
+      assertTrue(follows.box.isEdge === true, 'box flagged isEdge');
+      for (const e of d.edges) {
+        const b = e.box.bounds;
+        assertTrue([b.x, b.y, b.width, b.height].every(Number.isFinite), `${e.name} finite box`);
+        assertTrue(b.x >= 0 && b.y >= 0, `${e.name} box on canvas`);
+      }
+    },
+  },
+
+  // The inspector must resolve an edge box (and an edge attribute) so
+  // clicking one shows its details rather than nothing.
+  {
+    name: 'inspector resolves edge box and edge attribute selections',
+    source: `xdbml: 0.1
+Container g [type: keyspace] {
+  Entity Person { id int [pk] }
+  Entity Post { id int [pk] }
+  Edge FOLLOWS [source: Person, target: Person] {
+    since date
+  }
+  Edge AUTHORED [source: Person, target: Post] {
+    Note: 'no properties'
+  }
+}
+`,
+    check: ({ ast }) => {
+      const box = resolveSelection(ast, { kind: 'entity', entityId: 'edge:g.FOLLOWS' });
+      assertTrue(!!box && box.kind === 'entity', 'edge box resolves to an entity-kind node');
+      if (box && box.kind === 'entity') {
+        assertEq(box.node.kind, 'EdgeDeclaration', 'resolved node is the Edge');
+        assertEq(box.node.name, 'FOLLOWS', 'resolved edge name');
+      }
+      const fld = resolveSelection(ast, { kind: 'field', entityId: 'edge:g.FOLLOWS', path: 'since' });
+      assertTrue(!!fld && fld.kind === 'field', 'edge attribute resolves to a field');
+      if (fld && fld.kind === 'field') assertEq(fld.node.name, 'since', 'resolved attribute name');
+      // A collapsed (propertyless) edge box still resolves.
+      const collapsed = resolveSelection(ast, { kind: 'entity', entityId: 'edge:g.AUTHORED' });
+      assertTrue(!!collapsed && collapsed.kind === 'entity', 'collapsed edge box still resolves');
+    },
+  },
+
   /* ---- Bundled examples ---------------------------------------------- */
   //
   // Every bundled .xdbml example must parse AND lay out without errors.

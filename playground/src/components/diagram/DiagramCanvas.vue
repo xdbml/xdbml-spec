@@ -113,6 +113,18 @@
           />
         </g>
 
+        <!-- Edge lines (property-bearing relationships): two segments
+             through the edge box, cardinality at the node ends only.
+             Drawn with the ref lines so the boxes overlay them. -->
+        <g class="edge-lines">
+          <EdgeLine
+            v-for="edge in diagram.edges"
+            :key="edge.id"
+            :edge="edge"
+            :entities="diagram.entities"
+          />
+        </g>
+
         <!-- Entities -->
         <g
           v-for="entity in diagram.entities"
@@ -127,6 +139,25 @@
             @toggle-path="(path) => togglePath(entity.id, path)"
             @drag-start="onEntityDragStart"
             @select-field="(path) => onFieldClick(entity.id, path)"
+          />
+        </g>
+
+        <!-- Edge boxes. Rendered as cards (the box is an isEdge
+             EntityLayout) but not draggable: they follow the midpoint of
+             their endpoints. -->
+        <g
+          v-for="edge in diagram.edges"
+          :key="edge.id"
+          class="edge-box"
+          @click.stop="onEntityHeaderClick(edge.box.id)"
+        >
+          <EntityCard
+            :entity="edge.box"
+            :collapsed-paths="collapsedPaths"
+            :selection="selectionForEntity(edge.box.id)"
+            :is-selected="isEntitySelected(edge.box.id)"
+            @toggle-path="(path) => togglePath(edge.box.id, path)"
+            @select-field="(path) => onFieldClick(edge.box.id, path)"
           />
         </g>
 
@@ -296,6 +327,7 @@ import { useFileSystemStore } from '@/stores/fileSystemStore';
 
 import EntityCard from './EntityCard.vue';
 import RefLine from './RefLine.vue';
+import EdgeLine from './EdgeLine.vue';
 import { buildDiagram, makeCollapsedKey, applyUserPositions } from './layout';
 import type { UserPositions } from './layout';
 import { autoArrange } from './auto-arrange';

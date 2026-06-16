@@ -48,6 +48,7 @@
 import { computed } from 'vue';
 import type {
   ContainerDeclaration,
+  EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
   NoteBlock,
@@ -62,7 +63,7 @@ import EditInSourceButton from './EditInSourceButton.vue';
 import { highlightSql }   from './sqlHighlight';
 
 const props = defineProps<{
-  entity: EntityDeclaration | ViewDeclaration;
+  entity: EntityDeclaration | ViewDeclaration | EdgeDeclaration;
   container: ContainerDeclaration | null;
 }>();
 
@@ -71,14 +72,15 @@ defineEmits<{
 }>();
 
 /**
- * Views don't have a `keyword` field in the AST (their kind alone
- * identifies them). Display "View" as the keyword label for them so
- * the Identification block reads consistently regardless of whether
- * we're showing an Entity (with its specific keyword like Table or
- * Collection) or a View.
+ * Views and Edges don't have a `keyword` field in the AST (their kind
+ * alone identifies them). Display "View" / "Edge" as the keyword label
+ * for them so the Identification block reads consistently regardless of
+ * whether we're showing an Entity (with its specific keyword like Table
+ * or Collection), a View, or an Edge.
  */
 const keywordLabel = computed(() => {
   if (props.entity.kind === 'ViewDeclaration') return 'View';
+  if (props.entity.kind === 'EdgeDeclaration') return 'Edge';
   return (props.entity as EntityDeclaration).keyword;
 });
 

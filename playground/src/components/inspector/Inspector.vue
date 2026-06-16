@@ -126,7 +126,9 @@ const kindLabel = computed(() => {
     case 'container': return resolved.value.node.keyword;
     case 'entity':    return resolved.value.node.kind === 'ViewDeclaration'
       ? 'View'
-      : resolved.value.node.keyword;
+      : resolved.value.node.kind === 'EdgeDeclaration'
+        ? 'Edge'
+        : resolved.value.node.keyword;
     case 'field':     return 'Field';
     case 'ref':       return 'Ref';
   }
@@ -138,7 +140,9 @@ const kindBadgeClass = computed(() => {
     case 'container': return 'bg-purple-100 text-purple-800';
     case 'entity':    return resolved.value.node.kind === 'ViewDeclaration'
       ? 'bg-indigo-100 text-indigo-800'
-      : 'bg-blue-100 text-blue-800';
+      : resolved.value.node.kind === 'EdgeDeclaration'
+        ? 'bg-violet-100 text-violet-800'
+        : 'bg-blue-100 text-blue-800';
     case 'field':     return 'bg-green-100 text-green-800';
     case 'ref':       return 'bg-amber-100 text-amber-800';
   }

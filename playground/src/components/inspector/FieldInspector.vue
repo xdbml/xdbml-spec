@@ -67,6 +67,7 @@
 import { computed, ref } from 'vue';
 import type {
   ContainerDeclaration,
+  EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
   Span,
@@ -82,7 +83,7 @@ import EditInSourceButton from './EditInSourceButton.vue';
 const props = defineProps<{
   field: FieldDeclaration;
   ancestors: readonly FieldDeclaration[];
-  entity: EntityDeclaration | ViewDeclaration;
+  entity: EntityDeclaration | ViewDeclaration | EdgeDeclaration;
   container: ContainerDeclaration | null;
 }>();
 
