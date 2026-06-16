@@ -57,7 +57,7 @@ const DEBOUNCE_MS = 250;
  * Monaco's undo history still preserves the previous content if the
  * user wants to recover it within the session.
  */
-function loadInitial (): string {
+function loadInitial (): { content: string; restored: boolean } {
   try {
     const shared = decodeShareHash();
     if (shared !== null) {
@@ -69,7 +69,7 @@ function loadInitial (): string {
       } catch {
         // best-effort
       }
-      return shared;
+      return { content: shared, restored: false };
     }
   } catch (e) {
     logger.warn('URL hash decode failed', e);
@@ -90,7 +90,7 @@ function loadInitial (): string {
         const base = window.location.href.split('?')[0].split('#')[0];
         history.replaceState(null, '', base + (qs ? `?${qs}` : '') + window.location.hash);
         try { localStorage.setItem(STORAGE_KEY, content); } catch { /* best-effort */ }
-        return content;
+        return { content, restored: false };
       }
       logger.warn(`Unknown ?example slug: ${slug}`);
     }
@@ -99,15 +99,34 @@ function loadInitial (): string {
   }
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && stored.length > 0) return stored;
+    if (stored && stored.length > 0) return { content: stored, restored: true };
   } catch (e) {
     logger.warn('localStorage read failed', e);
   }
-  return DEFAULT_SAMPLE_CONTENT;
+  return { content: DEFAULT_SAMPLE_CONTENT, restored: false };
 }
 
 export const useParserStore = defineStore('parser', () => {
-  const content = ref<string>(loadInitial());
+  const initial = loadInitial();
+  const content = ref<string>(initial.content);
+
+  /**
+   * Bumps on every deliberate document load -- opening a file, loading an
+   * example, following a shared link, or reset -- i.e. a document *switch*,
+   * as opposed to the user editing the current document (which mutates
+   * `content` directly through the editor binding). The diagram canvas
+   * watches this to decide when to (re)apply a default layout for a freshly
+   * loaded document, without re-arranging on every keystroke.
+   */
+  const documentEpoch = ref(0);
+
+  /**
+   * True only when the initial content came from the persisted working
+   * copy (a reload), as opposed to a shared link, an example deep link, or
+   * the first-visit sample. The canvas uses this to restore a returning
+   * user's saved layout rather than re-arranging on load.
+   */
+  const initialRestore = ref(initial.restored);
 
   /**
    * The AST is `shallowRef`'d so Vue doesn't try to deep-proxy every
@@ -223,10 +242,34 @@ export const useParserStore = defineStore('parser', () => {
   });
 
   function reset (): void {
-    content.value = DEFAULT_SAMPLE_CONTENT;
+    loadDocument(DEFAULT_SAMPLE_CONTENT);
   }
 
+  /**
+   * Low-level content setter. Bound to the editor's two-way binding, so it
+   * fires on every keystroke. This is NOT a document switch: it must not
+   * bump the epoch or the canvas would re-arrange while the user types.
+   */
   function setContent (newContent: string): void {
+    content.value = newContent;
+  }
+
+  /**
+   * Load a different document: opening a file, an example, a shared link,
+   * or reset. Bumps the epoch so the canvas re-resolves the layout, and
+   * nulls the AST so layout consumers wait for the NEW content to parse
+   * rather than acting on the previous document.
+   */
+  function loadDocument (newContent: string): void {
+    documentEpoch.value++;
+    if (newContent === content.value) {
+      // Identical text (e.g. re-opening the same file): no reparse will
+      // fire, so leave the AST in place; the epoch bump alone tells the
+      // canvas to re-resolve against the current (correct) AST.
+      return;
+    }
+    ast.value = undefined;
+    flatAst.value = undefined;
     content.value = newContent;
   }
 
@@ -238,8 +281,11 @@ export const useParserStore = defineStore('parser', () => {
     errors,
     isLoading,
     hasAst,
+    documentEpoch,
+    initialRestore,
     reset,
     setContent,
+    loadDocument,
   };
 });
 

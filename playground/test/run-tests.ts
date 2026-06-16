@@ -823,6 +823,38 @@ Table dim_customer { id int [pk] }
     },
   },
 
+  // Container chrome: applyUserPositions derives a container's box UPWARD
+  // from its members (header band + inset). Auto-arrange must reserve that
+  // chrome so the box never lands above/left of the canvas origin, where
+  // the title bar would be out of scroll reach.
+  {
+    name: 'auto-arrange keeps container boxes inside the canvas origin',
+    source: `xdbml: 0.1
+Container sales [type: schema] {
+  Table fact_order {
+    id int [pk]
+    date_id int [ref: > dim_date.id]
+    product_id int [ref: > dim_product.id]
+    customer_id int [ref: > dim_customer.id]
+    amount decimal
+  }
+  Table dim_date { id int [pk] }
+  Table dim_product { id int [pk] }
+  Table dim_customer { id int [pk] }
+}
+`,
+    check: ({ ast }) => {
+      const base = buildDiagram(flatten(ast));
+      for (const strat of ['relational', 'star'] as ArrangeStrategy[]) {
+        const applied = applyUserPositions(base, autoArrange(base, strat));
+        for (const c of applied.containers) {
+          assertTrue(c.bounds.x >= 0, `${strat}: container ${c.name} left edge >= 0 (got ${c.bounds.x})`);
+          assertTrue(c.bounds.y >= 0, `${strat}: container ${c.name} top edge >= 0 (got ${c.bounds.y})`);
+        }
+      }
+    },
+  },
+
   /* ---- Bundled examples ---------------------------------------------- */
   //
   // Every bundled .xdbml example must parse AND lay out without errors.

@@ -292,6 +292,7 @@
 import { computed, ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 
 import { useParserStore } from '@/stores/parserStore';
+import { useFileSystemStore } from '@/stores/fileSystemStore';
 
 import EntityCard from './EntityCard.vue';
 import RefLine from './RefLine.vue';
@@ -302,6 +303,7 @@ import type { ArrangeStrategy } from './auto-arrange';
 import type { Selection } from '@/components/inspector/selection';
 
 const parser = useParserStore();
+const fileSystem = useFileSystemStore();
 
 /* -------------------------------------------------------------------------
  * Selection plumbing
@@ -762,36 +764,82 @@ function onWheel (e: WheelEvent): void {
  * ----------------------------------------------------------------------- */
 
 const POSITIONS_STORAGE_KEY = 'xdbml-playground:entity-positions';
+const WORKING_DOC_KEY = '__working__';
 
-function loadUserPositions (): Map<string, { x: number; y: number }> {
+type EntityPos = { x: number; y: number };
+type PosMap = Map<string, EntityPos>;
+
+/*
+ * localStorage holds positions PER DOCUMENT:
+ *   { [docKey]: { [entityId]: {x, y} } }
+ * docKey is `file:<name>` for a file opened from disk, or WORKING_DOC_KEY
+ * for the unsaved working copy. The working copy is mirrored on every
+ * write so a reload restores the last layout no matter which file (if any)
+ * was open. Keying by name (not full path) means two different files with
+ * the same name share a slot -- acceptable; tighten via the handle later.
+ */
+
+function currentDocKey (): string {
+  return fileSystem.filename ? `file:${fileSystem.filename}` : WORKING_DOC_KEY;
+}
+
+function isEntityPos (v: unknown): v is EntityPos {
+  return !!v && typeof v === 'object'
+    && typeof (v as EntityPos).x === 'number'
+    && typeof (v as EntityPos).y === 'number';
+}
+
+function loadAllPositions (): Record<string, Record<string, EntityPos>> {
   try {
     const raw = localStorage.getItem(POSITIONS_STORAGE_KEY);
-    if (!raw) return new Map();
+    if (!raw) return {};
     const obj = JSON.parse(raw);
-    if (typeof obj !== 'object' || obj === null) return new Map();
-    const out = new Map<string, { x: number; y: number }>();
-    for (const [k, v] of Object.entries(obj)) {
-      if (
-        v && typeof v === 'object' &&
-        typeof (v as { x?: unknown }).x === 'number' &&
-        typeof (v as { y?: unknown }).y === 'number'
-      ) {
-        out.set(k, { x: (v as { x: number }).x, y: (v as { y: number }).y });
+    if (typeof obj !== 'object' || obj === null) return {};
+    const values = Object.values(obj as Record<string, unknown>);
+    // Migration: the old format was a flat { entityId: {x,y} } map for a
+    // single global layout. Detect it (every value looks like {x,y}) and
+    // fold it under the working-copy key.
+    if (values.length > 0 && values.every(isEntityPos)) {
+      return { [WORKING_DOC_KEY]: obj as Record<string, EntityPos> };
+    }
+    const out: Record<string, Record<string, EntityPos>> = {};
+    for (const [docKey, docPos] of Object.entries(obj as Record<string, unknown>)) {
+      if (!docPos || typeof docPos !== 'object') continue;
+      const inner: Record<string, EntityPos> = {};
+      for (const [id, p] of Object.entries(docPos as Record<string, unknown>)) {
+        if (isEntityPos(p)) inner[id] = { x: p.x, y: p.y };
       }
+      out[docKey] = inner;
     }
     return out;
   } catch {
-    return new Map();
+    return {};
   }
 }
 
-const userPositions = ref<Map<string, { x: number; y: number }>>(loadUserPositions());
+function loadPositionsFor (docKey: string): PosMap {
+  const rec = loadAllPositions()[docKey];
+  const map: PosMap = new Map();
+  if (rec) for (const [id, p] of Object.entries(rec)) map.set(id, p);
+  return map;
+}
+
+// On first mount the file-system store is fresh (no filename yet), so the
+// working-copy key applies. A returning user (restore) sees their saved
+// working layout immediately; a fresh load starts empty and the resolver
+// applies the relational default once the parse lands.
+const userPositions = ref<PosMap>(
+  parser.initialRestore ? loadPositionsFor(WORKING_DOC_KEY) : new Map(),
+);
 
 function persistUserPositions (): void {
   try {
-    const obj: Record<string, { x: number; y: number }> = {};
-    for (const [k, v] of userPositions.value) obj[k] = v;
-    localStorage.setItem(POSITIONS_STORAGE_KEY, JSON.stringify(obj));
+    const all = loadAllPositions();
+    const rec: Record<string, EntityPos> = {};
+    for (const [id, p] of userPositions.value) rec[id] = p;
+    all[currentDocKey()] = rec;
+    all[WORKING_DOC_KEY] = rec; // mirror so a reload restores this layout
+    localStorage.setItem(POSITIONS_STORAGE_KEY, JSON.stringify(all));
   } catch {
     // best-effort
   }
@@ -823,12 +871,63 @@ const snapToGrid = (v: number): number => Math.round(v / GRID_SNAP) * GRID_SNAP;
 const arrangeMenuOpen = ref(false);
 const arrangeWrap = ref<HTMLElement | null>(null);
 
-function arrange (strategy: ArrangeStrategy): void {
+function applyStrategy (strategy: ArrangeStrategy): void {
   const base = buildDiagram(parser.flatAst, collapsedPaths.value);
   userPositions.value = new Map(autoArrange(base, strategy));
   persistUserPositions();
+  // Frame the whole ERD after arranging so it lands centered in the pane.
+  zoomToFit();
+}
+
+function arrange (strategy: ArrangeStrategy): void {
+  applyStrategy(strategy);
   arrangeMenuOpen.value = false;
 }
+
+/* -------------------------------------------------------------------------
+ * First-load layout
+ *
+ * When a document is loaded -- opened from disk, an example, a shared
+ * link, or the first-visit sample -- apply a relational arrangement by
+ * default, UNLESS that document already has a saved layout, in which case
+ * restore it. A returning user's working copy is restored as-is. Editing
+ * the current document never re-arranges; only a document switch does.
+ *
+ * Driven by `parser.documentEpoch`, which bumps on every switch. We wait
+ * for a successful parse (`hasAst`) so the relational pass sees real
+ * entities, and resolve at most once per epoch.
+ * ----------------------------------------------------------------------- */
+
+let appliedEpoch = -1;
+
+function resolveLayoutForDocument (): void {
+  const saved = loadPositionsFor(currentDocKey());
+  const firstResolve = appliedEpoch === -1;
+  const isRestore = firstResolve && parser.documentEpoch === 0 && parser.initialRestore;
+
+  if (isRestore) {
+    // Returning user: keep their saved working layout; else default.
+    if (saved.size > 0) { userPositions.value = saved; persistUserPositions(); } else applyStrategy('relational');
+  } else if (fileSystem.filename && saved.size > 0) {
+    // Re-opening a file that already has a saved layout.
+    userPositions.value = saved;
+    persistUserPositions();
+  } else {
+    // Fresh document with no saved layout: relational by default.
+    applyStrategy('relational');
+  }
+  appliedEpoch = parser.documentEpoch;
+}
+
+watch(
+  () => [parser.documentEpoch, parser.hasAst] as const,
+  () => {
+    if (!parser.hasAst) return;                         // wait for a good parse
+    if (parser.documentEpoch === appliedEpoch) return;  // already resolved this document
+    resolveLayoutForDocument();
+  },
+  { immediate: true },
+);
 
 // Close the Arrange menu on any click outside its wrapper.
 function onArrangeOutside (e: MouseEvent): void {

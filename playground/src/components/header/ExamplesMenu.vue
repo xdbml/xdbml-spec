@@ -73,7 +73,7 @@
  * sample schemas (sourced from /examples/ at build time via Vite's
  * ?raw imports; see services/sample-content.ts).
  *
- * Click a sample -> `parserStore.setContent(sample.content)`, dropdown
+ * Click a sample -> `parserStore.loadDocument(sample.content)`, dropdown
  * closes. The store handles the rest (debounced reparse, diagram update,
  * localStorage persistence).
  *
@@ -116,7 +116,7 @@ function isCurrent (sample: SampleCategory): boolean {
 }
 
 function onPick (sample: SampleCategory): void {
-  parser.setContent(sample.content);
+  parser.loadDocument(sample.content);
   // Loading an example is not "the file we had open" anymore -- clear
   // the file-system association so a subsequent Save prompts for a
   // filename rather than silently overwriting the previously-open file.

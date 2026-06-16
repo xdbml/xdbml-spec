@@ -20,7 +20,7 @@
  * grid pitch so orthogonal edges run in clean channels.
  */
 import type { DiagramModel, EntityLayout, UserPositions } from './layout.ts';
-import { CANVAS_MARGIN } from './layout.ts';
+import { CANVAS_MARGIN, CONTAINER_HEADER_HEIGHT, CONTAINER_PADDING } from './layout.ts';
 
 export type ArrangeStrategy = 'relational' | 'star';
 
@@ -67,11 +67,16 @@ export function autoArrange (
   }
 
   const blocks: Block[] = [];
-  for (const members of groups.values()) {
+  for (const [containerName, members] of groups) {
     const pos = strategy === 'star'
       ? layoutStar(members, diagram, sizeOf, laneW, laneH)
       : layoutRelational(members, diagram, sizeOf, laneW, laneH);
-    blocks.push(toBlock(pos, sizeOf));
+    // Reserve the container chrome (header band on top, inset on all
+    // sides) for grouped entities so the box applyUserPositions derives
+    // upward from these members never extends above or left of the canvas
+    // origin -- which would put the title bar out of scroll reach -- and
+    // so adjacent containers don't overlap.
+    blocks.push(groupBlock(pos, sizeOf, containerName !== ''));
   }
 
   const out = new Map<string, XY>();
@@ -461,6 +466,34 @@ function toBlock (pos: Map<string, XY>, sizeOf: Map<string, { w: number; h: numb
   const norm = new Map<string, XY>();
   for (const [id, p] of pos) norm.set(id, { x: p.x - minX, y: p.y - minY });
   return { pos: norm, width: maxX - minX, height: maxY - minY };
+}
+
+// Like toBlock, but reserves the container chrome when the group is a
+// container: members are shifted inward by the inset (and the header band
+// on top) and the block grows to match. This keeps the box that
+// applyUserPositions derives upward from the members inside the canvas
+// (never above/left of the origin) and clear of neighbouring blocks.
+function groupBlock (
+  pos: Map<string, XY>,
+  sizeOf: Map<string, { w: number; h: number }>,
+  isContainer: boolean,
+): Block {
+  if (pos.size === 0) return { pos, width: 0, height: 0 };
+  let minX = Infinity; let minY = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+  for (const [id, p] of pos) {
+    const s = sizeOf.get(id) ?? { w: 0, h: 0 };
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x + s.w);
+    maxY = Math.max(maxY, p.y + s.h);
+  }
+  const padL = isContainer ? CONTAINER_PADDING : 0;
+  const padTop = isContainer ? CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING : 0;
+  const padR = isContainer ? CONTAINER_PADDING : 0;
+  const padBottom = isContainer ? CONTAINER_PADDING : 0;
+  const norm = new Map<string, XY>();
+  for (const [id, p] of pos) norm.set(id, { x: p.x - minX + padL, y: p.y - minY + padTop });
+  return { pos: norm, width: (maxX - minX) + padL + padR, height: (maxY - minY) + padTop + padBottom };
 }
 
 // Shelf packing: place blocks left to right, wrap to a new row past a

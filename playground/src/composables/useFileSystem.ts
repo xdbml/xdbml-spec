@@ -141,7 +141,7 @@ export function useFileSystem () {
     const file = await handle.getFile();
     const text = await file.text();
 
-    parser.setContent(text);
+    parser.loadDocument(text);
     fs.fileHandle = handle;
     fs.filename = handle.name;
     fs.markSaved(text);
@@ -174,7 +174,7 @@ export function useFileSystem () {
         const reader = new FileReader();
         reader.onload = () => {
           const text = String(reader.result ?? '');
-          parser.setContent(text);
+          parser.loadDocument(text);
           fs.fileHandle = null; // no handle in this flow
           fs.filename = file.name;
           fs.markSaved(text);
