@@ -9,13 +9,13 @@ The diagram pane supports the standard pan-and-zoom interactions you'd expect fr
 
 ## Zoom controls in the corner
 
-The bottom-right of the diagram pane has five controls grouped into a small toolbar:
+The bottom-right of the diagram pane has a small toolbar. Six controls are always present; a seventh, **Reset positions**, appears once you've repositioned something:
 
 ::: screenshot
 **[Screenshot needed]**
 Filename suggestion: `diagram-pan-zoom-controls.png`
 Caption: The zoom toolbar in the bottom-right corner of the diagram pane, with controls labeled.
-Should show: close-up of the bottom-right corner. The toolbar with: minus button, percentage display showing e.g. "100%", plus button, Fit button, and 1:1 reset button. Annotations or callouts pointing at each.
+Should show: close-up of the bottom-right corner. The toolbar with: minus button, percentage display showing e.g. "100%", plus button, Fit button, 1:1 reset button, and Arrange dropdown. Annotations or callouts pointing at each. (The Reset positions button only appears once an entity has been moved or arranged.)
 :::
 
 From left to right:
@@ -25,6 +25,8 @@ From left to right:
 - **`+` (plus) button**: zoom in by one step.
 - **Fit button**: scale the diagram to fit the available pane width and height. Useful after a layout has been rearranged or when starting on a large schema.
 - **1:1 button**: reset to 100% zoom.
+- **Arrange button**: opens a menu of automatic layouts -- **Relational** (a general foreign-key layout) and **Star schema** (a central fact surrounded by its dimensions). Picking one positions every entity, snaps it to the grid, and fits the result to the pane. The arrangement persists like a manual drag and is reverted by **Reset positions**; it is also applied automatically the first time you open a document that has no saved layout.
+- **Reset positions button**: appears only after you've moved an entity or applied an Arrange layout. Clears every position override, returning entities to their default computed layout; the button then disappears until the next move.
 
 ## Mouse wheel zoom
 
