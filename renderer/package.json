@@ -1,0 +1,42 @@
+{
+  "name": "@xdbml/render",
+  "version": "0.1.0-poc.1",
+  "description": "Framework-free SVG renderer for xDBML diagrams. Shared by the playground, a future rendering API service, and an MCP server.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "xdbml",
+    "dbml",
+    "erd",
+    "diagram",
+    "svg",
+    "renderer"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "test": "node --experimental-strip-types test/run-tests.ts"
+  },
+  "dependencies": {
+    "@xdbml/parse": "file:../parser"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
