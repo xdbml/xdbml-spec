@@ -143,13 +143,13 @@
         </g>
 
         <!-- Edge boxes. Rendered as cards (the box is an isEdge
-             EntityLayout) but not draggable: they follow the midpoint of
-             their endpoints. -->
+             EntityLayout). Auto-seated at the midpoint of their
+             endpoints; dragging records a relative offset so the box
+             can be nudged while still tracking the endpoints. -->
         <g
           v-for="edge in diagram.edges"
           :key="edge.id"
           class="edge-box"
-          @click.stop="onEntityHeaderClick(edge.box.id)"
         >
           <EntityCard
             :entity="edge.box"
@@ -157,6 +157,7 @@
             :selection="selectionForEntity(edge.box.id)"
             :is-selected="isEntitySelected(edge.box.id)"
             @toggle-path="(path) => togglePath(edge.box.id, path)"
+            @drag-start="onEdgeDragStart"
             @select-field="(path) => onFieldClick(edge.box.id, path)"
           />
         </g>
@@ -272,16 +273,16 @@
         </div>
       </div>
 
-      <!-- Reset entity positions to layout default. Only shown when at
-           least one position has been overridden, otherwise the button
-           would be confusing (nothing to reset). -->
-      <template v-if="userPositions.size > 0">
+      <!-- Reset entity positions and edge nudges to layout default. Only
+           shown when at least one has been overridden, otherwise the
+           button would be confusing (nothing to reset). -->
+      <template v-if="userPositions.size > 0 || edgeOffsets.size > 0">
         <div class="w-px h-5 bg-gray-200 mx-0.5" />
         <button
           type="button"
           class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
           @click="resetPositions"
-          :title="`Reset ${userPositions.size} repositioned entit${userPositions.size === 1 ? 'y' : 'ies'} to layout default`"
+          title="Reset repositioned entities and edges to the layout default"
         >Reset positions</button>
       </template>
     </div>
@@ -329,7 +330,7 @@ import EntityCard from './EntityCard.vue';
 import RefLine from './RefLine.vue';
 import EdgeLine from './EdgeLine.vue';
 import { buildDiagram, makeCollapsedKey, applyUserPositions } from './layout';
-import type { UserPositions } from './layout';
+import type { UserPositions, EdgeOffsets } from './layout';
 import { autoArrange } from './auto-arrange';
 import type { ArrangeStrategy } from './auto-arrange';
 import type { Selection } from '@/components/inspector/selection';
@@ -796,6 +797,7 @@ function onWheel (e: WheelEvent): void {
  * ----------------------------------------------------------------------- */
 
 const POSITIONS_STORAGE_KEY = 'xdbml-playground:entity-positions';
+const EDGE_OFFSETS_STORAGE_KEY = 'xdbml-playground:edge-offsets';
 const WORKING_DOC_KEY = '__working__';
 
 type EntityPos = { x: number; y: number };
@@ -856,12 +858,58 @@ function loadPositionsFor (docKey: string): PosMap {
   return map;
 }
 
+/* Edge-box offsets: same per-document storage shape as positions, but
+ * values are {dx,dy} deltas from the auto-seated midpoint. Stored under
+ * a separate key; no flat-format migration is needed (this key is new). */
+type EdgeOff = { dx: number; dy: number };
+type OffMap = Map<string, EdgeOff>;
+
+function isEdgeOff (v: unknown): v is EdgeOff {
+  return !!v && typeof v === 'object'
+    && typeof (v as EdgeOff).dx === 'number'
+    && typeof (v as EdgeOff).dy === 'number';
+}
+
+function loadAllOffsets (): Record<string, Record<string, EdgeOff>> {
+  try {
+    const raw = localStorage.getItem(EDGE_OFFSETS_STORAGE_KEY);
+    if (!raw) return {};
+    const obj = JSON.parse(raw);
+    if (typeof obj !== 'object' || obj === null) return {};
+    const out: Record<string, Record<string, EdgeOff>> = {};
+    for (const [docKey, docOff] of Object.entries(obj as Record<string, unknown>)) {
+      if (!docOff || typeof docOff !== 'object') continue;
+      const inner: Record<string, EdgeOff> = {};
+      for (const [id, o] of Object.entries(docOff as Record<string, unknown>)) {
+        if (isEdgeOff(o)) inner[id] = { dx: o.dx, dy: o.dy };
+      }
+      out[docKey] = inner;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function loadOffsetsFor (docKey: string): OffMap {
+  const rec = loadAllOffsets()[docKey];
+  const map: OffMap = new Map();
+  if (rec) for (const [id, o] of Object.entries(rec)) map.set(id, o);
+  return map;
+}
+
 // On first mount the file-system store is fresh (no filename yet), so the
 // working-copy key applies. A returning user (restore) sees their saved
 // working layout immediately; a fresh load starts empty and the resolver
 // applies the relational default once the parse lands.
 const userPositions = ref<PosMap>(
   parser.initialRestore ? loadPositionsFor(WORKING_DOC_KEY) : new Map(),
+);
+
+// Edge-box nudges, restored from the working copy on a returning visit
+// for the same reason positions are.
+const edgeOffsets = ref<OffMap>(
+  parser.initialRestore ? loadOffsetsFor(WORKING_DOC_KEY) : new Map(),
 );
 
 function persistUserPositions (): void {
@@ -877,10 +925,25 @@ function persistUserPositions (): void {
   }
 }
 
+function persistEdgeOffsets (): void {
+  try {
+    const all = loadAllOffsets();
+    const rec: Record<string, EdgeOff> = {};
+    for (const [id, o] of edgeOffsets.value) rec[id] = o;
+    all[currentDocKey()] = rec;
+    all[WORKING_DOC_KEY] = rec; // mirror, matching positions
+    localStorage.setItem(EDGE_OFFSETS_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    // best-effort
+  }
+}
+
 function resetPositions (): void {
-  if (userPositions.value.size === 0) return;
+  if (userPositions.value.size === 0 && edgeOffsets.value.size === 0) return;
   userPositions.value = new Map();
+  edgeOffsets.value = new Map();
   persistUserPositions();
+  persistEdgeOffsets();
 }
 
 /* -------------------------------------------------------------------------
@@ -934,18 +997,31 @@ let appliedEpoch = -1;
 
 function resolveLayoutForDocument (): void {
   const saved = loadPositionsFor(currentDocKey());
+  const savedOff = loadOffsetsFor(currentDocKey());
   const firstResolve = appliedEpoch === -1;
   const isRestore = firstResolve && parser.documentEpoch === 0 && parser.initialRestore;
 
   if (isRestore) {
     // Returning user: keep their saved working layout; else default.
-    if (saved.size > 0) { userPositions.value = saved; persistUserPositions(); } else applyStrategy('relational');
+    if (saved.size > 0) {
+      userPositions.value = saved;
+      edgeOffsets.value = savedOff;
+      persistUserPositions();
+      persistEdgeOffsets();
+    } else {
+      edgeOffsets.value = new Map();
+      applyStrategy('relational');
+    }
   } else if (fileSystem.filename && saved.size > 0) {
     // Re-opening a file that already has a saved layout.
     userPositions.value = saved;
+    edgeOffsets.value = savedOff;
     persistUserPositions();
+    persistEdgeOffsets();
   } else {
-    // Fresh document with no saved layout: relational by default.
+    // Fresh document with no saved layout: relational by default, and no
+    // inherited edge nudges from a previous document.
+    edgeOffsets.value = new Map();
     applyStrategy('relational');
   }
   appliedEpoch = parser.documentEpoch;
@@ -1064,6 +1140,93 @@ function onDragEnd (): void {
     // No drag actually happened (< 2px movement): treat as a click on
     // the entity header and emit a selection event.
     onEntityHeaderClick(final.entityId);
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Edge-box drag interaction (relative nudge)
+ *
+ * An edge box is auto-seated at the midpoint of its endpoints. Dragging
+ * it doesn't pin an absolute position -- it records a {dx,dy} offset from
+ * that midpoint, so the box keeps following its endpoints (and recenters
+ * after Arrange) while sitting where the user parked it. A no-movement
+ * press selects the edge, mirroring entity cards. The snap on drop snaps
+ * the box's rendered position to the grid by adjusting the offset.
+ * ----------------------------------------------------------------------- */
+
+interface EdgeDragState {
+  edgeId: string;          // the edge box id (`edge:...`)
+  startOffsetX: number;    // offset at drag start
+  startOffsetY: number;
+  startClientX: number;
+  startClientY: number;
+  startZoom: number;
+  moved: boolean;
+}
+
+let edgeDragState: EdgeDragState | null = null;
+
+function onEdgeDragStart (e: { entityId: string; clientX: number; clientY: number }): void {
+  const cur = edgeOffsets.value.get(e.entityId) ?? { dx: 0, dy: 0 };
+  edgeDragState = {
+    edgeId: e.entityId,
+    startOffsetX: cur.dx,
+    startOffsetY: cur.dy,
+    startClientX: e.clientX,
+    startClientY: e.clientY,
+    startZoom: zoom.value,
+    moved: false,
+  };
+  document.addEventListener('mousemove', onEdgeDragMove);
+  document.addEventListener('mouseup', onEdgeDragEnd);
+  document.body.style.userSelect = 'none';
+}
+
+function onEdgeDragMove (e: MouseEvent): void {
+  if (!edgeDragState) return;
+  const dxPx = e.clientX - edgeDragState.startClientX;
+  const dyPx = e.clientY - edgeDragState.startClientY;
+  if (!edgeDragState.moved && Math.abs(dxPx) < 2 && Math.abs(dyPx) < 2) return;
+  edgeDragState.moved = true;
+
+  // Moving the rendered box by a delta means changing its offset by the
+  // same delta (the auto midpoint is fixed while no node moves).
+  const dxSvg = dxPx / edgeDragState.startZoom;
+  const dySvg = dyPx / edgeDragState.startZoom;
+  const next = new Map(edgeOffsets.value);
+  next.set(edgeDragState.edgeId, {
+    dx: edgeDragState.startOffsetX + dxSvg,
+    dy: edgeDragState.startOffsetY + dySvg,
+  });
+  edgeOffsets.value = next;
+}
+
+function onEdgeDragEnd (): void {
+  document.removeEventListener('mousemove', onEdgeDragMove);
+  document.removeEventListener('mouseup', onEdgeDragEnd);
+  document.body.style.userSelect = '';
+  const final = edgeDragState;
+  edgeDragState = null;
+  if (final?.moved) {
+    // Snap the box's rendered position to the grid by nudging the offset
+    // by the rounding delta (rendered = autoMidpoint + offset, and the
+    // midpoint is constant here, so snapping rendered == snapping offset).
+    const box = diagram.value.edges.find((e) => e.box.id === final.edgeId)?.box;
+    const cur = edgeOffsets.value.get(final.edgeId);
+    if (box && cur) {
+      const snappedX = snapToGrid(box.bounds.x);
+      const snappedY = snapToGrid(box.bounds.y);
+      const next = new Map(edgeOffsets.value);
+      next.set(final.edgeId, {
+        dx: cur.dx + (snappedX - box.bounds.x),
+        dy: cur.dy + (snappedY - box.bounds.y),
+      });
+      edgeOffsets.value = next;
+    }
+    persistEdgeOffsets();
+  } else if (final) {
+    // No drag: select the edge, like clicking an entity header.
+    onEntityHeaderClick(final.edgeId);
   }
 }
 
@@ -1226,7 +1389,11 @@ function onContainerDragEnd (): void {
 
 const diagram = computed(() => {
   const base = buildDiagram(parser.flatAst, collapsedPaths.value);
-  return applyUserPositions(base, userPositions.value as UserPositions);
+  return applyUserPositions(
+    base,
+    userPositions.value as UserPositions,
+    edgeOffsets.value as EdgeOffsets,
+  );
 });
 
 const hasAst = computed(() => parser.hasAst);

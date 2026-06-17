@@ -926,6 +926,38 @@ Container g [type: keyspace] {
     },
   },
 
+  // An edge box can be nudged by a stored {dx,dy} offset from its
+  // auto-seated midpoint. The offset is relative, composes with node
+  // moves, and is cleared by resetting (empty maps -> identity).
+  {
+    name: 'edge box honors a relative offset and clamps to canvas',
+    source: `xdbml: 0.1
+Container g [type: keyspace] {
+  Entity Person { id int [pk] }
+  Entity Post { id int [pk] }
+  Edge AUTHORED [source: Person, target: Post] { when date }
+}
+`,
+    check: ({ ast }) => {
+      const base = buildDiagram(flatten(ast));
+      const id = base.edges[0].box.id;
+      const b0 = base.edges[0].box.bounds;
+
+      const moved = applyUserPositions(base, new Map(), new Map([[id, { dx: 40, dy: -25 }]]));
+      const b1 = moved.edges.find((e) => e.box.id === id)!.box.bounds;
+      assertEq(b1.x - b0.x, 40, 'edge box shifts by dx');
+      assertEq(b1.y - b0.y, -25, 'edge box shifts by dy');
+
+      // Large negative offset is clamped to the canvas margin, not negative.
+      const clamped = applyUserPositions(base, new Map(), new Map([[id, { dx: -100000, dy: -100000 }]]));
+      const b2 = clamped.edges.find((e) => e.box.id === id)!.box.bounds;
+      assertTrue(b2.x >= 0 && b2.y >= 0, 'offset cannot push the box into negative space');
+
+      // No overrides at all -> the base diagram is returned unchanged.
+      assertTrue(applyUserPositions(base, new Map(), new Map()) === base, 'no-override is identity');
+    },
+  },
+
   /* ---- Bundled examples ---------------------------------------------- */
   //
   // Every bundled .xdbml example must parse AND lay out without errors.

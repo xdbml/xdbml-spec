@@ -710,8 +710,17 @@ export function buildDiagram (
  * Positions are clamped to stay within the canvas margin. Mutates each
  * edge's `box.bounds`.
  */
-function positionEdges (entities: EntityLayout[], edges: EdgeLayout[]): void {
+function positionEdges (entities: EntityLayout[], edges: EdgeLayout[], edgeOffsets?: EdgeOffsets): void {
   const byId = new Map(entities.map((e) => [e.id, e]));
+
+  // Apply a stored relative offset (if any) on top of the auto-seated
+  // position, keeping the box on-canvas. Offsets are deltas from the
+  // computed midpoint, so the box still tracks its endpoints.
+  const seat = (box: EntityLayout, autoX: number, autoY: number): void => {
+    const off = edgeOffsets?.get(box.id);
+    box.bounds.x = off ? Math.max(CANVAS_MARGIN, autoX + off.dx) : autoX;
+    box.bounds.y = off ? Math.max(CANVAS_MARGIN, autoY + off.dy) : autoY;
+  };
 
   // Group by unordered endpoint pair (or by node for self-edges) so
   // parallel/self edges can be spread apart.
@@ -735,8 +744,11 @@ function positionEdges (entities: EntityLayout[], edges: EdgeLayout[]): void {
 
       if (!src || !tgt) {
         // Unresolved: park near the origin so it's at least visible.
-        box.bounds.x = CANVAS_MARGIN;
-        box.bounds.y = CANVAS_MARGIN + i * (box.bounds.height + EDGE_SELF_SPREAD);
+        seat(
+          box,
+          CANVAS_MARGIN,
+          CANVAS_MARGIN + i * (box.bounds.height + EDGE_SELF_SPREAD),
+        );
         return;
       }
 
@@ -762,8 +774,11 @@ function positionEdges (entities: EntityLayout[], edges: EdgeLayout[]): void {
         cy = (sCy + tCy) / 2 + py * off;
       }
 
-      box.bounds.x = Math.max(CANVAS_MARGIN, cx - box.bounds.width / 2);
-      box.bounds.y = Math.max(CANVAS_MARGIN, cy - box.bounds.height / 2);
+      seat(
+        box,
+        Math.max(CANVAS_MARGIN, cx - box.bounds.width / 2),
+        Math.max(CANVAS_MARGIN, cy - box.bounds.height / 2),
+      );
     });
   }
 }
@@ -1467,6 +1482,16 @@ function settingValueAsString (settings: ReadonlyArray<Setting>, name: string): 
 export type UserPositions = ReadonlyMap<string, { x: number; y: number }>;
 
 /**
+ * Per-edge box offsets, keyed by edge box id (`edge:<container>.<name>`
+ * or `edge:<name>`). An edge box is normally auto-seated at the midpoint
+ * of its endpoints; a stored offset nudges it from that midpoint by a
+ * delta. Because the offset is relative, the box keeps following its
+ * endpoints (and re-centers after an auto-arrange) while honoring where
+ * the user parked it. Reverted by "Reset positions".
+ */
+export type EdgeOffsets = ReadonlyMap<string, { dx: number; dy: number }>;
+
+/**
  * Apply user-overridden positions to a freshly built DiagramModel.
  *
  * Returns a new DiagramModel with:
@@ -1489,9 +1514,37 @@ export type UserPositions = ReadonlyMap<string, { x: number; y: number }>;
 export function applyUserPositions (
   diagram: DiagramModel,
   userPositions: UserPositions,
+  edgeOffsets?: EdgeOffsets,
 ): DiagramModel {
-  // Fast path: no overrides at all.
-  if (userPositions.size === 0) return diagram;
+  const hasPositions = userPositions.size > 0;
+  const hasEdgeOffsets = !!edgeOffsets && edgeOffsets.size > 0;
+
+  // Fast path: nothing overridden at all.
+  if (!hasPositions && !hasEdgeOffsets) return diagram;
+
+  // Only edge boxes were nudged: nodes and containers are untouched, so
+  // just re-seat the edges (with their offsets) against the original
+  // node positions and grow the canvas if a box was pushed out.
+  if (!hasPositions) {
+    const reEdges: EdgeLayout[] = diagram.edges.map((edge) => ({
+      ...edge,
+      box: { ...edge.box, bounds: { ...edge.box.bounds } },
+    }));
+    positionEdges(diagram.entities, reEdges, edgeOffsets);
+    let mx = 0;
+    let my = 0;
+    for (const edge of reEdges) {
+      const b = edge.box.bounds;
+      if (b.x + b.width > mx) mx = b.x + b.width;
+      if (b.y + b.height > my) my = b.y + b.height;
+    }
+    return {
+      ...diagram,
+      edges: reEdges,
+      width: Math.max(diagram.width, mx + CANVAS_MARGIN),
+      height: Math.max(diagram.height, my + CANVAS_MARGIN),
+    };
+  }
 
   // First pass: relocate entities that have an override.
   const newEntities: EntityLayout[] = diagram.entities.map((entity) => {
@@ -1571,7 +1624,7 @@ export function applyUserPositions (
     ...edge,
     box: { ...edge.box, bounds: { ...edge.box.bounds } },
   }));
-  positionEdges(newEntities, newEdges);
+  positionEdges(newEntities, newEdges, edgeOffsets);
   for (const edge of newEdges) {
     const b = edge.box.bounds;
     if (b.x + b.width > canvasMaxX) canvasMaxX = b.x + b.width;
