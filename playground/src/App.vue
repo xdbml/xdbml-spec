@@ -15,6 +15,7 @@
       <section
         class="flex flex-col bg-white border-r border-gray-200"
         :style="{ width: editorWidth + 'px' }"
+        @pointerdown.capture="lastPane = 'editor'"
       >
         <XdbmlEditor ref="editorRef" v-model="content" />
       </section>
@@ -26,8 +27,12 @@
       />
 
       <!-- Diagram pane (flex-grow) -->
-      <section class="flex-1 min-w-0 flex flex-col">
+      <section
+        class="flex-1 min-w-0 flex flex-col"
+        @pointerdown.capture="lastPane = 'diagram'"
+      >
         <DiagramCanvas
+          ref="diagramRef"
           :selection="selection"
           @select="onSelect"
         />
@@ -114,6 +119,60 @@ const content = computed({
 const editorRef = useTemplateRef<{
   revealPosition: (line: number, column: number) => void;
 }>('editorRef');
+
+// DiagramCanvas exposes its ERD layout undo/redo.
+const diagramRef = useTemplateRef<{
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+}>('diagramRef');
+
+/* -------------------------------------------------------------------------
+ * Undo/redo routing
+ *
+ * Two independent histories: Monaco owns text undo; DiagramCanvas owns
+ * ERD layout undo. Ctrl/Cmd+Z (and redo) is routed to whichever pane the
+ * user last interacted with. `lastPane` is set on pointerdown in each
+ * pane (capture phase, so child handlers can't swallow it) and reset to
+ * 'editor' on a document switch, so post-load Ctrl+Z restores text as
+ * before.
+ *
+ * The listener runs in the capture phase so that, when the diagram is
+ * active, it can intercept the key before Monaco's own binding sees it.
+ * It only consumes the event when an ERD undo/redo actually happens;
+ * otherwise it lets the key fall through to Monaco.
+ * ----------------------------------------------------------------------- */
+
+const lastPane = ref<'editor' | 'diagram'>('editor');
+
+// A document switch is fundamentally a text change; route the next
+// Ctrl+Z to Monaco (which restores the previous content).
+watch(() => parser.documentEpoch, () => { lastPane.value = 'editor'; });
+
+function onGlobalKeydown (e: KeyboardEvent): void {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  const isUndo = k === 'z' && !e.shiftKey;
+  const isRedo = (k === 'z' && e.shiftKey) || k === 'y';
+  if (!isUndo && !isRedo) return;
+  // Don't hijack undo while typing in a field (e.g. the zoom % input).
+  const t = e.target as HTMLElement | null;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (lastPane.value !== 'diagram') return; // editor active -> Monaco handles it
+  const d = diagramRef.value;
+  if (!d) return;
+  if (isRedo && d.canRedo) {
+    e.preventDefault();
+    e.stopPropagation();
+    d.redo();
+  } else if (isUndo && d.canUndo) {
+    e.preventDefault();
+    e.stopPropagation();
+    d.undo();
+  }
+  // Nothing to undo/redo on the ERD side: let the key fall through.
+}
 
 /* -------------------------------------------------------------------------
  * Selection state
@@ -359,10 +418,12 @@ function onInspectorDragEnd (): void {
 
 onMounted(() => {
   window.addEventListener('resize', onResize);
+  window.addEventListener('keydown', onGlobalKeydown, true);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', onResize);
+  window.removeEventListener('keydown', onGlobalKeydown, true);
 });
 
 function onResize (): void {

@@ -244,6 +244,30 @@
 
       <div class="w-px h-5 bg-gray-200 mx-0.5" />
 
+      <!-- Undo / redo for ERD layout changes (positions and edge nudges).
+           Also bound to Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z when the diagram
+           is the active pane (routed from App.vue). -->
+      <button
+        type="button"
+        class="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        :disabled="!canUndo"
+        @click="undoLayout"
+        title="Undo layout change (Ctrl+Z)"
+      >
+        <svg viewBox="0 0 16 16" class="w-3.5 h-3.5"><path d="M6.5 4.5 3 8l3.5 3.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 8h6.5a3.5 3.5 0 1 1 0 7H6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button
+        type="button"
+        class="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        :disabled="!canRedo"
+        @click="redoLayout"
+        title="Redo layout change (Ctrl+Shift+Z)"
+      >
+        <svg viewBox="0 0 16 16" class="w-3.5 h-3.5"><path d="M9.5 4.5 13 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 8H6.5a3.5 3.5 0 1 0 0 7H10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div class="w-px h-5 bg-gray-200 mx-0.5" />
+
       <!-- Auto-arrange. A small menu of layout strategies; applying one
            writes positions for every entity (revertible via Reset). -->
       <div ref="arrangeWrap" class="relative">
@@ -331,6 +355,17 @@ import RefLine from './RefLine.vue';
 import EdgeLine from './EdgeLine.vue';
 import { buildDiagram, makeCollapsedKey, applyUserPositions } from './layout';
 import type { UserPositions, EdgeOffsets } from './layout';
+import {
+  emptyHistory,
+  seedHistory as seedH,
+  commitHistory as commitH,
+  undoHistory as undoH,
+  redoHistory as redoH,
+  canUndo as canUndoH,
+  canRedo as canRedoH,
+  currentSnapshot,
+} from './layout-history';
+import type { LayoutHistory } from './layout-history';
 import { autoArrange } from './auto-arrange';
 import type { ArrangeStrategy } from './auto-arrange';
 import type { Selection } from '@/components/inspector/selection';
@@ -944,7 +979,87 @@ function resetPositions (): void {
   edgeOffsets.value = new Map();
   persistUserPositions();
   persistEdgeOffsets();
+  commitHistory();
 }
+
+/* -------------------------------------------------------------------------
+ * Layout history (undo/redo for ERD position changes)
+ *
+ * A bounded stack of full snapshots of the position state -- both
+ * `userPositions` and `edgeOffsets`. Each mutating action (entity drag,
+ * container drag, edge nudge, Arrange, Reset) commits a snapshot of the
+ * *resulting* state; undo/redo walk an index over the stack. Full
+ * snapshots (rather than deltas) keep bulk ops like Arrange and Reset as
+ * single reversible steps, and the maps are small enough that the cost is
+ * negligible.
+ *
+ * Scope is positions only: text edits (Monaco's own undo) and
+ * expand/collapse are deliberately not in this stack. The history is
+ * reseeded on every document switch (see resolveLayoutForDocument), so
+ * undo never crosses documents. Snapshots are keyed by entity/edge id and
+ * are applied leniently -- a restored position for an id that no longer
+ * exists is simply ignored downstream -- so undo can never corrupt the
+ * document or the parse.
+ * ----------------------------------------------------------------------- */
+
+interface LayoutSnapshotMaps {
+  positions: Record<string, EntityPos>;
+  offsets: Record<string, EdgeOff>;
+}
+
+const HISTORY_CAP = 100;
+const history = ref<LayoutHistory>(emptyHistory());
+
+const canUndo = computed(() => canUndoH(history.value));
+const canRedo = computed(() => canRedoH(history.value));
+
+function snapshotLayout (): LayoutSnapshotMaps {
+  const positions: Record<string, EntityPos> = {};
+  for (const [id, p] of userPositions.value) positions[id] = { x: p.x, y: p.y };
+  const offsets: Record<string, EdgeOff> = {};
+  for (const [id, o] of edgeOffsets.value) offsets[id] = { dx: o.dx, dy: o.dy };
+  return { positions, offsets };
+}
+
+// Seed (or reseed) the history with the current layout as the baseline
+// floor -- nothing can be undone past it.
+function seedHistory (): void {
+  history.value = seedH(snapshotLayout());
+}
+
+// Record the current layout as a new history entry.
+function commitHistory (): void {
+  history.value = commitH(history.value, snapshotLayout(), HISTORY_CAP);
+}
+
+function restoreSnapshot (snap: LayoutSnapshotMaps): void {
+  const pos: PosMap = new Map();
+  for (const [id, p] of Object.entries(snap.positions)) pos.set(id, { x: p.x, y: p.y });
+  const off: OffMap = new Map();
+  for (const [id, o] of Object.entries(snap.offsets)) off.set(id, { dx: o.dx, dy: o.dy });
+  userPositions.value = pos;
+  edgeOffsets.value = off;
+  persistUserPositions();
+  persistEdgeOffsets();
+}
+
+function undoLayout (): void {
+  if (!canUndo.value) return;
+  history.value = undoH(history.value);
+  const snap = currentSnapshot(history.value);
+  if (snap) restoreSnapshot(snap as LayoutSnapshotMaps);
+}
+
+function redoLayout (): void {
+  if (!canRedo.value) return;
+  history.value = redoH(history.value);
+  const snap = currentSnapshot(history.value);
+  if (snap) restoreSnapshot(snap as LayoutSnapshotMaps);
+}
+
+// App.vue routes Ctrl/Cmd+Z (and redo) here when the diagram is the
+// active pane; the toolbar buttons call the same functions.
+defineExpose({ undo: undoLayout, redo: redoLayout, canUndo, canRedo });
 
 /* -------------------------------------------------------------------------
  * Auto-arrange
@@ -976,6 +1091,7 @@ function applyStrategy (strategy: ArrangeStrategy): void {
 
 function arrange (strategy: ArrangeStrategy): void {
   applyStrategy(strategy);
+  commitHistory();
   arrangeMenuOpen.value = false;
 }
 
@@ -1024,6 +1140,9 @@ function resolveLayoutForDocument (): void {
     edgeOffsets.value = new Map();
     applyStrategy('relational');
   }
+  // The resolved layout is the baseline for this document: history starts
+  // here and can't be undone past it.
+  seedHistory();
   appliedEpoch = parser.documentEpoch;
 }
 
@@ -1136,6 +1255,7 @@ function onDragEnd (): void {
       userPositions.value = next;
     }
     persistUserPositions();
+    commitHistory();
   } else if (final) {
     // No drag actually happened (< 2px movement): treat as a click on
     // the entity header and emit a selection event.
@@ -1224,6 +1344,7 @@ function onEdgeDragEnd (): void {
       edgeOffsets.value = next;
     }
     persistEdgeOffsets();
+    commitHistory();
   } else if (final) {
     // No drag: select the edge, like clicking an entity header.
     onEntityHeaderClick(final.edgeId);
@@ -1370,6 +1491,7 @@ function onContainerDragEnd (): void {
       }
     }
     persistUserPositions();
+    commitHistory();
   } else if (final) {
     // No drag actually happened: treat as a click and select the
     // container, same as the body-rect click handler does.

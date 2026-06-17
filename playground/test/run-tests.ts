@@ -35,6 +35,11 @@ import type { DiagramModel } from '../src/components/diagram/layout.ts';
 import { autoArrange } from '../src/components/diagram/auto-arrange.ts';
 import type { ArrangeStrategy } from '../src/components/diagram/auto-arrange.ts';
 import { resolveSelection } from '../src/components/inspector/ast-lookup.ts';
+import {
+  emptyHistory, seedHistory, commitHistory, undoHistory, redoHistory,
+  canUndo as histCanUndo, canRedo as histCanRedo, currentSnapshot,
+} from '../src/components/diagram/layout-history.ts';
+import type { LayoutSnapshot } from '../src/components/diagram/layout-history.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const examplesDir = join(__dirname, '..', '..', 'examples');
@@ -955,6 +960,54 @@ Container g [type: keyspace] {
 
       // No overrides at all -> the base diagram is returned unchanged.
       assertTrue(applyUserPositions(base, new Map(), new Map()) === base, 'no-override is identity');
+    },
+  },
+
+  // Pure undo/redo stack: seeding, commit, undo/redo cursor, redo-tail
+  // truncation on a new commit, and depth capping.
+  {
+    name: 'layout history: commit/undo/redo, redo-tail truncation, and cap',
+    source: 'xdbml: 0.1\nEntity T { id int }\n',
+    check: () => {
+      const snap = (n: number): LayoutSnapshot => ({ positions: { T: { x: n, y: 0 } }, offsets: {} });
+      const tag = (h: ReturnType<typeof emptyHistory>): number =>
+        currentSnapshot(h)?.positions.T.x ?? -1;
+
+      // Empty -> nothing to do.
+      let h = emptyHistory();
+      assertTrue(!histCanUndo(h) && !histCanRedo(h), 'empty history has no undo/redo');
+
+      // Seed baseline, then two commits.
+      h = seedHistory(snap(0));
+      assertTrue(!histCanUndo(h), 'baseline cannot be undone past');
+      h = commitHistory(h, snap(1), 100);
+      h = commitHistory(h, snap(2), 100);
+      assertEq(tag(h), 2, 'cursor at latest commit');
+      assertTrue(histCanUndo(h) && !histCanRedo(h), 'at tip: can undo, cannot redo');
+
+      // Undo twice down to the baseline.
+      h = undoHistory(h);
+      assertEq(tag(h), 1, 'undo steps back one');
+      assertTrue(histCanRedo(h), 'redo available after undo');
+      h = undoHistory(h);
+      assertEq(tag(h), 0, 'undo reaches baseline');
+      assertTrue(!histCanUndo(h), 'cannot undo past baseline');
+
+      // Redo, then a fresh commit truncates the redo tail.
+      h = redoHistory(h);
+      assertEq(tag(h), 1, 'redo steps forward');
+      h = commitHistory(h, snap(9), 100);
+      assertEq(tag(h), 9, 'new commit becomes current');
+      assertTrue(!histCanRedo(h), 'redo tail dropped after a new commit');
+      h = undoHistory(h);
+      assertEq(tag(h), 1, 'history past the new commit is [baseline, 1, 9]');
+
+      // Depth cap discards the oldest entries.
+      let capped = seedHistory(snap(0));
+      for (let i = 1; i <= 10; i++) capped = commitHistory(capped, snap(i), 5);
+      assertEq(capped.stack.length, 5, 'stack capped to 5');
+      assertEq(tag(capped), 10, 'latest commit retained at the tip');
+      assertEq(capped.stack[0].positions.T.x, 6, 'oldest retained entry is the 6th-from-last');
     },
   },
 
