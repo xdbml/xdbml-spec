@@ -41,9 +41,17 @@ The auto-layout still runs for any entity that doesn't have a stored manual posi
 
 ## Reset positions
 
-After any entity has been moved, a **Reset positions** button appears in the top-right corner of the diagram pane. Clicking it discards all stored manual positions and re-runs the auto-layout for every entity. This is a clean-slate operation; there's no undo.
+After any entity has been moved, a **Reset positions** button appears in the corner toolbar at the bottom-right of the diagram pane. Clicking it discards all stored manual positions (and edge nudges) and returns every entity to its computed layout. A reset can be undone -- see below -- so it's no longer a one-way operation.
 
 If you want to reset only a single entity, the workaround is to delete its entity declaration in the editor and add it back. The stored position is keyed by name, so a re-added entity with the same name will get its stored position back. To truly reset one entity, change its name temporarily, save, then change it back.
+
+## Undo and redo
+
+Diagram layout has its own undo history, separate from the editor's. Anything that moves things in the diagram can be stepped back and forward: dragging an entity, dragging a container, nudging an edge box, applying an **Arrange** layout, and **Reset positions**.
+
+Use the undo and redo buttons in the corner toolbar, or press **Ctrl+Z** to undo and **Ctrl+Shift+Z** (or **Ctrl+Y**) to redo while the diagram is the pane you're working in. The editor keeps its own undo for text, so Ctrl+Z with the editor focused still steps through your typing -- the two histories don't interfere.
+
+The history starts from the layout the document opened with: you can always step back to that, but not past it. Opening a different document (a file, an example, or a shared link) starts a fresh history.
 
 ## When auto-layout is good enough
 
