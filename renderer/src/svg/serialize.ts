@@ -33,6 +33,10 @@ import { escapeXml } from './util.ts';
 const HEADER_HEIGHT = 32;
 const INDENT_PX = 14;
 
+// Field selection tint (matches the interactive overlay's accent).
+const SELECT_FILL = '#dbeafe';
+const SELECT_STRIP = '#2563eb';
+
 export interface SerializeOptions {
   /**
    * Collapse state, as the same `${entityId}::${path}` keys
@@ -48,6 +52,19 @@ export interface SerializeOptions {
    * CSS backdrop rather than part of the SVG.
    */
   background?: string;
+  /**
+   * Emit inner markup only (the `<defs>` and content groups) without the
+   * enclosing `<svg>` wrapper. Used by the interactive mount, which
+   * composes the serializer's shapes and its own interaction overlay
+   * inside a single zoomable `<svg>` it controls. Default false.
+   */
+  inner?: boolean;
+  /**
+   * The currently selected field, drawn with a selection tint as part of
+   * the row (under the field name, over the zebra/pk fill) so the name
+   * stays readable on top -- matching the playground's prior behavior.
+   */
+  selectedField?: { entityId: string; path: string };
 }
 
 export function serializeDiagram (model: DiagramModel, options: SerializeOptions = {}): string {
@@ -55,28 +72,31 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
   const collapsed = options.collapsedPaths ?? new Set<string>();
 
   const parts: string[] = [];
+  const inner = options.inner === true;
 
-  parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${model.width}" height="${model.height}" ` +
-    `viewBox="0 0 ${model.width} ${model.height}" font-family="${theme.fontSans}">`,
-  );
+  if (!inner) {
+    parts.push(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${model.width}" height="${model.height}" ` +
+      `viewBox="0 0 ${model.width} ${model.height}" font-family="${theme.fontSans}">`,
+    );
+  }
 
   parts.push(defs(theme));
 
-  if (options.background) {
+  if (options.background && !inner) {
     parts.push(`<rect x="0" y="0" width="${model.width}" height="${model.height}" fill="${options.background}"/>`);
   }
 
   for (const c of model.containers) parts.push(container(c, theme));
   for (const r of model.refs) parts.push(refLine(r, model, theme));
   for (const e of model.edges) parts.push(edgeLine(e, model.entities, theme));
-  for (const e of model.entities) parts.push(entityCard(e, collapsed, theme));
-  for (const e of model.edges) parts.push(entityCard(e.box, collapsed, theme));
+  for (const e of model.entities) parts.push(entityCard(e, collapsed, theme, options.selectedField));
+  for (const e of model.edges) parts.push(entityCard(e.box, collapsed, theme, options.selectedField));
 
   const unresolved = model.refs.filter((r) => r.unresolved).length;
   if (unresolved > 0) parts.push(banner(unresolved, model, theme));
 
-  parts.push('</svg>');
+  if (!inner) parts.push('</svg>');
   return parts.join('');
 }
 
@@ -134,7 +154,7 @@ function container (c: ContainerLayout, theme: Theme): string {
 
 /* ----------------------------------------------------------- entity card */
 
-function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme: Theme): string {
+function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme: Theme, selectedField?: { entityId: string; path: string }): string {
   const { x, y, width, height } = entity.bounds;
   const te = theme.entity;
   const parts: string[] = ['<g>'];
@@ -182,7 +202,7 @@ function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme
 
   // Field rows.
   entity.fields.forEach((field, i) => {
-    parts.push(fieldRow(entity, field, i, collapsed, theme));
+    parts.push(fieldRow(entity, field, i, collapsed, theme, selectedField));
   });
 
   parts.push('</g>');
@@ -195,16 +215,28 @@ function fieldRow (
   index: number,
   collapsed: ReadonlySet<string>,
   theme: Theme,
+  selectedField?: { entityId: string; path: string },
 ): string {
   const { x, y, width } = entity.bounds;
   const tr = theme.row;
   const parts: string[] = [];
 
-  // Row tint.
-  const fill = rowFill(field, index, theme);
+  const isSelected = selectedField !== undefined
+    && selectedField.entityId === entity.id
+    && selectedField.path === field.path;
+
+  // Row tint. A selected field gets the selection tint (over any zebra/pk
+  // fill) plus an accent strip; the field name is drawn afterwards on top,
+  // so it stays readable rather than being covered by a highlight overlay.
+  const fill = isSelected ? SELECT_FILL : rowFill(field, index, theme);
   if (fill) {
     parts.push(
       `<rect x="${x + 1}" y="${y + field.rowY}" width="${width - 2}" height="${field.rowHeight}" fill="${fill}"/>`,
+    );
+  }
+  if (isSelected) {
+    parts.push(
+      `<rect x="${x + 1}" y="${y + field.rowY}" width="3" height="${field.rowHeight}" fill="${SELECT_STRIP}"/>`,
     );
   }
 

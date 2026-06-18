@@ -30,10 +30,13 @@ import { fileURLToPath } from 'node:url';
 
 import { parse, flatten } from '../../parser/src/index.ts';
 import type { XDbmlDocument } from '../../parser/src/index.ts';
-import { buildDiagram, applyUserPositions } from '../src/components/diagram/layout.ts';
-import type { DiagramModel } from '../src/components/diagram/layout.ts';
-import { autoArrange } from '../src/components/diagram/auto-arrange.ts';
-import type { ArrangeStrategy } from '../src/components/diagram/auto-arrange.ts';
+// Import the pure layout modules directly (not the package index): they
+// only type-import @xdbml/parse, which is erased at runtime, so the test
+// runs under plain Node without the parser installed as a built package.
+import { buildDiagram, applyUserPositions } from '../../renderer/src/layout/layout.ts';
+import type { DiagramModel } from '../../renderer/src/layout/layout.ts';
+import { autoArrange } from '../../renderer/src/layout/auto-arrange.ts';
+import type { ArrangeStrategy } from '../../renderer/src/layout/auto-arrange.ts';
 import { resolveSelection } from '../src/components/inspector/ast-lookup.ts';
 import {
   emptyHistory, seedHistory, commitHistory, undoHistory, redoHistory,

@@ -80,10 +80,44 @@ src/
   index.ts     public API
 ```
 
-The interactive browser mount (collapse/drag/pan-zoom and selection events)
-will live in a separate optional entry, `@xdbml/render/interactive`, so Node
-and server consumers never pull in DOM code. That is Phase 2, together with
-swapping the playground's diagram pane onto this package.
+## Interactive mount (`@xdbml/render/interactive`)
+
+For a live, editable diagram in the browser, the `interactive` entry mounts a
+self-contained canvas: it renders shapes through the serializer, draws its
+own transparent interaction layer (drag handles, row/ref hit areas, carets)
+from the same model, and handles selection, collapse/expand, entity /
+container / edge dragging, and scroll-pan with anchored zoom. It is kept in a
+separate entry so Node and server consumers never pull in DOM code.
+
+```ts
+import { mount } from '@xdbml/render/interactive';
+
+const handle = mount(targetEl, xdbmlSource, {
+  onSelect: (sel) => { /* sel: entity | field | ref | container | null */ },
+  onChange: (state) => { /* persist state.positions / state.offsets */ },
+  onCollapseChange: (collapsed) => { /* persist collapsed keys */ },
+  onZoom: (z) => { /* persist zoom */ },
+});
+
+handle.arrange('relational');     // or 'star'
+handle.zoomToFit();
+handle.setInput(newSource);       // re-render on edit
+const state = handle.getState();  // { positions, offsets, collapsed, zoom }
+handle.setState(state);           // restore
+handle.destroy();
+```
+
+The mount is policy-free: localStorage persistence, undo/redo, and document
+switching belong to the embedding shell, which subscribes to the events and
+drives the imperative methods. This is what the playground will consume in
+place of its own diagram components.
+
+A standalone demo lives in `demo/`. Build it and open the page:
+
+```
+npm run demo                 # esbuild -> demo/bundle.js
+# then open demo/index.html in a browser
+```
 
 ## Using it from an AI assistant artifact
 
@@ -105,18 +139,21 @@ imported at runtime from a CDN inside an artifact iframe:
 
 ```
 npm install        # resolves @xdbml/parse via file:../parser
-npm run build       # tsc -> dist (js + d.ts)
+npm run build       # tsc -> dist (js + d.ts), incl. ./interactive
 npm run type-check  # tsc --noEmit
-npm test            # render every example, assert invariants, manage goldens
+npm run test:all    # static render + viewport math + interactive (jsdom)
 ```
 
-The test harness (`test/run-tests.ts`) renders every file in `../examples`
-to SVG, checks structural invariants (well-formedness, balanced tags, no
-`NaN`, source/document/model output parity), asserts the self-reference loop
-in example 07 and the composite PK/FK in example 08, and verifies collapse
-removes child rows. It writes one golden SVG per example to `test/goldens/`;
-open those in a browser to diff the rendering. Set `UPDATE_GOLDENS=1` to
-accept output changes.
+`test/run-tests.ts` renders every file in `../examples` to SVG, checks
+structural invariants (well-formedness, balanced tags, no `NaN`,
+source/document/model output parity), asserts the self-reference loop in
+example 07 and the composite PK/FK in example 08, verifies collapse removes
+child rows, and writes one golden SVG per example to `test/goldens/` (open
+in a browser to diff; `UPDATE_GOLDENS=1` to accept changes).
+`test/run-viewport-tests.ts` unit-tests the pan/zoom math.
+`test/run-interactive-tests.ts` drives the mount through synthetic DOM
+events in jsdom (selection, collapse, the three drag kinds with grid snap,
+zoom wiring, arrange/reset, state round-trip).
 
 ## License
 

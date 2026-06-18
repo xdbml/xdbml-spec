@@ -16,7 +16,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@xdbml/parse": ["../parser/src/index.ts"]
+      "@xdbml/parse": ["../parser/src/index.ts"],
+      "@xdbml/render": ["../renderer/src/index.ts"],
+      "@xdbml/render/interactive": ["../renderer/src/interactive/index.ts"]
     },
     "types": ["vite/client"]
   },

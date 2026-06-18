@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>@xdbml/render/interactive demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0f172a; }
+    body { display: flex; flex-direction: column; }
+    header { padding: 10px 16px; background: #1e293b; color: #fff; display: flex; align-items: baseline; gap: 12px; }
+    header h1 { font-size: 15px; margin: 0; }
+    header span { font-size: 12px; color: #cbd5e1; }
+    .toolbar { padding: 8px 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px; background: #f8fafc; }
+    .toolbar button { font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; cursor: pointer; }
+    .toolbar button:hover { background: #f1f5f9; }
+    .toolbar .sp { flex: 1; }
+    .toolbar .muted { font-size: 12px; color: #64748b; }
+    main { flex: 1; display: flex; min-height: 0; }
+    #editor { width: 38%; border: none; border-right: 1px solid #e2e8f0; padding: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: none; outline: none; }
+    #canvas { flex: 1; min-width: 0; }
+    footer { padding: 6px 16px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; display: flex; gap: 18px; }
+    footer b { color: #0f172a; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>@xdbml/render/interactive</h1>
+    <span>edit xDBML, then click / drag / Ctrl+wheel to zoom</span>
+  </header>
+  <div class="toolbar">
+    <button id="rel">Arrange: relational</button>
+    <button id="star">Arrange: star</button>
+    <button id="reset">Reset</button>
+    <span class="sp"></span>
+    <button id="zout">&minus;</button>
+    <span class="muted" id="zoom">100%</span>
+    <button id="zin">+</button>
+    <button id="fit">Fit</button>
+  </div>
+  <main>
+    <textarea id="editor" spellcheck="false"></textarea>
+    <div id="canvas"></div>
+  </main>
+  <footer>
+    <div>status: <b id="status">&mdash;</b></div>
+    <div>selection: <b id="selection">none</b></div>
+  </footer>
+  <script src="./bundle.js"></script>
+</body>
+</html>

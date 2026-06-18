@@ -10,6 +10,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./interactive": {
+      "types": "./dist/interactive/index.d.ts",
+      "default": "./dist/interactive/index.js"
     }
   },
   "files": [
@@ -27,13 +31,20 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "type-check": "tsc --noEmit",
-    "test": "node --experimental-strip-types test/run-tests.ts"
+    "test": "node --experimental-strip-types test/run-tests.ts",
+    "test:viewport": "node --experimental-strip-types test/run-viewport-tests.ts",
+    "test:interactive": "node --experimental-strip-types test/run-interactive-tests.ts",
+    "test:all": "npm run test && npm run test:viewport && npm run test:interactive",
+    "demo": "esbuild demo/demo.ts --bundle --format=iife --outfile=demo/bundle.js --platform=browser"
   },
   "dependencies": {
     "@xdbml/parse": "file:../parser"
   },
   "devDependencies": {
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^24.13.2",
+    "esbuild": "^0.24.2",
+    "jsdom": "^25.0.1",
     "typescript": "^5.7.3"
   },
   "engines": {

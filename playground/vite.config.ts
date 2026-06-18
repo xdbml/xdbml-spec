@@ -28,6 +28,8 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, 'src'),
       '@xdbml/parse': resolve(__dirname, '../parser/src/index.ts'),
+      '@xdbml/render/interactive': resolve(__dirname, '../renderer/src/interactive/index.ts'),
+      '@xdbml/render': resolve(__dirname, '../renderer/src/index.ts'),
     },
   },
   server: {
