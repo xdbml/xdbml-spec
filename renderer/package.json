@@ -35,7 +35,8 @@
     "test:viewport": "node --experimental-strip-types test/run-viewport-tests.ts",
     "test:interactive": "node --experimental-strip-types test/run-interactive-tests.ts",
     "test:all": "npm run test && npm run test:viewport && npm run test:interactive",
-    "demo": "esbuild demo/demo.ts --bundle --format=iife --outfile=demo/bundle.js --platform=browser"
+    "demo": "esbuild demo/demo.ts --bundle --format=iife --outfile=demo/bundle.js --platform=browser",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@xdbml/parse": "file:../parser"
