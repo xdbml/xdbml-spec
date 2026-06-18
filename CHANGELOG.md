@@ -4,9 +4,60 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.2 -- 2026
+## v0.3 -- 2026
 
 **Status**: Draft -- current
+**Released**: 2026
+
+### Added
+
+#### Module system
+
+- **Remote module sources (§26.14)**: a `use` or `reuse` directive may now import a module from an `https://` URL in addition to a relative path. The source form is recognized purely by scheme. A remote source changes only where a module's bytes come from, not what an import does: both directive keywords, both selection forms (the import-all `*` and the selective `{ ... }` list), per-symbol `as` aliasing, and directive settings behave identically whether the string after `from` is a path or a URL. This delivers the URL imports deferred in v0.2.
+
+- **HTTPS-only, with a strict scheme boundary (§26.14)**: only the `https` scheme is permitted. A source using `http`, `file`, `git`, `ssh`, `data`, a protocol-relative `//host/path`, or a bare host is rejected with a located error and never reinterpreted as a relative path. This keeps the local/remote boundary unambiguous and refuses plaintext transport for content the importing document will trust as schema.
+
+- **Relative references inside remote modules (§26.14.1)**: a relative source inside a remote module resolves against that module's base URL per RFC 3986, never against the entry document or any filesystem location. An author can publish a multi-file module set, expose a single entry file, and rely on the set's internal references continuing to work once imported by URL. A consequence is a deliberate trust boundary: a remote module can never reach the importing system's filesystem.
+
+- **Browser-based resolution and CORS guidance (§26.14.6, informative)**: notes on retrieving remote modules from browser-based tooling.
+
+#### Tooling -- interactive playground
+
+- **Interactive playground**: a live editor-and-diagram environment pairing a Monaco source editor (with xDBML syntax highlighting and code folding) with a live-rendered ERD and a properties inspector. Schemas are shareable via URL, and the example pages and landing pages link directly into the playground.
+
+- **ERD auto-arrange**: relational and star-schema layout strategies. A relational arrangement is applied automatically the first time a document is opened, framed to fit the pane.
+
+- **ERD direct manipulation**: entities and property-bearing edge boxes can be dragged to reposition, layout is persisted per document, layout changes have undo/redo (keyboard and floating-bar buttons), and zoom controls offer fit and reset.
+
+- **Inspector**: shows properties for containers, entities, attributes, relationships, and edge boxes.
+
+#### Tooling -- renderer package
+
+- **New `@xdbml/render` package**: a framework-free SVG renderer for xDBML diagrams (pure layout, geometry, a string serializer, and an interactive DOM mount), extracted from the playground so diagram rendering has a single source of truth. It is reusable by outside systems and is the shared core for a planned rendering API service and MCP server.
+
+- **Playground migrated onto `@xdbml/render`**: the playground now renders and handles all canvas interaction through the shared mount; the duplicated layout engine and the per-component diagram renderers it replaced were removed.
+
+- **`@xdbml/parse` and `@xdbml/render` packaged for external consumption**: both build to `dist` with declaration output and an `exports` map, so they can be consumed outside the monorepo (the prerequisite for the API service and MCP server).
+
+#### Examples
+
+- **Examples 02 and 10 extended** to demonstrate complex Type reuse.
+
+### Changed
+
+- **Conformance (§30)**: v0.3 implementations parse v0.1, v0.2, and v0.3 documents with their respective semantics, and support remote module sources per §26.14.
+
+### Not changed (compatibility)
+
+- Every v0.2 document remains valid under v0.3. Remote module sources are a strict, backward-compatible addition.
+- Relative-path imports resolve exactly as in v0.2.
+- v0.1 documents and DBML 3.13.6 documents (no version directive) continue to parse with their respective semantics.
+
+---
+
+## v0.2 -- 2026
+
+**Status**: Superseded by v0.3 (still supported)
 **Released**: 2026
 
 ### Added
