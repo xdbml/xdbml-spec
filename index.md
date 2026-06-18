@@ -22,7 +22,7 @@ hero:
       rel: noopener
     - theme: alt
       text: Read the spec
-      link: /spec/v0.2
+      link: /spec/v0.3
     - theme: alt
       text: View on GitHub
       link: https://github.com/xdbml/xdbml-spec
@@ -167,7 +167,7 @@ xDBML describes the **structural and semantic layer** of data: entities, fields,
 
 xDBML is **not** the round-trip format between a data modeling tool and a target technology. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands the target's complete capability surface (partitioning, sharding, tablespaces, replication, PL/SQL, triggers, identity columns, advanced constraints, refresh schedules) and preserves it in the tool's own canonical model. xDBML carries the parts of that model with meaning across boundaries.
 
-Operational features (partitions, storage configuration, replication), procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage.
+Operational features (partitions, storage configuration, replication), procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage, and Google's Open Knowledge Format (OKF) for the curated, agent-facing knowledge context that an xDBML schema can populate. Diagramming languages such as Mermaid ER render a picture of a schema; xDBML is the schema that picture is generated from.
 
 xDBML is a format, not a data modeling tool. The <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
 
@@ -175,7 +175,7 @@ xDBML is a format, not a data modeling tool. The <a href="/playground/index.html
 
 - **[Read the 5-minute introduction](/learn/)** for a quick tour of what xDBML does and why it exists
 - **[Browse the FAQ](/faq)** for answers to the questions newcomers most often ask
-- **[Read the v0.2 specification](/spec/v0.2)** for the complete language reference
+- **[Read the v0.3 specification](/spec/v0.3)** for the complete language reference
 - **[Browse the examples](/examples/)** for realistic schemas across e-commerce, IoT, healthcare, social graphs, and financial services
 - <a href="/playground/index.html" target="_blank" rel="noopener"><strong>Try it in the playground</strong></a> by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - **[Review the ANTLR4 grammar](/grammar)** and [**parser**](https://github.com/xdbml/xdbml-spec/tree/main/parser)
@@ -184,7 +184,7 @@ xDBML is a format, not a data modeling tool. The <a href="/playground/index.html
 
 ## Project status
 
-xDBML is currently a draft v0.2 specification stewarded by [Hackolade](https://hackolade.com), with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0. The path to neutral foundation governance is described in the [governance model](/governance).
+xDBML is currently a draft v0.3 specification stewarded by [Hackolade](https://hackolade.com), with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0. The path to neutral foundation governance is described in the [governance model](/governance).
 
 Feedback from real-world use will shape v1.0. [Open an issue](https://github.com/xdbml/xdbml-spec/issues) with comments, proposals, or questions.
 

@@ -25,7 +25,7 @@ xDBML occupies the **schema layer of the modern data stack**. It carries **decla
 
 The same xDBML document feeds an ODCS contract's schema section, an OSI semantic model's underlying tables, a SHACL validator's target shapes, and the SQL DDL that creates them.
 
-xDBML is currently a draft v0.2 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
+xDBML is currently a draft v0.3 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
 
 ## Design philosophy
 
@@ -54,7 +54,7 @@ xDBML describes the **structural and semantic layer** of data: entities, fields,
 
 xDBML is **not** the round-trip format between an xDBML tool or xDBML-compatible data modeling tool and a target technology. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands the target's complete capability surface (partitioning, sharding, tablespaces, replication, PL/SQL, triggers, identity columns, advanced constraints, refresh schedules) and preserves it in the tool's own canonical model. xDBML carries the parts of that model with meaning across boundaries.
 
-Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage.
+Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage, and Google's Open Knowledge Format (OKF) for the curated, agent-facing knowledge context that an xDBML schema can populate. Diagramming languages such as Mermaid ER render a picture of a schema; xDBML is the schema that picture is generated from.
 
 xDBML is a format, not a data modeling tool. The [playground at xdbml.org](https://xdbml.org/playground/index.html) demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
 
@@ -63,8 +63,9 @@ xDBML is a format, not a data modeling tool. The [playground at xdbml.org](https
 - [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
-- [`spec/v0.2.md`](./spec/v0.2.md) -- the current v0.2 language specification (adds module system, scalar Named Types, field-level imports)
-- [`spec/v0.1.md`](./spec/v0.1.md) -- the previous v0.1 specification, still supported
+- [`spec/v0.3.md`](./spec/v0.3.md) -- the current v0.3 language specification (adds remote module sources over HTTPS)
+- [`spec/v0.2.md`](./spec/v0.2.md) -- the previous v0.2 specification, still supported (module system, scalar Named Types, field-level imports)
+- [`spec/v0.1.md`](./spec/v0.1.md) -- the original v0.1 specification, still supported
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
 - [`playground/`](https://xdbml.org/playground/index.html) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus and [parser/](./parser)

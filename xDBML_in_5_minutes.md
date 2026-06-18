@@ -273,6 +273,8 @@ The following are *not* xDBML's job:
 
 xDBML describes shape and declarative metadata. Adjacent standards handle the layers above and below.
 
+Two newer neighbors are worth naming directly. Google's Open Knowledge Format (OKF) gives AI agents a curated markdown wiki of concepts; where an OKF concept sketches a table's columns informally for an agent to read, xDBML is the precise, generative schema that concept can reference or be generated from. Mermaid ER is a diagramming language that draws a picture of entities and relationships; xDBML is the schema that picture is rendered from, not a drawing notation. In both cases xDBML sits underneath as the authoritative, machine-actionable schema.
+
 xDBML is a format, not a data modeling tool. The <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
 
 ---
@@ -280,12 +282,12 @@ xDBML is a format, not a data modeling tool. The <a href="/playground/index.html
 ## Where to go from here
 
 - **Browse the [FAQ](/faq)** for answers to the questions newcomers most often ask after reading this introduction.
-- **Read the [v0.2 specification](/spec/v0.2)** for the full language reference.
+- **Read the [v0.3 specification](/spec/v0.3)** for the full language reference.
 - **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
 - **Try it in the <a href="/playground/index.html" target="_blank" rel="noopener">playground</a>** -- type or paste xDBML, see rendered the corresponding Entity-Relationship diagram.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** -- the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
-xDBML is a draft v0.2 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
+xDBML is a draft v0.3 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.
 
 ---
 

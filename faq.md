@@ -125,9 +125,21 @@ These are adjacent standards that layer above and below xDBML:
 
 xDBML generates the schemas these standards reference and consumes nothing they own. The same xDBML document can feed an ODCS contract's schema section, an OSI semantic model's underlying tables, a SHACL validator's target shapes, and the SQL DDL that creates them.
 
+## How does xDBML relate to Google's Open Knowledge Format (OKF)?
+
+They solve different problems and fit together cleanly. OKF, introduced by Google Cloud in June 2026, is a context format for AI agents: a directory of markdown "concept" files (a table, a dataset, a metric, a runbook, an API) carrying a little YAML frontmatter and cross-linked into a knowledge graph, meant to be the portable, version-controlled wiki an agent reads and keeps current. It is deliberately minimal. The only required field is `type`, and a concept's schema, where it has one, is an informal markdown table with prose notes.
+
+xDBML is the formal, generative schema underneath that. Where an OKF table concept sketches a few columns for an agent to read, xDBML defines the same table precisely and machine-checkably, with full engine-native types, nested structures, polymorphism, relationships with exact cardinality, validation constraints, and AI-readiness metadata, and forward-engineers it to DDL, JSON Schema, Avro, and the rest. The relationship mirrors the one xDBML has with ODCS: an OKF concept can reference or embed an xDBML definition, and an xDBML document can generate the schema section of an OKF concept, so the curated agent-facing knowledge and the authoritative schema stay in sync instead of drifting. The two also share a philosophy -- plain text, file-based, git-native, no SDK or platform, readable by humans and agents alike -- which makes xDBML a natural fit as the precise-schema substrate inside an OKF bundle.
+
+## How does xDBML relate to Mermaid ER diagrams?
+
+Mermaid is a diagramming language: its ER syntax turns a few lines of text into an entity-relationship picture, with crow's-foot cardinality, optional attributes, and identifying or non-identifying lines. It is intentionally light. Attribute types are free text with no defined type system, attributes are usually a hand-picked subset rather than the full schema, and the output is a drawing, not something you generate DDL or validators from. xDBML in fact credits Mermaid's crow's-foot notation as an influence on its own cardinality syntax.
+
+xDBML works one layer down. It is the schema itself -- precisely typed, polyglot, and generative -- and a diagram is one of the things you produce from it, not the source of truth. The clean way to hold it: Mermaid answers "draw me a picture of these entities," while xDBML answers "what is the schema, exactly, so I can render it, validate it, and forward-engineer it." Because the two meet at entities and cardinality, xDBML reads naturally as a Mermaid superset for ER purposes, and emitting a Mermaid ER diagram from an xDBML document is a straightforward export (the playground already renders its own SVG diagrams from the same model). Reach for Mermaid when you want a quick diagram in a markdown file; reach for xDBML when the schema needs to be authoritative and machine-actionable.
+
 ## Who maintains xDBML?
 
-xDBML is currently a draft v0.2 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
+xDBML is currently a draft v0.3 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
 
 ## How can I contribute?
 
