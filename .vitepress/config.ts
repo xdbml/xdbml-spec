@@ -77,6 +77,8 @@ export default defineConfig({
     'playground/public/**',
     'playground/node_modules/**',
     'parser/**',
+    'renderer/**',
+    'api/**',
   ],
 
   // Routing: map markdown source files to clean URLs.

@@ -1,0 +1,7 @@
+name = "xdbml-render-api"
+main = "src/worker.ts"
+compatibility_date = "2026-06-18"
+
+# The render path is pure JavaScript (parser, layout, serializer), so no
+# nodejs_compat flag is required. Wrangler bundles @xdbml/render (and its
+# @xdbml/parse dependency) into the Worker with esbuild at build time.
