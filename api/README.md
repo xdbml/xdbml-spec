@@ -34,6 +34,80 @@ CORS is open (`Access-Control-Allow-Origin: *`) so browser apps and the
 playground can call it. Errors return a JSON body `{ "error": "..." }` with an
 appropriate status (400 for unparseable input, 413 over the size limit).
 
+## The render URL (GET endpoint)
+
+`GET /render` renders a schema passed entirely in the URL and returns
+`image/svg+xml`, so the link opens straight into a diagram in a browser tab.
+This is the form behind a one-click "render this" link. The full shape is:
+
+```
+https://xdbml-render-api.xdbml.workers.dev/render?src=<encoded xDBML>&arrange=<mode>&playground=<on|off>&background=<color>
+```
+
+### `src` (required)
+
+The entire xDBML document, percent-encoded for a query string. This is URL
+encoding, not HTML-entity encoding: every reserved character (spaces, braces,
+brackets, `#`, `&`, line breaks, ...) becomes its `%XX` form. In JavaScript
+that is exactly `encodeURIComponent(source)`:
+
+```js
+const url = base + "/render?src=" + encodeURIComponent(xdbml) + "&arrange=relational";
+```
+
+Encode the whole document in one call; hand-encoding is error-prone because an
+un-encoded `&` or `#` would be read as URL syntax and silently truncate the
+schema. Outside JavaScript, use your platform's URL/percent-encoder (Python
+`urllib.parse.quote`, etc.), not an HTML-escaping function.
+
+### `arrange` (optional, default `relational`)
+
+Auto-layout strategy: `relational` (default) for a general entity layout,
+`star` for a fact-in-the-center dimensional (star-schema) layout, or `none` to
+keep the raw column layout with no rearrangement.
+
+### `playground` (optional, default `on`)
+
+`on` adds the "Open in xDBML playground" footer link (the schema travels in
+that link as a compressed `#s=` share hash); `off` omits it.
+
+### `background` (optional, default transparent)
+
+Any CSS color (`#ffffff`, `white`, `#0b1020`, ...) painted behind the diagram.
+Omitted leaves the background transparent. `bg` is accepted as an alias.
+
+### Examples
+
+Small schema, defaults (relational, link on), in a browser:
+
+```
+https://xdbml-render-api.xdbml.workers.dev/render?src=Table%20users%20%7B%20id%20int%20%5Bpk%5D%20email%20varchar%20%7D
+```
+
+Star layout, white background, no playground link:
+
+```
+https://xdbml-render-api.xdbml.workers.dev/render?src=<encoded>&arrange=star&background=%23ffffff&playground=off
+```
+
+Build one in JavaScript:
+
+```js
+const base = "https://xdbml-render-api.xdbml.workers.dev";
+const link = `${base}/render?src=${encodeURIComponent(xdbml)}&arrange=relational`;
+```
+
+### How long can the URL be?
+
+The whole document rides in `src`, and percent-encoding inflates it (a space
+becomes `%20`, a brace `%7B`), so the URL grows quickly. Keep a GET render URL
+under roughly 2,000 characters if it must work everywhere: browsers accept far
+more in the address bar, but shared links pass through mail clients, chat apps,
+proxies, and CDNs that commonly truncate near that length. As a rough guide
+that is a few hundred characters of xDBML. For anything larger, use
+`POST /render` with the document in the body (up to the 256 KB limit), which
+has no URL-length constraint.
+
 ## Publishing the libraries (one time)
 
 The Worker depends on the published `@xdbml/render`. Publish the two libraries

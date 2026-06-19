@@ -54,6 +54,14 @@ or a `DiagramModel`, and returns an SVG string. Options:
 - `theme`: a partial override merged over the default theme.
 - `background`: a solid background color (default transparent, matching the
   playground where the grid is a CSS backdrop).
+- `playgroundLink`: when the input is source text, adds an "Open in xDBML
+  playground" link to the SVG (in a small footer band) whose target carries the
+  schema as the playground's `#s=` share hash (lz-string), so a viewer can open
+  and edit it. Pass the playground base URL as a string, or `{ url, label }` to
+  override the link text. Off by default, and ignored for a prebuilt
+  document/model (there is no source text to embed) or in `inner` mode. The
+  hosted render API sets this; see `../api/README.md` for the HTTP `playground`
+  parameter that toggles it.
 
 Also re-exported: `buildDiagram`, `applyUserPositions`, `autoArrange`,
 `serializeDiagram`, `defaultTheme`/`resolveTheme`, the layout constants, and
