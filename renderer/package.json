@@ -1,6 +1,6 @@
 {
   "name": "@xdbml/render",
-  "version": "0.1.0-poc.1",
+  "version": "0.1.0-poc.2",
   "description": "Framework-free SVG renderer for xDBML diagrams. Shared by the playground, a future rendering API service, and an MCP server.",
   "license": "Apache-2.0",
   "type": "module",
@@ -39,7 +39,8 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@xdbml/parse": "file:../parser"
+    "@xdbml/parse": "^0.1.0-poc.1",
+    "lz-string": "^1.5.0"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

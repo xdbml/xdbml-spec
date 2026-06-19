@@ -65,6 +65,14 @@ export interface SerializeOptions {
    * stays readable on top -- matching the playground's prior behavior.
    */
   selectedField?: { entityId: string; path: string };
+  /**
+   * When set (and not in `inner` mode), draws a small clickable
+   * "Open in xDBML playground" link in a footer band below the diagram.
+   * The href is precomputed by `renderToSVG` (an lz-string `#s=` share
+   * hash the playground already decodes), so the serializer stays free of
+   * the source text and the share codec.
+   */
+  playgroundLink?: { href: string; label: string };
 }
 
 export function serializeDiagram (model: DiagramModel, options: SerializeOptions = {}): string {
@@ -74,17 +82,23 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
   const parts: string[] = [];
   const inner = options.inner === true;
 
+  // A "playground" footer link (drawn only for standalone, non-inner SVGs)
+  // adds a short band beneath the diagram so the link never overlaps content.
+  const link = inner ? undefined : options.playgroundLink;
+  const footerH = link ? 28 : 0;
+  const canvasH = model.height + footerH;
+
   if (!inner) {
     parts.push(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${model.width}" height="${model.height}" ` +
-      `viewBox="0 0 ${model.width} ${model.height}" font-family="${theme.fontSans}">`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${model.width}" height="${canvasH}" ` +
+      `viewBox="0 0 ${model.width} ${canvasH}" font-family="${theme.fontSans}">`,
     );
   }
 
   parts.push(defs(theme));
 
   if (options.background && !inner) {
-    parts.push(`<rect x="0" y="0" width="${model.width}" height="${model.height}" fill="${options.background}"/>`);
+    parts.push(`<rect x="0" y="0" width="${model.width}" height="${canvasH}" fill="${options.background}"/>`);
   }
 
   for (const c of model.containers) parts.push(container(c, theme));
@@ -96,8 +110,23 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
   const unresolved = model.refs.filter((r) => r.unresolved).length;
   if (unresolved > 0) parts.push(banner(unresolved, model, theme));
 
+  if (link) parts.push(playgroundFooter(link, model.width, model.height));
+
   if (!inner) parts.push('</svg>');
   return parts.join('');
+}
+
+/**
+ * Right-aligned, underlined "Open in xDBML playground" link in the footer
+ * band beneath the diagram. Clickable when the SVG is viewed as a document
+ * (for example the render API's image/svg+xml response opened in a browser
+ * tab); inert but still legible when embedded via an <img> tag.
+ */
+function playgroundFooter (link: { href: string; label: string }, width: number, top: number): string {
+  const y = top + 18;
+  return `<a href="${escapeXml(link.href)}" target="_blank" rel="noopener noreferrer">` +
+    `<text x="${width - 12}" y="${y}" text-anchor="end" font-size="12" font-weight="500" ` +
+    `fill="#2563eb" text-decoration="underline">${escapeXml(link.label)} →</text></a>`;
 }
 
 /* ------------------------------------------------------------------ defs */

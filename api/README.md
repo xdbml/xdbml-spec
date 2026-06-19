@@ -24,6 +24,11 @@ Pass as query parameters, or as JSON fields on a `POST`:
 
 - `arrange` -- `relational` (default), `star`, or `none`.
 - `background` -- any CSS color for a solid background (default: transparent).
+- `playground` -- `on` (default) or `off`. When on, the SVG includes a small
+  "Open in xDBML playground" link in a footer band; the link carries the
+  schema as an lz-string `#s=` share hash, so opening it loads the diagram into
+  the interactive playground for editing. The link is clickable when the SVG is
+  viewed as a document (the API's `image/svg+xml` response in a browser tab).
 
 CORS is open (`Access-Control-Allow-Origin: *`) so browser apps and the
 playground can call it. Errors return a JSON body `{ "error": "..." }` with an
@@ -135,7 +140,7 @@ Each `npm run build` should finish without errors and leave a `dist` folder in t
 **Step 2, point the API at your local renderer instead of npm.** Open `api/package.json` and change the single dependency line from
 
 ```
-"@xdbml/render": "^0.1.0-poc.1"
+"@xdbml/render": "^0.1.0-poc.2"
 ```
 
 to
@@ -163,7 +168,7 @@ npm run dev
 3. Service info: `http://localhost:8787/health` returns JSON describing the endpoints and options.
 4. Postman, the normal path for real schemas: method `POST`, URL `http://localhost:8787/render`, then Body, raw, Text, and paste your xDBML document. To pass options, use Body, raw, JSON instead, with `{"source": "...your xdbml...", "arrange": "star", "background": "#ffffff"}`. Postman avoids the shell-quoting headaches that `curl` has on Windows, so I would reach for it over `curl` here.
 
-**Step 5, stop and decide.** Press Ctrl+C in the terminal to stop the local server. Nothing you did touched npm or Cloudflare, so there is nothing to undo except that one dependency line. When you are ready to go live for real, change `"@xdbml/render"` back to `"^0.1.0-poc.1"`, then follow the publish-then-deploy sequence in `api/README.md`.
+**Step 5, stop and decide.** Press Ctrl+C in the terminal to stop the local server. Nothing you did touched npm or Cloudflare, so there is nothing to undo except that one dependency line. When you are ready to go live for real, change `"@xdbml/render"` back to `"^0.1.0-poc.2"`, then follow the publish-then-deploy sequence in `api/README.md`.
 
 One thing to watch: if `npm run dev` complains that it cannot find `@xdbml/render`, it almost always means Step 1 did not produce a `dist`, or Step 2's path edit was not saved before Step 3's `npm install`. Re-running Step 1 and confirming `renderer/dist/index.js` exists clears it up.
 

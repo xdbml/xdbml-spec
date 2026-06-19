@@ -30,6 +30,10 @@
  */
 import { parse, flatten } from '@xdbml/parse';
 import type { XDbmlDocument } from '@xdbml/parse';
+// lz-string is CommonJS; a default import resolves to its exports object in
+// Node-ESM, esbuild, and Vite alike, whereas a named import breaks under
+// Node-ESM. Access the compressor as a property of the default export.
+import lzString from 'lz-string';
 
 import {
   applyUserPositions,
@@ -42,7 +46,7 @@ import {
 import { autoArrange, type ArrangeStrategy } from './layout/auto-arrange.ts';
 import { serializeDiagram, type SerializeOptions } from './svg/serialize.ts';
 
-export interface RenderOptions extends SerializeOptions {
+export interface RenderOptions extends Omit<SerializeOptions, 'playgroundLink'> {
   /**
    * Automatic arrangement applied when no explicit `userPositions` are
    * given. Defaults to `'relational'`, matching the layout the playground
@@ -54,6 +58,16 @@ export interface RenderOptions extends SerializeOptions {
   userPositions?: UserPositions;
   /** Per-edge box offsets to overlay before serializing. */
   edgeOffsets?: EdgeOffsets;
+  /**
+   * When set, and the input is source text, the rendered SVG gains a small
+   * "Open in xDBML playground" link in a footer band. Its target carries
+   * the schema as a shared `#s=` hash (lz-string), the same format the
+   * playground decodes, so a viewer can open the diagram and edit it.
+   * Pass the playground base URL as a string, or `{ url, label }` to
+   * override the link text. Ignored for a prebuilt document/model (there
+   * is no source text to embed) and in `inner` mode.
+   */
+  playgroundLink?: string | { url: string; label?: string };
 }
 
 export type RenderInput = string | XDbmlDocument | DiagramModel;
@@ -64,7 +78,31 @@ export type RenderInput = string | XDbmlDocument | DiagramModel;
  */
 export function renderToSVG (input: RenderInput, options: RenderOptions = {}): string {
   const model = toModel(input, options);
-  return serializeDiagram(model, options);
+
+  const { playgroundLink, arrange: _a, userPositions: _u, edgeOffsets: _e, ...serialize } = options;
+  const serializeOpts: SerializeOptions = { ...serialize };
+
+  // The playground link can only be built when we hold the source text;
+  // a prebuilt document or model has no text to embed in the share hash.
+  if (playgroundLink && typeof input === 'string') {
+    const url = typeof playgroundLink === 'string' ? playgroundLink : playgroundLink.url;
+    const label = typeof playgroundLink === 'string'
+      ? 'Open in xDBML playground'
+      : (playgroundLink.label ?? 'Open in xDBML playground');
+    serializeOpts.playgroundLink = { href: playgroundHref(url, input), label };
+  }
+
+  return serializeDiagram(model, serializeOpts);
+}
+
+/**
+ * Build the playground deep link: the base URL plus a `#s=<compressed>`
+ * share hash, matching the playground's own share format (lz-string
+ * `compressToEncodedURIComponent`, decoded by its `decodeShareHash`).
+ */
+function playgroundHref (url: string, source: string): string {
+  const sep = url.includes('#') ? '&' : '#';
+  return `${url}${sep}s=${lzString.compressToEncodedURIComponent(source)}`;
 }
 
 function toModel (input: RenderInput, options: RenderOptions): DiagramModel {

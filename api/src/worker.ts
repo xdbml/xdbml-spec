@@ -23,14 +23,22 @@
 
 import { renderToSVG, type ArrangeStrategy } from '@xdbml/render';
 
-const VERSION = '0.1.0-poc.1';
+const VERSION = '0.1.0-poc.2';
 
 /** Reject inputs larger than this (defends the edge against abuse). */
 const MAX_SOURCE_BYTES = 256 * 1024;
 
+/**
+ * Base URL of the interactive playground. Rendered SVGs include an
+ * "Open in xDBML playground" link pointing here (with the schema carried
+ * in a `#s=` share hash) unless the caller passes `playground=off`.
+ */
+const PLAYGROUND_URL = 'https://xdbml.org/playground/';
+
 interface RenderParams {
   arrange?: ArrangeStrategy | 'none';
   background?: string;
+  playground?: boolean;
 }
 
 const CORS: Record<string, string> = {
@@ -71,6 +79,7 @@ export default {
         options: {
           arrange: ['relational (default)', 'star', 'none'],
           background: 'any CSS color (default: transparent)',
+          playground: 'on (default) | off -- include or omit the "Open in xDBML playground" link',
         },
         limits: { maxSourceBytes: MAX_SOURCE_BYTES, selfContainedDocumentsOnly: true },
       });
@@ -131,6 +140,7 @@ function render (source: string, params: RenderParams): Response {
     svg = renderToSVG(source, {
       arrange: params.arrange,
       background: params.background,
+      playgroundLink: params.playground === false ? undefined : PLAYGROUND_URL,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
@@ -158,6 +168,7 @@ function paramsFromQuery (params: URLSearchParams): RenderParams {
   return {
     arrange: normalizeArrange(params.get('arrange')),
     background: params.get('background') ?? params.get('bg') ?? undefined,
+    playground: parseToggle(params.get('playground')),
   };
 }
 
@@ -166,7 +177,17 @@ function paramsFromObject (obj: Record<string, unknown>, params: URLSearchParams
   const background = typeof obj.background === 'string'
     ? obj.background
     : (params.get('background') ?? params.get('bg') ?? undefined);
-  return { arrange: normalizeArrange(arrange), background: background ?? undefined };
+  const playground = typeof obj.playground === 'boolean'
+    ? obj.playground
+    : parseToggle(params.get('playground'));
+  return { arrange: normalizeArrange(arrange), background: background ?? undefined, playground };
+}
+
+/** Toggle parsing: absent or anything but a clear "off" means on. */
+function parseToggle (value: string | null): boolean {
+  if (value === null) return true;
+  const v = value.toLowerCase();
+  return !(v === 'off' || v === 'false' || v === '0' || v === 'no');
 }
 
 /* ------------------------------------------------------------ helpers */
