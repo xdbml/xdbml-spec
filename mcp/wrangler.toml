@@ -1,0 +1,11 @@
+name = "xdbml-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-06-19"
+# The Agents SDK / MCP SDK require the Node.js compatibility layer on Workers.
+compatibility_flags = ["nodejs_compat"]
+
+# Bundle the font for PNG rasterization as an ArrayBuffer import.
+# (The resvg .wasm is imported from the package and bundled automatically.)
+rules = [
+  { type = "Data", globs = ["**/*.ttf"], fallthrough = true }
+]

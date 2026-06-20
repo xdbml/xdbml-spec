@@ -79,6 +79,7 @@ export default defineConfig({
     'parser/**',
     'renderer/**',
     'api/**',
+    'mcp/**',
   ],
 
   // Routing: map markdown source files to clean URLs.

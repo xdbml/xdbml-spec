@@ -171,6 +171,12 @@ Operational features (partitions, storage configuration, replication), procedura
 
 xDBML is a format, not a data modeling tool. The <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
 
+## Tooling and services
+
+xDBML is a format, not a tool, but a small open ecosystem makes it easy to author, render, validate, and work with schemas wherever you are. One parser and one renderer power all of it, so a schema behaves identically in the browser, in your editor, in your own code, in a build pipeline, and inside an AI assistant.
+
+The <a href="/playground/index.html" target="_blank" rel="noopener">playground</a> renders the diagram as you type and shares it by URL, entirely in your browser. The [xDBML VS Code extension](https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml) adds syntax highlighting and an Open in Playground command, so you can author in your editor and jump to the live diagram with one click. Two npm libraries, [`@xdbml/parse`](https://www.npmjs.com/package/@xdbml/parse) and [`@xdbml/render`](https://www.npmjs.com/package/@xdbml/render), provide the parser and a framework-free SVG renderer for your own code. A hosted API turns a schema into an SVG or PNG over a simple HTTP request, for documentation and build pipelines. And a remote Model Context Protocol (MCP) server lets an AI assistant render and validate xDBML natively: in Claude, add `https://xdbml-mcp.xdbml.workers.dev/mcp` as a custom connector, and the assistant can write a schema, validate it, render it, and return a playground link in a single turn.
+
 ## Where to go next
 
 - **[Read the 5-minute introduction](/learn/)** for a quick tour of what xDBML does and why it exists
@@ -179,6 +185,7 @@ xDBML is a format, not a data modeling tool. The <a href="/playground/index.html
 - **[Browse the examples](/examples/)** for realistic schemas across e-commerce, IoT, healthcare, social graphs, and financial services
 - <a href="/playground/index.html" target="_blank" rel="noopener"><strong>Try it in the playground</strong></a> by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - **[Review the ANTLR4 grammar](/grammar)** and [**parser**](https://github.com/xdbml/xdbml-spec/tree/main/parser)
+- **[Install the VS Code extension](https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml)**, or build on the [`@xdbml/parse`](https://www.npmjs.com/package/@xdbml/parse) and [`@xdbml/render`](https://www.npmjs.com/package/@xdbml/render) libraries, the [hosted render API](https://github.com/xdbml/xdbml-spec/tree/main/api), and the [MCP server](https://github.com/xdbml/xdbml-spec/tree/main/mcp) for AI assistants
 - **[Read the governance model](/governance)** to understand stewardship and the path to neutral governance
 - **[Contribute](/contributing)** by filing an issue, proposing a construct, or building tooling
 

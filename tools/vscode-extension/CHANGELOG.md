@@ -4,6 +4,23 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0]
+
+Adds a one-click bridge from the editor to the playground.
+
+### Added
+- **Open in Playground** command (`xDBML: Open in Playground`). It opens the
+  current `.xdbml` file -- or the current selection -- in the hosted playground
+  at xdbml.org with the schema already loaded, so there is no copy and paste.
+  Available from a button in the editor title bar, the editor right-click menu,
+  and the command palette. The link uses the same lz-string `#s=` share format
+  as the renderer and the HTTP render API, so it round-trips exactly.
+
+### Notes
+- This is the extension's first release with runtime activation code. The
+  bundle is built with esbuild at publish time (`vscode:prepublish`), and
+  `lz-string` is bundled in, so the packaged extension stays self-contained.
+
 ## [0.2.0]
 
 Adds syntax highlighting for the constructs introduced in xDBML v0.2.
@@ -67,6 +84,7 @@ Initial release.
 - Language icon (visible in the status bar and language picker).
 - File association for `.xdbml`.
 
+[0.3.0]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.3.0
 [0.2.0]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.2.0
 [0.1.1]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.1.1
 [0.1.0]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.1.0

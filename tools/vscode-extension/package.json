@@ -2,18 +2,19 @@
   "name": "xdbml",
   "displayName": "xDBML",
   "description": "Syntax highlighting and editor support for xDBML, a unified, open markup language for describing the shape of structured and semi-structured data, plus the declarative metadata attached to that shape across heterogeneous storage technologies.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "Apache-2.0",
   "publisher": "xdbml",
-
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:xdbml"
+  ],
   "engines": {
     "vscode": "^1.75.0"
   },
-
   "categories": [
     "Programming Languages"
   ],
-
   "keywords": [
     "xdbml",
     "dbml",
@@ -23,30 +24,30 @@
     "erd",
     "entity-relationship"
   ],
-
   "icon": "icons/xdbml-marketplace.png",
-
   "repository": {
     "type": "git",
     "url": "https://github.com/xdbml/xdbml-spec.git"
   },
-
   "bugs": {
     "url": "https://github.com/xdbml/xdbml-spec/issues"
   },
-
   "homepage": "https://xdbml.org",
-
   "contributes": {
     "languages": [
       {
         "id": "xdbml",
-        "aliases": ["xDBML", "xdbml"],
-        "extensions": [".xdbml"],
+        "aliases": [
+          "xDBML",
+          "xdbml"
+        ],
+        "extensions": [
+          ".xdbml"
+        ],
         "configuration": "./language-configuration.json",
         "icon": {
           "light": "./icons/xdbml-language.svg",
-          "dark":  "./icons/xdbml-language.svg"
+          "dark": "./icons/xdbml-language.svg"
         }
       }
     ],
@@ -56,10 +57,45 @@
         "scopeName": "source.xdbml",
         "path": "./syntaxes/xdbml.tmLanguage.json"
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "xdbml.openInPlayground",
+        "title": "Open in Playground",
+        "category": "xDBML",
+        "icon": "$(link-external)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "xdbml.openInPlayground",
+          "when": "editorLangId == xdbml"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "xdbml.openInPlayground",
+          "when": "editorLangId == xdbml",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "xdbml.openInPlayground",
+          "when": "editorLangId == xdbml",
+          "group": "navigation@1"
+        }
+      ]
+    }
   },
-
   "scripts": {
-    "prepare": "node scripts/prepare.mjs"
+    "prepare": "node scripts/prepare.mjs",
+    "build": "esbuild src/extension.js --bundle --platform=node --target=node18 --external:vscode --format=cjs --outfile=dist/extension.js",
+    "vscode:prepublish": "node scripts/prepare.mjs && npm run build"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.12",
+    "lz-string": "^1.5.0"
   }
 }

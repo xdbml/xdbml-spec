@@ -3,8 +3,11 @@
 # vsce reads this file and skips matching entries when packaging.
 # Everything not listed here ships to end users.
 
-# Build-time tooling (not needed at runtime)
+# Build-time tooling and source (bundled into dist/, not needed at runtime)
 scripts/**
+src/**
+*.vsix
+esbuild.config.*
 .vscodeignore
 
 # Source markers

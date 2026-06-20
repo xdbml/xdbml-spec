@@ -58,6 +58,33 @@ Operational features, procedural code (PL/SQL, T-SQL, triggers, server-side func
 
 xDBML is a format, not a data modeling tool. The [playground at xdbml.org](https://xdbml.org/playground/index.html) demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
 
+## Tools and services
+
+xDBML is a format, not a tool, but a small open ecosystem makes it easy to author, render, validate, and work with schemas wherever you are. One parser and one renderer power all of it, so a schema behaves identically in the browser, in your editor, in your own code, in a build pipeline, and inside an AI assistant. Everything here is Apache License 2.0.
+
+**Playground.** [xdbml.org/playground](https://xdbml.org/playground/) renders the diagram as you type and shares your work via URL. Entirely in-browser, no install, no signup.
+
+**VS Code extension.** The [xDBML extension for Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml) adds syntax highlighting for `.xdbml` files and an Open in Playground command, so you can author schemas in your editor and jump straight to the live diagram with one click, no copy and paste.
+
+**Libraries (npm).** [`@xdbml/parse`](https://www.npmjs.com/package/@xdbml/parse) is the parser (tokenizer, parser, module resolver, and name resolver); [`@xdbml/render`](https://www.npmjs.com/package/@xdbml/render) is a framework-free renderer that turns a schema into an entity-relationship SVG. Both run anywhere JavaScript runs, so you can embed rendering or validation in your own code.
+
+**Hosted render API.** A small HTTP service turns xDBML into an SVG (or PNG) over the wire, for documentation, build pipelines, or any tool that can make a request:
+
+```
+GET  https://xdbml-render-api.xdbml.workers.dev/render?src=<url-encoded xDBML>
+POST https://xdbml-render-api.xdbml.workers.dev/render   (xDBML in the request body)
+```
+
+Options control layout (`arrange=relational|star|none`), background color, and whether the SVG embeds an "Open in xDBML playground" link. See [`api/`](./api) for the full reference.
+
+**MCP server.** A remote [Model Context Protocol](https://modelcontextprotocol.io) server lets an AI assistant work with xDBML natively as tool calls. In Claude, add the URL as a custom connector (Settings, Connectors, Add custom connector):
+
+```
+https://xdbml-mcp.xdbml.workers.dev/mcp
+```
+
+It exposes two tools: `render_xdbml` (renders a schema to SVG, plus a PNG the model can actually see, and returns a playground link) and `validate_xdbml` (checks syntax and resolves references, reporting any problems with line/column locations, without rendering). Together they support a generate, validate, render loop: the assistant drafts a schema, validates it, fixes what it flags, and renders the result in one turn. See [`mcp/`](./mcp) for details.
+
 ## Where to go next
 
 - [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
@@ -69,3 +96,6 @@ xDBML is a format, not a data modeling tool. The [playground at xdbml.org](https
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
 - [`playground/`](https://xdbml.org/playground/index.html) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
 - [`grammar/`](./grammar) -- the ANTLR4 grammar and reference test corpus and [parser/](./parser)
+- [`tools/vscode-extension/`](./tools/vscode-extension) -- the VS Code extension (syntax highlighting + Open in Playground)
+- [`api/`](./api) -- the hosted HTTP render service (xDBML to SVG/PNG over a request)
+- [`mcp/`](./mcp) -- the remote MCP server exposing `render_xdbml` and `validate_xdbml` to AI assistants

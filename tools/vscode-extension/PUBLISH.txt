@@ -1,0 +1,31 @@
+xDBML -- VS Code "Open in Playground" button
+=============================================
+
+VS CODE EXTENSION (tools/vscode-extension/)
+  package.json          version 0.3.0; adds main, activationEvents,
+                        the openInPlayground command + menus (title bar,
+                        right-click, palette), build scripts, devDeps.
+  src/extension.js      NEW. The command: sends the file (or selection) to
+                        https://xdbml.org/playground/#s=<lz-string> -- the
+                        same share format the renderer/API use (verified to
+                        round-trip exactly).
+  .vscodeignore         excludes src/ and old *.vsix from the package.
+  README.md             documents the command.
+  CHANGELOG.md          0.3.0 entry.
+
+PUBLISH A NEW VERSION
+  cd tools/vscode-extension
+  npm install            # pulls esbuild + lz-string, runs the grammar copy
+
+  # if not ;vsix file is need, or preferably other option below
+  npx @vscode/vsce publish
+  # (vscode:prepublish copies the grammar and esbuild-bundles src -> dist;
+  #  lz-string is bundled in, so the .vsix stays self-contained.)
+
+  # first create a .vsix file §whihch can be manually uploaded if nto  command line credentials
+  npx @vscode/vsce package    # writes xdbml-0.3.0.vsix to the folder (optional, to inspect/keep)
+  npx @vscode/vsce publish    # builds + uploads to the Marketplace (no file left behind)
+
+  # or to manually publish, go to https://marketplace.visualstudio.com/manage/publishers/xdbml
+
+Marketplace URL once published: https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml
