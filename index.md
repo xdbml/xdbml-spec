@@ -56,13 +56,13 @@ features:
     title: The schema layer
     details: "xDBML describes what data is -- entities, tables, classes, attributes, fields, columns, relationships, data types, classifications. <br>Higher layers build on top of xDBML: ODCS for contracts, OSI for measures and metrics, <br>JSON Schema for validation, OWL for inference. <br>xDBML tooling generates the schemas they reference."
 
-  - icon: 🧬
-    title: Strict superset of DBML
-    details: "Every valid DBML 3.13.6 document is a valid xDBML document, but not vice versa. Upgrade in place by adding 'xdbml: 0.2' at the top."
+  - icon: 🛠️
+    title: Tools and services
+    details: "A browser playground, a VS Code extension, the @xdbml/parse and @xdbml/render npm libraries, a hosted render API, and an MCP server that lets AI assistants render and validate xDBML. <br>One parser and one renderer behind all of it."
 
   - icon: 🆓
     title: Open standard
-    details: Apache License 2.0. Stewarded by Hackolade pending evolution to neutral foundation governance. <br>Free to use, extend, and implement.
+    details: "Apache License 2.0, stewarded by Hackolade pending evolution to neutral foundation governance, and free to use, extend, and implement. <br>A strict superset of DBML 3.13.6: every valid DBML document is valid xDBML, and you upgrade in place by adding 'xdbml: 0.3' at the top."
 ---
 
 <div class="vp-doc" style="max-width: 960px; margin: 64px auto; padding: 0 24px;">
@@ -74,7 +74,7 @@ features:
 :::
 
 ```xdbml
-xdbml: 0.2
+xdbml: 0.3
 
 // Schema spans two storage engines: Oracle for customer master data,
 // MongoDB for order documents. xDBML expresses both in one document

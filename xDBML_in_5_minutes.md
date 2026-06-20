@@ -24,7 +24,7 @@ xDBML extends DBML into a unified metadata and semantic data modeling language w
 Here is a complete xDBML document describing an order system. Read it once, top to bottom:
 
 ```xdbml
-xdbml: 0.2
+xdbml: 0.3
 
 Project ecommerce {
   targets: [Oracle, MongoDB]
