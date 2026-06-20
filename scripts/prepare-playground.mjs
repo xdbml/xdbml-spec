@@ -24,6 +24,8 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot       = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const playgroundDir  = path.join(repoRoot, 'playground');
+const rendererDir    = path.join(repoRoot, 'renderer');
+const parserDir      = path.join(repoRoot, 'parser');
 const playgroundDist = path.join(playgroundDir, 'dist');
 const targetDir      = path.join(repoRoot, 'public', 'playground');
 
@@ -32,39 +34,53 @@ if (!fs.existsSync(playgroundDir)) {
   process.exit(0);
 }
 
-// 1. Install playground deps if node_modules is missing OR stale.
+// 1. Install dependencies for the playground AND for the sibling packages
+//    it aliases by SOURCE.
 //
-// We don't use npm workspaces (the root package.json is VitePress-only
-// and the playground is a separate Vue/Vite project with very different
-// devDependencies; mixing them creates resolution headaches). Instead
-// we install each independently.
+//    We don't use npm workspaces (the root package.json is VitePress-only
+//    and the playground is a separate Vue/Vite project with very different
+//    devDependencies; mixing them creates resolution headaches). Instead we
+//    install each independently.
 //
-// "Stale" means package.json was modified more recently than
-// node_modules/.package-lock.json. That happens when someone pulls
-// changes that added or bumped a dependency. Without this check, the
-// build would skip the install (because node_modules exists from a
-// previous session) and then fail confusingly at a much later step
+//    Crucially, the playground's vite.config.ts and tsconfig.json map
+//    `@xdbml/render` -> ../renderer/src and `@xdbml/parse` -> ../parser/src,
+//    so its `vue-tsc` and `vite build` follow into the renderer's source.
+//    The renderer imports real npm dependencies (e.g. lz-string, for the
+//    "Open in playground" link), which live in the renderer's own
+//    node_modules. So the renderer must be installed too, not just the
+//    playground, or the type-check fails with "Cannot find module
+//    'lz-string'". The parser currently has no external runtime
+//    dependencies, but installing it is cheap and future-proofs the same
+//    leak.
+ensureDeps(parserDir, 'parser');
+ensureDeps(rendererDir, 'renderer');
+ensureDeps(playgroundDir, 'playground');
+
+// "Stale" means a project's package.json was modified more recently than its
+// installed lockfile, which happens when someone pulls changes that add or
+// bump a dependency. Without this check a cached node_modules from a previous
+// run would skip the install and then fail confusingly at a much later step
 // when the new module can't be resolved by Rollup or TypeScript.
-const playgroundModules    = path.join(playgroundDir, 'node_modules');
-const playgroundPackageJson = path.join(playgroundDir, 'package.json');
-const playgroundLockfile    = path.join(playgroundModules, '.package-lock.json');
-
-let needsInstall = !fs.existsSync(playgroundModules);
-if (!needsInstall && fs.existsSync(playgroundLockfile)) {
-  const pkgMtime  = fs.statSync(playgroundPackageJson).mtimeMs;
-  const lockMtime = fs.statSync(playgroundLockfile).mtimeMs;
-  if (pkgMtime > lockMtime) {
-    console.log('prepare-playground: package.json is newer than installed dependencies; reinstalling...');
-    needsInstall = true;
+function ensureDeps (projectDir, label) {
+  if (!fs.existsSync(projectDir)) {
+    console.log(`prepare-playground: ${label} not found at ${projectDir}; skipping its install`);
+    return;
   }
-}
+  const modules     = path.join(projectDir, 'node_modules');
+  const packageJson = path.join(projectDir, 'package.json');
+  const lockfile    = path.join(modules, '.package-lock.json');
 
-if (needsInstall) {
-  console.log('prepare-playground: installing playground dependencies (this can take a minute)...');
-  execSync('npm install --no-audit --no-fund', {
-    cwd: playgroundDir,
-    stdio: 'inherit',
-  });
+  let needsInstall = !fs.existsSync(modules);
+  if (!needsInstall && fs.existsSync(lockfile)) {
+    if (fs.statSync(packageJson).mtimeMs > fs.statSync(lockfile).mtimeMs) {
+      console.log(`prepare-playground: ${label} package.json is newer than its installed dependencies; reinstalling...`);
+      needsInstall = true;
+    }
+  }
+  if (needsInstall) {
+    console.log(`prepare-playground: installing ${label} dependencies (this can take a minute)...`);
+    execSync('npm install --no-audit --no-fund', { cwd: projectDir, stdio: 'inherit' });
+  }
 }
 
 // 2. Build the playground. Its build script runs prepare-assets first

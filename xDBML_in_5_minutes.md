@@ -277,6 +277,10 @@ Two newer neighbors are worth naming directly. Google's Open Knowledge Format (O
 
 xDBML is a format, not a data modeling tool. The <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
 
+## Tools and services
+
+The language is the starting point; a small open ecosystem, all of it open source under Apache 2.0, lets you put xDBML to work right away. The quickest way in is the <a href="/playground/index.html" target="_blank" rel="noopener">playground</a>, where you type or paste a schema, watch the entity-relationship diagram render, and share it by URL. In your editor, the [xDBML VS Code extension](https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml) adds syntax highlighting for `.xdbml` files and a one-click jump to that same playground. When you are ready to build on it, the [`@xdbml/parse`](https://www.npmjs.com/package/@xdbml/parse) and [`@xdbml/render`](https://www.npmjs.com/package/@xdbml/render) libraries drop the parser and renderer straight into your code, and a hosted render API returns an SVG or PNG from a schema with a single HTTP request. And to work with xDBML inside an AI assistant, a remote Model Context Protocol (MCP) server exposes rendering and validation as native tools: in Claude, add `https://xdbml-mcp.xdbml.workers.dev/mcp` as a custom connector, and it can draft, validate, and render a schema, then return a playground link, in one turn.
+
 ---
 
 ## Where to go from here
