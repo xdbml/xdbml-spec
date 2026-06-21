@@ -1,8 +1,24 @@
 {
   "name": "@xdbml/render",
-  "version": "0.1.0-poc.2",
-  "description": "Framework-free SVG renderer for xDBML diagrams. Shared by the playground, a future rendering API service, and an MCP server.",
+  "version": "0.3.0",
+  "description": "Framework-free SVG renderer for xDBML diagrams, shared by the playground, the hosted render API, and the MCP server.",
   "license": "Apache-2.0",
+  "author": "Hackolade",
+  "homepage": "https://xdbml.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xdbml/xdbml-spec.git",
+    "directory": "renderer"
+  },
+  "bugs": "https://github.com/xdbml/xdbml-spec/issues",
+  "keywords": [
+    "xdbml",
+    "dbml",
+    "erd",
+    "diagram",
+    "svg",
+    "renderer"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,14 +36,6 @@
     "dist",
     "README.md"
   ],
-  "keywords": [
-    "xdbml",
-    "dbml",
-    "erd",
-    "diagram",
-    "svg",
-    "renderer"
-  ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "type-check": "tsc --noEmit",
@@ -39,7 +47,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@xdbml/parse": "^0.1.0-poc.1",
+    "@xdbml/parse": "^0.3.0",
     "lz-string": "^1.5.0"
   },
   "devDependencies": {

@@ -1,8 +1,24 @@
 {
   "name": "@xdbml/parse",
-  "version": "0.1.0-poc.1",
-  "description": "Proof-of-concept parser for xDBML v0.1 (extension of DBML 3.13.6)",
+  "version": "0.3.0",
+  "description": "Parser for xDBML (eXtended Database Markup Language), a strict superset of DBML 3.13.6: tokenizer, parser, module resolver, and name resolver.",
   "license": "Apache-2.0",
+  "author": "Hackolade",
+  "homepage": "https://xdbml.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xdbml/xdbml-spec.git",
+    "directory": "parser"
+  },
+  "bugs": "https://github.com/xdbml/xdbml-spec/issues",
+  "keywords": [
+    "xdbml",
+    "dbml",
+    "parser",
+    "data-modeling",
+    "schema",
+    "ast"
+  ],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,7 +29,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

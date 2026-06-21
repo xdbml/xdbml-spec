@@ -10,7 +10,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@xdbml/render": "^0.1.0-poc.2"
+    "@xdbml/render": "^0.3.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260617.1",
