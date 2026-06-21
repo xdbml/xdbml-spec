@@ -33,7 +33,7 @@ The consumer half of a multi-file example pair. A sales data mart that imports c
 //
 //  A sales data mart that imports canonical dimension entities from the
 //  conformed-dimensions library file (09-modules-conformed-dimensions.xdbml)
-//  via the xDBML v0.2 module system. This file is the consumer half of a
+//  via the xDBML v0.2+ module system. This file is the consumer half of a
 //  paired example; both files have their own page in the examples directory.
 //
 //  v0.2 features exercised:
@@ -100,7 +100,7 @@ The consumer half of a multi-file example pair. A sales data mart that imports c
 //
 // =============================================================================
 
-xdbml: 0.2
+xdbml: 0.3
 
 
 Project sales_data_product {

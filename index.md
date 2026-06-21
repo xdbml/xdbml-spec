@@ -17,7 +17,7 @@ hero:
       link: /learn/
     - theme: alt
       text: Try it live in the playground
-      link: /playground/index.html
+      link: /playground/index.html?example=02-ecommerce
       target: _blank
       rel: noopener
     - theme: alt
@@ -56,13 +56,13 @@ features:
     title: The schema layer
     details: "xDBML describes what data is -- entities, tables, classes, attributes, fields, columns, relationships, data types, classifications. <br>Higher layers build on top of xDBML: ODCS for contracts, OSI for measures and metrics, <br>JSON Schema for validation, OWL for inference. <br>xDBML tooling generates the schemas they reference."
 
-  - icon: 🛠️
-    title: Tools and services
-    details: "A browser playground, a VS Code extension, the @xdbml/parse and @xdbml/render npm libraries, a hosted render API, and an MCP server that lets AI assistants render and validate xDBML. <br>One parser and one renderer behind all of it."
-
   - icon: 🆓
     title: Open standard
     details: "Apache License 2.0, stewarded by Hackolade pending evolution to neutral foundation governance, and free to use, extend, and implement. <br>A strict superset of DBML 3.13.6: every valid DBML document is valid xDBML, and you upgrade in place by adding 'xdbml: 0.3' at the top."
+
+  - icon: 🛠️
+    title: Tools and services
+    details: "A browser playground, a VS Code extension, the @xdbml/parse and @xdbml/render npm libraries, a hosted render API, and an MCP server that lets AI assistants render and validate xDBML. <br>One parser and one renderer behind all of it."
 ---
 
 <div class="vp-doc" style="max-width: 960px; margin: 64px auto; padding: 0 24px;">
@@ -70,7 +70,7 @@ features:
 ## A first look
 
 ::: tip 🎮 Try it live in the playground
-<strong><a href="/playground/index.html" target="_blank" rel="noopener">Open the playground at xdbml.org/playground →</a></strong> -- write or paste a schema, see the entity-relationship diagram update as you type, share your work via URL. Runs entirely in your browser; no install, no signup.
+<strong><a href="/playground/index.html?example=02-ecommerce" target="_blank" rel="noopener">Open the playground with a live example →</a></strong> -- it loads a polyglot e-commerce schema you can edit, with the entity-relationship diagram updating as you type. Share your work via URL. Runs entirely in your browser; no install, no signup.
 :::
 
 ```xdbml
@@ -181,7 +181,7 @@ xDBML is a format, not a tool, but a small open ecosystem makes it easy to autho
 - **[Browse the FAQ](/faq)** for answers to the questions newcomers most often ask
 - **[Read the v0.3 specification](/spec/v0.3)** for the complete language reference
 - **[Browse the examples](/examples/)** for realistic schemas across e-commerce, IoT, healthcare, social graphs, and financial services
-- <a href="/playground/index.html" target="_blank" rel="noopener"><strong>Try it in the playground</strong></a> by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram
+- <a href="/playground/index.html?example=02-ecommerce" target="_blank" rel="noopener"><strong>Try it in the playground</strong></a> -- it opens with a live example you can edit, and renders the corresponding Entity-Relationship diagram as you type
 - **[Review the ANTLR4 grammar](/grammar)** and [**parser**](https://github.com/xdbml/xdbml-spec/tree/main/parser)
 - **[Install the VS Code extension](https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml)**, or build on the [`@xdbml/parse`](https://www.npmjs.com/package/@xdbml/parse) and [`@xdbml/render`](https://www.npmjs.com/package/@xdbml/render) libraries, the [hosted render API](https://github.com/xdbml/xdbml-spec/tree/main/api), and the [MCP server](https://github.com/xdbml/xdbml-spec/tree/main/mcp) for AI assistants
 - **[Read the governance model](/governance)** to understand stewardship and the path to neutral governance

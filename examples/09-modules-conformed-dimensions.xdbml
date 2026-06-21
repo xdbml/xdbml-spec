@@ -4,7 +4,7 @@
 //
 //  Canonical dimension entities and shared scalar Named Types used across
 //  multiple data products. This file is intended to be imported by consumer
-//  files via the xDBML v0.2 module system; it has no Project block of its
+//  files via the xDBML v0.2+ module system; it has no Project block of its
 //  own because its sole purpose is to be reused. The paired consumer example
 //  that imports from this file is 10-modules-consumer.xdbml.
 //
@@ -29,7 +29,7 @@
 //
 // =============================================================================
 
-xdbml: 0.2
+xdbml: 0.3
 
 
 // -----------------------------------------------------------------------------

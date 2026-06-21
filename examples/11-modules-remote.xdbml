@@ -4,7 +4,7 @@
 //
 //  Companion to 10-modules-consumer.xdbml. Same sales-data-product domain,
 //  but the conformed-dimension library is imported from its PUBLISHED location
-//  over HTTPS rather than by a local relative path. This exercises the v0.3
+//  over HTTPS rather than by a local relative path. This exercises the v0.3+
 //  remote module-source feature (spec §26.14).
 //
 //  What changes versus example 10:
@@ -29,6 +29,8 @@
 //      interactively in the playground, where a fetching resolver retrieves
 //      the bytes. It is intentionally not used here so this file stays
 //      parseable offline by the hermetic example suite.
+
+xdbml: 0.3
 
 Project sales_live {
   targets: [Snowflake]
@@ -67,7 +69,7 @@ Container sales [type: schema, target: Snowflake] {
   //  namespace -- the entity becomes `sales.dim_date` here.
 
   reuse { entity core.dim_date }
-    from 'https://raw.githubusercontent.com/xdbml/xdbml-spec/v0.2/examples/09-modules-conformed-dimensions.xdbml'
+    from 'https://raw.githubusercontent.com/xdbml/xdbml-spec/main/examples/09-modules-conformed-dimensions.xdbml'
     [cloned_at: '2026-06-15T00:00:00Z'] {
       Entity dim_date [
         note: 'Calendar dimension. Grain: one row per calendar day from 2020-01-01 through 2049-12-31. Populated by the dim_date_generator job.'
@@ -96,7 +98,7 @@ Container sales [type: schema, target: Snowflake] {
 //  resolution handles the forward reference.
 
 reuse { type CurrencyCode }
-  from 'https://raw.githubusercontent.com/xdbml/xdbml-spec/v0.2/examples/09-modules-conformed-dimensions.xdbml'
+  from 'https://raw.githubusercontent.com/xdbml/xdbml-spec/main/examples/09-modules-conformed-dimensions.xdbml'
   [cloned_at: '2026-06-15T00:00:00Z'] {
     Type CurrencyCode varchar [
       pattern: '^[A-Z]{3}$',

@@ -17,7 +17,7 @@ xDBML extends DBML into a unified metadata and semantic data modeling language w
 ## The first 60 seconds
 
 ::: tip 🎮 Try it live in the playground
-<strong><a href="/playground/index.html" target="_blank" rel="noopener">Open the playground at xdbml.org/playground →</a></strong> -- write or paste a schema, see the entity-relationship diagram update as you type, share your work via URL. Runs entirely in your browser; no install, no signup.
+<strong><a href="/playground/index.html?example=02-ecommerce" target="_blank" rel="noopener">Open the playground with a live example →</a></strong> -- it loads a polyglot e-commerce schema you can edit, with the entity-relationship diagram updating as you type. Share your work via URL. Runs entirely in your browser; no install, no signup.
 :::
 
 
@@ -288,7 +288,7 @@ The language is the starting point; a small open ecosystem, all of it open sourc
 - **Browse the [FAQ](/faq)** for answers to the questions newcomers most often ask after reading this introduction.
 - **Read the [v0.3 specification](/spec/v0.3)** for the full language reference.
 - **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
-- **Try it in the <a href="/playground/index.html" target="_blank" rel="noopener">playground</a>** -- type or paste xDBML, see rendered the corresponding Entity-Relationship diagram.
+- **Try it in the <a href="/playground/index.html?example=02-ecommerce" target="_blank" rel="noopener">playground</a>** -- it opens with a live example you can edit, and renders the corresponding Entity-Relationship diagram as you type.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** -- the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
 
 xDBML is a draft v0.3 standard, stewarded by [Hackolade](https://hackolade.com) pending governance evolution. The grammar is finalized; the ecosystem is being built. Feedback from real-world use is what will shape v1.0.

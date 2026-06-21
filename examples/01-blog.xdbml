@@ -1,4 +1,4 @@
-xdbml: 0.1
+xdbml: 0.3
 
 Project blog {
   targets: PostgreSQL
