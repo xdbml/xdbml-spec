@@ -79,6 +79,21 @@ jobs:
       - name: Install playground dependencies
         run: cd playground && npm ci
 
+      - name: Install renderer dependencies
+        # The playground consumes the renderer as SOURCE via the
+        # @xdbml/render -> ../renderer/src alias in vite.config.ts and
+        # tsconfig.json. When vue-tsc type-checks (and Vite builds) the
+        # playground, it follows that alias into renderer/src, which does
+        # `import lzString from 'lz-string'`. Without the renderer's own
+        # node_modules, that bare import is unresolvable and the type check
+        # fails with TS2307 ("Cannot find module 'lz-string'..."). The
+        # parser has no external runtime deps, so only the renderer needs
+        # installing. docs:build installs these via prepare-playground, but
+        # the type-check and build steps run before it. npm install (not
+        # npm ci): the renderer lockfile isn't cached and may lag
+        # package.json after dependency bumps.
+        run: cd renderer && npm install --no-audit --no-fund
+
       - name: Parser tests
         run: npm run test:parser
 
