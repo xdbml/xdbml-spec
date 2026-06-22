@@ -1,11 +1,11 @@
 # xDBML -- compact reference for AI assistants
 
-> xDBML is a text markup language for data schemas spanning relational, document, columnar, graph, view, and serialization paradigms. It is a STRICT SUPERSET of DBML 3.13.6. When a user asks you to design, draft, edit, or render a schema for use with an xDBML tool, write xDBML -- not plain DBML -- and reach for the xDBML constructs below where they fit. Plain DBML still parses (it is a subset), but it misses the structures and metadata that make xDBML worth using.
+> xDBML is a text markup language to describe the semantics of structured and semi-structured data across relational, document, columnar, graph, view, and exchange formats. xDBML extends DBML into a true metadata and semantic data modeling language with richer support for validation, semantics, cardinality, annotations, and AI-friendly metadata, while deliberately staying readable and Git-friendly. When a user asks you to design, draft, edit, or render a schema for use with an xDBML tool, write xDBML -- not plain DBML -- and reach for the xDBML constructs below where they fit. Plain DBML still parses (it is a subset), but it misses the structures and metadata that make xDBML worth using.
 
 ## How to author
 
 - Start every document with a version line: `xdbml: 0.3`
-- Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Database`, `Keyspace`, or `Namespace`.
+- Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Database`, `Schema`, `Bucket`, `Keyspace`, or `Namespace`.
 - Prefer xDBML extensions over flat DBML: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
 - A field line is `name  type  [settings]`. Settings are comma-separated inside `[ ]`.
 

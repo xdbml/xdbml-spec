@@ -1,13 +1,13 @@
 ---
 layout: home
 title: xDBML
-description: A unified, open markup language for describing structured and semi-structured data across relational, document, columnar, graph, and exchange formats. One declarative source, many target-native outputs. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling, AI-mediated schema interchange, and metadata-as-code.
+description: A unified, open markup language to describe the semantics of structured and semi-structured data across relational, document, columnar, graph, and exchange formats. One declarative source, many target-native outputs. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling, AI-mediated schema interchange, and metadata-as-code.
 titleTemplate: eXtended Database Markup Language
 
 hero:
   name: xDBML
   text: One schema language. <br>Many target technologies.
-  tagline: A unified, open markup language for describing structured and semi-structured data across relational, document, columnar, graph, and exchange formats. <br>One declarative source describes them all. <br>Easy to author and interpret by both humans and AI, designed for the polyglot data stack.
+  tagline: A unified, open markup language to describe the semantics of structured and semi-structured data across relational, document, columnar, graph, and exchange formats. <br>One declarative source describes them all. <br>Easy to author and interpret by both humans and AI, designed for the polyglot data stack.
   image:
     src: /logo/xdbml-mark.svg
     alt: xDBML
