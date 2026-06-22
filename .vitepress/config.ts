@@ -120,6 +120,7 @@ export default defineConfig({
           { text: '5-minute introduction',  link: '/learn/' },
           { text: 'Examples',                link: '/examples/' },
           { text: 'FAQ',                     link: '/faq' },
+          { text: 'Use from AI assistants',  link: '/ai-assistants' },
         ]
       },
       { text: 'Specification',
@@ -198,6 +199,7 @@ export default defineConfig({
             { text: '5-minute introduction', link: '/learn/' },
             { text: 'Examples',               link: '/examples/' },
             { text: 'FAQ',                    link: '/faq' },
+            { text: 'Use from AI assistants', link: '/ai-assistants' },
           ]
         }
       ],
@@ -209,6 +211,19 @@ export default defineConfig({
             { text: '5-minute introduction', link: '/learn/' },
             { text: 'Examples',               link: '/examples/' },
             { text: 'FAQ',                    link: '/faq' },
+            { text: 'Use from AI assistants', link: '/ai-assistants' },
+          ]
+        }
+      ],
+
+      '/ai-assistants': [
+        {
+          text: 'Learn xDBML',
+          items: [
+            { text: '5-minute introduction', link: '/learn/' },
+            { text: 'Examples',               link: '/examples/' },
+            { text: 'FAQ',                    link: '/faq' },
+            { text: 'Use from AI assistants', link: '/ai-assistants' },
           ]
         }
       ],

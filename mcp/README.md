@@ -89,6 +89,91 @@ A typical use: ask Claude to design a schema, and it can write the xDBML,
 validate it, call `render_xdbml`, and hand you a playground link to view and
 refine it, all in one turn.
 
+## Connect it in ChatGPT
+
+ChatGPT reaches a custom MCP server through Developer Mode, available on the
+Plus, Pro, Business, Enterprise, and Edu plans (not Free) and only for remote
+HTTPS servers, which this one is. Open Settings, then Apps (older builds call
+this Connectors), then Advanced settings, and turn on Developer mode; on
+Business and Enterprise a workspace admin enables it first. Create a custom
+connector pointing at the `/mcp` URL with no authentication, and ChatGPT lists
+`render_xdbml` and `validate_xdbml`, which you enable per chat from the
+composer's Developer Mode menu. ChatGPT treats a tool without a `readOnlyHint`
+annotation as a write action and asks you to confirm each call; both tools here
+are read-only, so annotating them with `readOnlyHint: true` removes the prompt.
+For a published custom GPT rather than a personal connector, point an Action at
+the HTTP render API instead (see [`../api/README.md`](../api/README.md)).
+
+## Connect it in GitHub Copilot
+
+GitHub Copilot uses MCP servers in agent mode. In VS Code 1.99 or later, add the
+server to `.vscode/mcp.json` in a repository, or to your user configuration via
+the Command Palette ("MCP: Open User Configuration"). The root key is `servers`,
+not the `mcpServers` that Cursor and Claude Desktop use:
+
+```json
+{
+  "servers": {
+    "xdbml": { "type": "http", "url": "https://xdbml-mcp.xdbml.workers.dev/mcp" }
+  }
+}
+```
+
+Click Start above the entry, open Copilot Chat, and switch the mode to Agent;
+MCP tools are hidden in Ask and Edit mode. Copilot then offers `render_xdbml`
+and `validate_xdbml` and asks you to Allow each call. The same server works from
+Visual Studio 2022 (17.14 or later) and 2026 via a `.mcp.json` entry, from the
+Copilot CLI via `~/.copilot/mcp-config.json`, and from the Copilot cloud agent
+and code review via repository-level MCP configuration. On Copilot Business and
+Enterprise, an admin must first enable the "MCP servers in Copilot" policy,
+which is off by default.
+
+## Connect it in Mistral Le Chat
+
+Le Chat is an MCP client and accepts any remote MCP server. Open the Connectors
+page, click Add Connector, switch to the Custom MCP Connector tab, give it a
+name (no spaces), paste the `/mcp` URL, and choose No authentication. Le Chat
+runs the MCP handshake, lists `render_xdbml` and `validate_xdbml`, and makes them
+available in chats; you can leave tool calls on manual approval or mark a tool
+Always allow. In an organization an administrator controls which connectors are
+available, and plan availability for custom connectors has shifted over time, so
+check Mistral's current terms.
+
+## Connect it in Grok
+
+Grok (xAI) supports custom MCP servers, which it calls "bring your own MCP," on
+its paid plans. Go to grok.com/connectors, click New Connector, choose Custom,
+and enter the `/mcp` URL (the server must be reachable on the public internet,
+which this one is). Grok discovers the tools and uses them in conversations like
+its built-in connectors. For programmatic use, the xAI API also accepts remote
+MCP tools: pass `{ "type": "mcp", "server_url":
+"https://xdbml-mcp.xdbml.workers.dev/mcp", "server_label": "xdbml" }` in the
+request's `tools` array.
+
+## Connect it in Gemini
+
+Google's consumer Gemini app does not currently let you add a custom MCP server.
+The paths that do work are the Gemini CLI (now folding into Google's Antigravity
+CLI), where you add the server to the `mcpServers` map in
+`~/.gemini/settings.json` using `httpUrl` for the streamable-HTTP endpoint;
+Gemini Enterprise, where an administrator registers it as a custom MCP data
+store; and the Gemini API, whose function-calling and MCP support let your own
+agent call the tools. For a quick one-off in the consumer app, fall back to the
+HTTP render API.
+
+## Connect it in Meta AI
+
+Meta's consumer AI assistant does not act as an MCP client, so there is no
+connector to add there. With Llama models you can still reach the server by
+running an MCP client around them (Llama Stack, LlamaIndex, LocalAI, or your own
+code using the Llama API's tool calling), or you can skip MCP entirely and call
+the HTTP render API, which any agent that makes web requests can use.
+
+The note above on inline rendering applies to every assistant here: each receives
+the SVG and PNG as a tool result and reasons over the PNG, but neither renders
+inline in the reply, so the playground link is the reliable way for a person to
+open and edit the diagram.
+
 ## Local development
 
 ```

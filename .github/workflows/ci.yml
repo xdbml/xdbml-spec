@@ -72,6 +72,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             playground/package-lock.json
+            renderer/package-lock.json
 
       - name: Install root dependencies
         run: npm ci
@@ -89,10 +90,10 @@ jobs:
         # fails with TS2307 ("Cannot find module 'lz-string'..."). The
         # parser has no external runtime deps, so only the renderer needs
         # installing. docs:build installs these via prepare-playground, but
-        # the type-check and build steps run before it. npm install (not
-        # npm ci): the renderer lockfile isn't cached and may lag
-        # package.json after dependency bumps.
-        run: cd renderer && npm install --no-audit --no-fund
+        # the type-check and build steps run before it. npm ci against the
+        # committed renderer/package-lock.json, which is in
+        # cache-dependency-path above so the npm download cache is reused.
+        run: cd renderer && npm ci --no-audit --no-fund
 
       - name: Parser tests
         run: npm run test:parser
