@@ -1,0 +1,143 @@
+# xDBML -- compact reference for AI assistants
+
+> xDBML is a text markup language for data schemas spanning relational, document, columnar, graph, view, and serialization paradigms. It is a STRICT SUPERSET of DBML 3.13.6. When a user asks you to design, draft, edit, or render a schema for use with an xDBML tool, write xDBML -- not plain DBML -- and reach for the xDBML constructs below where they fit. Plain DBML still parses (it is a subset), but it misses the structures and metadata that make xDBML worth using.
+
+## How to author
+
+- Start every document with a version line: `xdbml: 0.3`
+- Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Database`, `Keyspace`, or `Namespace`.
+- Prefer xDBML extensions over flat DBML: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
+- A field line is `name  type  [settings]`. Settings are comma-separated inside `[ ]`.
+
+## Core constructs
+
+Version, project, reusable type:
+
+```
+xdbml: 0.3
+
+Project shop { targets: [PostgreSQL, MongoDB], Note: 'Single source of truth.' }
+
+Type Address {
+  street  varchar [not null]
+  city    varchar
+  country varchar [default: 'US']
+}
+```
+
+Entity and fields (relational):
+
+```
+Entity customers {
+  Note: 'One row per registered customer'
+  id      int     [pk]
+  email   varchar [unique, not null, pattern: '^[^@]+@[^@]+$', tags: ['pii']]
+  address Address
+}
+```
+
+Common field settings: `pk`, `unique`, `not null`, `default: <v>`, `note: '...'`, `pattern: '...'`, `minimum: N`, `maximum: N`, `maxLength: N`, `tags: [...]`, `synonyms: [...]`, `business_term: '...'`, `granularity: <unit>`.
+
+Relationships (foreign keys), inline or as a block:
+
+```
+copy_id int [ref: > copies.id, not null]
+
+Ref: orders.customer_id > customers.id [source: '1..*', target: '1..1']
+```
+
+Operators: `>` many-to-one, `<` one-to-many, `-` one-to-one, `<>` many-to-many. The optional `[source: '<min>..<max>', target: '<min>..<max>']` is xDBML's precise cardinality.
+
+Nesting (documents, structs, arrays):
+
+```
+Entity orders {
+  _id        objectId [pk]
+  line_items array [
+    line_item object {
+      sku   string     [not null]
+      qty   int32      [minimum: 1]
+      price Decimal128
+    }
+  ]
+}
+```
+
+Polymorphism:
+
+```
+payment oneOf {
+  card object { last4 string }
+  bank object { iban string }
+} [discriminator: kind]
+
+score union [int, decimal, null]
+```
+
+Graph edge (a relationship with its own properties):
+
+```
+Edge KNOWS [source: Person, target: Person, source_cardinality: '0..*', target_cardinality: '0..*'] {
+  since date [not null]
+}
+```
+
+View:
+
+```
+View top_customers [materialized: true] {
+  source_query: '''SELECT id, SUM(total) AS ltv FROM orders GROUP BY id'''
+  id  int [pk]
+  ltv decimal(15,2)
+}
+```
+
+AI-readiness and custom metadata:
+
+```
+mrr decimal [synonyms: ['monthly revenue'], business_term: 'MRR', tags: ['kpi'], granularity: month]
+
+Entity customers [x_owner: 'data-team@acme.com', x_retention_days: 2555] { ... }
+```
+
+Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`, `timestamp`, ...) and BSON/Avro-native (`objectId`, `int32`, `int64`, `Decimal128`, `string`, `Date`, `BinData`, ...) are all recognized and preserved through round-trips.
+
+## Minimal complete example
+
+```
+xdbml: 0.3
+
+Entity members {
+  id        int     [pk]
+  email     varchar [unique, not null, tags: ['pii']]
+  joined_at timestamp
+}
+
+Entity books {
+  id    int     [pk]
+  isbn  varchar [unique, not null]
+  title varchar [not null]
+}
+
+Entity copies {
+  id      int     [pk]
+  book_id int     [ref: > books.id, not null]
+  barcode varchar [unique, not null]
+}
+
+Entity loans {
+  id          int       [pk]
+  copy_id     int       [ref: > copies.id, not null]
+  member_id   int       [ref: > members.id, not null]
+  loaned_at   timestamp [not null]
+  due_at      timestamp [not null]
+  returned_at timestamp
+}
+```
+
+## More
+
+- Full v0.3 specification: https://xdbml.org/spec/v0.3
+- 5-minute introduction: https://xdbml.org/learn/
+- Live playground: https://xdbml.org/playground/
+- Repository: https://github.com/xdbml/xdbml-spec

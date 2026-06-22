@@ -86,9 +86,17 @@ directly.
 
 In a chat where the connector is enabled, ask:
 
-> Using the xDBML tools, design a small library-lending schema (members, books,
-> copies, loans, with primary and foreign keys), validate it, render it, and
-> give me the playground link.
+> Using the xDBML tools, first call xdbml_reference (or read
+> https://xdbml.org/llms.txt) so you author xDBML, a strict superset of DBML,
+> rather than plain DBML. Then design a small library-lending schema (members,
+> books, copies, loans, with primary and foreign keys) using xDBML constructs
+> where they fit, validate it, render it, and give me the playground link.
+
+Pointing the assistant at the reference matters: assistants that do not yet know
+xDBML otherwise fall back to plain DBML, which renders but misses the xDBML
+constructs. The `xdbml_reference` tool and the server's built-in instructions
+both nudge it the right way; the `llms.txt` link covers assistants that can read
+a page but are not connected over MCP.
 
 ## One thing to expect
 

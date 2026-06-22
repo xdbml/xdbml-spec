@@ -59,6 +59,23 @@ entity that does not exist) are both reported. The point is a tight
 author -> validate -> fix -> render loop: a model can check a draft, fix what it
 flags, and only then pay to render.
 
+### `xdbml_reference`
+
+```
+xdbml_reference()
+```
+
+Returns a compact xDBML cheatsheet as text: the version line, core constructs,
+field settings, relationships, nesting, polymorphism, edges, views, and
+AI-readiness metadata, with a minimal complete example. It takes no arguments.
+Its job is grounding. Because xDBML is a strict superset of DBML, an assistant
+that does not yet know xDBML tends to fall back to plain DBML, which parses but
+ignores the xDBML-only constructs and metadata. Calling this first keeps the
+authoring idiomatic; the two render and validate tool descriptions and the
+server's `instructions` field both nudge the model to do so. The same text is
+published at https://xdbml.org/llms.txt for assistants that read a page rather
+than connect over MCP.
+
 ## Endpoint
 
 - `POST /mcp` -- the streamable-HTTP MCP endpoint (the default route).
