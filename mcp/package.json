@@ -1,11 +1,15 @@
 {
   "name": "@xdbml/mcp",
-  "version": "0.1.0-poc.3",
+  "version": "0.2.0",
   "description": "Remote MCP server exposing the xDBML render core as a tool. Cloudflare Worker.",
   "private": true,
   "type": "module",
   "scripts": {
+    "generate:reference": "node scripts/generate-reference.mjs",
+    "check:reference": "node scripts/generate-reference.mjs --check",
+    "predev": "npm run generate:reference",
     "dev": "wrangler dev",
+    "predeploy": "npm run generate:reference",
     "deploy": "wrangler deploy",
     "type-check": "tsc --noEmit"
   },

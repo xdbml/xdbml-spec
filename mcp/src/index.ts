@@ -31,7 +31,7 @@ import { svgToPngBase64 } from './rasterize.js';
 import { XDBML_REFERENCE } from './reference.js';
 
 const SERVER_NAME = 'xdbml';
-const SERVER_VERSION = '0.2.0-poc.1';
+const SERVER_VERSION = '0.2.0';
 
 /**
  * Server-level grounding shown to the model at initialize by clients that

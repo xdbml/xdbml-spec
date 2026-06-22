@@ -37,6 +37,18 @@ Enterprise admin enables it first). Create a custom connector with the URL above
 and no authentication, then enable it per chat from the composer's Developer
 Mode menu.
 
+![](public\images\chatgpt-mcp-app.png)
+
+
+
+Accept to connect
+
+![](public\images\chatgpt-mcp-app-connect.png)
+
+Then allow access
+
+![](public\images\chatgpt-mcp-app-allow.png)
+
 ## GitHub Copilot
 
 Copilot uses MCP in agent mode. In VS Code 1.99 or later, add the server to
