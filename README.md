@@ -2,10 +2,10 @@
 
 # xDBML
 
-**[xDBML](https://xdbml.org/)** (eXtended Database Markup Language) is a **unified, open markup language** for **describing the shape** of structured and semi-structured data, plus the **declarative metadata** attached to that shape **across heterogeneous storage technologies**.
+**[xDBML](https://xdbml.org/)** (eXtended Database Markup Language) is a **unified, open markup language** to **describe the shape** of structured and semi-structured data, plus the **declarative metadata** attached to that shape **across heterogeneous storage technologies**.
 
 > [!TIP]
-> **🎮 Try xDBML live in the playground at [xdbml.org/playground](https://xdbml.org/playground/)** -- write or paste a schema, see the entity-relationship diagram update as you type, share your work via URL. Runs entirely in your browser; no install, no signup.
+> **🎮 Try xDBML live in the playground at [xdbml.org/playground](https://xdbml.org/playground/index.html?example=02-ecommerce)** -- write or paste a schema, see the entity-relationship diagram update as you type, share your work via URL. Runs entirely in your browser; no install, no signup.
 
 A single xDBML document expresses entities, tables, attributes, columns, fields, data types, nested structures, relationships, polymorphism, named reusable types, classification tags, business-glossary references, validation constraints, synonyms, and the polyglot target-native vocabulary that real enterprise data architectures use. It round-trips cleanly to engine-native DDL (Oracle, PostgreSQL, SQL Server, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, etc.), to serialization schemas (Avro, Parquet), and to API contracts (JSON Schema, OpenAPI, GraphQL).
 
@@ -21,7 +21,7 @@ The same metadata that helps LLMs also helps humans, governance platforms, data 
 
 Enterprise data structures and semantics are trapped in technology-specific formats that GenAI can parse but cannot reliably compare, govern, transform, or reason over across platforms. xDBML provides a compact, open, polyglot, AI-readable schema language that captures the portable meaning of data structures without pretending to replace native implementation formats.
 
-xDBML occupies the **schema layer of the modern data stack**. It carries **declarative meaning**: what data is called, what it represents, how it's classified. But deliberately leaves *computational* meaning (measures, metrics, aggregations) to semantic-layer formats like the Open Semantic Interchange [OSI](https://opensemanticinterchange.org) and dbt MetricFlow, *contractual* obligations (quality rules, SLAs, ownership, pricing) to data-contract formats like [ODCS](https://bitol.io), and *inferential* reasoning to knowledge-graph standards like [OWL](https://www.w3.org/OWL/) and RDF-star. xDBML is the shape-and-declarative-metadata-layer companion to all of these standards, generating the schemas they reference and consuming nothing they own.
+xDBML occupies the **schema layer of the modern data stack**. It carries **declarative meaning**: what data is called, what it represents, how it's classified. But deliberately leaves *curated markdown wiki of concepts* to Google's Open Knowledge Format ([OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing)), *computational* meaning (measures, metrics, aggregations) to semantic-layer formats like the Open Semantic Interchange [OSI](https://opensemanticinterchange.org) and dbt MetricFlow, *contractual* obligations (quality rules, SLAs, ownership, pricing) to data-contract formats like [ODCS](https://bitol.io), and *inferential* reasoning to knowledge-graph standards like [OWL](https://www.w3.org/OWL/) and RDF-star. xDBML is the shape-and-declarative-metadata-layer companion to all of these standards, generating the schemas they reference and consuming nothing they own.
 
 The same xDBML document feeds an ODCS contract's schema section, an OSI semantic model's underlying tables, a SHACL validator's target shapes, and the SQL DDL that creates them.
 

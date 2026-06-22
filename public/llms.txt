@@ -16,7 +16,10 @@ Version, project, reusable type:
 ```
 xdbml: 0.3
 
-Project shop { targets: [PostgreSQL, MongoDB], Note: 'Single source of truth.' }
+Project shop {
+  targets: [PostgreSQL, MongoDB]
+  Note: 'Single source of truth.'
+}
 
 Type Address {
   street  varchar [not null]
@@ -97,7 +100,7 @@ AI-readiness and custom metadata:
 ```
 mrr decimal [synonyms: ['monthly revenue'], business_term: 'MRR', tags: ['kpi'], granularity: month]
 
-Entity customers [x_owner: 'data-team@acme.com', x_retention_days: 2555] { ... }
+Entity customers [x_owner: 'data-team@acme.com', x_retention_days: 2555] { id int [pk] }
 ```
 
 Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`, `timestamp`, ...) and BSON/Avro-native (`objectId`, `int32`, `int64`, `Decimal128`, `string`, `Date`, `BinData`, ...) are all recognized and preserved through round-trips.
