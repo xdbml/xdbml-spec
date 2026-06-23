@@ -28,6 +28,16 @@ conversation. For a client that only speaks local stdio, such as Claude Desktop,
 bridge to the remote server with
 [`mcp-remote`](https://www.npmjs.com/package/mcp-remote).
 
+Add custom connector:
+
+![](images\claude-add-custom-connector.png)
+
+Allow to use:
+
+![](images\claude-mcp-allow.png)
+
+
+
 ## ChatGPT
 
 Custom MCP servers live behind ChatGPT's Developer Mode, on the Plus, Pro,
@@ -37,17 +47,23 @@ Enterprise admin enables it first). Create a custom connector with the URL above
 and no authentication, then enable it per chat from the composer's Developer
 Mode menu.
 
-![](public\images\chatgpt-mcp-app.png)
+![](images\chatgpt-mcp-app.png)
 
 
 
 Accept to connect
 
-![](public\images\chatgpt-mcp-app-connect.png)
+![](images\chatgpt-mcp-app-connect.png)
 
 Then allow access
 
-![](public\images\chatgpt-mcp-app-allow.png)
+![](images\chatgpt-mcp-app-allow.png)
+
+
+
+And allow the file materialization
+
+![](images\chatgpt-mcp-app-allow-materialization.png)
 
 ## GitHub Copilot
 
@@ -98,11 +114,7 @@ directly.
 
 In a chat where the connector is enabled, ask:
 
-> Using the xDBML tools, first call xdbml_reference (or read
-> https://xdbml.org/llms.txt) so you author xDBML, a strict superset of DBML,
-> rather than plain DBML. Then design a small library-lending schema (members,
-> books, copies, loans, with primary and foreign keys) using xDBML constructs
-> where they fit, validate it, render it, and give me the playground link.
+> Using the xDBML tools, first call xdbml_reference (or read https://xdbml.org/llms.txt) so you author xDBML. Then design a small library-lending schema (members, books, copies, loans, with primary and foreign keys) using xDBML constructs where they fit and display the xDBML block.  Then validate it, render it, and give me the playground link.
 
 Pointing the assistant at the reference matters: assistants that do not yet know
 xDBML otherwise fall back to plain DBML, which renders but misses the xDBML
