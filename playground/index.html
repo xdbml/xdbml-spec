@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/xdbml-favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      The playground is a light-only design. Without an explicit color
+      scheme, Chromium's automatic dark mode (and similar mobile-browser
+      transforms) repaints the page's light surfaces when the OS is in
+      dark mode. That darkens the ERD card backgrounds but leaves the
+      SVG's fixed near-black attribute-name text untouched, rendering
+      field names illegible. Declaring "light" opts the page out of that
+      transform so it renders as designed in every OS theme.
+    -->
+    <meta name="color-scheme" content="light" />
     <title>xDBML Playground</title>
   </head>
   <body>

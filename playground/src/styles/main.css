@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 /*
+ * The playground is a light-only design. Declaring the color scheme
+ * explicitly tells the browser the page handles its own theming, which
+ * stops Chromium's automatic dark mode from repainting light surfaces
+ * (the ERD card backgrounds in particular) while leaving the SVG's
+ * fixed dark attribute-name text in place. This is the CSS-level
+ * counterpart to the color-scheme meta tag in index.html: the meta tag
+ * covers the document before paint, this covers the rendered root.
+ */
+:root {
+  color-scheme: light;
+}
+
+/*
  * Make Monaco fill its container and not draw a blue focus ring on the
  * wrapper element. The editor itself manages its own focus visuals.
  */
