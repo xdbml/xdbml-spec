@@ -1,5 +1,5 @@
 <template>
-  <div class="h-screen flex flex-col bg-gray-50">
+  <div class="h-screen flex flex-col bg-gray-50 dark:bg-slate-950">
     <HeaderBar />
 
     <!-- Thin parsing-progress strip so users see the system reacting. -->
@@ -13,7 +13,7 @@
     <main class="flex-1 min-h-0 flex">
       <!-- Editor pane -->
       <section
-        class="flex flex-col bg-white border-r border-gray-200"
+        class="flex flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-700"
         :style="{ width: editorWidth + 'px' }"
         @pointerdown.capture="lastPane = 'editor'"
       >
@@ -22,7 +22,7 @@
 
       <!-- Drag handle: editor | diagram -->
       <div
-        class="w-1 cursor-col-resize bg-gray-200 hover:bg-blue-400 transition-colors flex-shrink-0"
+        class="w-1 cursor-col-resize bg-gray-200 dark:bg-slate-700 hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors flex-shrink-0"
         @mousedown="onEditorDragStart"
       />
 
@@ -41,7 +41,7 @@
       <!-- Drag handle: diagram | inspector (only shown when inspector is open) -->
       <div
         v-if="inspectorVisible"
-        class="w-1 cursor-col-resize bg-gray-200 hover:bg-blue-400 transition-colors flex-shrink-0"
+        class="w-1 cursor-col-resize bg-gray-200 dark:bg-slate-700 hover:bg-blue-400 dark:hover:bg-blue-500 transition-colors flex-shrink-0"
         @mousedown="onInspectorDragStart"
       />
 

@@ -9,10 +9,10 @@
 
     <div
       v-if="!hasAst"
-      class="absolute inset-0 flex items-center justify-center text-gray-400 text-sm pointer-events-none"
+      class="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-slate-500 text-sm pointer-events-none"
     >
       <div class="text-center">
-        <div class="font-medium text-gray-600 mb-1">Diagram unavailable</div>
+        <div class="font-medium text-gray-600 dark:text-slate-300 mb-1">Diagram unavailable</div>
         <div>See the diagnostics panel below for the parse error</div>
       </div>
     </div>
@@ -20,11 +20,11 @@
     <!-- Floating controls, bottom-right, outside the scrolling viewport. -->
     <div
       v-if="hasAst"
-      class="absolute bottom-3 right-3 flex items-center gap-0.5 px-1 py-0.5 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg shadow-sm select-none"
+      class="absolute bottom-3 right-3 flex items-center gap-0.5 px-1 py-0.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm select-none"
     >
       <button
         type="button"
-        class="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        class="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         :disabled="zoomIndex === 0"
         @click="zoomOut"
         title="Zoom out (Ctrl + scroll down)"
@@ -37,14 +37,14 @@
         @change="onZoomInputChange"
         @keydown.enter.prevent="onZoomInputEnter"
         @focus="onZoomInputFocus"
-        class="w-14 h-7 text-center text-xs font-medium tabular-nums text-gray-700 bg-transparent border-none focus:outline-none focus:bg-gray-50 rounded"
+        class="w-14 h-7 text-center text-xs font-medium tabular-nums text-gray-700 dark:text-slate-200 bg-transparent border-none focus:outline-none focus:bg-gray-50 dark:focus:bg-slate-700 rounded"
         type="text"
         :title="`Zoom level. Range: ${zoomPercent(ZOOM_LEVELS[0])}% to ${zoomPercent(ZOOM_LEVELS[ZOOM_LEVELS.length-1])}%`"
       />
 
       <button
         type="button"
-        class="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        class="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         :disabled="zoomIndex === ZOOM_LEVELS.length - 1"
         @click="zoomIn"
         title="Zoom in (Ctrl + scroll up)"
@@ -52,27 +52,27 @@
         <svg viewBox="0 0 16 16" class="w-3.5 h-3.5"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" fill="none"/></svg>
       </button>
 
-      <div class="w-px h-5 bg-gray-200 mx-0.5" />
+      <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
 
       <button
         type="button"
-        class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+        class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
         @click="zoomToFit"
         title="Fit diagram to viewport"
       >Fit</button>
 
       <button
         type="button"
-        class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+        class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
         @click="zoomTo(1)"
         title="Reset to 100%"
       >1:1</button>
 
-      <div class="w-px h-5 bg-gray-200 mx-0.5" />
+      <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
 
       <button
         type="button"
-        class="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        class="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         :disabled="!canUndo"
         @click="undoLayout"
         title="Undo layout change (Ctrl+Z)"
@@ -81,7 +81,7 @@
       </button>
       <button
         type="button"
-        class="w-7 h-7 flex items-center justify-center text-gray-600 hover:bg-gray-100 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        class="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         :disabled="!canRedo"
         @click="redoLayout"
         title="Redo layout change (Ctrl+Shift+Z)"
@@ -89,12 +89,12 @@
         <svg viewBox="0 0 16 16" class="w-3.5 h-3.5"><path d="M9.5 4.5 13 8l-3.5 3.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M13 8H6.5a3.5 3.5 0 1 0 0 7H10" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
 
-      <div class="w-px h-5 bg-gray-200 mx-0.5" />
+      <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
 
       <div ref="arrangeWrap" class="relative">
         <button
           type="button"
-          class="h-7 px-2 flex items-center gap-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          class="h-7 px-2 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
           @click="arrangeMenuOpen = !arrangeMenuOpen"
           title="Auto-arrange the diagram"
         >
@@ -103,18 +103,18 @@
         </button>
         <div
           v-if="arrangeMenuOpen"
-          class="absolute bottom-full right-0 mb-1 w-40 py-1 bg-white border border-gray-200 rounded-lg shadow-lg"
+          class="absolute bottom-full right-0 mb-1 w-40 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg"
         >
-          <button type="button" class="w-full px-3 py-1.5 flex items-center text-left text-xs text-gray-700 hover:bg-gray-100" @click="arrange('relational')">Relational</button>
-          <button type="button" class="w-full px-3 py-1.5 flex items-center text-left text-xs text-gray-700 hover:bg-gray-100" @click="arrange('star')">Star schema</button>
+          <button type="button" class="w-full px-3 py-1.5 flex items-center text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700" @click="arrange('relational')">Relational</button>
+          <button type="button" class="w-full px-3 py-1.5 flex items-center text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700" @click="arrange('star')">Star schema</button>
         </div>
       </div>
 
       <template v-if="userPositions.size > 0 || edgeOffsets.size > 0">
-        <div class="w-px h-5 bg-gray-200 mx-0.5" />
+        <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
         <button
           type="button"
-          class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition-colors"
+          class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
           @click="resetPositions"
           title="Reset repositioned entities and edges to the layout default"
         >Reset positions</button>
@@ -142,7 +142,7 @@ import { computed, ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useParserStore } from '@/stores/parserStore';
 import { useFileSystemStore } from '@/stores/fileSystemStore';
 
-import { buildDiagram, autoArrange } from '@xdbml/render';
+import { buildDiagram, autoArrange, darkTheme } from '@xdbml/render';
 import type { ArrangeStrategy } from '@xdbml/render';
 import { mount, ZOOM_LEVELS } from '@xdbml/render/interactive';
 import type { DiagramHandle, Selection as MountSelection } from '@xdbml/render/interactive';
@@ -159,6 +159,9 @@ import {
   currentSnapshot,
 } from './layout-history';
 import type { LayoutHistory } from './layout-history';
+import { useAppearance } from '@/composables/useAppearance';
+
+const { isDark } = useAppearance();
 
 const parser = useParserStore();
 const fileSystem = useFileSystemStore();
@@ -476,6 +479,10 @@ function toMount (s: Selection): MountSelection {
 function ensureMount (): void {
   if (handle || !viewportEl.value || !parser.flatAst) return;
   handle = mount(viewportEl.value, parser.flatAst, {
+    // In dark mode, hand the renderer its dark palette. The palette also
+    // carries the canvas backdrop, so the mount's viewport grid matches.
+    // Light mode passes no override and uses the renderer defaults.
+    theme: isDark.value ? darkTheme : undefined,
     onSelect: (s) => emit('select', toInspector(s)),
     onChange: (st) => {
       // A user drag (entity/container/edge) settled. Mirror into the
@@ -549,6 +556,21 @@ function syncDocument (): void {
 
 watch(() => [parser.flatAst, parser.documentEpoch] as const, syncDocument);
 watch(() => props.selection, (s) => { handle?.select(toMount(s)); });
+
+/* ---------------------------------------------------------- theme switch */
+
+// The renderer bakes theme colors into the SVG at mount time and has no
+// live re-theme entry, so an appearance change tears the mount down and
+// rebuilds it with the new palette. Layout is safe across this: the
+// authoritative positions/offsets/collapsed/zoom live in this shell's
+// refs, and ensureMount's pushLayout restores them; selection is restored
+// from props. destroy() removes the old viewport, so no DOM leaks.
+watch(isDark, () => {
+  if (!handle || !viewportEl.value) return;
+  handle.destroy();
+  handle = null;
+  ensureMount();
+});
 
 /* ------------------------------------------------------------ lifecycle */
 

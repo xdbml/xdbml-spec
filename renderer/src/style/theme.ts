@@ -78,6 +78,20 @@ export interface Theme {
     stroke: string;
     text: string;
   };
+
+  /**
+   * Backdrop behind the diagram. The static serializer leaves the SVG
+   * background transparent (the consumer paints behind it), so these
+   * tokens are consumed by the interactive mount, which paints the
+   * scrolling viewport and its dot/line grid. They live on the theme so
+   * the dark palette travels as one unit: a caller that switches to the
+   * dark theme gets a matching dark canvas without coordinating a
+   * separate option.
+   */
+  canvas: {
+    background: string;
+    grid: string;
+  };
 }
 
 export const defaultTheme: Theme = {
@@ -143,6 +157,95 @@ export const defaultTheme: Theme = {
     fill: '#fef3c7',
     stroke: '#f59e0b',
     text: '#92400e',
+  },
+
+  canvas: {
+    background: '#f8fafc',
+    grid: '#eef2f7',
+  },
+};
+
+/**
+ * Dark palette. A full theme (not a partial) so it can be passed directly
+ * as a `theme` override and so the rendering API and MCP server share one
+ * dark look with the playground. Tuned against a slate-900 canvas:
+ *
+ *   - Cards sit a step above the backdrop (slate-800) so they read as
+ *     raised surfaces; the header band is another step lighter.
+ *   - Field-name text is light (slate-200) -- the core legibility fix.
+ *     PK rows tint with a deep amber and a bright amber name; synthetic
+ *     and type labels use a muted slate that stays readable but recedes.
+ *   - Ref and edge lines are lightened so they remain visible on the
+ *     dark backdrop. `readableInk` already flips header text to light,
+ *     so header inks need no per-theme handling here.
+ */
+export const darkTheme: Theme = {
+  fontSans: defaultTheme.fontSans,
+  fontMono: defaultTheme.fontMono,
+
+  shadow: {
+    dx: 0,
+    dy: 1,
+    stdDeviation: 2,
+    floodColor: '#000000',
+    floodOpacity: 0.45,
+  },
+
+  container: {
+    fill: '#0f172a',
+    stroke: '#334155',
+    strokeWidth: 1.5,
+    dashArray: '4 3',
+    headerFallback: '#64748b',
+  },
+
+  entity: {
+    fill: '#1e293b',
+    stroke: '#475569',
+    strokeWidth: 1,
+    viewDashArray: '6 3',
+    headerDefault: '#475569',
+    headerCollectionRecord: '#1e3a8a',
+  },
+
+  row: {
+    pkFill: '#422006',
+    syntheticFill: '#172033',
+    zebraFill: '#243042',
+    indentGuide: '#334155',
+    caret: '#94a3b8',
+    nameDefault: '#e2e8f0',
+    namePk: '#fcd34d',
+    nameSynthetic: '#94a3b8',
+    typeLabel: '#94a3b8',
+  },
+
+  badges: {
+    pk: '#ca8a04',
+    fk: '#0891b2',
+    unique: '#7c3aed',
+    notNull: '#dc2626',
+  },
+
+  ref: {
+    line: '#94a3b8',
+    label: '#cbd5e1',
+  },
+
+  edge: {
+    line: '#a78bfa',
+    label: '#c4b5fd',
+  },
+
+  banner: {
+    fill: '#422006',
+    stroke: '#f59e0b',
+    text: '#fcd34d',
+  },
+
+  canvas: {
+    background: '#0f172a',
+    grid: '#1e293b',
   },
 };
 

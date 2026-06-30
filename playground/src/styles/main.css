@@ -1,16 +1,24 @@
 @import "tailwindcss";
 
 /*
- * The playground is a light-only design. Declaring the color scheme
- * explicitly tells the browser the page handles its own theming, which
- * stops Chromium's automatic dark mode from repainting light surfaces
- * (the ERD card backgrounds in particular) while leaving the SVG's
- * fixed dark attribute-name text in place. This is the CSS-level
- * counterpart to the color-scheme meta tag in index.html: the meta tag
- * covers the document before paint, this covers the rendered root.
+ * Drive Tailwind's `dark:` variant from a `dark` class on <html> (set by
+ * the appearance bootstrap / useAppearance) instead of the default
+ * prefers-color-scheme media query. This lets the in-app toggle and the
+ * website hand-off control the theme directly, independent of the OS.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * color-scheme follows the resolved mode so native form controls,
+ * scrollbars, and the like match. The bootstrap also sets this inline on
+ * <html> before paint; these rules keep it correct after hydration and
+ * across runtime toggles.
  */
 :root {
   color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
 }
 
 /*
@@ -32,6 +40,12 @@
     linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
   background-size: 20px 20px;
+}
+:root.dark .diagram-canvas {
+  background-color: #0f172a;
+  background-image:
+    linear-gradient(to right, rgba(226, 232, 240, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(226, 232, 240, 0.05) 1px, transparent 1px);
 }
 
 /*
@@ -64,3 +78,17 @@
 .sql-block .token.operator    { color: #4b5563; }
 .sql-block .token.punctuation { color: #4b5563; }
 .sql-block .token.variable    { color: #b91c1c; }
+
+/*
+ * Dark counterpart of the SQL palette: same hues lifted toward the
+ * brighter end so they stay legible on the inspector's dark surface.
+ */
+:root.dark .sql-block .token.keyword     { color: #93c5fd; }
+:root.dark .sql-block .token.string      { color: #6ee7b7; }
+:root.dark .sql-block .token.number      { color: #fcd34d; }
+:root.dark .sql-block .token.boolean     { color: #fcd34d; }
+:root.dark .sql-block .token.comment     { color: #94a3b8; }
+:root.dark .sql-block .token.function    { color: #c4b5fd; }
+:root.dark .sql-block .token.operator    { color: #cbd5e1; }
+:root.dark .sql-block .token.punctuation { color: #cbd5e1; }
+:root.dark .sql-block .token.variable    { color: #fca5a5; }

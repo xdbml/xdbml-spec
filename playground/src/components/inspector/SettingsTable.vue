@@ -1,5 +1,5 @@
 <template>
-  <div v-if="settings.length === 0" class="text-xs text-gray-400 italic">
+  <div v-if="settings.length === 0" class="text-xs text-gray-400 dark:text-slate-500 italic">
     No settings
   </div>
   <table v-else class="w-full text-xs">
@@ -7,19 +7,19 @@
       <tr
         v-for="(s, i) in settings"
         :key="`${s.name}:${i}`"
-        class="border-b border-gray-50 last:border-b-0"
+        class="border-b border-gray-50 dark:border-slate-800 last:border-b-0"
       >
-        <td class="py-1.5 pr-2 font-medium text-gray-700 align-top w-2/5 break-words">
+        <td class="py-1.5 pr-2 font-medium text-gray-700 dark:text-slate-200 align-top w-2/5 break-words">
           {{ s.nameSource }}
         </td>
         <td class="py-1.5 align-top">
           <span
             v-if="s.value === null"
-            class="inline-block px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 text-gray-600 rounded"
+            class="inline-block px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300 rounded"
           >flag</span>
           <code
             v-else
-            class="text-xs text-gray-600 font-mono break-all"
+            class="text-xs text-gray-600 dark:text-slate-300 font-mono break-all"
           >{{ renderValue(s.value) }}</code>
         </td>
       </tr>

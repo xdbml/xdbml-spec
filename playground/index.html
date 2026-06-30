@@ -5,15 +5,52 @@
     <link rel="icon" type="image/svg+xml" href="/xdbml-favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      The playground is a light-only design. Without an explicit color
-      scheme, Chromium's automatic dark mode (and similar mobile-browser
-      transforms) repaints the page's light surfaces when the OS is in
-      dark mode. That darkens the ERD card backgrounds but leaves the
-      SVG's fixed near-black attribute-name text untouched, rendering
-      field names illegible. Declaring "light" opts the page out of that
-      transform so it renders as designed in every OS theme.
+      The playground supports light and dark. The actual scheme is driven
+      by a `dark` class on <html> (see the bootstrap below and
+      src/composables/useAppearance.ts); declaring "light dark" tells the
+      browser the page handles both so it never auto-darkens on its own.
     -->
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
+    <!--
+      Appearance bootstrap. Runs before first paint so the page never
+      flashes the wrong theme. Precedence:
+        1. URL ?theme=light|dark  -- the hand-off from xdbml.org; it wins,
+           is persisted, and is then stripped from the URL.
+        2. localStorage           -- a direct/standalone open reuses the
+           last chosen mode.
+        3. prefers-color-scheme   -- otherwise follow the OS.
+      Kept as a classic inline script (not a module) so it executes during
+      head parsing, ahead of the deferred app bundle. Mirrors the contract
+      in src/composables/useAppearance.ts (same key, same `dark` class).
+    -->
+    <script>
+      (function () {
+        try {
+          var KEY = 'xdbml-playground:appearance';
+          var url = new URL(window.location.href);
+          var param = url.searchParams.get('theme');
+          var mode = null;
+          if (param === 'light' || param === 'dark') {
+            mode = param;
+            try { localStorage.setItem(KEY, mode); } catch (e) {}
+            url.searchParams.delete('theme');
+            window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+          } else {
+            try {
+              var stored = localStorage.getItem(KEY);
+              if (stored === 'light' || stored === 'dark') mode = stored;
+            } catch (e) {}
+          }
+          if (!mode) {
+            mode = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+              ? 'dark' : 'light';
+          }
+          var root = document.documentElement;
+          root.classList.toggle('dark', mode === 'dark');
+          root.style.colorScheme = mode;
+        } catch (e) { /* leave default light on any failure */ }
+      })();
+    </script>
     <title>xDBML Playground</title>
   </head>
   <body>

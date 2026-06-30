@@ -2,18 +2,18 @@
   <div>
     <InspectorSection title="Identification">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt class="font-medium text-gray-500">Keyword</dt>
-        <dd class="text-gray-900 font-mono">{{ keywordLabel }}</dd>
-        <dt class="font-medium text-gray-500">Name</dt>
-        <dd class="text-gray-900 font-mono break-all">{{ entity.name }}</dd>
-        <dt v-if="container" class="font-medium text-gray-500">Container</dt>
-        <dd v-if="container" class="text-gray-900 font-mono break-all">{{ container.name }}</dd>
-        <dt class="font-medium text-gray-500">Fields</dt>
-        <dd class="text-gray-900">
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Keyword</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono">{{ keywordLabel }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Name</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ entity.name }}</dd>
+        <dt v-if="container" class="font-medium text-gray-500 dark:text-slate-400">Container</dt>
+        <dd v-if="container" class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ container.name }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Fields</dt>
+        <dd class="text-gray-900 dark:text-slate-100">
           {{ fieldStats.total }} total
           <span v-if="fieldStats.pk"      class="text-yellow-700">· {{ fieldStats.pk }} PK</span>
-          <span v-if="fieldStats.notNull" class="text-red-700">· {{ fieldStats.notNull }} required</span>
-          <span v-if="fieldStats.nested"  class="text-blue-700">· {{ fieldStats.nested }} nested</span>
+          <span v-if="fieldStats.notNull" class="text-red-700 dark:text-red-300">· {{ fieldStats.notNull }} required</span>
+          <span v-if="fieldStats.nested"  class="text-blue-700 dark:text-blue-300">· {{ fieldStats.nested }} nested</span>
         </dd>
       </dl>
     </InspectorSection>
@@ -35,7 +35,7 @@
          wrote it themselves), Prism HTML-escapes non-token text, and
          the only emitted markup is `<span class="token …">…</span>`. -->
     <InspectorSection v-if="sourceQueryBody" title="Source query">
-      <pre class="sql-block text-[11px] leading-relaxed font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded px-2 py-1.5 overflow-x-auto whitespace-pre max-h-[40vh] overflow-y-auto"><code v-html="highlightedSourceQuery"></code></pre>
+      <pre class="sql-block text-[11px] leading-relaxed font-mono text-gray-800 dark:text-slate-100 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded px-2 py-1.5 overflow-x-auto whitespace-pre max-h-[40vh] overflow-y-auto"><code v-html="highlightedSourceQuery"></code></pre>
     </InspectorSection>
 
     <div class="px-3 pb-3">

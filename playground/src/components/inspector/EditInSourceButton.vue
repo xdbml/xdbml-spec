@@ -1,7 +1,7 @@
 <template>
   <button
     type="button"
-    class="mt-3 w-full px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded transition-colors flex items-center justify-center gap-1.5"
+    class="mt-3 w-full px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 border border-gray-200 dark:border-slate-700 rounded transition-colors flex items-center justify-center gap-1.5"
     @click="$emit('click')"
     title="Reveal this construct in the editor"
   >

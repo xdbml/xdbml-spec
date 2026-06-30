@@ -1,9 +1,9 @@
 <template>
   <p
     v-if="body"
-    class="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap break-words"
+    class="text-xs text-gray-700 dark:text-slate-200 leading-relaxed whitespace-pre-wrap break-words"
   >{{ body }}</p>
-  <p v-else class="text-xs text-gray-400 italic">
+  <p v-else class="text-xs text-gray-400 dark:text-slate-500 italic">
     No note
   </p>
 </template>

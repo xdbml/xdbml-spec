@@ -2,14 +2,14 @@
   <div>
     <InspectorSection title="Identification">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt class="font-medium text-gray-500">Operator</dt>
-        <dd class="text-gray-900 font-mono">{{ refDecl.spec.operator }}</dd>
-        <dt class="font-medium text-gray-500">Source</dt>
-        <dd class="text-gray-900 font-mono break-all">{{ renderEndpoint(refDecl.spec.source) }}</dd>
-        <dt class="font-medium text-gray-500">Target</dt>
-        <dd class="text-gray-900 font-mono break-all">{{ renderEndpoint(refDecl.spec.target) }}</dd>
-        <dt v-if="refDecl.name" class="font-medium text-gray-500">Name</dt>
-        <dd v-if="refDecl.name" class="text-gray-900 font-mono">{{ refDecl.name }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Operator</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono">{{ refDecl.spec.operator }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Source</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ renderEndpoint(refDecl.spec.source) }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Target</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ renderEndpoint(refDecl.spec.target) }}</dd>
+        <dt v-if="refDecl.name" class="font-medium text-gray-500 dark:text-slate-400">Name</dt>
+        <dd v-if="refDecl.name" class="text-gray-900 dark:text-slate-100 font-mono">{{ refDecl.name }}</dd>
       </dl>
     </InspectorSection>
 

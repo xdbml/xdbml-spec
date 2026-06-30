@@ -1,11 +1,11 @@
 <template>
   <!-- Always-visible header bar. The body collapses out when there's
        nothing to show OR the user manually collapsed it. -->
-  <section class="bg-white border-t border-gray-200 flex-shrink-0 flex flex-col">
+  <section class="bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 flex-shrink-0 flex flex-col">
     <!-- Header bar: status + toggle -->
     <button
       type="button"
-      class="h-8 px-3 flex items-center justify-between text-left hover:bg-gray-50 transition-colors flex-shrink-0"
+      class="h-8 px-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
       :class="{ 'cursor-pointer': totalCount > 0, 'cursor-default': totalCount === 0 }"
       :disabled="totalCount === 0"
       @click="toggle"
@@ -15,18 +15,18 @@
         <svg
           v-if="totalCount > 0"
           viewBox="0 0 12 12"
-          class="w-3 h-3 text-gray-500 transition-transform"
+          class="w-3 h-3 text-gray-500 dark:text-slate-400 transition-transform"
           :class="{ 'rotate-90': bodyVisible }"
         >
           <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
         </svg>
-        <span class="text-[11px] uppercase font-semibold tracking-wide text-gray-600">
+        <span class="text-[11px] uppercase font-semibold tracking-wide text-gray-600 dark:text-slate-300">
           Diagnostics
         </span>
         <!-- Count badges (errors / warnings separately). -->
         <template v-if="errorCount > 0">
-          <span class="flex items-center gap-1 text-xs text-red-700">
-            <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-100">
+          <span class="flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+            <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-100 dark:bg-red-900/30">
               <svg viewBox="0 0 8 8" class="w-2 h-2">
                 <path d="M2 2l4 4M6 2l-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
@@ -35,8 +35,8 @@
           </span>
         </template>
         <template v-if="warningCount > 0">
-          <span class="flex items-center gap-1 text-xs text-amber-700">
-            <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-100">
+          <span class="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
+            <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-100 dark:bg-amber-900/30">
               <svg viewBox="0 0 8 8" class="w-2 h-2">
                 <path d="M4 1v3.5M4 6v0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
@@ -44,11 +44,11 @@
             {{ warningCount }} {{ warningCount === 1 ? 'warning' : 'warnings' }}
           </span>
         </template>
-        <span v-if="totalCount === 0" class="text-xs text-gray-400">
+        <span v-if="totalCount === 0" class="text-xs text-gray-400 dark:text-slate-500">
           No issues
         </span>
       </div>
-      <span v-if="totalCount > 0" class="text-[10px] text-gray-400">
+      <span v-if="totalCount > 0" class="text-[10px] text-gray-400 dark:text-slate-500">
         {{ bodyVisible ? 'Click to collapse' : 'Click to expand' }}
       </span>
     </button>
@@ -57,14 +57,14 @@
          errors doesn't push the diagram off-screen. -->
     <div
       v-if="bodyVisible && totalCount > 0"
-      class="border-t border-gray-100 overflow-y-auto"
+      class="border-t border-gray-100 dark:border-slate-800 overflow-y-auto"
       :style="{ maxHeight: BODY_MAX_HEIGHT_PX + 'px' }"
     >
       <ul class="divide-y divide-gray-50">
         <li
           v-for="(err, i) in sortedDiagnostics"
           :key="i"
-          class="flex items-start gap-3 px-3 py-2 hover:bg-blue-50 cursor-pointer transition-colors"
+          class="flex items-start gap-3 px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors"
           @click="onErrorClick(err)"
         >
           <!-- Severity icon: red 'x' for errors, amber '!' for warnings.
@@ -72,7 +72,7 @@
                some warnings) reads at a glance. -->
           <span
             v-if="err.severity === 'warning'"
-            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-700 flex-shrink-0 mt-0.5"
+            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5"
           >
             <svg viewBox="0 0 8 8" class="w-2.5 h-2.5">
               <path d="M4 1v3.5M4 6v0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -80,7 +80,7 @@
           </span>
           <span
             v-else
-            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 text-red-700 flex-shrink-0 mt-0.5"
+            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 flex-shrink-0 mt-0.5"
           >
             <svg viewBox="0 0 8 8" class="w-2.5 h-2.5">
               <path d="M2 2l4 4M6 2l-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -88,17 +88,17 @@
           </span>
 
           <div class="flex-1 min-w-0">
-            <div class="text-xs text-gray-900 leading-snug break-words">
+            <div class="text-xs text-gray-900 dark:text-slate-100 leading-snug break-words">
               {{ err.message }}
             </div>
-            <div class="text-[10px] text-gray-500 mt-0.5 font-mono flex items-center gap-2">
+            <div class="text-[10px] text-gray-500 dark:text-slate-400 mt-0.5 font-mono flex items-center gap-2">
               <span>Line {{ err.location.line }}, column {{ err.location.column }}</span>
               <!-- Stable code (e.g. 'unresolved-type'). Helps users learn
                    the vocabulary and lets them search the docs/FAQ for it.
                    Numeric codes (lex/parse internals) stay hidden. -->
               <span
                 v-if="typeof err.code === 'string'"
-                class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600"
+                class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300"
               >{{ err.code }}</span>
             </div>
           </div>

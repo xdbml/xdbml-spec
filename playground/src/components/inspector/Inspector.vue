@@ -1,25 +1,25 @@
 <template>
-  <aside class="h-full bg-white border-l border-gray-200 flex flex-col">
+  <aside class="h-full bg-white dark:bg-slate-900 border-l border-gray-200 dark:border-slate-700 flex flex-col">
     <!-- Header: kind badge + title + close. Always present so the
          empty state has visual symmetry with the populated state. -->
-    <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+    <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-slate-700">
       <div class="flex items-center gap-2 min-w-0">
         <template v-if="resolved">
           <span
             class="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
             :class="kindBadgeClass"
           >{{ kindLabel }}</span>
-          <span class="text-sm font-medium text-gray-900 truncate" :title="titleLabel">
+          <span class="text-sm font-medium text-gray-900 dark:text-slate-100 truncate" :title="titleLabel">
             {{ titleLabel }}
           </span>
         </template>
-        <span v-else class="text-xs text-gray-400">
+        <span v-else class="text-xs text-gray-400 dark:text-slate-500">
           Inspector
         </span>
       </div>
       <button
         type="button"
-        class="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
+        class="w-6 h-6 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors flex-shrink-0"
         @click="$emit('close')"
         title="Close inspector"
       >
@@ -57,7 +57,7 @@
         @edit-source="onEditSource"
       />
     </div>
-    <div v-else class="flex-1 flex items-center justify-center text-gray-400 text-xs px-4 text-center">
+    <div v-else class="flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-xs px-4 text-center">
       Click anything in the diagram to inspect it
     </div>
   </aside>
@@ -135,16 +135,16 @@ const kindLabel = computed(() => {
 });
 
 const kindBadgeClass = computed(() => {
-  if (!resolved.value) return 'bg-gray-100 text-gray-700';
+  if (!resolved.value) return 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200';
   switch (resolved.value.kind) {
-    case 'container': return 'bg-purple-100 text-purple-800';
+    case 'container': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
     case 'entity':    return resolved.value.node.kind === 'ViewDeclaration'
       ? 'bg-indigo-100 text-indigo-800'
       : resolved.value.node.kind === 'EdgeDeclaration'
         ? 'bg-violet-100 text-violet-800'
-        : 'bg-blue-100 text-blue-800';
-    case 'field':     return 'bg-green-100 text-green-800';
-    case 'ref':       return 'bg-amber-100 text-amber-800';
+        : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
+    case 'field':     return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
+    case 'ref':       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
   }
 });
 

@@ -25,6 +25,7 @@ import {
 } from '../layout/layout.ts';
 import { autoArrange, type ArrangeStrategy } from '../layout/auto-arrange.ts';
 import { serializeDiagram } from '../svg/serialize.ts';
+import { resolveTheme } from '../style/theme.ts';
 import type { DeepPartial, Theme } from '../style/theme.ts';
 import { buildOverlay, type Selection } from './overlay.ts';
 import {
@@ -94,13 +95,19 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
   let selection: Selection = null;
   let model: DiagramModel = buildDiagram(doc, collapsed);
 
+  // Resolve the theme once up front so the viewport backdrop (painted
+  // below) and the serialized shapes (rendered in `render`) share one
+  // token set. The backdrop is a mount concern, not part of the SVG, so
+  // it reads `theme.canvas` here rather than going through the serializer.
+  const theme: Theme = resolveTheme(options.theme);
+
   // ---- DOM scaffold ----
   const viewport = target.ownerDocument.createElement('div');
   viewport.className = 'xdbml-viewport';
   viewport.style.cssText =
     'position:relative;width:100%;height:100%;overflow:auto;' +
-    'background-color:#f8fafc;' +
-    'background-image:linear-gradient(#eef2f7 1px,transparent 1px),linear-gradient(90deg,#eef2f7 1px,transparent 1px);' +
+    `background-color:${theme.canvas.background};` +
+    `background-image:linear-gradient(${theme.canvas.grid} 1px,transparent 1px),linear-gradient(90deg,${theme.canvas.grid} 1px,transparent 1px);` +
     'background-size:20px 20px;';
   target.appendChild(viewport);
   let svgEl: SVGSVGElement | null = null;

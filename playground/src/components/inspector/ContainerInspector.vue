@@ -2,14 +2,14 @@
   <div>
     <InspectorSection title="Identification">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt class="font-medium text-gray-500">Keyword</dt>
-        <dd class="text-gray-900 font-mono">{{ container.keyword }}</dd>
-        <dt class="font-medium text-gray-500">Name</dt>
-        <dd class="text-gray-900 font-mono break-all">{{ container.name }}</dd>
-        <dt class="font-medium text-gray-500">Members</dt>
-        <dd class="text-gray-900">
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Keyword</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono">{{ container.keyword }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Name</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ container.name }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Members</dt>
+        <dd class="text-gray-900 dark:text-slate-100">
           {{ entityCount }} {{ entityCount === 1 ? 'member' : 'members' }}
-          <span v-if="memberBreakdown" class="text-gray-500">({{ memberBreakdown }})</span>
+          <span v-if="memberBreakdown" class="text-gray-500 dark:text-slate-400">({{ memberBreakdown }})</span>
         </dd>
       </dl>
     </InspectorSection>

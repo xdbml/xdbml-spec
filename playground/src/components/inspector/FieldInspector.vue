@@ -2,34 +2,34 @@
   <div>
     <InspectorSection title="Identification">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-        <dt class="font-medium text-gray-500">Name</dt>
-        <dd class="text-gray-900 font-mono break-all">{{ field.name }}</dd>
-        <dt v-if="ancestors.length > 0" class="font-medium text-gray-500">Path</dt>
-        <dd v-if="ancestors.length > 0" class="text-gray-900 font-mono break-all">
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Name</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ field.name }}</dd>
+        <dt v-if="ancestors.length > 0" class="font-medium text-gray-500 dark:text-slate-400">Path</dt>
+        <dd v-if="ancestors.length > 0" class="text-gray-900 dark:text-slate-100 font-mono break-all">
           {{ ancestorPath }}.<span class="font-semibold">{{ field.name }}</span>
         </dd>
-        <dt class="font-medium text-gray-500">Entity</dt>
-        <dd class="text-gray-900 font-mono break-all">{{ entity.name }}</dd>
-        <dt v-if="container" class="font-medium text-gray-500">Container</dt>
-        <dd v-if="container" class="text-gray-900 font-mono break-all">{{ container.name }}</dd>
+        <dt class="font-medium text-gray-500 dark:text-slate-400">Entity</dt>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ entity.name }}</dd>
+        <dt v-if="container" class="font-medium text-gray-500 dark:text-slate-400">Container</dt>
+        <dd v-if="container" class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ container.name }}</dd>
       </dl>
     </InspectorSection>
 
     <InspectorSection title="Type">
-      <div class="text-xs font-mono text-gray-900 break-all">
+      <div class="text-xs font-mono text-gray-900 dark:text-slate-100 break-all">
         {{ shortTypeLabel }}
       </div>
       <div v-if="isStructuralType" class="mt-2">
         <button
           type="button"
-          class="text-[11px] text-blue-600 hover:text-blue-800 font-medium"
+          class="text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-800 font-medium"
           @click="showFullType = !showFullType"
         >
           {{ showFullType ? '▾ Hide' : '▸ Show' }} structural details
         </button>
         <pre
           v-if="showFullType"
-          class="mt-2 text-[11px] bg-gray-50 border border-gray-200 rounded p-2 overflow-x-auto leading-relaxed"
+          class="mt-2 text-[11px] bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-2 overflow-x-auto leading-relaxed"
         >{{ fullTypeBreakdown }}</pre>
       </div>
     </InspectorSection>
@@ -114,16 +114,16 @@ const flagBadges = computed(() => {
     switch (s.name) {
       case 'pk':
       case 'primary key':
-        badges.push({ label: 'PRIMARY KEY',    class: 'bg-yellow-100 text-yellow-800' });
+        badges.push({ label: 'PRIMARY KEY',    class: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300' });
         break;
       case 'unique':
-        badges.push({ label: 'UNIQUE',         class: 'bg-purple-100 text-purple-800' });
+        badges.push({ label: 'UNIQUE',         class: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300' });
         break;
       case 'not null':
-        badges.push({ label: 'REQUIRED',       class: 'bg-red-100 text-red-800' });
+        badges.push({ label: 'REQUIRED',       class: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' });
         break;
       case 'increment':
-        badges.push({ label: 'AUTO-INCREMENT', class: 'bg-blue-100 text-blue-800' });
+        badges.push({ label: 'AUTO-INCREMENT', class: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300' });
         break;
     }
   }

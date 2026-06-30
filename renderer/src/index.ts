@@ -179,4 +179,4 @@ export type {
 export { autoArrange, type ArrangeStrategy } from './layout/auto-arrange.ts';
 
 export { serializeDiagram, type SerializeOptions } from './svg/serialize.ts';
-export { defaultTheme, resolveTheme, type Theme, type DeepPartial } from './style/theme.ts';
+export { defaultTheme, darkTheme, resolveTheme, type Theme, type DeepPartial } from './style/theme.ts';

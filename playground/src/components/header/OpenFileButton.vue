@@ -4,7 +4,7 @@
          shows a confirmation modal first. -->
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-700 border border-transparent rounded transition-colors cursor-pointer hover:bg-gray-100 hover:border-gray-200"
+      class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-slate-200 border border-transparent rounded transition-colors cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700 hover:border-gray-200 dark:hover:border-slate-600"
       :title="canUseFsAccess ? 'Open an .xdbml file from your computer' : 'Open an .xdbml file from your computer (download mode)'"
       @click="onOpenClick"
     >
@@ -35,24 +35,24 @@
         aria-modal="true"
         @click.self="onCancel"
       >
-        <div class="bg-white rounded-lg shadow-xl border border-gray-200 max-w-sm w-full mx-4 p-5">
-          <h2 class="text-sm font-semibold text-gray-900">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 max-w-sm w-full mx-4 p-5">
+          <h2 class="text-sm font-semibold text-gray-900 dark:text-slate-100">
             You have unsaved changes
           </h2>
-          <p class="mt-1.5 text-xs text-gray-600">
+          <p class="mt-1.5 text-xs text-gray-600 dark:text-slate-300">
             Opening a new file will discard your current edits unless you save them first.
           </p>
           <div class="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
-              class="px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 rounded transition-colors cursor-pointer"
+              class="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors cursor-pointer"
               @click="onCancel"
             >
               Cancel
             </button>
             <button
               type="button"
-              class="px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 rounded transition-colors cursor-pointer"
+              class="px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-300 hover:bg-red-50 rounded transition-colors cursor-pointer"
               @click="onDiscard"
             >
               Discard and open

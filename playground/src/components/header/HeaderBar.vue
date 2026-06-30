@@ -1,5 +1,5 @@
 <template>
-  <header class="bg-white border-b border-gray-200 h-14 flex-shrink-0">
+  <header class="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 h-14 flex-shrink-0">
     <div class="h-full px-5 flex justify-between items-center">
       <!-- Brand: official xDBML wordmark (Apache-2.0) from the spec
            repo. The wordmark already includes the mark glyph and the
@@ -21,9 +21,9 @@
             class="h-7 w-auto"
           />
         </a>
-        <span class="h-5 w-px bg-gray-300" />
-        <span class="text-sm font-medium text-gray-700">Playground</span>
-        <span class="px-2 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-800 rounded-full uppercase tracking-wide">
+        <span class="h-5 w-px bg-gray-300 dark:bg-slate-600" />
+        <span class="text-sm font-medium text-gray-700 dark:text-slate-200">Playground</span>
+        <span class="px-2 py-0.5 text-[10px] font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300 rounded-full uppercase tracking-wide">
           Preview
         </span>
 
@@ -31,9 +31,9 @@
              monospace font, with an amber dot to the right when there
              are unsaved changes. Italic "(untitled)" placeholder when
              no file is open. -->
-        <span class="h-5 w-px bg-gray-300" />
+        <span class="h-5 w-px bg-gray-300 dark:bg-slate-600" />
         <span
-          class="text-xs font-mono text-gray-500 truncate max-w-[16rem]"
+          class="text-xs font-mono text-gray-500 dark:text-slate-400 truncate max-w-[16rem]"
           :title="filenameTooltip"
         >
           <span v-if="filename">{{ filename }}</span>
@@ -52,13 +52,15 @@
       <div class="flex items-center gap-1">
         <OpenFileButton />
         <SaveFileButton />
-        <span class="h-5 w-px bg-gray-300 mx-1" />
+        <span class="h-5 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
         <ExamplesMenu />
         <ShareMenu />
         <HeaderButton
           label="Help"
           @click="onOpenHelp"
         />
+        <span class="h-5 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
+        <AppearanceToggle />
       </div>
     </div>
   </header>
@@ -90,6 +92,7 @@ import ExamplesMenu from './ExamplesMenu.vue';
 import ShareMenu from './ShareMenu.vue';
 import OpenFileButton from './OpenFileButton.vue';
 import SaveFileButton from './SaveFileButton.vue';
+import AppearanceToggle from './AppearanceToggle.vue';
 
 import { useFileSystem } from '@/composables/useFileSystem';
 import { useFileSystemStore } from '@/stores/fileSystemStore';

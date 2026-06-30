@@ -16,13 +16,13 @@
     >
       <div
         v-if="isOpen"
-        class="absolute top-full right-0 mt-1 w-96 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-3"
+        class="absolute top-full right-0 mt-1 w-96 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-50 p-3"
         role="menu"
       >
-        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
+        <div class="text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide mb-1">
           Share this schema
         </div>
-        <div class="text-[11px] text-gray-400 mb-2 leading-snug">
+        <div class="text-[11px] text-gray-400 dark:text-slate-500 mb-2 leading-snug">
           The entire schema is encoded into the URL. Anyone who opens this
           link sees your current schema. No server, no account.
         </div>
@@ -35,25 +35,23 @@
             ref="urlInputEl"
             :value="shareUrl"
             readonly
-            class="flex-1 min-w-0 px-2 py-1.5 text-[11px] font-mono text-gray-700 bg-gray-50 border border-gray-200 rounded focus:outline-none focus:border-blue-400 focus:bg-white"
+            class="flex-1 min-w-0 px-2 py-1.5 text-[11px] font-mono text-gray-700 dark:text-slate-200 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded focus:outline-none focus:border-blue-400 focus:bg-white"
             @focus="onUrlFocus"
             @click="onUrlFocus"
           />
           <button
             type="button"
             class="flex-shrink-0 px-2.5 py-1.5 text-xs font-medium rounded transition-colors"
-            :class="copyState === 'idle'
-              ? 'text-gray-700 bg-gray-100 hover:bg-gray-200'
-              : 'text-white bg-green-600'"
+            :class="copyState === 'idle' ? 'text-gray-700 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200' : 'text-white bg-green-600'"
             @click="onCopy"
           >
             {{ copyState === 'idle' ? 'Copy' : 'Copied!' }}
           </button>
         </div>
 
-        <div class="mt-2 flex items-center justify-between text-[10px] text-gray-400">
+        <div class="mt-2 flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-500">
           <span>{{ urlSizeLabel }}</span>
-          <span v-if="urlIsLong" class="text-amber-600">
+          <span v-if="urlIsLong" class="text-amber-600 dark:text-amber-400">
             ⚠ Long URLs may be truncated by some chat apps
           </span>
         </div>

@@ -19,14 +19,14 @@
     >
       <div
         v-if="isOpen"
-        class="absolute top-full right-0 mt-1 w-80 max-h-[28rem] overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg z-50"
+        class="absolute top-full right-0 mt-1 w-80 max-h-[28rem] overflow-y-auto bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-50"
         role="menu"
       >
-        <div class="px-3 py-2 border-b border-gray-100">
-          <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+        <div class="px-3 py-2 border-b border-gray-100 dark:border-slate-800">
+          <div class="text-[11px] font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wide">
             Example schemas
           </div>
-          <div class="text-[11px] text-gray-400 mt-0.5">
+          <div class="text-[11px] text-gray-400 dark:text-slate-500 mt-0.5">
             Loading replaces your current schema. Ctrl + Z in the editor restores.
           </div>
         </div>
@@ -35,7 +35,7 @@
           v-for="sample in SAMPLE_CATEGORIES"
           :key="sample.slug"
           type="button"
-          class="w-full text-left px-3 py-2.5 hover:bg-gray-50 active:bg-gray-100 transition-colors flex items-start gap-2 border-b border-gray-50 last:border-b-0"
+          class="w-full text-left px-3 py-2.5 hover:bg-gray-50 dark:hover:bg-slate-800 active:bg-gray-100 transition-colors flex items-start gap-2 border-b border-gray-50 last:border-b-0"
           role="menuitem"
           @click="onPick(sample)"
         >
@@ -45,17 +45,17 @@
             <svg
               v-if="isCurrent(sample)"
               viewBox="0 0 16 16"
-              class="w-4 h-4 text-blue-600"
+              class="w-4 h-4 text-blue-600 dark:text-blue-400"
               aria-label="Current sample"
             >
               <path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
             </svg>
           </div>
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-gray-900 leading-tight">
+            <div class="text-sm font-medium text-gray-900 dark:text-slate-100 leading-tight">
               {{ sample.name }}
             </div>
-            <div class="text-[11px] text-gray-500 mt-0.5 leading-snug">
+            <div class="text-[11px] text-gray-500 dark:text-slate-400 mt-0.5 leading-snug">
               {{ sample.description }}
             </div>
           </div>

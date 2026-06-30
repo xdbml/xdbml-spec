@@ -79,6 +79,69 @@ const XDBML_THEME: monaco.editor.IStandaloneThemeData = {
 export const XDBML_LANGUAGE_ID = 'xdbml';
 export const XDBML_THEME_NAME = 'xdbml-theme';
 
+/*
+ * Dark counterpart of XDBML_THEME. Same token taxonomy, foregrounds
+ * lifted to read on a dark editor surface, and a slate editor chrome so
+ * the editor pane matches the rest of the playground in dark mode rather
+ * than Monaco's default near-black vs-dark background.
+ */
+const XDBML_THEME_DARK: monaco.editor.IStandaloneThemeData = {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [
+    { token: 'keyword.declaration', foreground: '6ea8ff', fontStyle: 'bold' },
+    { token: 'keyword.container', foreground: '6ea8ff', fontStyle: 'bold' },
+    { token: 'keyword.entity', foreground: '6ea8ff', fontStyle: 'bold' },
+    { token: 'keyword.type', foreground: 'e08fd0', fontStyle: 'bold' },
+    { token: 'keyword.polymorphism', foreground: 'e08fd0', fontStyle: 'bold italic' },
+    { token: 'keyword.directive', foreground: 'c89be0', fontStyle: 'bold' },
+    { token: 'keyword.setting', foreground: '4ec9b0' },
+    { token: 'keyword.value', foreground: '4ec9b0' },
+    { token: 'keyword.literal', foreground: 'e08fd0' },
+    { token: 'keyword.wildcard', foreground: 'ff9e5e', fontStyle: 'bold' },
+    { token: 'keyword.partial', foreground: 'ff9e5e', fontStyle: 'bold' },
+
+    { token: 'type', foreground: '7ec699' },
+    { token: 'type.bson', foreground: '7ec699', fontStyle: 'italic' },
+
+    { token: 'identifier', foreground: 'd4d4d4' },
+    { token: 'identifier.custom-property', foreground: 'd7ba7d', fontStyle: 'italic' },
+
+    { token: 'string', foreground: 'ce9178' },
+    { token: 'string.multiline', foreground: 'ce9178' },
+    { token: 'string.quoted-ident', foreground: '9cdcfe' },
+    { token: 'string.backtick', foreground: 'ce9178', fontStyle: 'italic' },
+    { token: 'string.escape', foreground: 'd7ba7d' },
+
+    { token: 'comment', foreground: '8a98a8', fontStyle: 'italic' },
+    { token: 'comment.block', foreground: '8a98a8', fontStyle: 'italic' },
+
+    { token: 'number', foreground: 'b5cea8' },
+    { token: 'number.float', foreground: 'b5cea8' },
+    { token: 'number.hex', foreground: '6ea8ff' },
+
+    { token: 'operators.cardinality', foreground: 'd4d4d4', fontStyle: 'bold' },
+    { token: 'delimiter', foreground: 'b0b0b0' },
+    { token: 'delimiter.curly', foreground: 'b0b0b0' },
+    { token: 'delimiter.square', foreground: 'b0b0b0' },
+    { token: 'delimiter.parenthesis', foreground: 'b0b0b0' },
+  ],
+  colors: {
+    'editor.background': '#0f172a',
+    'editorGutter.background': '#0f172a',
+    'editorLineNumber.foreground': '#475569',
+    'editorLineNumber.activeForeground': '#94a3b8',
+    'editor.lineHighlightBackground': '#1e293b',
+    'editor.lineHighlightBorder': '#00000000',
+    'editorCursor.foreground': '#e2e8f0',
+    'editor.selectionBackground': '#334155',
+    'editorIndentGuide.background1': '#1e293b',
+    'editorIndentGuide.activeBackground1': '#334155',
+  },
+};
+
+export const XDBML_THEME_DARK_NAME = 'xdbml-theme-dark';
+
 let registered = false;
 
 export function registerXDbmlLanguage (): void {
@@ -88,6 +151,7 @@ export function registerXDbmlLanguage (): void {
     monaco.languages.setMonarchTokensProvider(XDBML_LANGUAGE_ID, XDBML_TOKEN_PROVIDER);
     monaco.languages.setLanguageConfiguration(XDBML_LANGUAGE_ID, XDBML_LANGUAGE_CONFIG);
     monaco.editor.defineTheme(XDBML_THEME_NAME, XDBML_THEME);
+    monaco.editor.defineTheme(XDBML_THEME_DARK_NAME, XDBML_THEME_DARK);
     registered = true;
   } catch (e) {
     logger.warn('Failed to register xDBML language with Monaco', e);

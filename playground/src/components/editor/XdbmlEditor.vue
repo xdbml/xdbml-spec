@@ -4,13 +4,13 @@
       ref="editorContainer"
       class="flex-1 min-h-0"
     />
-    <div class="bg-gray-50 border-t border-gray-200 px-3 py-1 text-xs text-gray-600 flex justify-between items-center">
+    <div class="bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700 px-3 py-1 text-xs text-gray-600 dark:text-slate-400 flex justify-between items-center">
       <span class="font-medium">xDBML</span>
       <span>
         Ln {{ cursor.line }}, Col {{ cursor.column }}
         <span
           v-if="selection.chars > 0"
-          class="text-gray-400 ml-2"
+          class="text-gray-400 dark:text-slate-500 ml-2"
         >({{ selection.chars }} selected)</span>
       </span>
     </div>
@@ -37,8 +37,11 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 
 import { useParserStore } from '@/stores/parserStore';
 
-import { registerXDbmlLanguage, XDBML_LANGUAGE_ID, XDBML_THEME_NAME } from './xdbml_language';
+import { registerXDbmlLanguage, XDBML_LANGUAGE_ID, XDBML_THEME_NAME, XDBML_THEME_DARK_NAME } from './xdbml_language';
 import { setMonacoMarkers } from './xdbml_markers';
+import { useAppearance } from '@/composables/useAppearance';
+
+const { isDark } = useAppearance();
 
 const content = defineModel<string>({ required: true });
 
@@ -54,7 +57,7 @@ function editorOptions (): monaco.editor.IStandaloneEditorConstructionOptions {
   return {
     value: content.value,
     language: XDBML_LANGUAGE_ID,
-    theme: XDBML_THEME_NAME,
+    theme: isDark.value ? XDBML_THEME_DARK_NAME : XDBML_THEME_NAME,
     minimap: { enabled: false },
     wordWrap: 'off',
     scrollBeyondLastLine: false,
@@ -140,6 +143,12 @@ watch(() => parser.errors, (errors) => {
   if (!model) return;
   setMonacoMarkers(model, errors);
 }, { immediate: true });
+
+// Switch the editor theme when the appearance mode changes. setTheme is
+// global to Monaco, which is fine here -- the playground has one editor.
+watch(isDark, (dark) => {
+  monaco.editor.setTheme(dark ? XDBML_THEME_DARK_NAME : XDBML_THEME_NAME);
+});
 
 /**
  * Programmatic navigation to a line/column. Used by the inspector's
