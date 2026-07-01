@@ -39,7 +39,10 @@ const appearance = ref<Appearance>(currentFromDom());
 function apply (mode: Appearance): void {
   const root = document.documentElement;
   root.classList.toggle('dark', mode === 'dark');
-  root.style.colorScheme = mode;
+  // `only` forbids the browser from force-darkening our page; without it a
+  // runtime toggle back to light would let Chrome's Auto Dark Theme mangle
+  // the ERD SVG again. Mirrors the pre-paint bootstrap in index.html.
+  root.style.colorScheme = mode === 'dark' ? 'only dark' : 'only light';
   try {
     localStorage.setItem(APPEARANCE_STORAGE_KEY, mode);
   } catch {

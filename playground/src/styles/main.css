@@ -9,16 +9,21 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * color-scheme follows the resolved mode so native form controls,
- * scrollbars, and the like match. The bootstrap also sets this inline on
- * <html> before paint; these rules keep it correct after hydration and
- * across runtime toggles.
+ * color-scheme follows the resolved mode with the `only` keyword, which
+ * forbids the browser from overriding our theme. This is what actually
+ * blocks Chrome's "Auto Dark Theme" / forced-dark from repainting the
+ * page: a plain `light` (without `only`) still lets forced-dark mangle
+ * the ERD SVG (white cards but inverted, invisible attribute names). We
+ * own both themes explicitly (Tailwind classes + the renderer palette),
+ * so we want zero UA override in either direction. The bootstrap also
+ * sets this inline on <html> before paint; these rules keep it correct
+ * after hydration and across runtime toggles.
  */
 :root {
-  color-scheme: light;
+  color-scheme: only light;
 }
 :root.dark {
-  color-scheme: dark;
+  color-scheme: only dark;
 }
 
 /*

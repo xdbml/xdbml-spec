@@ -5,12 +5,15 @@
     <link rel="icon" type="image/svg+xml" href="/xdbml-favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      The playground supports light and dark. The actual scheme is driven
-      by a `dark` class on <html> (see the bootstrap below and
-      src/composables/useAppearance.ts); declaring "light dark" tells the
-      browser the page handles both so it never auto-darkens on its own.
+      The playground controls its own light and dark themes. `only light`
+      is the no-JS default and, via the `only` keyword, forbids the
+      browser from force-darkening the page (a plain `light`/`light dark`
+      does not stop Chrome's Auto Dark Theme, which mangles the ERD SVG).
+      The pre-paint bootstrap below overrides this inline on <html> with
+      `only light` / `only dark` to match the resolved mode, so the meta
+      is just the fallback when scripting is off.
     -->
-    <meta name="color-scheme" content="light dark" />
+    <meta name="color-scheme" content="only light" />
     <!--
       Appearance bootstrap. Runs before first paint so the page never
       flashes the wrong theme. Precedence:
@@ -47,7 +50,10 @@
           }
           var root = document.documentElement;
           root.classList.toggle('dark', mode === 'dark');
-          root.style.colorScheme = mode;
+          // `only` forbids the browser from force-darkening (or -lightening)
+          // our page: without it, Chrome's Auto Dark Theme repaints the app
+          // and mangles the ERD SVG. We control both themes ourselves.
+          root.style.colorScheme = 'only ' + mode;
         } catch (e) { /* leave default light on any failure */ }
       })();
     </script>
