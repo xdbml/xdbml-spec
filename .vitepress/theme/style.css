@@ -177,3 +177,67 @@
 .dark .custom-block.screenshot .custom-block-title {
   color: #fbbf24;
 }
+
+/* ============================================================
+ * "View in playground" launch button (above full spec examples)
+ *
+ * Sits above complete, self-contained examples that render as an
+ * ERD. The site's existing capture-phase click interceptor
+ * (theme/index.ts) rewrites these links at activation time to
+ * carry the live light/dark appearance as ?theme=, so the hand-off
+ * works without per-link markup.
+ *
+ * NOTE: selectors are scoped as `.vp-doc a.playground-launch` so
+ * they win over VitePress's default `.vp-doc a` link color, which
+ * otherwise repaints the label in the brand link color (this made
+ * the earlier version illegible against its own background).
+ * ============================================================ */
+.vp-doc a.playground-launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  margin: 0.2rem 0 0.6rem;
+  padding: 0.32rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease,
+              transform 0.1s ease, box-shadow 0.15s ease;
+
+  /* Light mode: white label on deep navy -- ~8.6:1 contrast */
+  color: #ffffff;
+  background-color: #1a4d7a;
+  border: 1px solid #123a5e;
+}
+
+.vp-doc a.playground-launch::before {
+  content: "\25B6"; /* play triangle, inherits label color */
+  font-size: 0.7em;
+  line-height: 1;
+}
+
+.vp-doc a.playground-launch:hover {
+  color: #ffffff;
+  background-color: #123a5e;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(18, 58, 94, 0.35);
+}
+
+.vp-doc a.playground-launch:active {
+  transform: translateY(0);
+}
+
+/* Dark mode: deep-navy label on light cyan -- ~9:1 contrast */
+.dark .vp-doc a.playground-launch {
+  color: #0d2b45;
+  background-color: #6fc8ec;
+  border-color: #4aa9d4;
+}
+
+.dark .vp-doc a.playground-launch:hover {
+  color: #0d2b45;
+  background-color: #8ad6f2;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
