@@ -4,7 +4,7 @@
  * `@xdbml/render` with no MCP SDK in the loop.
  */
 
-import { renderToSVG, buildDiagram } from '@xdbml/render';
+import { renderToSVG, buildDiagram, defaultTheme, darkTheme } from '@xdbml/render';
 import { parse, flatten } from '@xdbml/parse';
 
 export const PLAYGROUND_URL = 'https://xdbml.org/playground/';
@@ -14,6 +14,7 @@ export interface RenderArgs {
   arrange?: 'relational' | 'star' | 'none';
   background?: string;
   playground?: boolean;
+  mode?: 'light' | 'dark';
 }
 
 export type ToolResult = {
@@ -26,13 +27,22 @@ export type ToolResult = {
 };
 
 export function renderXdbmlTool (args: RenderArgs): ToolResult {
-  const { source, arrange, background, playground = true } = args;
+  const { source, arrange, background, playground = true, mode = 'light' } = args;
+
+  // A standalone SVG is transparent by default and the viewer paints behind
+  // it. On the dark theme the row text is light, so without a dark backdrop it
+  // would land on the viewer's white page (and the white PNG canvas). Paint the
+  // dark canvas unless the caller gave an explicit background. This also makes
+  // the rasterized PNG dark, since the full-canvas rect covers resvg's white.
+  const theme = mode === 'dark' ? darkTheme : defaultTheme;
+  const bg = background ?? (mode === 'dark' ? darkTheme.canvas.background : undefined);
 
   let svg: string;
   try {
     svg = renderToSVG(source, {
       arrange,
-      background,
+      theme,
+      background: bg,
       playgroundLink: playground ? PLAYGROUND_URL : undefined,
     });
   } catch (e) {

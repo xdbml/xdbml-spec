@@ -75,7 +75,11 @@ function createServer (): McpServer {
       background: z
         .string()
         .optional()
-        .describe('Optional CSS background color, e.g. "#ffffff". Default: transparent.'),
+        .describe('Optional CSS background color, e.g. "#ffffff". Default: transparent (light) or the dark canvas when mode is "dark".'),
+      mode: z
+        .enum(['light', 'dark'])
+        .optional()
+        .describe('Color theme. Default: light. Use "dark" for a dark-background diagram; the SVG and PNG both carry a matching dark backdrop so the light text stays legible.'),
       playground: z
         .boolean()
         .optional()
@@ -144,7 +148,7 @@ streamable-HTTP endpoint:
   POST /mcp
 
 Tools:
-  render_xdbml(source, arrange?, background?, playground?, image?)
+  render_xdbml(source, arrange?, background?, mode?, playground?, image?)
     Renders an xDBML schema to SVG (plus a PNG by default) and returns a
     playground link. xDBML is a strict superset of DBML.
   validate_xdbml(source)
