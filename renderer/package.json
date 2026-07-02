@@ -1,6 +1,6 @@
 {
   "name": "@xdbml/render",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Framework-free SVG renderer for xDBML diagrams, shared by the playground, the hosted render API, and the MCP server.",
   "license": "Apache-2.0",
   "author": "Hackolade",
