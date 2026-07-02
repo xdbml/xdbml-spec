@@ -106,7 +106,7 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
   const unresolved = model.refs.filter((r) => r.unresolved).length;
   if (unresolved > 0) parts.push(banner(unresolved, model, theme));
 
-  if (link) parts.push(playgroundFooter(link, model.width, model.height));
+  if (link) parts.push(playgroundFooter(link, model.width, model.height, theme));
 
   if (!inner) parts.push('</svg>');
   return parts.join('');
@@ -118,11 +118,11 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
  * (for example the render API's image/svg+xml response opened in a browser
  * tab); inert but still legible when embedded via an <img> tag.
  */
-function playgroundFooter (link: { href: string; label: string }, width: number, top: number): string {
+function playgroundFooter (link: { href: string; label: string }, width: number, top: number, theme: Theme): string {
   const y = top + 18;
   return `<a href="${escapeXml(link.href)}" target="_blank" rel="noopener noreferrer">` +
     `<text x="${width - 12}" y="${y}" text-anchor="end" font-size="12" font-weight="500" ` +
-    `fill="#2563eb" text-decoration="underline">${escapeXml(link.label)} →</text></a>`;
+    `fill="${theme.footerLink}" text-decoration="underline">${escapeXml(link.label)} →</text></a>`;
 }
 
 /* ------------------------------------------------------------------ defs */

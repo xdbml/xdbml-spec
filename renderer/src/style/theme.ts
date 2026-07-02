@@ -14,6 +14,9 @@ export interface Theme {
   fontSans: string;
   fontMono: string;
 
+  /** Color of the standalone-SVG "Open in playground" footer link. */
+  footerLink: string;
+
   /** Drop shadow under entity cards. */
   shadow: {
     dx: number;
@@ -103,6 +106,8 @@ export const defaultTheme: Theme = {
     "system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
   fontMono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 
+  footerLink: '#2563eb',
+
   shadow: {
     dx: 0,
     dy: 1,
@@ -188,6 +193,8 @@ export const defaultTheme: Theme = {
 export const darkTheme: Theme = {
   fontSans: defaultTheme.fontSans,
   fontMono: defaultTheme.fontMono,
+
+  footerLink: '#60a5fa',
 
   shadow: {
     dx: 0,

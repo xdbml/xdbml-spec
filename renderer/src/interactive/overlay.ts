@@ -16,10 +16,10 @@
  */
 import type { DiagramModel, EntityLayout } from '../layout/layout.ts';
 import { CONTAINER_HEADER_HEIGHT, ENTITY_HEADER_HEIGHT } from '../layout/layout.ts';
+import type { Theme } from '../style/theme.ts';
 import { resolveRef } from '../geometry/ref-path.ts';
 
 const INDENT_PX = 14;
-const SELECT_COLOR = '#2563eb';
 
 export type Selection =
   | { kind: 'entity'; id: string }
@@ -28,19 +28,19 @@ export type Selection =
   | { kind: 'container'; name: string }
   | null;
 
-export function buildOverlay (model: DiagramModel, selection: Selection): string {
+export function buildOverlay (model: DiagramModel, selection: Selection, theme: Theme): string {
   const parts: string[] = ['<g class="xdbml-overlay">'];
 
-  for (const c of model.containers) parts.push(containerOverlay(c, selection));
-  for (const r of model.refs) parts.push(refOverlay(r, model, selection));
-  for (const e of model.entities) parts.push(entityOverlay(e, 'entity', selection));
-  for (const e of model.edges) parts.push(entityOverlay(e.box, 'edge', selection));
+  for (const c of model.containers) parts.push(containerOverlay(c, selection, theme));
+  for (const r of model.refs) parts.push(refOverlay(r, model, selection, theme));
+  for (const e of model.entities) parts.push(entityOverlay(e, 'entity', selection, theme));
+  for (const e of model.edges) parts.push(entityOverlay(e.box, 'edge', selection, theme));
 
   parts.push('</g>');
   return parts.join('');
 }
 
-function entityOverlay (entity: EntityLayout, handle: 'entity' | 'edge', sel: Selection): string {
+function entityOverlay (entity: EntityLayout, handle: 'entity' | 'edge', sel: Selection, theme: Theme): string {
   const { x, y, width, height } = entity.bounds;
   const id = attr(entity.id);
   const parts: string[] = [`<g data-xdbml="${handle}" data-id="${id}">`];
@@ -52,7 +52,7 @@ function entityOverlay (entity: EntityLayout, handle: 'entity' | 'edge', sel: Se
   if (sel && (sel.kind === 'entity' || sel.kind === 'field') && sel.id === entity.id) {
     parts.push(
       `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="5" fill="none" ` +
-      `stroke="${SELECT_COLOR}" stroke-width="2" pointer-events="none"/>`,
+      `stroke="${theme.row.selectStrip}" stroke-width="2" pointer-events="none"/>`,
     );
   }
 
@@ -83,6 +83,7 @@ function entityOverlay (entity: EntityLayout, handle: 'entity' | 'edge', sel: Se
 function containerOverlay (
   c: DiagramModel['containers'][number],
   sel: Selection,
+  theme: Theme,
 ): string {
   const { x, y, width, height } = c.bounds;
   const name = attr(c.name);
@@ -91,7 +92,7 @@ function containerOverlay (
   if (sel && sel.kind === 'container' && sel.name === c.name) {
     parts.push(
       `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="6" fill="none" ` +
-      `stroke="${SELECT_COLOR}" stroke-width="2.5" stroke-dasharray="4 3" pointer-events="none"/>`,
+      `stroke="${theme.row.selectStrip}" stroke-width="2.5" stroke-dasharray="4 3" pointer-events="none"/>`,
     );
   }
 
@@ -114,6 +115,7 @@ function refOverlay (
   r: DiagramModel['refs'][number],
   model: DiagramModel,
   sel: Selection,
+  theme: Theme,
 ): string {
   const resolved = resolveRef(r, model.entities, model.containers);
   if (!resolved) return '';
@@ -122,7 +124,7 @@ function refOverlay (
 
   if (sel && sel.kind === 'ref' && sel.id === r.id) {
     parts.push(
-      `<path d="${resolved.path.d}" fill="none" stroke="${SELECT_COLOR}" stroke-width="2.5" pointer-events="none"/>`,
+      `<path d="${resolved.path.d}" fill="none" stroke="${theme.row.selectStrip}" stroke-width="2.5" pointer-events="none"/>`,
     );
   }
   // Wide transparent hit path.

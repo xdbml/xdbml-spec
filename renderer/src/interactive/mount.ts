@@ -135,7 +135,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
         ? { entityId: selection.id, path: selection.path }
         : undefined,
     });
-    const overlay = buildOverlay(model, selection);
+    const overlay = buildOverlay(model, selection, theme);
     const w = model.width * zoom;
     const h = model.height * zoom;
     viewport.innerHTML =
