@@ -473,7 +473,11 @@ objectKeyword
     ;
 
 arrayType
-    : arrayKeyword LBRACK typeExpression RBRACK
+    // A single element type is the common case. A comma-separated list --
+    // `array [T1, T2, ...]` -- is shorthand for `array [union [T1, T2, ...]]`;
+    // the listed types must be scalar or named types (or `null`), the same
+    // members a `union` accepts.
+    : arrayKeyword LBRACK typeExpression (COMMA typeExpression)* RBRACK
     ;
 
 arrayKeyword

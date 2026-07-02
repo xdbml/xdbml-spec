@@ -1158,8 +1158,31 @@ export class Parser {
     ) {
       elementName = this.advance().text;
     }
-    const elementType = this.parseTypeExpression();
+    const elemStart = this.peek().start;
+    let elementType = this.parseTypeExpression();
     const elementSettings = this.maybeSettingsBlock();
+
+    // Sugar: `array [T1, T2, ...]` is shorthand for `array [union [T1, T2, ...]]`.
+    // It applies when the first element is a scalar / named / null type with no
+    // per-member settings; the comma-separated members fold into a UnionType.
+    // (Object shapes use `oneOf`, fixed positional layouts use a tuple; see
+    // spec 8.4 / 8.6.)
+    if (
+      elementSettings.length === 0
+      && this.check(TokenKind.Comma)
+      && this.isUnionMemberType(elementType)
+    ) {
+      const members: UnionType['members'] = [elementType as UnionType['members'][number]];
+      while (this.match(TokenKind.Comma)) {
+        members.push(this.parseUnionMember());
+      }
+      elementType = {
+        kind: 'UnionType',
+        members,
+        span: this.spanFrom(elemStart),
+      };
+    }
+
     this.expect(TokenKind.RBracket, "Expected ']' closing array");
     return {
       kind: 'ArrayType',
@@ -1169,6 +1192,14 @@ export class Parser {
       elementSettings: elementSettings.length > 0 ? elementSettings : undefined,
       span: this.spanFrom(start),
     };
+  }
+
+  /** A type usable as a `union` member (and thus foldable from array sugar).
+   *  `null` is only ever a later member (parsed via parseUnionMember), never
+   *  the first standalone element type, so it is not listed here. */
+  private isUnionMemberType (t: TypeExpression): boolean {
+    return t.kind === 'ScalarType'
+      || t.kind === 'NamedTypeReference';
   }
 
   /** True if the token looks like the start of a TypeExpression. */

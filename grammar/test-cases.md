@@ -160,6 +160,18 @@ Entity records {
 }
 ```
 
+### VALID -- array element-type shorthand (folds to a union)
+
+```
+xdbml: 0.1
+
+Entity records {
+  ids     array [int, varchar]          // shorthand for array [union [int, varchar]]
+  mixed   array [int, varchar, null]
+  tagged  array [union [int, varchar]]   // explicit form, still valid
+}
+```
+
 ### VALID -- polymorphism inside an array
 
 ```

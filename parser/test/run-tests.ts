@@ -165,6 +165,34 @@ function runInlineTests (): TestResult[] {
       },
     },
     {
+      name: 'Array sugar: `array [int, varchar]` folds to a union element',
+      source: 'Entity e {\n  f array [int, varchar]\n}',
+      assert: (doc) => {
+        const e = doc.statements[0];
+        const f = e.body.find((b) => (b as { name?: string }).name === 'f') as { type?: { kind?: string; elementType?: { kind?: string; members?: { kind: string; name?: string }[] } } } | undefined;
+        if (f?.type?.kind !== 'ArrayType') return `expected ArrayType, got ${f?.type?.kind}`;
+        const el = f.type.elementType;
+        if (el?.kind !== 'UnionType') return `expected element to fold to UnionType, got ${el?.kind}`;
+        const ms = el.members ?? [];
+        if (ms.length !== 2) return `expected 2 union members, got ${ms.length}`;
+        if (ms[0].name !== 'int' || ms[1].name !== 'varchar') return `expected int,varchar members, got ${ms.map((m) => m.name).join(',')}`;
+        return null;
+      },
+    },
+    {
+      name: 'Array sugar: three members incl. null; single type is NOT folded',
+      source: 'Entity e {\n  many array [int, varchar, null]\n  one  array [varchar]\n}',
+      assert: (doc) => {
+        const e = doc.statements[0];
+        const many = e.body.find((b) => (b as { name?: string }).name === 'many') as { type?: { elementType?: { kind?: string; members?: unknown[] } } } | undefined;
+        const one = e.body.find((b) => (b as { name?: string }).name === 'one') as { type?: { elementType?: { kind?: string } } } | undefined;
+        if (many?.type?.elementType?.kind !== 'UnionType') return `many: expected UnionType element, got ${many?.type?.elementType?.kind}`;
+        if ((many.type.elementType.members ?? []).length !== 3) return `many: expected 3 members, got ${(many.type.elementType.members ?? []).length}`;
+        if (one?.type?.elementType?.kind === 'UnionType') return 'one: single element type must NOT fold to a union';
+        return null;
+      },
+    },
+    {
       name: 'Tuple: newline-separated elements (no commas)',
       source: `Entity customers {
   id int [pk]
