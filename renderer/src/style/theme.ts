@@ -54,6 +54,10 @@ export interface Theme {
     namePk: string;
     nameSynthetic: string;
     typeLabel: string;
+    /** Selected-field row: tint fill and left accent strip. Theme-aware
+     *  so the (light) row text stays legible on the dark palette. */
+    selectFill: string;
+    selectStrip: string;
   };
 
   badges: {
@@ -134,6 +138,8 @@ export const defaultTheme: Theme = {
     namePk: '#854d0e',
     nameSynthetic: '#64748b',
     typeLabel: '#64748b',
+    selectFill: '#dbeafe',
+    selectStrip: '#2563eb',
   },
 
   badges: {
@@ -218,6 +224,8 @@ export const darkTheme: Theme = {
     namePk: '#fcd34d',
     nameSynthetic: '#94a3b8',
     typeLabel: '#94a3b8',
+    selectFill: '#1e3a5f',
+    selectStrip: '#3b82f6',
   },
 
   badges: {

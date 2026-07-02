@@ -33,10 +33,6 @@ import { escapeXml } from './util.ts';
 const HEADER_HEIGHT = 32;
 const INDENT_PX = 14;
 
-// Field selection tint (matches the interactive overlay's accent).
-const SELECT_FILL = '#dbeafe';
-const SELECT_STRIP = '#2563eb';
-
 export interface SerializeOptions {
   /**
    * Collapse state, as the same `${entityId}::${path}` keys
@@ -257,7 +253,7 @@ function fieldRow (
   // Row tint. A selected field gets the selection tint (over any zebra/pk
   // fill) plus an accent strip; the field name is drawn afterwards on top,
   // so it stays readable rather than being covered by a highlight overlay.
-  const fill = isSelected ? SELECT_FILL : rowFill(field, index, theme);
+  const fill = isSelected ? tr.selectFill : rowFill(field, index, theme);
   if (fill) {
     parts.push(
       `<rect x="${x + 1}" y="${y + field.rowY}" width="${width - 2}" height="${field.rowHeight}" fill="${fill}"/>`,
@@ -265,7 +261,7 @@ function fieldRow (
   }
   if (isSelected) {
     parts.push(
-      `<rect x="${x + 1}" y="${y + field.rowY}" width="3" height="${field.rowHeight}" fill="${SELECT_STRIP}"/>`,
+      `<rect x="${x + 1}" y="${y + field.rowY}" width="3" height="${field.rowHeight}" fill="${tr.selectStrip}"/>`,
     );
   }
 
