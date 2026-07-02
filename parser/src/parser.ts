@@ -1187,7 +1187,11 @@ export class Parser {
       this.expect(TokenKind.RBracket, "Expected ']' after position");
       const nameTok = this.expect(TokenKind.Identifier, 'Expected tuple element name');
       const type = this.parseTypeExpression();
-      const settings = this.maybeSettingsBlock();
+      // Optional per-element settings. A following `[` only opens a settings
+      // block if it is NOT the next element's `[N]` position marker; otherwise
+      // maybeSettingsBlock would greedily consume it and fail on the number
+      // (grammar: tupleElement's settingsBlock is optional).
+      const settings = this.positionMarkerAhead() ? [] : this.maybeSettingsBlock();
       out.push({
         kind: 'TupleElement',
         position: parseInt(numTok.text, 10),
@@ -1196,9 +1200,19 @@ export class Parser {
         settings,
         span: this.spanFrom(start),
       });
-      if (!this.match(TokenKind.Comma)) break;
+      // Elements may be separated by a comma OR by whitespace/newline alone
+      // (grammar: `tupleElement (COMMA? tupleElement)+`). Consume an optional
+      // separator; the loop condition resumes on the next `[N]`.
+      this.match(TokenKind.Comma);
     }
     return out;
+  }
+
+  /** Lookahead for a tuple position marker `[ <number> ]` (vs. a settings block). */
+  private positionMarkerAhead (): boolean {
+    return this.check(TokenKind.LBracket)
+      && this.peek(1).kind === TokenKind.NumberLiteral
+      && this.peek(2).kind === TokenKind.RBracket;
   }
 
   private parseMapType (): MapType {

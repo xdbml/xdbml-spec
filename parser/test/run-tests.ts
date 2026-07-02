@@ -165,6 +165,51 @@ function runInlineTests (): TestResult[] {
       },
     },
     {
+      name: 'Tuple: newline-separated elements (no commas)',
+      source: `Entity customers {
+  id int [pk]
+  addresses array [
+    [0] billing object {
+      street varchar
+      city varchar
+    }
+    [1] shipping object {
+      street varchar
+    }
+  ]
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return `expected EntityDeclaration, got ${e.kind}`;
+        const f = e.body.find((b) => (b as { name?: string }).name === 'addresses') as { type?: { kind?: string; elements?: { position: number; name: string }[] } } | undefined;
+        if (!f || f.type?.kind !== 'TupleType') return `expected addresses field to be a TupleType, got ${f?.type?.kind}`;
+        const els = f.type.elements ?? [];
+        if (els.length !== 2) return `expected 2 tuple elements, got ${els.length}`;
+        if (els[0].position !== 0 || els[1].position !== 1) return `expected positions 0,1, got ${els.map((x) => x.position).join(',')}`;
+        if (els[0].name !== 'billing' || els[1].name !== 'shipping') return `expected names billing,shipping, got ${els.map((x) => x.name).join(',')}`;
+        return null;
+      },
+    },
+    {
+      name: 'Tuple: newline elements with per-element settings (position marker not consumed as settings)',
+      source: `Entity e {
+  t array [
+    [0] a int [not null]
+    [1] b int [default: 5]
+  ]
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        const f = e.body.find((b) => (b as { name?: string }).name === 't') as { type?: { kind?: string; elements?: { settings?: { name: string }[] }[] } } | undefined;
+        if (f?.type?.kind !== 'TupleType') return `expected TupleType, got ${f?.type?.kind}`;
+        const els = f.type.elements ?? [];
+        if (els.length !== 2) return `expected 2 elements, got ${els.length}`;
+        if ((els[0].settings ?? []).length !== 1) return `expected 1 setting on element 0, got ${(els[0].settings ?? []).length}`;
+        if ((els[1].settings ?? []).length !== 1) return `expected 1 setting on element 1, got ${(els[1].settings ?? []).length}`;
+        return null;
+      },
+    },
+    {
       name: 'Version header recognized',
       source: `xdbml: 0.1\nProject p { targets: PostgreSQL }`,
       assert: (doc) => {

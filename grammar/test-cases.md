@@ -86,8 +86,14 @@ xdbml: 0.1
 Entity customers {
   id int [pk]
   addresses array [
-    [0] billing  object { street varchar, city varchar }
-    [1] shipping object { street varchar, city varchar }
+    [0] billing  object {
+      street varchar
+      city varchar
+    }
+    [1] shipping object {
+      street varchar
+      city varchar
+    }
   ]
 }
 ```
@@ -134,7 +140,10 @@ xdbml: 0.1
 
 Entity payments {
   method oneOf {
-    card object { last4 varchar(4), brand varchar }
+    card object {
+      last4 varchar(4)
+      brand varchar
+    }
     bank object { iban varchar }
   } [discriminator: method_kind]
 }
@@ -159,8 +168,16 @@ xdbml: 0.1
 Entity event_log {
   events array [
     event oneOf {
-      user_event object { type varchar, user_id objectId, action varchar }
-      item_event object { type varchar, item_id objectId, qty int }
+      user_event object {
+        type varchar
+        user_id objectId
+        action varchar
+      }
+      item_event object {
+        type varchar
+        item_id objectId
+        qty int
+      }
     } [discriminator: type]
   ]
 }
@@ -194,7 +211,10 @@ Entity orders {
       city   varchar
     }
     items array [
-      item object { sku varchar, quantity int }
+      item object {
+        sku varchar
+        quantity int
+      }
     ]
   }
 }
@@ -228,7 +248,10 @@ xdbml: 0.1
 Entity orders {
   id int [pk]
   line_items array [
-    line_item object { sku varchar, quantity int }
+    line_item object {
+      sku varchar
+      quantity int
+    }
   ]
 
   indexes {
@@ -600,9 +623,15 @@ Container orders_store [type: database, target: MongoDB] {
       }
     ]
     payment_method oneOf {
-      card   object { last4 string [maxLength: 4], brand string }
+      card   object {
+        last4 string [maxLength: 4]
+        brand string
+      }
       bank   object { iban string }
-      wallet object { provider string, account string }
+      wallet object {
+        provider string
+        account string
+      }
     } [discriminator: method_kind]
   }
 }
