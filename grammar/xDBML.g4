@@ -506,7 +506,9 @@ mapKeyword
     ;
 
 setType
-    : SET LBRACK typeExpression RBRACK
+    // Like arrayType, a comma-separated list -- `set [T1, T2, ...]` -- is
+    // shorthand for `set [union [T1, T2, ...]]`.
+    : SET LBRACK typeExpression (COMMA typeExpression)* RBRACK
     ;
 
 // ---- §17.3 Polymorphism ---------------------------------------------------

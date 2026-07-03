@@ -169,6 +169,7 @@ Entity records {
   ids     array [int, varchar]          // shorthand for array [union [int, varchar]]
   mixed   array [int, varchar, null]
   tagged  array [union [int, varchar]]   // explicit form, still valid
+  labels  set [int, varchar]             // set takes the same shorthand
 }
 ```
 

@@ -1162,26 +1162,8 @@ export class Parser {
     let elementType = this.parseTypeExpression();
     const elementSettings = this.maybeSettingsBlock();
 
-    // Sugar: `array [T1, T2, ...]` is shorthand for `array [union [T1, T2, ...]]`.
-    // It applies when the first element is a scalar / named / null type with no
-    // per-member settings; the comma-separated members fold into a UnionType.
-    // (Object shapes use `oneOf`, fixed positional layouts use a tuple; see
-    // spec 8.4 / 8.6.)
-    if (
-      elementSettings.length === 0
-      && this.check(TokenKind.Comma)
-      && this.isUnionMemberType(elementType)
-    ) {
-      const members: UnionType['members'] = [elementType as UnionType['members'][number]];
-      while (this.match(TokenKind.Comma)) {
-        members.push(this.parseUnionMember());
-      }
-      elementType = {
-        kind: 'UnionType',
-        members,
-        span: this.spanFrom(elemStart),
-      };
-    }
+    // Sugar: `array [T1, T2, ...]` == `array [union [T1, T2, ...]]` (see helper).
+    elementType = this.maybeFoldUnionSugar(elementType, elemStart, elementSettings.length === 0);
 
     this.expect(TokenKind.RBracket, "Expected ']' closing array");
     return {
@@ -1192,6 +1174,33 @@ export class Parser {
       elementSettings: elementSettings.length > 0 ? elementSettings : undefined,
       span: this.spanFrom(start),
     };
+  }
+
+  /** array/set sugar: fold a following comma-list of union-eligible members
+   *  (`[T1, T2, ...]`) into a UnionType. Applies only when the element is a
+   *  scalar/named type with no per-member settings; `null` is allowed as a
+   *  later member. Object shapes use `oneOf`, positional layouts use a tuple. */
+  private maybeFoldUnionSugar (
+    elementType: TypeExpression,
+    elemStart: Position,
+    noElementSettings: boolean,
+  ): TypeExpression {
+    if (
+      noElementSettings
+      && this.check(TokenKind.Comma)
+      && this.isUnionMemberType(elementType)
+    ) {
+      const members: UnionType['members'] = [elementType as UnionType['members'][number]];
+      while (this.match(TokenKind.Comma)) {
+        members.push(this.parseUnionMember());
+      }
+      return {
+        kind: 'UnionType',
+        members,
+        span: this.spanFrom(elemStart),
+      };
+    }
+    return elementType;
   }
 
   /** A type usable as a `union` member (and thus foldable from array sugar).
@@ -1267,7 +1276,11 @@ export class Parser {
     const start = this.peek().start;
     this.advance(); // set
     this.expect(TokenKind.LBracket, "Expected '[' after set");
-    const elementType = this.parseTypeExpression();
+    const elemStart = this.peek().start;
+    let elementType = this.parseTypeExpression();
+    // Sugar: `set [T1, T2, ...]` == `set [union [T1, T2, ...]]` (set has no
+    // per-element settings, so the fold is always eligible).
+    elementType = this.maybeFoldUnionSugar(elementType, elemStart, true);
     this.expect(TokenKind.RBracket, "Expected ']' closing set");
     return {
       kind: 'SetType',

@@ -193,6 +193,20 @@ function runInlineTests (): TestResult[] {
       },
     },
     {
+      name: 'Set sugar: `set [int, varchar]` folds to a union element',
+      source: 'Entity e {\n  f set [int, varchar]\n  g set [varchar]\n}',
+      assert: (doc) => {
+        const e = doc.statements[0];
+        const f = e.body.find((b) => (b as { name?: string }).name === 'f') as { type?: { kind?: string; elementType?: { kind?: string; members?: unknown[] } } } | undefined;
+        const g = e.body.find((b) => (b as { name?: string }).name === 'g') as { type?: { elementType?: { kind?: string } } } | undefined;
+        if (f?.type?.kind !== 'SetType') return `expected SetType, got ${f?.type?.kind}`;
+        if (f.type.elementType?.kind !== 'UnionType') return `expected set element to fold to UnionType, got ${f.type.elementType?.kind}`;
+        if ((f.type.elementType.members ?? []).length !== 2) return `expected 2 members, got ${(f.type.elementType.members ?? []).length}`;
+        if (g?.type?.elementType?.kind === 'UnionType') return 'single set element type must NOT fold to a union';
+        return null;
+      },
+    },
+    {
       name: 'Tuple: newline-separated elements (no commas)',
       source: `Entity customers {
   id int [pk]

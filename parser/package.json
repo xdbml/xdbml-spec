@@ -1,6 +1,6 @@
 {
   "name": "@xdbml/parse",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Parser for xDBML (eXtended Database Markup Language), a strict superset of DBML 3.13.6: tokenizer, parser, module resolver, and name resolver.",
   "license": "Apache-2.0",
   "author": "Hackolade",
