@@ -4,9 +4,68 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
+## v0.3.1 -- 2026
+
+**Status**: Draft -- current (point release of v0.3)
+**Released**: 2026-07-03
+
+A backward-compatible point release of the v0.3 draft: one small surface-syntax addition, spec clarifications, and tooling fixes across the parser, renderer, playground, and MCP server. Every v0.3 document remains valid, and documents continue to declare `xdbml: 0.3`.
+
+### Added
+
+#### Spec
+
+- **Array/list/set element-type shorthand (§8.4)**: `array [T1, T2, ...]` is now shorthand for `array [union [T1, T2, ...]]`, and `list` and `set` behave the same. The listed members must be the types a `union` accepts (scalar or named types, or `null`) and must be comma-separated -- the comma is what distinguishes the shorthand from the named-element form `array [name type]`. This lets a schema describe the heterogeneous arrays JSON and BSON allow without writing `union`. A single element type is unchanged, and the positional tuple form is unaffected.
+
+- **Element and field separators table (§3.8)**: a normative table of which separator joins the items inside each construct -- newline-only for entity/edge/`object`/`oneOf` bodies, comma-and/or-newline for tuples, comma-required for `map` and `union`, and the element-type shorthand for `array`/`set`.
+
+- **"View in playground" links in the spec**: every complete, renderable example now carries a link that opens it in the interactive playground.
+
+### Changed
+
+#### Spec
+
+- **§8.4 "Array of scalars" rewritten**: clarifies that an `array`/`set` holds a single element *type expression* (which may itself be polymorphic), that JSON/BSON arrays need not be uniform, and points to `union` (scalar mix), `oneOf` (object-shape mix, §20.5), a tuple (fixed positions, §8.6), or an opaque `json` field for each kind of heterogeneity.
+
+- **§8.6 tuple separators clarified**: tuple elements may be separated by a comma, a newline, or both -- the separator is optional and position-independent.
+
+#### Grammar
+
+- **Conformance pass on the example corpus**: object/struct bodies in `grammar/test-cases.md` and in the spec examples that used inline comma-separated fields (which the formal `.g4` does not permit) were rewritten to the newline-separated form the grammar defines, so the corpus is self-consistent with the grammar and the parser.
+
+- **`arrayType` / `setType`**: extended to accept the comma-list element-type shorthand.
+
+### Fixed
+
+#### Parser (`@xdbml/parse`)
+
+- **Newline-separated tuple elements**: a heterogeneous tuple whose elements are separated by newlines rather than commas now parses. Previously the parser required a comma between elements and greedily consumed the next `[N]` position marker as a settings block. Comma-separated tuples and per-element settings are unchanged.
+
+#### Renderer (`@xdbml/render`) -- dark mode
+
+- **Selected-row legibility**: a selected field row is no longer washed out in dark mode; the selection fill and accent strip are now theme tokens, so the row keeps light text on a dark tint.
+
+- **Footer link and selection outlines**: the standalone-SVG "Open in playground" footer link and the entity/container/relationship selection outlines are now theme-aware and stay legible on the dark canvas. Light-mode output is unchanged.
+
+### Tooling
+
+- **Playground dark mode**: a light/dark toggle with persistence, `?theme=` hand-off from the documentation site, and protection against Chrome's automatic dark-theme re-coloring.
+
+- **MCP `render_xdbml` mode parameter**: the render tool accepts `mode: "light" | "dark"`; in dark mode the returned SVG and PNG carry a matching dark backdrop so the diagram is legible in any viewer.
+
+### Packages
+
+- `@xdbml/parse` 0.3.2 (tuple fix, array/set shorthand) and `@xdbml/render` 0.3.1 (dark-mode theming) were published; the MCP server was redeployed on `@xdbml/render` 0.3.1.
+
+### Not changed (compatibility)
+
+- Backward-compatible throughout. Every v0.3 document remains valid; the element-type shorthand is purely additive surface syntax that desugars to the existing `union` type, and requires no change to a document's `xdbml:` version.
+
+---
+
 ## v0.3 -- 2026
 
-**Status**: Draft -- current
+**Status**: Draft -- superseded by v0.3.1
 **Released**: 2026
 
 ### Added
