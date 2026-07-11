@@ -91,7 +91,17 @@ export function validateXdbml (source: string): ValidateOutcome {
   //    spans. It does not throw: a well-formed-but-meaningless document
   //    still parses, it just resolves with diagnostics.
   const flat = flatten(doc);
-  const entityCount = flat.statements.filter((s) => s.kind === 'EntityDeclaration').length;
+  // Entities are declared at top level or inside a Container body
+  // (Container/Schema/Database/Keyspace/Namespace/Dataset/Bucket). The
+  // grammar does not allow containers to nest (§17.7 containerBody), so a
+  // single level of traversal is sufficient.
+  const entityCount = flat.statements.reduce((n, s) => {
+    if (s.kind === 'EntityDeclaration') return n + 1;
+    if (s.kind === 'ContainerDeclaration') {
+      return n + s.body.filter((b) => b.kind === 'EntityDeclaration').length;
+    }
+    return n;
+  }, 0);
 
   const diagnostics: ValidateDiagnostic[] = resolveNames(doc).diagnostics.map((d) => ({
     severity: d.severity,
