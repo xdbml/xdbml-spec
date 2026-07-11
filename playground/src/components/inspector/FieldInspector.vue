@@ -72,6 +72,7 @@ import type {
   FieldDeclaration,
   Span,
   TypeExpression,
+  UnionType,
   ViewDeclaration,
 } from '@xdbml/parse';
 
@@ -103,7 +104,10 @@ const isStructuralType = computed(() => {
          t.kind === 'OneOfType'  || t.kind === 'AnyOfType'  ||
          t.kind === 'AllOfType'  || t.kind === 'JsonType'   ||
          t.kind === 'MapType'    || t.kind === 'SetType'    ||
-         t.kind === 'TupleType'  || t.kind === 'UnionType';
+         t.kind === 'TupleType';
+  // UnionType is deliberately absent: its members are always simple
+  // (scalar / named type / null), so the short label above lists them in
+  // full and a structural-details toggle would add nothing.
 });
 
 const fullTypeBreakdown = computed(() => renderTypeBreakdown(props.field.type, 0));
@@ -164,6 +168,16 @@ const noteBody = computed(() => {
  * Type rendering helpers (display only)
  * ----------------------------------------------------------------------- */
 
+/**
+ * Union members are a narrower set than TypeExpression (ScalarType |
+ * NamedTypeReference | NullTypeLiteral); NullTypeLiteral exists only inside
+ * unions, so it is handled here rather than in renderShortType.
+ */
+function renderUnionMember (m: UnionType['members'][number]): string {
+  if (m.kind === 'NullTypeLiteral') return 'null';
+  return renderShortType(m);
+}
+
 function renderShortType (t: TypeExpression): string {
   switch (t.kind) {
     case 'ScalarType':
@@ -185,7 +199,7 @@ function renderShortType (t: TypeExpression): string {
     case 'SetType':
       return `set [${renderShortType(t.elementType)}]`;
     case 'UnionType':
-      return `union [${t.members.length}]`;
+      return `union [${t.members.map(renderUnionMember).join(', ')}]`;
     case 'OneOfType': return `oneOf (${t.alternatives.length})`;
     case 'AnyOfType': return `anyOf (${t.alternatives.length})`;
     case 'AllOfType': return `allOf (${t.alternatives.length})`;

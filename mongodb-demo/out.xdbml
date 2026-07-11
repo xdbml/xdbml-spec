@@ -1,0 +1,46 @@
+xdbml: 0.3
+
+Database shop {
+  Collection customers [x_inferred_from: 'mongodb-mcp collection-schema', x_sample_size: 50, x_inferred_on: '2026-07-11'] {
+    Note: 'Schema inferred from a document sample; may not represent the full collection.'
+    _id objectId [pk]
+    email string [not null]
+    name string [not null]
+    loyalty_tier string
+    address object {
+      street string [not null]
+      city string [not null]
+      country string [not null]
+      zip union [string, int32]
+    } [not null]
+    tags array [string] [not null]
+    created_at Date [not null]
+  }
+  Collection orders [x_inferred_from: 'mongodb-mcp collection-schema', x_sample_size: 50, x_inferred_on: '2026-07-11'] {
+    Note: 'Schema inferred from a document sample; may not represent the full collection.'
+    _id objectId [pk]
+    customer_id objectId [not null]
+    total union [Decimal128, double]
+    status string [not null]
+    payment oneOf {
+      as_document object {
+        method string [not null]
+        last4 string [not null]
+        captured boolean [not null]
+      }
+      as_string string
+    }
+    line_items array [
+      line_item object {
+        sku string [not null]
+        qty int32 [not null]
+        unit_price Decimal128 [not null]
+        discount double
+      }
+    ] [not null]
+    placed_at Date [not null]
+    notes string
+  }
+}
+
+Ref: shop.orders.customer_id > shop.customers._id [source: '0..*', target: '1..1']
