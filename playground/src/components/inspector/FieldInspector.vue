@@ -251,6 +251,17 @@ function renderTypeBreakdown (t: TypeExpression, indent: number): string {
       lines.push(`${pad}}`);
       return lines.join('\n');
     }
+    case 'TupleType': {
+      // Elements are `[N] name type` and the type is a full TypeExpression,
+      // so recurse: a structural element (e.g. an object) expands in place.
+      const lines = [`${pad}tuple [`];
+      for (const el of t.elements) {
+        const inner = renderTypeBreakdown(el.type, indent + 1).trimStart();
+        lines.push(`${pad}  [${el.position}] ${el.name}: ${inner}`);
+      }
+      lines.push(`${pad}]`);
+      return lines.join('\n');
+    }
     default:
       return `${pad}${renderShortType(t)}`;
   }
