@@ -39,6 +39,13 @@ export interface ValidateOutcome {
   valid: boolean;
   summary: string;
   entityCount: number;
+  /**
+   * Number of Container declarations (any synonym: Container, Schema,
+   * Database, Keyspace, Namespace, Dataset, Bucket) in the flattened
+   * document. Surfaced in the summary so namespaced documents are
+   * recognizable at a glance.
+   */
+  containerCount: number;
   diagnostics: ValidateDiagnostic[];
 }
 
@@ -74,6 +81,7 @@ export function validateXdbml (source: string): ValidateOutcome {
         summary: `Invalid xDBML: ${isLex ? 'lexical' : 'syntax'} error at ` +
           `line ${e.position.line}, column ${e.position.column}.`,
         entityCount: 0,
+        containerCount: 0,
         diagnostics: [{
           severity: 'error',
           code: isLex ? 'lex-error' : 'parse-error',
@@ -102,6 +110,8 @@ export function validateXdbml (source: string): ValidateOutcome {
     }
     return n;
   }, 0);
+  const containerCount =
+    flat.statements.filter((s) => s.kind === 'ContainerDeclaration').length;
 
   const diagnostics: ValidateDiagnostic[] = resolveNames(doc).diagnostics.map((d) => ({
     severity: d.severity,
@@ -115,7 +125,13 @@ export function validateXdbml (source: string): ValidateOutcome {
   const warningCount = diagnostics.length - errorCount;
   const valid = errorCount === 0;
 
-  const entityLabel = `${entityCount} ${entityCount === 1 ? 'entity' : 'entities'}`;
+  // "2 entities and 1 container" -- the container part is phrased as a
+  // separate count (not "entities in containers") so it stays accurate when
+  // entities are mixed between top level and container bodies.
+  const entityLabel = `${entityCount} ${entityCount === 1 ? 'entity' : 'entities'}` +
+    (containerCount > 0
+      ? ` and ${containerCount} ${containerCount === 1 ? 'container' : 'containers'}`
+      : '');
   let summary: string;
   if (valid && warningCount === 0) {
     summary = `Valid xDBML: ${entityLabel}, all references resolved.`;
@@ -130,7 +146,7 @@ export function validateXdbml (source: string): ValidateOutcome {
       `${warnPart} across ${entityLabel}.`;
   }
 
-  return { valid, summary, entityCount, diagnostics };
+  return { valid, summary, entityCount, containerCount, diagnostics };
 }
 
 /**
@@ -154,6 +170,7 @@ export function validateXdbmlTool (args: ValidateArgs): ToolResult {
   lines.push('', '```json', JSON.stringify({
     valid: outcome.valid,
     entityCount: outcome.entityCount,
+    containerCount: outcome.containerCount,
     diagnostics: outcome.diagnostics,
   }), '```');
 

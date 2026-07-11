@@ -12,9 +12,10 @@
     "prepare:playground": "node scripts/prepare-playground.mjs",
     "build:playground": "cd playground && npm install && npm run build",
     "test:parser": "cd parser && npm test",
+    "test:mcp": "cd mcp && npm test",
     "test:playground": "cd playground && npm test",
     "check:vsix": "node scripts/check-vsix.mjs",
-    "test": "npm run test:parser && npm run test:playground && npm run check:vsix",
+    "test": "npm run test:parser && npm run test:mcp && npm run test:playground && npm run check:vsix",
     "check": "npm test && cd playground && npm run type-check && cd .. && npm run docs:build"
   },
   "devDependencies": {
