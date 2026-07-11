@@ -164,11 +164,29 @@ In a chat with both servers connected, ask:
 
 ## Reference implementation
 
-The repository ships a deterministic implementation of the mapping in
+The mapping is available in two forms for two audiences.
+
+For building on, use the npm package
+[`@xdbml/from-mongodb`](https://www.npmjs.com/package/@xdbml/from-mongodb)
+(source in
+[`from-mongodb/`](https://github.com/xdbml/xdbml-spec/tree/main/from-mongodb)):
+
+```
+npm install @xdbml/from-mongodb
+```
+
+It is typed, tested, and dependency-free, and exports two functions:
+`simplifiedSchemaToXdbml(results, options)` performs the mapping above, and
+`detectReferences(results)` proposes reference candidates from ObjectId
+naming conventions for you to review and pass back in, so detection is never
+silently applied. An `inferredOn` option pins the provenance date for
+reproducible output.
+
+For reading, the repository also ships the mapping as a single self-contained
+script in
 [`mongodb-demo/`](https://github.com/xdbml/xdbml-spec/tree/main/mongodb-demo):
-`simplified-schema-to-xdbml.mjs` is a dependency-free ES module that consumes
-`collection-schema` results and emits xDBML, and `demo.mjs` runs it on sample
-payloads shaped exactly like the tool's output. Run it with
+`simplified-schema-to-xdbml.mjs` plus `demo.mjs`, which runs it on sample
+payloads shaped exactly like the tool's output. No install step: run
 `node demo.mjs` from that folder. Its committed sample output,
 [`out.xdbml`](https://github.com/xdbml/xdbml-spec/blob/main/mongodb-demo/out.xdbml),
 can be opened directly:

@@ -1,6 +1,11 @@
 /**
  * simplified-schema-to-xdbml.mjs
  *
+ * Self-contained, zero-setup form of the mapping, kept deliberately as a
+ * single readable file for the MongoDB recipe (xdbml.org/recipes/mongodb).
+ * Building on this? Use the typed, tested npm package instead:
+ * @xdbml/from-mongodb (source in ../from-mongodb).
+ *
  * Maps the output of the MongoDB MCP server's `collection-schema` tool to xDBML.
  *
  * Source format (mongodb-mcp-server -> mongodb-schema getSimplifiedSchema):

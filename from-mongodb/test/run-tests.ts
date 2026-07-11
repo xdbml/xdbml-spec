@@ -105,10 +105,9 @@ test('R3: scalar variance folds to a union, frequency order preserved', () => {
     total: { types: [{ bsonType: 'Decimal128' }, { bsonType: 'Double' }] },
   })], OPTS);
   assertIncludes(x, 'total union [Decimal128, double]\n');
-  // Documented R2 applies not null to single-type fields only; whether a
-  // never-null multi-type field should also get it is an open decision
-  // tracked outside this suite (would need coordinated changes to the
-  // recipe, mongodb-demo, and the committed playground payloads).
+  // Decided (2026-07-11): R2 applies not null to single-type fields only.
+  // A never-null multi-type field does NOT get not null, matching the
+  // recipe, mongodb-demo, and the committed playground payloads.
   assertExcludes(x, 'total union [Decimal128, double] [not null]');
 });
 

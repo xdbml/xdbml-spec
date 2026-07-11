@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
 import { parse, flatten, resolveNames } from '../src/index.ts';
-import type { ParseOptions, XDbmlDocument } from '../src/index.ts';
+import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
   CONTAINER_KEYWORDS,
   ENTITY_KEYWORDS,
@@ -168,7 +168,7 @@ function runInlineTests (): TestResult[] {
       name: 'Array sugar: `array [int, varchar]` folds to a union element',
       source: 'Entity e {\n  f array [int, varchar]\n}',
       assert: (doc) => {
-        const e = doc.statements[0];
+        const e = doc.statements[0] as EntityDeclaration;
         const f = e.body.find((b) => (b as { name?: string }).name === 'f') as { type?: { kind?: string; elementType?: { kind?: string; members?: { kind: string; name?: string }[] } } } | undefined;
         if (f?.type?.kind !== 'ArrayType') return `expected ArrayType, got ${f?.type?.kind}`;
         const el = f.type.elementType;
@@ -183,7 +183,7 @@ function runInlineTests (): TestResult[] {
       name: 'Array sugar: three members incl. null; single type is NOT folded',
       source: 'Entity e {\n  many array [int, varchar, null]\n  one  array [varchar]\n}',
       assert: (doc) => {
-        const e = doc.statements[0];
+        const e = doc.statements[0] as EntityDeclaration;
         const many = e.body.find((b) => (b as { name?: string }).name === 'many') as { type?: { elementType?: { kind?: string; members?: unknown[] } } } | undefined;
         const one = e.body.find((b) => (b as { name?: string }).name === 'one') as { type?: { elementType?: { kind?: string } } } | undefined;
         if (many?.type?.elementType?.kind !== 'UnionType') return `many: expected UnionType element, got ${many?.type?.elementType?.kind}`;
@@ -196,7 +196,7 @@ function runInlineTests (): TestResult[] {
       name: 'Set sugar: `set [int, varchar]` folds to a union element',
       source: 'Entity e {\n  f set [int, varchar]\n  g set [varchar]\n}',
       assert: (doc) => {
-        const e = doc.statements[0];
+        const e = doc.statements[0] as EntityDeclaration;
         const f = e.body.find((b) => (b as { name?: string }).name === 'f') as { type?: { kind?: string; elementType?: { kind?: string; members?: unknown[] } } } | undefined;
         const g = e.body.find((b) => (b as { name?: string }).name === 'g') as { type?: { elementType?: { kind?: string } } } | undefined;
         if (f?.type?.kind !== 'SetType') return `expected SetType, got ${f?.type?.kind}`;
@@ -241,7 +241,7 @@ function runInlineTests (): TestResult[] {
   ]
 }`,
       assert: (doc) => {
-        const e = doc.statements[0];
+        const e = doc.statements[0] as EntityDeclaration;
         const f = e.body.find((b) => (b as { name?: string }).name === 't') as { type?: { kind?: string; elements?: { settings?: { name: string }[] }[] } } | undefined;
         if (f?.type?.kind !== 'TupleType') return `expected TupleType, got ${f?.type?.kind}`;
         const els = f.type.elements ?? [];
@@ -2058,6 +2058,7 @@ Container app {
     email varchar
   }
 }`,
+      assert: (_doc) => 'parse should have failed',
       expectError: true,
     },
     (() => {
