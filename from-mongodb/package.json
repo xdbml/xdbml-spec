@@ -1,0 +1,53 @@
+{
+  "name": "@xdbml/from-mongodb",
+  "version": "0.1.0",
+  "description": "Map MongoDB inferred collection schemas (MongoDB MCP server collection-schema / mongodb-schema SimplifiedSchema) to xDBML, with reviewable reference detection.",
+  "license": "Apache-2.0",
+  "author": "Hackolade",
+  "homepage": "https://xdbml.org/recipes/mongodb",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xdbml/xdbml-spec.git",
+    "directory": "from-mongodb"
+  },
+  "bugs": "https://github.com/xdbml/xdbml-spec/issues",
+  "keywords": [
+    "xdbml",
+    "dbml",
+    "mongodb",
+    "mcp",
+    "reverse-engineering",
+    "schema-inference",
+    "data-modeling",
+    "schema"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc --noEmit",
+    "test": "node --experimental-strip-types test/run-tests.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
