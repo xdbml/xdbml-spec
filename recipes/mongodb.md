@@ -128,6 +128,8 @@ before it became a subdocument:
 
 the mapping produces:
 
+<a class="playground-launch" href="https://xdbml.org/playground/index.html#s=B4EwRgtgNgXABABgHQGYBQaDCB7KUCmAxgC4CW2AdnNgE4j40DOcA3mnHAPqkjVgBWRYgEleAbQAOAawC67OMWzEAhlDgBXCuSpiAIkVIRVARgBMADgA0cENnVgCcjhOUBPCPgrFqFfAHkAM1Z5DmVGTltCdQ8vPkESYI4kuA9iAAtsXg5GYhpSCgBzDjEKJTgKdTwnZLgoMOIAFmScvMLi0u8KqpCkwmUJYnUafF4wbFx8ZR0O8sqoao4AXx6wzhb8ovXC+WXloA" target="_blank" rel="noopener">View in playground</a>
+
 ```xdbml
 total union [Decimal128, double]
 payment oneOf {
@@ -167,7 +169,11 @@ The repository ships a deterministic implementation of the mapping in
 `simplified-schema-to-xdbml.mjs` is a dependency-free ES module that consumes
 `collection-schema` results and emits xDBML, and `demo.mjs` runs it on sample
 payloads shaped exactly like the tool's output. Run it with
-`node demo.mjs` from that folder. It is useful when you want the mapping to be
+`node demo.mjs` from that folder. Its committed sample output,
+[`out.xdbml`](https://github.com/xdbml/xdbml-spec/blob/main/mongodb-demo/out.xdbml),
+can be opened directly:
+
+<a class="playground-launch" href="https://xdbml.org/playground/index.html#s=B4EwRgtgNgXABABgHQGYBQaAiBDALtsbAZwFM4iALAewAc4BvNOOAYSqihIGNcBLKgHZwuAVyK4qEEgCcicANrAA+rwEAzGdJIgla6ZPgByCIIDmVcAFoIXOl3ace-AZaJcKJCNkMAaOMqJsCBpOJSJeAC8SeABWBD9lVQ1pLR1BIwAmBAyANksEAHZLAEZiwwBdBiZmOAA5KlxouEMAZXdPbDgkzW04PUk4TpAqUSkBXHIgkJIAbjgvAE84AQa4LRotUnG4XA8+kQ5hB24+QSRDauYVEDgqMAArE4BJG-kaAGtyy7gO3ihyXDSVSmBQrCYCA5QL41ZZBMjiIECEHyMHLSHQmpQKgLbBQXALJR8GQAxGmb7YEAgTZyO6PHhVGHMBEkEgTBHA0GrCEcDEwri8fEkjkorno77MewicbSJbspGc8FixlwCK8OhS5wKOWmPyqXAoDK8uAAXwVaJ533wpjk2BS2CW8m1lRFiotfK0eG0SjwcBwjTN3Kh1WN1TYHBOmqo0hAMjkihU6h6On6ECMJiRFjA1lsR3DTkErnaXl8-jCU1C4SisXipe6KS96WaWVy+SKpQqDJq9UaRjaHi8XUT9ZuKcGcGGoxI20CwU4c0Wy1W602U4muzIakhuccpwE52+11uD2erw+RtE4kkMkPtJPAaVNQk+H+GsECkw3F4XigxQyAA4-GGEQwE4I1xDwMQhXlF1zSDGEaHtMYJkEEgAHk1E7GFiCUCcRCQo86QmRhlWYKRdgsKDkVRQMjRhKBiFwAAWSj7zdEiuGwGhcBEVI4DAKh2BIbAhBgmjxRNcTsO1SjvhDOjVBIFRGggG07QdcSoAUpTPAIk5MMZIh3hEFjRIfZUAEdBT1A1WLgkiNVwJQNl4LgyA-flv1-P9bNomoQF4NwqClCYgJAkhxLkmpnWosy4BCbBXJ0H0-TIUy2OYMESDkbVgzQEM0AAJRINR4EoWgkCjGNZCQC8JCkaRDwAPnIagaBqsQ6tjJBD0dILpFcoxkCQAAqEt8GkUxWSMYokCQMoviAA" target="_blank" rel="noopener">View out.xdbml in playground</a> It is useful when you want the mapping to be
 reproducible rather than performed inline by the assistant, for example in a
 scheduled job that regenerates a model and diffs it against the committed one
 to detect schema drift.
