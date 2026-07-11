@@ -121,6 +121,7 @@ export default defineConfig({
           { text: 'Examples',                link: '/examples/' },
           { text: 'FAQ',                     link: '/faq' },
           { text: 'Use from AI assistants',  link: '/ai-assistants' },
+          { text: 'Recipes',                 link: '/recipes/' },
         ]
       },
       { text: 'Specification',
@@ -200,6 +201,26 @@ export default defineConfig({
             { text: 'Examples',               link: '/examples/' },
             { text: 'FAQ',                    link: '/faq' },
             { text: 'Use from AI assistants', link: '/ai-assistants' },
+            { text: 'Recipes',                link: '/recipes/' },
+          ]
+        }
+      ],
+
+      '/recipes/': [
+        {
+          text: 'Recipes',
+          items: [
+            { text: 'Overview',                        link: '/recipes/' },
+            { text: 'MongoDB cluster to xDBML diagram', link: '/recipes/mongodb' },
+          ]
+        },
+        {
+          text: 'Learn xDBML',
+          items: [
+            { text: '5-minute introduction', link: '/learn/' },
+            { text: 'Examples',               link: '/examples/' },
+            { text: 'FAQ',                    link: '/faq' },
+            { text: 'Use from AI assistants', link: '/ai-assistants' },
           ]
         }
       ],
@@ -212,6 +233,7 @@ export default defineConfig({
             { text: 'Examples',               link: '/examples/' },
             { text: 'FAQ',                    link: '/faq' },
             { text: 'Use from AI assistants', link: '/ai-assistants' },
+            { text: 'Recipes',                link: '/recipes/' },
           ]
         }
       ],
@@ -224,6 +246,7 @@ export default defineConfig({
             { text: 'Examples',               link: '/examples/' },
             { text: 'FAQ',                    link: '/faq' },
             { text: 'Use from AI assistants', link: '/ai-assistants' },
+            { text: 'Recipes',                link: '/recipes/' },
           ]
         }
       ],
