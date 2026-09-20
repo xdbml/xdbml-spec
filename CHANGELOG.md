@@ -49,6 +49,8 @@ Expands relationships with a second relationship type. Every v0.3 document remai
 
 - **tools/RELEASE.md, tools/release.cmd, tools/release-preflight.cmd**: the release is now a script rather than a list of manual edits. Preflight checks npm login, whether the version is already taken, wrangler auth, missing dev tooling, `NODE_ENV=production`, generated-file drift and the test suites, and changes nothing. The release script bumps every version and dependency range through `npm version` and `npm pkg set` so `package.json` and `package-lock.json` move together, waits for each package to become visible on the registry before the next step depends on it, and stops at the first failure. RELEASE.md carries the same sequence by hand, plus the expected-but-harmless output and the genuinely wrong output, separated.
 
+- **tools/github-release.cmd and scripts/release-notes.mjs**: tagging and publishing the GitHub release is a command rather than a web form. Notes are extracted from the `## v<version>` section of CHANGELOG.md, so nothing is retyped and the release cannot drift from the repo. The script refuses a dirty tree or a `HEAD` that differs from `origin/main`, is safe to rerun, and falls back to writing the notes file and printing the URL when the GitHub CLI is absent.
+
 - **MCP `SERVER_VERSION`** now reads `package.json` instead of restating the version in `src/index.ts`, removing a second place to bump that could drift.
 
 ### Fixed

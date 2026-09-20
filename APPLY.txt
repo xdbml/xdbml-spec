@@ -1,230 +1,135 @@
-xDBML v0.4 draft -- cumulative release package
-Base: origin/main at 6bfb703. Contains every change from Deltas 1, 1b, 1c,
-1d, 2a, 2b, 2c, 2d, 2e, 3a and 3b, plus the remaining work listed below.
+xDBML -- Delta 4: the GitHub release is a command, and the caret fix
+Base: origin/main at e5bc4f0 (v0.4 released).
 
-Apply this instead of the individual deltas if you have not committed them
-yet. If you have already applied some, this still overwrites cleanly: every
-file here is the final state, not a patch.
+WHY
+---
+The release runbook stopped at "push the tag", then described what to paste
+into a web form. That left the last step manual, which is the thing you asked
+me to stop doing. It also meant the release notes were retyped rather than
+taken from the CHANGELOG, so the two can drift.
 
-WHAT v0.4 ADDS
+WHAT THIS ADDS
 --------------
-Relationships. Three subjects, one chapter.
+  tools\github-release.cmd 0.5
+  tools\github-release.cmd 0.5 --prerelease
 
-  Foreign master (11.10 - 11.13)
-    A `Ref` may carry a `foreign_master` flag recording where a duplicated
-    attribute of denormalized data is mastered. Documentation only: it
-    reaches no DDL, takes one attribute on each side, and a child attribute
-    has at most one master. The four role markers fk / fm / dk / dm are
-    computed from the declared relationships, and 11.13 fixes the line style
-    for each relationship type.
+One command: generates the notes, refuses to tag a dirty tree or a HEAD that
+differs from origin/main, creates and pushes the annotated tag with those
+notes as its message, then creates the GitHub release through `gh`. Safe to
+rerun -- an existing tag is left alone, an existing release has its notes
+updated rather than duplicated.
 
-  Roles, verbs, constraint type (11.14 - 11.15)
-    `source_role` / `target_role` and `source_verb` / `target_verb` carry the
-    wording that reads a relationship in each direction. `constraint_type`
-    records identifying or non-identifying. All of it is authored, never
-    derived, and never generated. 11.15.1 maps the constraint type onto the
-    spellings used by Hackolade Studio, erwin, ER/Studio and PowerDesigner.
+Notes come from the `## v<version>` section of CHANGELOG.md via
+scripts/release-notes.mjs, which also works standalone:
 
-  Entity-level relationships (11.16)
-    A `Ref` endpoint may name an entity rather than an attribute, so a
-    relationship can be drawn between two concepts and refined in place
-    without changing declaration kind. It states no cardinality, produces no
-    attribute markers, and takes its reading direction from the operator
-    alone.
+  node scripts\release-notes.mjs 0.4
+  node scripts\release-notes.mjs 0.4 --out RELEASE-NOTES-v0.4.md
 
-Every v0.3 document remains valid. Documents using the new constructs
-declare `xdbml: 0.4`.
+It strips the Status and Released lines (GitHub shows its own status) and
+appends links to the versioned spec, the current draft, and the tagged
+CHANGELOG. It exits non-zero when the version has no section, so a release
+cannot be created with empty notes.
 
-ALSO IN THIS PACKAGE
---------------------
-  Stable spec URL      xdbml.org/spec/current always serves the newest draft,
-                       generated at build time by scripts/prepare-spec.mjs.
-                       Versioned URLs keep working; the stable copy carries
-                       rel=canonical to the versioned page and stays out of
-                       the sitemap.
+Without the GitHub CLI installed, the script still tags and pushes, writes
+the notes file, and prints the exact URL and file to paste. Installing it
+once removes that:
 
-  Playground links     "View in playground" follows the origin serving the
-                       page, so it works in docs:dev and on preview deploys.
+  winget install GitHub.cli
+  gh auth login
 
-  Two bug fixes        An inline `[ref: ...]` written on a nested field is
-                       drawn (it was silently dropped). The inspector
-                       resolves a relationship that came from an inline ref
-                       (the pane was empty).
+ALSO: THE CARETS
+----------------
+cmd.exe treats `^` as its escape character, so every
+`npm pkg set dependencies.@xdbml/parse=^0.4.0` you ran stored `0.4.0` with no
+caret. main currently pins all four @xdbml dependency ranges exactly. It
+resolves correctly, but a future 0.4.1 patch of the parser would not reach
+the renderer, the MCP server or the API without a manual bump in each.
 
-  CI                   The renderer's 181 tests were never run in CI. They
-                       are now in the root test script and in ci.yml.
+This package carries the corrected ranges:
+
+  renderer  @xdbml/parse   ^0.4.0
+  mcp       @xdbml/parse   ^0.4.0
+            @xdbml/render  ^0.4.0
+  api       @xdbml/render  ^0.4.0
+
+Nothing else in those files changed -- the diff is four lines. No republish
+is needed: the ranges affect future installs from source and the next
+publish, not the packages already on npm. The published @xdbml/render@0.4.0
+keeps its exact pin on parse 0.4.0, which is harmless and not worth a
+republish to change.
+
+In cmd.exe the caret must be doubled: `npm pkg set ...=^^0.4.0`. release.cmd
+already does this, which is why it was not a problem there.
+
+ALSO: tools/PUBLISH-0.4.md is deleted. RELEASE.md supersedes it, and two
+runbooks drift.
+
+FILES
+-----
+  tools\github-release.cmd      NEW   tag + release in one command
+  scripts\release-notes.mjs     NEW   notes from CHANGELOG.md
+  tools\RELEASE.md              EDIT  step 6 added; the three commands listed at the top
+  tools\release.cmd             EDIT  final message points at github-release.cmd
+  CHANGELOG.md                  EDIT  the tooling entry
+  parser\package.json           EDIT  (no @xdbml deps; included so the set is complete)
+  renderer\package.json         EDIT  caret restored
+  mcp\package.json              EDIT  carets restored
+  api\package.json              EDIT  caret restored
+
+  DELETE tools\PUBLISH-0.4.md   (superseded by RELEASE.md)
 
 APPLY (cmd.exe -- set REPO to your working clone)
 -------------------------------------------------
 set REPO=C:\path\to\xdbml-spec
 set DELTA=%CD%
 
-xcopy /Y /E /I "%DELTA%\spec"       "%REPO%\spec"
-xcopy /Y /E /I "%DELTA%\parser"     "%REPO%\parser"
-xcopy /Y /E /I "%DELTA%\renderer"   "%REPO%\renderer"
-xcopy /Y /E /I "%DELTA%\playground" "%REPO%\playground"
-xcopy /Y /E /I "%DELTA%\examples"   "%REPO%\examples"
-xcopy /Y /E /I "%DELTA%\grammar"    "%REPO%\grammar"
-xcopy /Y /E /I "%DELTA%\tools"      "%REPO%\tools"
-xcopy /Y /E /I "%DELTA%\mcp"        "%REPO%\mcp"
-xcopy /Y /E /I "%DELTA%\scripts"    "%REPO%\scripts"
-xcopy /Y /E /I "%DELTA%\public"     "%REPO%\public"
-xcopy /Y /E /I "%DELTA%\.vitepress" "%REPO%\.vitepress"
-xcopy /Y /E /I "%DELTA%\.github"    "%REPO%\.github"
-copy  /Y "%DELTA%\CHANGELOG.md"          "%REPO%\CHANGELOG.md"
-copy  /Y "%DELTA%\README.md"             "%REPO%\README.md"
-copy  /Y "%DELTA%\index.md"              "%REPO%\index.md"
-copy  /Y "%DELTA%\xDBML_in_5_minutes.md" "%REPO%\xDBML_in_5_minutes.md"
-copy  /Y "%DELTA%\package.json"          "%REPO%\package.json"
-copy  /Y "%DELTA%\.gitignore"            "%REPO%\.gitignore"
+copy /Y "%DELTA%\tools\github-release.cmd"  "%REPO%\tools\github-release.cmd"
+copy /Y "%DELTA%\tools\RELEASE.md"          "%REPO%\tools\RELEASE.md"
+copy /Y "%DELTA%\tools\release.cmd"         "%REPO%\tools\release.cmd"
+copy /Y "%DELTA%\scripts\release-notes.mjs" "%REPO%\scripts\release-notes.mjs"
+copy /Y "%DELTA%\CHANGELOG.md"              "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\parser\package.json"       "%REPO%\parser\package.json"
+copy /Y "%DELTA%\renderer\package.json"     "%REPO%\renderer\package.json"
+copy /Y "%DELTA%\mcp\package.json"          "%REPO%\mcp\package.json"
+copy /Y "%DELTA%\api\package.json"          "%REPO%\api\package.json"
+del "%REPO%\tools\PUBLISH-0.4.md"
 
 VERIFY
 ------
   cd /d %REPO%
+  node scripts\release-notes.mjs 0.4
   npm test
-  cd playground && npm run type-check && cd ..
-  npm run docs:build
 
-  Expect in the build log:
-    prepare-spec: wrote spec/current.md from spec/v0.4.md (v0.4)
-    prepare-examples: copied 12 raw .xdbml file(s)
+  Then refresh the lockfiles the ranges belong to and commit:
 
-  Then open /spec/current and check:
-    - section 11 runs from 11.1 to 11.16
-    - the 11.10 and 11.16 examples both carry a working playground link
-    - the nav lists Current draft, then v0.4, then the superseded versions
+  cd renderer && npm install && cd ..
+  cd mcp && npm install --include=dev && cd ..
+  cd api && npm install --include=dev && cd ..
+  git add -A
+  git commit -m "release tooling: github-release script, notes from CHANGELOG, caret ranges"
+  git push
 
-  In the playground, load example 12:
-    - one conceptual line with no markers, five dotted foreign master lines
-    - fk / fm / dk / dm pills on the participating attributes, clear of the
-      field names
-    - clicking any line fills the inspector, with a sentence per direction:
-      "orders, as shopping cart, is bought by 1..1 customers." and
-      "customers, as buyer, places 0..* orders." 
-    - Display > Conceptual and > Foreign master each hide their own lines
-    - a selected foreign master highlights dotted, not solid
+  No republish and no redeploy: nothing in the shipped code changed.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm test
-    parser        183 passed, 0 failed   (was 157 at 6bfb703)
-    renderer      151 passed, 0 failed
-    viewport       14 passed, 0 failed
-    interactive    38 passed, 0 failed
-    mcp             9 passed, 0 failed
-    from-mongodb   24 passed, 0 failed
-    playground     49 passed, 0 failed   (was 45)
-  playground type-check   clean
-  npm run docs:build      build complete, sitemap generated
-  textmate build + test   all checks passed
-  example 12              parses clean, 8 relationships, none unresolved,
-                          1 entity-level, 5 foreign master
-  example 13              parses clean, 10 relationships, none unresolved,
-                          8 foreign master
-  mcp check:reference     in sync with public/llms.txt
+  node scripts/release-notes.mjs 0.4     7.4 KB of notes, correct section,
+                                         Status/Released stripped, links appended
+  node scripts/release-notes.mjs 9.9     reports the missing section and lists
+                                         the ones that exist
+  npm test                               all suites green, 429 cases
+  npm run docs:build                     build complete, sitemap generated
+  dependency ranges                      four lines changed, nothing else
 
-FILES (59)
-----------
-  spec/v0.4.md                      NEW   the specification
-  spec/index.md, CHANGELOG.md             version table, stable link, v0.4 entry
-  scripts/prepare-spec.mjs          NEW   generates spec/current.md
-  scripts/examples-manifest.mjs           example 12 registered
-  .vitepress/config.ts                    nav, canonical override, sitemap filter
-  .vitepress/theme/playground-links.ts NEW playground link origin
-  .vitepress/theme/index.ts               uses it
-  grammar/xDBML.g4                        long-form settings block; validation notes
-  parser/src/relationships.ts       NEW   type helpers and the semantic checks
-  parser/src/{index,keywords,name-resolver,parser}.ts
-  parser/test/run-tests.ts                +26 cases
-  renderer/src/layout/layout.ts           collectRefDeclarations, roles, entity-level
-  renderer/src/geometry/ref-path.ts       optional cardinality
-  renderer/src/svg/serialize.ts           line styles, badges, text metrics
-  renderer/src/style/theme.ts             badge colours, dash tokens
-  renderer/src/interactive/{mount,overlay,index}.ts
-  renderer/test/run-interactive-tests.ts  +15 cases
-  renderer/test/goldens/*.svg             12 files regenerated
-  playground/src/components/diagram/DiagramCanvas.vue
-  playground/src/components/inspector/{RefInspector.vue,ast-lookup.ts}
-  playground/test/run-tests.ts            +3 cases
-  examples/12-conceptual-to-denormalized.xdbml  NEW
-  examples/13-foreign-master-denormalization.xdbml NEW
-  tools/RELEASE.md                      NEW   release runbook
-  tools/release.cmd                     NEW   the release script
-  tools/release-preflight.cmd           NEW   pre-release checks
-  mcp/src/index.ts                            SERVER_VERSION reads package.json
-  examples/README.md                      regenerated table
-  mcp/src/{index,reference}.ts            teaches v0.4
-  public/llms.txt                         teaches v0.4
-  package.json, .github/workflows/ci.yml  renderer tests in CI
-  README.md, index.md, xDBML_in_5_minutes.md, .gitignore
+  As before, the cmd.exe control flow was not executed on Windows. The node
+  script it calls was, and RELEASE.md step 6 has the manual equivalent.
 
-RELEASING: PUBLISH AND DEPLOY
-------------------------------
-Two scripts, run from the repo root. Neither asks you to edit a file.
+ON v0.4, WHICH IS ALREADY RELEASED
+-----------------------------------
+The v0.4 tag points at e5bc4f0 and the release exists, so nothing here needs
+applying retroactively. If you want the release notes regenerated from the
+CHANGELOG rather than what you pasted:
 
-  tools\release-preflight.cmd 0.4.0     checks everything, changes nothing
-  tools\release.cmd 0.4.0               publishes and deploys
-
-Run preflight first. It is the only point in a release where stopping costs
-nothing, because a published npm version can never be republished.
-
-Preflight checks: npm login and scope access; whether 0.4.0 is already taken
-on either package; wrangler installed locally and authenticated; dev tooling
-actually present (tsc in node_modules\.bin); NODE_ENV not forcing production;
-mcp/src/reference.ts in sync with public/llms.txt; every test suite green; a
-clean git tree.
-
-The release script then does parser, renderer, mcp, api in order, halting at
-the first failure. It bumps versions and dependency ranges with `npm version`
-and `npm pkg set` so package.json and package-lock.json move together, and it
-POLLS the registry after each publish rather than assuming the version is
-immediately visible -- the renderer's install resolves @xdbml/parse from npm
-and fails confusingly if it is not there yet.
-
-tools\RELEASE.md has the same sequence written out for running by hand, plus
-two sections worth reading once: output that is expected and harmless (the
-wrangler -> miniflare -> sharp / undici advisories, which are the local Worker
-emulator and never bundled), and output that means something is actually
-wrong.
-
-The site is not in this sequence. It aliases the parser and renderer SOURCE
-through its Vite config, so pushing to main ships v0.4 whatever is on npm.
-
-ONE FEWER THING TO EDIT
-------------------------
-mcp/src/index.ts had SERVER_VERSION restated as a literal beside the version
-in package.json. It now reads package.json, so a release bumps one number
-instead of two that can drift. Verified with wrangler deploy --dry-run: the
-Worker still bundles.
-
-ONE THING TO KNOW ABOUT THE MCP SERVER
----------------------------------------
-mcp/src/reference.ts is GENERATED from public/llms.txt and is what the
-xdbml_reference tool returns. `npm run predeploy` regenerates it, so a hand
-edit to the generated file is silently undone at deploy time. Edit
-public/llms.txt and commit the regenerated file. Preflight and CI both check
-this now.
-
-KNOWN GAPS, FOR AFTER THE DRAFT LANDS
---------------------------------------
-1. Studio round trip. Whether Hackolade Studio persists a flag separating a
-   default direction from an explicitly declared one is still unchecked. If
-   it does, `-` alone will not round-trip and a setting is needed. Worth
-   answering before the Studio plugin mapping, not after.
-
-2. `from-mongodb` proposes foreign keys only. Duplicate values across
-   collections are foreign master evidence, so `detectReferences()` could
-   propose those too. An opportunity, not a defect.
-
-3. Version gating covers only the v0.4 relationship constructs. Nothing read
-   the declared version before this delta, so the module-system gates
-   described in the grammar notes remain unimplemented. `versionAtLeast()`
-   is written generally for them to adopt.
-
-4. Identifying consistency is not checked. 11.15 offers it as something an
-   implementation may do and report as a warning; the parser does not. The
-   rule is written out in 11.15 if you want it later.
-
-5. v0.4 has three more subjects planned: identifying relationships beyond the
-   constraint-type property, associative entities for many-to-many, and
-   supertype / subtype groups.
+  node scripts\release-notes.mjs 0.4 --out RELEASE-NOTES-v0.4.md
+  gh release edit v0.4 --notes-file RELEASE-NOTES-v0.4.md
+  del RELEASE-NOTES-v0.4.md

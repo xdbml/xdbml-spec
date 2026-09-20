@@ -129,11 +129,12 @@ call npm view @xdbml/render dependencies --prefer-online
 echo.
 echo ============================================================
 echo  Done. Every version and lockfile changed on disk.
-echo  Commit them:
+echo  Commit them, then tag and publish the GitHub release:
 echo.
 echo    git add -A
 echo    git commit -m "release %VER%"
 echo    git push
+echo    tools\github-release.cmd %VER%
 echo ============================================================
 cd /d "%ROOT%"
 exit /b 0

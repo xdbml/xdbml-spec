@@ -5,6 +5,7 @@ first failure, and waits for the npm registry rather than assuming.
 
     tools\release-preflight.cmd 0.4.0     check everything first, changes nothing
     tools\release.cmd 0.4.0               publish and deploy
+    tools\github-release.cmd 0.4          tag and publish the GitHub release
 
 Run both from the repo root. Preflight is the important habit: it is the only
 moment where stopping is free, because a published npm version can never be
@@ -95,6 +96,32 @@ without the range bump the renderer keeps resolving the old parser.
     git add -A
     git commit -m "release 0.4.0"
     git push
+
+### 6. Tag and publish the GitHub release
+
+    tools\github-release.cmd 0.4
+
+Notes are generated from the `## v0.4` section of `CHANGELOG.md`, so nothing
+is retyped and the release cannot drift from the repo. The script refuses to
+tag a dirty tree or a `HEAD` that differs from `origin/main`, creates the tag
+with those notes as its message, pushes it, and creates the release through
+the GitHub CLI. Add `--prerelease` for a draft version:
+
+    tools\github-release.cmd 0.4 --prerelease
+
+Rerunning is safe: an existing tag is left alone and an existing release has
+its notes updated rather than duplicated.
+
+Without the GitHub CLI the script still tags and pushes, writes
+`RELEASE-NOTES-v0.4.md`, and prints the URL and the file to paste. Install it
+once to avoid that:
+
+    winget install GitHub.cli
+    gh auth login
+
+To see the notes without doing anything else:
+
+    node scripts\release-notes.mjs 0.4
 
 The site is not in this sequence. It aliases the parser and renderer source
 through its Vite config, so pushing to `main` ships it whatever is on npm.
