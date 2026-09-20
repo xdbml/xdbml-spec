@@ -151,6 +151,113 @@ const restored = handle.getState();
 check('getState/setState positions round-trip',
   JSON.stringify(restored.positions) === JSON.stringify(saved.positions));
 
+// ---- relationship visibility (spec 11.10, 11.13) ----
+//
+// A second mount on its own host, with a document that carries one
+// referential relationship, one foreign master, and one inactive
+// relationship, so each toggle can be observed independently.
+const visHost = window.document.createElement('div');
+window.document.body.appendChild(visHost);
+const visSource = `xdbml: 0.4
+Collection customers {
+  customerID objectId [pk]
+  name string
+}
+Collection orders {
+  orderID objectId [pk]
+  customerID objectId
+  customerName string
+  legacyRef objectId
+}
+Ref: orders.customerID > customers.customerID
+Ref: orders.customerName > customers.name [foreign_master]
+Ref: orders.legacyRef > customers.customerID [inactive]`;
+
+let lastVisibility: unknown = 'unset';
+const visHandle = mount(visHost, visSource, {
+  onRelationshipVisibilityChange: (v) => { lastVisibility = v; },
+});
+
+const visModel = visHandle.getModel();
+check('visibility: three refs in the model', visModel.refs.length === 3,
+  `got ${visModel.refs.length}`);
+check('visibility: relationship types are carried',
+  visModel.refs.filter((r) => r.relationshipType === 'foreign_master').length === 1,
+  visModel.refs.map((r) => r.relationshipType).join(','));
+check('visibility: inactive flag is carried',
+  visModel.refs.filter((r) => r.inactive).length === 1);
+
+check('visibility: defaults to all types shown',
+  JSON.stringify(visHandle.getRelationshipVisibility())
+    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true }));
+
+const beforeHide = visHost.innerHTML;
+visHandle.setRelationshipVisibility({ foreignMaster: false });
+check('visibility: hiding foreign masters redraws', visHost.innerHTML !== beforeHide);
+check('visibility: getter reflects the change',
+  visHandle.getRelationshipVisibility().foreignMaster === false);
+check('visibility: change callback fires',
+  JSON.stringify(lastVisibility)
+    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true }));
+check('visibility: the model keeps every relationship',
+  visHandle.getModel().refs.length === 3);
+
+visHandle.setRelationshipVisibility({ foreignMaster: true });
+check('visibility: showing them again restores the drawing',
+  visHost.innerHTML === beforeHide);
+
+visHandle.setRelationshipVisibility({ referential: false, foreignMaster: false, inactive: false, conceptual: false });
+check('visibility: hiding every type still renders the entities',
+  !!visHost.querySelector('svg'));
+// ---- selection highlight follows the line style (spec 11.13) ----
+//
+// A selected relationship is re-stroked in the selection colour over its own
+// line. The highlight repeats that line's style rather than flattening every
+// selection to a solid stroke, and keeps the base pattern's period so the two
+// strokes stay in phase.
+visHandle.setRelationshipVisibility({ referential: true, foreignMaster: true, inactive: true, conceptual: true });
+
+const highlightPaths = (id: string): Array<{ width: string; dash: string }> => {
+  visHandle.select({ kind: 'ref', id });
+  return [...visHost.querySelectorAll('path')]
+    .filter((p) => p.getAttribute('pointer-events') === 'none')
+    .map((p) => ({
+      width: p.getAttribute('stroke-width') ?? '',
+      dash: p.getAttribute('stroke-dasharray') ?? '',
+    }));
+};
+const period = (dash: string): number =>
+  dash.trim().split(/\s+/).map(Number).reduce((a, b) => a + b, 0);
+
+const refIdOf = (predicate: (r: { relationshipType: string; inactive: boolean }) => boolean): string =>
+  visHandle.getModel().refs.find(predicate)!.id;
+
+const referentialHighlight = highlightPaths(
+  refIdOf((r) => r.relationshipType === 'referential' && !r.inactive),
+);
+check('highlight: a selected foreign key stays solid',
+  referentialHighlight.length === 1 && referentialHighlight[0].dash === '',
+  JSON.stringify(referentialHighlight));
+
+const masterHighlight = highlightPaths(refIdOf((r) => r.relationshipType === 'foreign_master'));
+check('highlight: a selected foreign master stays dotted',
+  masterHighlight.length === 1 && masterHighlight[0].dash !== '',
+  JSON.stringify(masterHighlight));
+check('highlight: the dotted highlight keeps the base period',
+  Math.abs(period(masterHighlight[0].dash) - period('1.5 4')) < 0.01,
+  masterHighlight[0].dash);
+
+const inactiveHighlight = highlightPaths(refIdOf((r) => r.inactive));
+check('highlight: a selected inactive relationship keeps open centres',
+  inactiveHighlight.length === 2, JSON.stringify(inactiveHighlight));
+check('highlight: the open-centre highlight keeps the base period',
+  inactiveHighlight.every((p) => Math.abs(period(p.dash) - period('0.1 9')) < 0.01),
+  JSON.stringify(inactiveHighlight.map((p) => p.dash)));
+
+visHandle.select(null);
+
+visHandle.destroy();
+
 // ---- destroy ----
 handle.destroy();
 check('destroy removes the viewport', !host.querySelector('svg'));

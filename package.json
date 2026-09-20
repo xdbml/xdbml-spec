@@ -5,9 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "docs:dev": "npm run prepare:examples && npm run prepare:playground && vitepress dev .",
-    "docs:build": "npm run prepare:examples && npm run prepare:playground && vitepress build .",
+    "docs:dev": "npm run prepare:spec && npm run prepare:examples && npm run prepare:playground && vitepress dev .",
+    "docs:build": "npm run prepare:spec && npm run prepare:examples && npm run prepare:playground && vitepress build .",
     "docs:preview": "vitepress preview .",
+    "prepare:spec": "node scripts/prepare-spec.mjs",
     "prepare:examples": "node scripts/prepare-examples.mjs",
     "prepare:playground": "node scripts/prepare-playground.mjs",
     "build:playground": "cd playground && npm install && npm run build",
@@ -15,8 +16,9 @@
     "test:mcp": "cd mcp && npm test",
     "test:from-mongodb": "cd from-mongodb && npm test",
     "test:playground": "cd playground && npm test",
+    "test:renderer": "cd renderer && npm run test:all",
     "check:vsix": "node scripts/check-vsix.mjs",
-    "test": "npm run test:parser && npm run test:mcp && npm run test:from-mongodb && npm run test:playground && npm run check:vsix",
+    "test": "npm run test:parser && npm run test:renderer && npm run test:mcp && npm run test:from-mongodb && npm run test:playground && npm run check:vsix",
     "check": "npm test && cd playground && npm run type-check && cd .. && npm run docs:build"
   },
   "devDependencies": {

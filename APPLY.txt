@@ -1,0 +1,222 @@
+xDBML v0.4 draft -- cumulative release package
+Base: origin/main at 6bfb703. Contains every change from Deltas 1, 1b, 1c,
+1d, 2a, 2b, 2c, 2d, 2e, 3a and 3b, plus the remaining work listed below.
+
+Apply this instead of the individual deltas if you have not committed them
+yet. If you have already applied some, this still overwrites cleanly: every
+file here is the final state, not a patch.
+
+WHAT v0.4 ADDS
+--------------
+Relationships. Three subjects, one chapter.
+
+  Foreign master (11.10 - 11.13)
+    A `Ref` may carry a `foreign_master` flag recording where a duplicated
+    attribute of denormalized data is mastered. Documentation only: it
+    reaches no DDL, takes one attribute on each side, and a child attribute
+    has at most one master. The four role markers fk / fm / dk / dm are
+    computed from the declared relationships, and 11.13 fixes the line style
+    for each relationship type.
+
+  Roles, verbs, constraint type (11.14 - 11.15)
+    `source_role` / `target_role` and `source_verb` / `target_verb` carry the
+    wording that reads a relationship in each direction. `constraint_type`
+    records identifying or non-identifying. All of it is authored, never
+    derived, and never generated. 11.15.1 maps the constraint type onto the
+    spellings used by Hackolade Studio, erwin, ER/Studio and PowerDesigner.
+
+  Entity-level relationships (11.16)
+    A `Ref` endpoint may name an entity rather than an attribute, so a
+    relationship can be drawn between two concepts and refined in place
+    without changing declaration kind. It states no cardinality, produces no
+    attribute markers, and takes its reading direction from the operator
+    alone.
+
+Every v0.3 document remains valid. Documents using the new constructs
+declare `xdbml: 0.4`.
+
+ALSO IN THIS PACKAGE
+--------------------
+  Stable spec URL      xdbml.org/spec/current always serves the newest draft,
+                       generated at build time by scripts/prepare-spec.mjs.
+                       Versioned URLs keep working; the stable copy carries
+                       rel=canonical to the versioned page and stays out of
+                       the sitemap.
+
+  Playground links     "View in playground" follows the origin serving the
+                       page, so it works in docs:dev and on preview deploys.
+
+  Two bug fixes        An inline `[ref: ...]` written on a nested field is
+                       drawn (it was silently dropped). The inspector
+                       resolves a relationship that came from an inline ref
+                       (the pane was empty).
+
+  CI                   The renderer's 181 tests were never run in CI. They
+                       are now in the root test script and in ci.yml.
+
+APPLY (cmd.exe -- set REPO to your working clone)
+-------------------------------------------------
+set REPO=C:\path\to\xdbml-spec
+set DELTA=%CD%
+
+xcopy /Y /E /I "%DELTA%\spec"       "%REPO%\spec"
+xcopy /Y /E /I "%DELTA%\parser"     "%REPO%\parser"
+xcopy /Y /E /I "%DELTA%\renderer"   "%REPO%\renderer"
+xcopy /Y /E /I "%DELTA%\playground" "%REPO%\playground"
+xcopy /Y /E /I "%DELTA%\examples"   "%REPO%\examples"
+xcopy /Y /E /I "%DELTA%\grammar"    "%REPO%\grammar"
+xcopy /Y /E /I "%DELTA%\tools"      "%REPO%\tools"
+xcopy /Y /E /I "%DELTA%\mcp"        "%REPO%\mcp"
+xcopy /Y /E /I "%DELTA%\scripts"    "%REPO%\scripts"
+xcopy /Y /E /I "%DELTA%\public"     "%REPO%\public"
+xcopy /Y /E /I "%DELTA%\.vitepress" "%REPO%\.vitepress"
+xcopy /Y /E /I "%DELTA%\.github"    "%REPO%\.github"
+copy  /Y "%DELTA%\CHANGELOG.md"          "%REPO%\CHANGELOG.md"
+copy  /Y "%DELTA%\README.md"             "%REPO%\README.md"
+copy  /Y "%DELTA%\index.md"              "%REPO%\index.md"
+copy  /Y "%DELTA%\xDBML_in_5_minutes.md" "%REPO%\xDBML_in_5_minutes.md"
+copy  /Y "%DELTA%\package.json"          "%REPO%\package.json"
+copy  /Y "%DELTA%\.gitignore"            "%REPO%\.gitignore"
+
+VERIFY
+------
+  cd /d %REPO%
+  npm test
+  cd playground && npm run type-check && cd ..
+  npm run docs:build
+
+  Expect in the build log:
+    prepare-spec: wrote spec/current.md from spec/v0.4.md (v0.4)
+    prepare-examples: copied 12 raw .xdbml file(s)
+
+  Then open /spec/current and check:
+    - section 11 runs from 11.1 to 11.16
+    - the 11.10 and 11.16 examples both carry a working playground link
+    - the nav lists Current draft, then v0.4, then the superseded versions
+
+  In the playground, load example 12:
+    - one conceptual line with no markers, five dotted foreign master lines
+    - fk / fm / dk / dm pills on the participating attributes, clear of the
+      field names
+    - clicking any line fills the inspector, with a sentence per direction:
+      "orders, as shopping cart, is bought by 1..1 customers." and
+      "customers, as buyer, places 0..* orders." 
+    - Display > Conceptual and > Foreign master each hide their own lines
+    - a selected foreign master highlights dotted, not solid
+
+VERIFICATION RUN HERE (Linux, Node 22)
+---------------------------------------
+  npm test
+    parser        183 passed, 0 failed   (was 157 at 6bfb703)
+    renderer      151 passed, 0 failed
+    viewport       14 passed, 0 failed
+    interactive    38 passed, 0 failed
+    mcp             9 passed, 0 failed
+    from-mongodb   24 passed, 0 failed
+    playground     49 passed, 0 failed   (was 45)
+  playground type-check   clean
+  npm run docs:build      build complete, sitemap generated
+  textmate build + test   all checks passed
+  example 12              parses clean, 8 relationships, none unresolved,
+                          1 entity-level, 5 foreign master
+  example 13              parses clean, 10 relationships, none unresolved,
+                          8 foreign master
+  mcp check:reference     in sync with public/llms.txt
+
+FILES (55)
+----------
+  spec/v0.4.md                      NEW   the specification
+  spec/index.md, CHANGELOG.md             version table, stable link, v0.4 entry
+  scripts/prepare-spec.mjs          NEW   generates spec/current.md
+  scripts/examples-manifest.mjs           example 12 registered
+  .vitepress/config.ts                    nav, canonical override, sitemap filter
+  .vitepress/theme/playground-links.ts NEW playground link origin
+  .vitepress/theme/index.ts               uses it
+  grammar/xDBML.g4                        long-form settings block; validation notes
+  parser/src/relationships.ts       NEW   type helpers and the semantic checks
+  parser/src/{index,keywords,name-resolver,parser}.ts
+  parser/test/run-tests.ts                +26 cases
+  renderer/src/layout/layout.ts           collectRefDeclarations, roles, entity-level
+  renderer/src/geometry/ref-path.ts       optional cardinality
+  renderer/src/svg/serialize.ts           line styles, badges, text metrics
+  renderer/src/style/theme.ts             badge colours, dash tokens
+  renderer/src/interactive/{mount,overlay,index}.ts
+  renderer/test/run-interactive-tests.ts  +15 cases
+  renderer/test/goldens/*.svg             12 files regenerated
+  playground/src/components/diagram/DiagramCanvas.vue
+  playground/src/components/inspector/{RefInspector.vue,ast-lookup.ts}
+  playground/test/run-tests.ts            +3 cases
+  examples/12-conceptual-to-denormalized.xdbml  NEW
+  examples/13-foreign-master-denormalization.xdbml NEW
+  tools/PUBLISH-0.4.md                  NEW   release runbook
+  examples/README.md                      regenerated table
+  mcp/src/{index,reference}.ts            teaches v0.4
+  public/llms.txt                         teaches v0.4
+  package.json, .github/workflows/ci.yml  renderer tests in CI
+  README.md, index.md, xDBML_in_5_minutes.md, .gitignore
+
+RELEASING: PUBLISH AND DEPLOY
+------------------------------
+tools/PUBLISH-0.4.md in this package is the full runbook. The short version,
+in order, because the steps depend on each other:
+
+  1. Site      push to main; deploy.yml does the rest. Independent of npm --
+               the site aliases the parser and renderer SOURCE, so it carries
+               v0.4 as soon as it is pushed.
+
+  2. parser    version 0.3.2 -> 0.4.0, then npm publish.
+               New exports and diagnostics, no removals.
+
+  3. renderer  version 0.3.1 -> 0.4.0 AND its @xdbml/parse range ^0.3.0 ->
+               ^0.4.0, then npm publish. Must come after step 2: the range
+               cannot resolve until the parser is on npm.
+               Note the visible change -- the fk marker is now a two-letter
+               pill, so a consumer with its own SVG snapshots will see diffs.
+
+  4. mcp       ranges -> ^0.4.0, version 0.2.0 -> 0.3.0, SERVER_VERSION in
+               src/index.ts to match, npm install, then npm run deploy
+               (wrangler). Commit the refreshed lockfile: the Worker bundles
+               from it, so an uncommitted lockfile means the deployed bundle
+               does not match the repo.
+
+  5. api       @xdbml/render range -> ^0.4.0, npm install, npm run deploy.
+
+This package deliberately leaves every version and dependency range as it is
+today, so the repo stays buildable and `npm ci` keeps working before any of
+the above is done. Bumping a range to a version that is not yet on npm breaks
+the install for everyone in between.
+
+ONE THING TO KNOW ABOUT THE MCP SERVER
+---------------------------------------
+mcp/src/reference.ts is GENERATED from public/llms.txt and is what the
+xdbml_reference tool returns. `npm run predeploy` regenerates it, so a hand
+edit to the generated file is silently undone at deploy time. Edit
+public/llms.txt and commit the regenerated file.
+
+I hit this while updating the cheatsheet for v0.4: I edited both files and
+they drifted, which `npm run check:reference` caught. Both now say the same
+thing, and ci.yml runs that check so the drift cannot recur.
+
+KNOWN GAPS, FOR AFTER THE DRAFT LANDS
+--------------------------------------
+1. Studio round trip. Whether Hackolade Studio persists a flag separating a
+   default direction from an explicitly declared one is still unchecked. If
+   it does, `-` alone will not round-trip and a setting is needed. Worth
+   answering before the Studio plugin mapping, not after.
+
+2. `from-mongodb` proposes foreign keys only. Duplicate values across
+   collections are foreign master evidence, so `detectReferences()` could
+   propose those too. An opportunity, not a defect.
+
+3. Version gating covers only the v0.4 relationship constructs. Nothing read
+   the declared version before this delta, so the module-system gates
+   described in the grammar notes remain unimplemented. `versionAtLeast()`
+   is written generally for them to adopt.
+
+4. Identifying consistency is not checked. 11.15 offers it as something an
+   implementation may do and report as a warning; the parser does not. The
+   rule is written out in 11.15 if you want it later.
+
+5. v0.4 has three more subjects planned: identifying relationships beyond the
+   constraint-type property, associative entities for many-to-many, and
+   supertype / subtype groups.

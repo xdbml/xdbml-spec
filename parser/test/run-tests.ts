@@ -15,7 +15,11 @@ import { join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
-import { parse, flatten, resolveNames } from '../src/index.ts';
+import {
+  parse, flatten, resolveNames,
+  isForeignMaster, pathToString, refChildEndpoint, refParentEndpoint, relationshipType,
+  constraintType, isUndirected,
+} from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
   CONTAINER_KEYWORDS,
@@ -1493,6 +1497,358 @@ reuse { entity X } from '${A}'`,
      * parses a small source, runs resolveNames, and asserts on the
      * resulting diagnostics list and symbol table.
      * ----------------------------------------------------------------- */
+    /* -------------------------------------------------------------------
+     * Foreign master relationships (spec 11.10 - 11.11, new in v0.4)
+     * ----------------------------------------------------------------- */
+    {
+      name: 'FM: top-level foreign master is clean',
+      source: `xdbml: 0.4
+Collection customers {
+  customerID objectId [pk]
+  name string
+}
+Collection orders {
+  orderID objectId [pk]
+  customerName string
+}
+Ref: orders.customerName > customers.name [foreign_master]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected 0 diagnostics, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        if (relationshipType(ref) !== 'foreign_master') return 'expected relationshipType foreign_master';
+        if (!isForeignMaster(ref)) return 'expected isForeignMaster true';
+        return null;
+      },
+    },
+    {
+      name: 'FM: a Ref without the flag is referential',
+      source: `xdbml: 0.4
+Collection a { x int }
+Collection b { y int }
+Ref: a.x > b.y`,
+      assert: (doc) => {
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        if (relationshipType(ref) !== 'referential') return `expected referential, got ${relationshipType(ref)}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: inline foreign master beside an inline ref is clean',
+      source: `xdbml: 0.4
+Collection customers {
+  customerID objectId [pk]
+  name string
+}
+Collection orders {
+  orderID objectId [pk]
+  customerName string [ref: > customers.name, foreign_master]
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected 0 diagnostics, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: settings block in the long Ref form parses (new in v0.4)',
+      source: `xdbml: 0.4
+Collection a { x int }
+Collection b { y int }
+Ref named {
+  a.x > b.y [foreign_master]
+}`,
+      assert: (doc) => {
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        if (ref.name !== 'named') return `expected name 'named', got ${String(ref.name)}`;
+        if (!isForeignMaster(ref)) return 'expected the long-form settings block to carry the flag';
+        return null;
+      },
+    },
+    {
+      name: 'FM: composite endpoints are rejected',
+      source: `xdbml: 0.4
+Collection a { p int
+ q int }
+Collection b { p int
+ q int }
+Ref: a.(p, q) > b.(p, q) [foreign_master]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code === 'foreign-master-composite');
+        if (hits.length !== 2) return `expected 2 foreign-master-composite diagnostics, got ${hits.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: composite referential relationships stay legal',
+      source: `xdbml: 0.4
+Collection a { p int
+ q int }
+Collection b { p int
+ q int }
+Ref: a.(p, q) > b.(p, q)`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code.startsWith('foreign-master'));
+        if (hits.length !== 0) return `expected no foreign-master diagnostics, got ${hits.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: a child attribute takes at most one master',
+      source: `xdbml: 0.4
+Collection a { p int
+ q int }
+Collection o { x int }
+Ref: o.x > a.p [foreign_master]
+Ref: o.x > a.q [foreign_master]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code === 'foreign-master-duplicate-child');
+        if (hits.length !== 1) return `expected 1 foreign-master-duplicate-child, got ${hits.length}`;
+        if (!hits[0].message.includes('o.x')) return 'message should name the child attribute';
+        return null;
+      },
+    },
+    {
+      name: 'FM: two referential relationships from one child stay legal',
+      source: `xdbml: 0.4
+Collection a { p int }
+Collection b { q int }
+Collection o { x int }
+Ref: o.x > a.p
+Ref: o.x > b.q`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code.startsWith('foreign-master'));
+        if (hits.length !== 0) return `expected no foreign-master diagnostics, got ${hits.map((d) => d.code).join(', ')}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: the flag without an inline ref is rejected',
+      source: `xdbml: 0.4
+Collection o { x int [foreign_master] }`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code === 'foreign-master-without-ref');
+        if (hits.length !== 1) return `expected 1 foreign-master-without-ref, got ${hits.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: the flag on a nested field without an inline ref is rejected',
+      source: `xdbml: 0.4
+Collection o {
+  id objectId [pk]
+  ship object {
+    city string [foreign_master]
+  }
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code === 'foreign-master-without-ref');
+        if (hits.length !== 1) return `expected 1 foreign-master-without-ref, got ${hits.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: the flag requires a document declaring 0.4 or later',
+      source: `xdbml: 0.3
+Collection a { p int }
+Collection o { x int }
+Ref: o.x > a.p [foreign_master]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code === 'construct-requires-version');
+        if (hits.length !== 1) return `expected 1 construct-requires-version, got ${hits.length}`;
+        return null;
+      },
+    },
+    {
+      name: 'FM: the cardinality operator picks the child endpoint',
+      source: `xdbml: 0.4
+Collection a { p int }
+Collection o { x int }
+Ref: a.p < o.x [foreign_master]`,
+      assert: (doc) => {
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        const child = refChildEndpoint(ref);
+        const parent = refParentEndpoint(ref);
+        if (!child || pathToString(child.path) !== 'o.x') return `expected child o.x, got ${child ? pathToString(child.path) : 'none'}`;
+        if (!parent || pathToString(parent.path) !== 'a.p') return `expected parent a.p, got ${parent ? pathToString(parent.path) : 'none'}`;
+        return null;
+      },
+    },
+    /* -------------------------------------------------------------------
+     * Entity-level relationship endpoints (spec 11.16)
+     * ----------------------------------------------------------------- */
+    {
+      name: 'EL: bare entity names resolve',
+      source: `xdbml: 0.4
+Entity Customer { }
+Entity Order { }
+Ref: Customer > Order`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+      },
+    },
+    {
+      name: 'EL: container.entity resolves as an entity-level endpoint',
+      source: `xdbml: 0.4
+Database shop {
+  Entity orders { id int [pk] }
+}
+Entity Customer { }
+Ref: Customer - shop.orders`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+      },
+    },
+    {
+      name: 'EL: an unknown single-segment endpoint is an error',
+      source: `xdbml: 0.4
+Entity Customer { }
+Ref: Customer > Nope`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code === 'unresolved-entity');
+        return hits.length === 1 ? null : `expected 1 unresolved-entity, got ${hits.length}`;
+      },
+    },
+    {
+      name: 'EL: the attribute reading still wins',
+      source: `xdbml: 0.4
+Entity shop { orders int }
+Entity Customer { id int [pk] }
+Ref: Customer.id > shop.orders`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+      },
+    },
+    {
+      name: 'EL: a genuine collision warns and keeps the attribute reading',
+      source: `xdbml: 0.4
+Database shop {
+  Entity orders { id int [pk] }
+}
+Entity shop { orders int }
+Entity Customer { id int [pk] }
+Ref: Customer.id > shop.orders`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const hits = r.diagnostics.filter((d) => d.code === 'ambiguous-ref-endpoint');
+        if (hits.length !== 1) return `expected 1 ambiguous-ref-endpoint, got ${hits.length}`;
+        if (hits[0].severity !== 'warning') return `expected a warning, got ${hits[0].severity}`;
+        return null;
+      },
+    },
+    /* -------------------------------------------------------------------
+     * Relationship documentation settings (spec 11.14, 11.15, 11.16.2)
+     * ----------------------------------------------------------------- */
+    {
+      name: 'RD: roles, verbs and constraint type are accepted',
+      source: `xdbml: 0.4
+Entity a { id int [pk] }
+Entity b { aid int }
+Ref: b.aid > a.id [source_role: 'child', target_role: 'parent', source_verb: 'belongs to', target_verb: 'owns', constraint_type: identifying]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        if (constraintType(ref) !== 'identifying') return `expected identifying, got ${String(constraintType(ref))}`;
+        return null;
+      },
+    },
+    {
+      name: 'RD: an unknown constraint type is rejected',
+      source: `xdbml: 0.4
+Entity a { id int [pk] }
+Entity b { aid int }
+Ref: b.aid > a.id [constraint_type: identifyng]`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'invalid-constraint-type');
+        return hits.length === 1 ? null : `expected 1 invalid-constraint-type, got ${hits.length}`;
+      },
+    },
+    {
+      name: 'RD: constraint type does not apply to a foreign master',
+      source: `xdbml: 0.4
+Entity a { id int [pk] }
+Entity b { aid int }
+Ref: b.aid > a.id [foreign_master, constraint_type: identifying]`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'constraint-type-on-foreign-master');
+        return hits.length === 1 ? null : `expected 1 constraint-type-on-foreign-master, got ${hits.length}`;
+      },
+    },
+    {
+      name: 'RD: undirected takes true or false',
+      source: `xdbml: 0.4
+Entity a { }
+Entity b { }
+Ref: a - b [undirected: yes]`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'invalid-undirected');
+        return hits.length === 1 ? null : `expected 1 invalid-undirected, got ${hits.length}`;
+      },
+    },
+    {
+      name: 'RD: undirected true is accepted and readable',
+      source: `xdbml: 0.4
+Entity a { }
+Entity b { }
+Ref: a - b [undirected: true]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        return isUndirected(ref) ? null : 'expected isUndirected true';
+      },
+    },
+    {
+      name: 'RD: <> is rejected between entities',
+      source: `xdbml: 0.4
+Entity a { }
+Entity b { }
+Ref: a <> b`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'entity-level-many-to-many');
+        return hits.length === 1 ? null : `expected 1 entity-level-many-to-many, got ${hits.length}`;
+      },
+    },
+    {
+      name: 'RD: <> between attributes stays legal',
+      source: `xdbml: 0.4
+Entity a { id int [pk] }
+Entity b { aid int }
+Ref: b.aid <> a.id`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+      },
+    },
+    {
+      name: 'RD: the documentation settings require v0.4',
+      source: `xdbml: 0.3
+Entity a { id int [pk] }
+Entity b { aid int }
+Ref: b.aid > a.id [source_role: 'child']`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'construct-requires-version');
+        return hits.length === 1 ? null : `expected 1 construct-requires-version, got ${hits.length}`;
+      },
+    },
     {
       name: 'P6: clean schema produces no diagnostics',
       source: `xdbml: 0.2

@@ -5,12 +5,13 @@
  * rendering API, the MCP server) never pull in DOM-touching code. Import
  * this entry only in a browser context.
  */
-export { mount } from './mount.ts';
+export { mount, ALL_RELATIONSHIPS_VISIBLE } from './mount.ts';
 export type {
   MountInput,
   MountOptions,
   DiagramHandle,
   LayoutState,
+  RelationshipVisibility,
 } from './mount.ts';
 export type { Selection } from './overlay.ts';
 export {

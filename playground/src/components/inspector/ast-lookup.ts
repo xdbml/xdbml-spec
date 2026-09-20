@@ -39,6 +39,11 @@ import type {
   ViewDeclaration,
   XDbmlDocument,
 } from '@xdbml/parse';
+// Imported from the layout module by path rather than through the
+// `@xdbml/render` alias: this file is loaded directly by the Node test
+// runner, which resolves relative paths but not the Vite alias. The
+// layout module only type-imports @xdbml/parse, so nothing else follows.
+import { collectRefDeclarations } from '../../../../renderer/src/layout/layout.ts';
 
 import type { Selection } from './selection';
 
@@ -131,18 +136,17 @@ function resolveField (doc: XDbmlDocument, entityId: string, path: string): Reso
 }
 
 function resolveRef (doc: XDbmlDocument, refId: string): ResolvedSelection {
-  // refId is `ref:<index>` from layout.
+  // refId is `ref:<index>` from layout. The index covers top-level `Ref`
+  // statements AND the inline `[ref: ...]` settings the diagram synthesizes
+  // a declaration for, so it is resolved through the renderer's own
+  // collector rather than by counting RefDeclaration statements here.
+  // Counting statements missed every inline ref, which left the inspector
+  // empty for any line that came from one.
   const m = refId.match(/^ref:(\d+)$/);
   if (!m) return null;
-  const wanted = Number(m[1]);
-  let index = 0;
-  for (const stmt of doc.statements) {
-    if (stmt.kind === 'RefDeclaration') {
-      if (index === wanted) return { kind: 'ref', node: stmt, index };
-      index += 1;
-    }
-  }
-  return null;
+  const index = Number(m[1]);
+  const node = collectRefDeclarations(doc)[index];
+  return node ? { kind: 'ref', node, index } : null;
 }
 
 /* -------------------------------------------------------------------------

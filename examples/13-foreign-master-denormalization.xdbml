@@ -1,0 +1,119 @@
+xdbml: 0.4
+
+// ---------------------------------------------------------------------------
+// Denormalization with foreign master relationships.
+//
+// A product catalogue and an order history for a storefront. Orders and their
+// line items keep copies of values that are mastered elsewhere, so reading an
+// order needs no join and an order stays a faithful record of what was true
+// at the time of sale.
+//
+// Every copy is declared with a `foreign_master` relationship (spec 11.10),
+// which records where the value is mastered. Nothing is generated from them:
+// no foreign key, no validator, no index. They exist so that a change to a
+// master can be traced to every place the model repeats it.
+//
+// Three things distinguish a foreign master from a foreign key (11.11):
+//   - it takes one attribute on each side, never a composite
+//   - a copied attribute has exactly one master
+//   - it never reaches a generator
+//
+// Both declaration forms appear below. `customers` uses top-level `Ref:`
+// statements, `orders.lineItems` uses the inline form, and they mean the
+// same thing.
+// ---------------------------------------------------------------------------
+
+Project storefront {
+  targets: [MongoDB]
+  Note: 'Read-optimized order documents. Copies are deliberate; each one is declared.'
+}
+
+// --- Masters --------------------------------------------------------------
+
+Collection customers {
+  Note: 'Master of the customer name and the default shipping address.'
+  customerID objectId [pk]
+  name       string   [not null]
+  email      string   [unique, not null, tags: ['pii']]
+  loyaltyTier string  [default: 'standard']
+  address object {
+    street  string
+    city    string
+    country string [default: 'BE']
+  }
+}
+
+Collection products {
+  Note: 'Master of the product name, brand and current list price.'
+  productID objectId   [pk]
+  sku       string     [unique, not null]
+  name      string     [not null]
+  brand     string
+  listPrice Decimal128
+}
+
+// --- Denormalized document ------------------------------------------------
+
+Collection orders {
+  Note: 'One document per order. Copies below are frozen at the time of sale.'
+  orderID    objectId [pk]
+  orderDate  Date     [not null]
+
+  // The key reference. This is the foreign key: it locates the master.
+  customerID objectId [not null]
+
+  // Copies of customer fields, declared as foreign masters further down.
+  customerName  string
+  loyaltyTier   string [note: 'Tier as it stood when the order was placed.']
+  shipTo object {
+    street  string
+    city    string
+    country string
+  }
+
+  lineItems array [
+    lineItem object {
+      // The key reference for the line item.
+      productID objectId [ref: > products.productID, not null]
+
+      // Copies of catalogue fields, declared inline. `unitPrice` is NOT a
+      // foreign master: it records the price charged, which is a fact about
+      // this order rather than a copy of the catalogue price. A value that
+      // can legitimately differ from its source is not a replicated value.
+      sku         string     [ref: > products.sku, foreign_master]
+      productName string     [ref: > products.name, foreign_master]
+      brand       string     [ref: > products.brand, foreign_master]
+      unitPrice   Decimal128 [note: 'Price charged. May differ from products.listPrice.']
+
+      qty int32 [minimum: 1]
+    }
+  ]
+}
+
+// --- Foreign masters, top-level form --------------------------------------
+//
+// One relationship per copied attribute. The parent endpoint names where the
+// value is mastered; the child endpoint names the copy.
+//
+// customers.name and every field of customers.address carry the `dm` marker
+// once these are declared, and the matching fields in orders carry `fm`.
+// Those markers are computed, never written (11.12).
+
+Ref: orders.customerName > customers.name        [foreign_master]
+Ref: orders.loyaltyTier  > customers.loyaltyTier [foreign_master]
+
+Ref: orders.shipTo.street  > customers.address.street  [foreign_master]
+Ref: orders.shipTo.city    > customers.address.city    [foreign_master]
+Ref: orders.shipTo.country > customers.address.country [foreign_master]
+
+// --- The foreign key it sits beside ---------------------------------------
+//
+// Declared last so the contrast is visible: this one IS generated, and it
+// carries the documentation a logical model wants (11.14, 11.15).
+
+Ref placed_by: orders.customerID > customers.customerID [
+  source_role: 'order history', source_verb: 'is placed by',
+  target_role: 'buyer',         target_verb: 'places',
+  source: '0..*',               target: '1..1',
+  constraint_type: non_identifying
+]

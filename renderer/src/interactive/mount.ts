@@ -40,6 +40,31 @@ import {
 
 export type MountInput = string | XDbmlDocument;
 
+/**
+ * Which relationship types the diagram draws (spec 11.10, 11.13). Hiding a
+ * type removes its lines from the picture only; the relationships stay in
+ * the model, keep their markers on the field rows, and stay selectable once
+ * shown again. A heavily denormalized model carries many foreign masters,
+ * and hiding them leaves the referential structure legible.
+ *
+ * `inactive` cuts across the other two: an inactive relationship is hidden
+ * when `inactive` is false, whatever its type.
+ */
+export interface RelationshipVisibility {
+  referential: boolean;
+  foreignMaster: boolean;
+  inactive: boolean;
+  /** Relationships between entities with no attribute endpoints (spec 11.16). */
+  conceptual: boolean;
+}
+
+export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
+  referential: true,
+  foreignMaster: true,
+  inactive: true,
+  conceptual: true,
+};
+
 export interface LayoutState {
   positions: Record<string, { x: number; y: number }>;
   offsets: Record<string, { dx: number; dy: number }>;
@@ -49,6 +74,10 @@ export interface LayoutState {
 
 export interface MountOptions {
   theme?: DeepPartial<Theme>;
+  /** Initial relationship-type visibility. Defaults to all types shown. */
+  relationshipVisibility?: Partial<RelationshipVisibility>;
+  /** Fired when relationship-type visibility changes. */
+  onRelationshipVisibilityChange?: (visibility: RelationshipVisibility) => void;
   background?: string;
   /** Initial automatic arrangement when no positions are restored. Default 'relational'. */
   arrange?: ArrangeStrategy;
@@ -70,6 +99,8 @@ export interface DiagramHandle {
   toggleCollapse (entityId: string, path: string): void;
   setCollapsed (collapsed: Iterable<string>): void;
   arrange (strategy: ArrangeStrategy): void;
+  getRelationshipVisibility (): RelationshipVisibility;
+  setRelationshipVisibility (visibility: Partial<RelationshipVisibility>): void;
   reset (): void;
   select (selection: Selection): void;
   getSelection (): Selection;
@@ -93,6 +124,10 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
   let offsets: EdgeOffsets = new Map();
   let zoom = 1;
   let selection: Selection = null;
+  let refVisibility: RelationshipVisibility = {
+    ...ALL_RELATIONSHIPS_VISIBLE,
+    ...(options.relationshipVisibility ?? {}),
+  };
   let model: DiagramModel = buildDiagram(doc, collapsed);
 
   // Resolve the theme once up front so the viewport backdrop (painted
@@ -126,8 +161,31 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
       : base;
   }
 
+  /**
+   * True when the current visibility settings draw this relationship.
+   * Filtering happens at draw time rather than in `buildDiagram`, so the
+   * model stays the full picture: `getModel()` returns every relationship
+   * whatever is hidden, and toggling a type back on needs no rebuild.
+   */
+  function refVisible (
+    ref: { relationshipType: string; inactive: boolean; entityLevel: boolean },
+  ): boolean {
+    if (ref.inactive && !refVisibility.inactive) return false;
+    // An entity-level relationship states no attributes and so is neither a
+    // foreign key nor a foreign master yet; it answers to its own toggle.
+    if (ref.entityLevel) return refVisibility.conceptual;
+    return ref.relationshipType === 'foreign_master'
+      ? refVisibility.foreignMaster
+      : refVisibility.referential;
+  }
+
+  function visibleModel (): DiagramModel {
+    const refs = model.refs.filter(refVisible);
+    return refs.length === model.refs.length ? model : { ...model, refs };
+  }
+
   function render (): void {
-    const shapes = serializeDiagram(model, {
+    const shapes = serializeDiagram(visibleModel(), {
       inner: true,
       collapsedPaths: collapsed,
       theme: options.theme,
@@ -135,7 +193,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
         ? { entityId: selection.id, path: selection.path }
         : undefined,
     });
-    const overlay = buildOverlay(model, selection, theme);
+    const overlay = buildOverlay(visibleModel(), selection, theme);
     const w = model.width * zoom;
     const h = model.height * zoom;
     viewport.innerHTML =
@@ -408,6 +466,14 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
       render();
     },
     arrange: (strategy) => applyArrange(strategy, true),
+    getRelationshipVisibility: () => ({ ...refVisibility }),
+    setRelationshipVisibility (next: Partial<RelationshipVisibility>): void {
+      refVisibility = { ...refVisibility, ...next };
+      // No model rebuild: `render` filters what it draws, so a toggle is a
+      // redraw of the same layout with the same positions.
+      render();
+      options.onRelationshipVisibilityChange?.({ ...refVisibility });
+    },
     reset,
     select: (sel: Selection) => setSelection(sel, false),
     getSelection: () => selection,

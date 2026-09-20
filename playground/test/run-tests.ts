@@ -79,6 +79,57 @@ interface TestCase {
  * ----------------------------------------------------------------------- */
 
 const tests: TestCase[] = [
+  /* ---- Inline refs on nested fields, and inspector resolution --------- */
+
+  {
+    name: 'inline refs on nested fields are drawn',
+    source: `xdbml: 0.4
+Collection customers {
+  customerID objectId [pk]
+  name string
+  address object { street string }
+}
+Collection orders {
+  orderID objectId [pk]
+  customerID objectId [ref: > customers.customerID]
+  customerName string [ref: > customers.name, foreign_master]
+  shipTo object { street string [ref: > customers.address.street, foreign_master] }
+}
+`,
+    check: ({ diagram }) => {
+      assertEq(diagram.refs.length, 3, 'relationship count');
+      const nested = diagram.refs.find((r) => r.source?.fieldName === 'shipTo.street');
+      assertTrue(!!nested, 'the inline ref inside shipTo should be drawn');
+      assertEq(nested!.relationshipType, 'foreign_master', 'nested inline ref keeps its flag');
+      assertEq(nested!.unresolved, false, 'nested inline ref resolves');
+    },
+  },
+
+  {
+    name: 'every drawn relationship resolves in the inspector',
+    source: `xdbml: 0.4
+Collection customers {
+  customerID objectId [pk]
+  name string
+  address object { street string }
+}
+Collection orders {
+  orderID objectId [pk]
+  customerID objectId [ref: > customers.customerID]
+  shipTo object { street string [ref: > customers.address.street, foreign_master] }
+}
+Ref: orders.orderID - customers.customerID
+`,
+    check: ({ ast, diagram }) => {
+      assertTrue(diagram.refs.length >= 3, 'expected a mix of top-level and inline refs');
+      for (const r of diagram.refs) {
+        const resolved = resolveSelection(ast, { kind: 'ref', refId: r.id });
+        assertTrue(!!resolved, `inspector should resolve ${r.id}`);
+        assertEq(resolved!.kind, 'ref', `${r.id} should resolve to a relationship`);
+      }
+    },
+  },
+
   {
     name: 'plain scalar fields render as leaf rows',
     source: `xdbml: 0.1
@@ -1045,10 +1096,14 @@ for (const file of readdirSync(examplesDir).filter((f) => f.endsWith('.xdbml')).
     check: ({ ast, diagram }) => {
       assertTrue(ast.statements.length > 0, 'has statements');
       assertTrue(diagram.entities.length > 0, 'has at least one entity');
-      // Every entity should have at least one row (an entity with no
-      // fields is technically allowed by the spec but no bundled
-      // example should ship with one).
+      // Every entity should have at least one row, with one exception: an
+      // entity named in a conceptual relationship (spec 11.16) legitimately
+      // has none yet, which is the whole point of that stage of a model.
+      // Those are listed here so an accidentally empty entity elsewhere
+      // still fails.
+      const intentionallyEmpty = new Set(['Campaign']);
       for (const e of diagram.entities) {
+        if (intentionallyEmpty.has(e.name)) continue;
         assertTrue(e.fields.length > 0, `entity '${e.name}' has rows`);
       }
     },

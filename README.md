@@ -90,8 +90,9 @@ It exposes two tools: `render_xdbml` (renders a schema to SVG, plus a PNG the mo
 - [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
-- [`spec/v0.3.md`](./spec/v0.3.md) -- the current v0.3 language specification (adds remote module sources over HTTPS)
-- [`spec/v0.2.md`](./spec/v0.2.md) -- the previous v0.2 specification, still supported (module system, scalar Named Types, field-level imports)
+- [`spec/v0.4.md`](./spec/v0.4.md) -- the current v0.4 language specification (adds the foreign master relationship type). Published at [xdbml.org/spec/current](https://xdbml.org/spec/current), which always serves the newest draft, and at its own permanent URL [xdbml.org/spec/v0.4](https://xdbml.org/spec/v0.4)
+- [`spec/v0.3.md`](./spec/v0.3.md) -- the previous v0.3 specification, still supported (remote module sources over HTTPS)
+- [`spec/v0.2.md`](./spec/v0.2.md) -- the v0.2 specification, still supported (module system, scalar Named Types, field-level imports)
 - [`spec/v0.1.md`](./spec/v0.1.md) -- the original v0.1 specification, still supported
 - [`examples/`](./examples) -- reference xDBML documents covering a blog, e-commerce, IoT telemetry, social graphs, healthcare, and financial services
 - [`playground/`](https://xdbml.org/playground/index.html) -- try it in the playground by typing or pasting xDBML, and see rendered the corresponding Entity-Relationship diagram

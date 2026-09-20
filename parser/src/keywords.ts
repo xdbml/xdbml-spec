@@ -176,6 +176,7 @@ export const SETTING_FLAGS = [
   'required',
   'increment',
   'inactive',          // v0.2 §11.9: Ref flag for visualization-only deactivation
+  'foreign_master',    // v0.4 §11.10: Ref flag for denormalized replication
 ] as const;
 
 export const SETTING_KEYS = [
@@ -201,6 +202,12 @@ export const SETTING_KEYS = [
   'min_target',
   'max_target',
   'undirected',
+  // v0.4 relationship documentation (spec 11.14, 11.15)
+  'source_role',
+  'target_role',
+  'source_verb',
+  'target_verb',
+  'constraint_type',
   'discriminator',
   'source_query',
   'materialized',

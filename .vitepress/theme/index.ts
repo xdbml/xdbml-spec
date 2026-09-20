@@ -4,6 +4,7 @@
 
 import DefaultTheme from 'vitepress/theme'
 import type { Theme } from 'vitepress'
+import { isPlaygroundUrl, localizeAllPlaygroundLinks } from './playground-links'
 import './style.css'
 
 /*
@@ -24,11 +25,6 @@ import './style.css'
  * belt-and-suspenders there; it's the actual signal in dev and preview,
  * where the path differs.
  */
-function isPlaygroundUrl(u: URL): boolean {
-  const p = u.pathname.replace(/\/+$/, '') // tolerate trailing slash
-  return p === '/playground' || p.endsWith('/playground/index') || p.endsWith('/playground/index.html')
-}
-
 function currentAppearance(): 'light' | 'dark' {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
@@ -55,7 +51,7 @@ function onPointerDownCapture(e: Event): void {
 
 export default {
   extends: DefaultTheme,
-  enhanceApp() {
+  enhanceApp({ router }) {
     if (typeof window === 'undefined') return
     // Capture phase so the href is correct before navigation begins.
     window.addEventListener('pointerdown', onPointerDownCapture, true)
@@ -65,5 +61,16 @@ export default {
       const a = document.activeElement as HTMLAnchorElement | null
       if (a && a.tagName === 'A') rewritePlaygroundLink(a)
     }, true)
+
+    // Point playground links at the origin serving this page. Once after
+    // the first paint, then after each client-side route change, since
+    // VitePress swaps page content without a reload.
+    const localize = () => localizeAllPlaygroundLinks(document, window.location.href)
+    requestAnimationFrame(localize)
+    const previous = router.onAfterRouteChanged
+    router.onAfterRouteChanged = (to) => {
+      previous?.(to)
+      requestAnimationFrame(localize)
+    }
   },
 } satisfies Theme

@@ -55,6 +55,7 @@ import type {
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { flatten } from './module-resolver.ts';
+import { checkRelationships } from './relationships.ts';
 
 /* -------------------------------------------------------------------------
  * Public types
@@ -113,7 +114,16 @@ export type DiagnosticCode =
   | 'unresolved-records-entity'
   | 'unresolved-records-column'
   | 'empty-import'
-  | 'invalid-nested-path';
+  | 'invalid-nested-path'
+  | 'foreign-master-composite'
+  | 'foreign-master-duplicate-child'
+  | 'foreign-master-without-ref'
+  | 'construct-requires-version'
+  | 'ambiguous-ref-endpoint'
+  | 'invalid-constraint-type'
+  | 'constraint-type-on-foreign-master'
+  | 'invalid-undirected'
+  | 'entity-level-many-to-many';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -250,6 +260,9 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 2: resolve references.
   resolveReferences(flat, symbols, diagnostics);
+
+  // Pass 3: relationship rules that the grammar cannot express (spec 11.11).
+  diagnostics.push(...checkRelationships(flat));
 
   return { diagnostics, symbols };
 }
@@ -680,7 +693,29 @@ function resolveRefSpec (
   } else {
     maxEntityLen = leadingFields.length - 1;
   }
-  if (maxEntityLen < 1) return;
+  // An entity-level endpoint (spec 11.16) names an entity and stops there:
+  // `Customer`, or `shop.orders` for an entity inside a container. It is
+  // checked as a fallback rather than first, so an endpoint that already
+  // resolved as entity-plus-attribute keeps that reading and every document
+  // that parsed before this means what it meant before.
+  const wholePath = leadingFields.join('.');
+  const entityLevelMatch = (!hasComposite && !hasNonFieldTail)
+    ? resolveEntityRef(wholePath, symbols)
+    : undefined;
+
+  if (maxEntityLen < 1) {
+    // A single segment cannot be entity-plus-attribute, so it is either an
+    // entity-level endpoint or a reference to something undeclared.
+    if (!entityLevelMatch) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'unresolved-entity',
+        message: `Relationship endpoint references unknown entity '${wholePath}'.`,
+        span: endpoint.span,
+      });
+    }
+    return;
+  }
 
   // PHASE 1 (cont'd): longest-prefix entity match.
   let entity: SymbolEntry | undefined;
@@ -695,14 +730,28 @@ function resolveRefSpec (
     }
   }
   if (!entity) {
+    if (entityLevelMatch) return; // entity-level endpoint; nothing further to check
     const guess = leadingFields.slice(0, maxEntityLen).join('.');
     diagnostics.push({
       severity: 'error',
       code: 'unresolved-entity',
-      message: `Foreign-key endpoint references unknown entity '${guess}'.`,
+      message: `Relationship endpoint references unknown entity '${guess}'.`,
       span: endpoint.span,
     });
     return;
+  }
+  if (entityLevelMatch) {
+    // Both readings exist: `a.b` names an entity, and `a` names an entity
+    // with a field `b`. The attribute reading wins, and the collision is
+    // reported so the author can qualify the path differently.
+    diagnostics.push({
+      severity: 'warning',
+      code: 'ambiguous-ref-endpoint',
+      message:
+        `Endpoint '${wholePath}' names both an entity and a field of entity '${entity.qualifiedName}'. ` +
+        'Reading it as the field; rename one of them or qualify the path to remove the ambiguity.',
+      span: endpoint.span,
+    });
   }
   if (entity.declaration.kind !== 'EntityDeclaration') return;
 

@@ -176,6 +176,7 @@ export type {
   EdgeOffsets,
 } from './layout/layout.ts';
 
+export { collectRefDeclarations } from './layout/layout.ts';
 export { autoArrange, type ArrangeStrategy } from './layout/auto-arrange.ts';
 
 export { serializeDiagram, type SerializeOptions } from './svg/serialize.ts';

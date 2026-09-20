@@ -126,8 +126,10 @@ export default defineConfig({
       },
       { text: 'Specification',
         items: [
+          { text: 'Current draft',         link: '/spec/current' },
           { text: 'All versions',          link: '/spec/' },
-          { text: 'v0.3 (current draft)',  link: '/spec/v0.3' },
+          { text: 'v0.4',                  link: '/spec/v0.4' },
+          { text: 'v0.3 (superseded)',     link: '/spec/v0.3' },
           { text: 'v0.2 (superseded)',     link: '/spec/v0.2' },
           { text: 'v0.1 (superseded)',     link: '/spec/v0.1' },
           { text: 'Grammar',                link: '/grammar/' },
@@ -179,7 +181,9 @@ export default defineConfig({
           text: 'Specification',
           items: [
             { text: 'All versions',           link: '/spec/' },
-            { text: 'v0.3 (current draft)',   link: '/spec/v0.3' },
+            { text: 'Current draft',          link: '/spec/current' },
+            { text: 'v0.4',                   link: '/spec/v0.4' },
+            { text: 'v0.3 (superseded)',      link: '/spec/v0.3' },
             { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },
             { text: 'v0.1 (superseded)',      link: '/spec/v0.1' },
           ]
@@ -307,7 +311,9 @@ export default defineConfig({
           text: 'Specification',
           items: [
             { text: 'All versions',           link: '/spec/' },
-            { text: 'v0.3 (current draft)',   link: '/spec/v0.3' },
+            { text: 'Current draft',          link: '/spec/current' },
+            { text: 'v0.4',                   link: '/spec/v0.4' },
+            { text: 'v0.3 (superseded)',      link: '/spec/v0.3' },
             { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },
             { text: 'v0.1 (superseded)',      link: '/spec/v0.1' },
           ]
@@ -470,16 +476,23 @@ export default defineConfig({
     const siteTitle = 'xDBML -- eXtended Database Markup Language';
     const siteDescription = 'eXtended Database Markup Language -- one schema, many storage technologies, human and AI-readable.';
 
+    // Compose page-specific title and description.
+    const fm = pageData.frontmatter || {};
+
     // Build absolute URL for this page (used by canonical and og:url).
     // pageData.relativePath is the source markdown path, e.g. 'spec/v0.1.md'.
     // pageData.filePath gives the same path. Strip the trailing .md and 'index'.
     const path = (pageData.relativePath || '')
       .replace(/\.md$/, '')
       .replace(/(^|\/)index$/, '$1');
-    const canonical = `https://xdbml.org/${path}`;
 
-    // Compose page-specific title and description.
-    const fm = pageData.frontmatter || {};
+    // A page may point its canonical URL elsewhere via a `canonical:` key in
+    // frontmatter, given as a site-absolute path. /spec/current uses this to
+    // name the versioned page it was generated from, so search engines index
+    // /spec/vN.M rather than the stable copy that changes every release.
+    const canonical = typeof fm.canonical === 'string'
+      ? `https://xdbml.org${fm.canonical}`
+      : `https://xdbml.org/${path}`;
     // If the page's own title already includes "xDBML", use it as-is; otherwise
     // append " -- xDBML" so the page is identifiable in shared/saved links.
     const pageTitle = !fm.title
@@ -554,5 +567,11 @@ export default defineConfig({
   // Build hooks
   sitemap: {
     hostname: 'https://xdbml.org',
+
+    // /spec/current duplicates the newest versioned page, which carries the
+    // canonical URL. A sitemap should list canonical URLs only, so the copy
+    // is filtered out here. It stays crawlable and bookmarkable either way.
+    transformItems: (items) =>
+      items.filter((item) => !/^\/?spec\/current(\.html)?$/.test(item.url)),
   },
 })

@@ -36,7 +36,13 @@ export interface RefEndpoint {
   x: number;
   y: number;
   side: Side;
-  card: Cardinality;
+  /**
+   * Cardinality glyph for this end, or undefined when none is drawn. An
+   * entity-level relationship (spec 11.16) leaves cardinality unstated, so
+   * the operator-based inference of spec 11.8 does not fill it in and no
+   * crow's foot appears until a `source:` or `target:` setting states one.
+   */
+  card: Cardinality | undefined;
   /** Explicit cardinality string to render as a small label, or '' for none. */
   label: string;
 }
@@ -82,12 +88,13 @@ export function resolveRef (
     };
   }
 
+  const inferCard = !ref.entityLevel;
   const sourceCard = ref.sourceCardinality
     ? parseCardinality(ref.sourceCardinality)
-    : cardinalityFromOperator(ref.operator, 'source');
+    : (inferCard ? cardinalityFromOperator(ref.operator, 'source') : undefined);
   const targetCard = ref.targetCardinality
     ? parseCardinality(ref.targetCardinality)
-    : cardinalityFromOperator(ref.operator, 'target');
+    : (inferCard ? cardinalityFromOperator(ref.operator, 'target') : undefined);
 
   return {
     path,

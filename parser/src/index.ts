@@ -37,6 +37,24 @@ export {
 } from './module-resolver.ts';
 export type { ModuleSource } from './module-resolver.ts';
 export { resolveNames, SymbolTable } from './name-resolver.ts';
+export {
+  FOREIGN_MASTER_FLAG,
+  checkRelationships,
+  hasForeignMasterFlag,
+  isForeignMaster,
+  pathToString,
+  refChildEndpoint,
+  refParentEndpoint,
+  relationshipType,
+  versionAtLeast,
+  CONSTRAINT_TYPES,
+  V04_RELATIONSHIP_SETTINGS,
+  constraintType,
+  entityNames,
+  isEntityLevelEndpoint,
+  isUndirected,
+} from './relationships.ts';
+export type { RelationshipType, ConstraintType } from './relationships.ts';
 export type {
   Diagnostic,
   DiagnosticCode,

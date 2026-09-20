@@ -319,17 +319,27 @@ function fieldRow (
   // Flag badges.
   const badges = fieldBadges(field, theme);
   if (badges.length) {
-    const bx = x + badgeX(field);
-    badges.forEach((b, bi) => {
-      const cx = bx + bi * 14;
+    // Badges are laid out from their left edges so the gap after the name
+    // is the same whatever the first badge's shape.
+    let bx = x + badgeLeft(field);
+    for (const b of badges) {
+      const bw = badgeWidth(b);
+      const cy = y + field.rowY + 12;
+      if (b.wide) {
+        parts.push(
+          `<rect x="${round(bx)}" y="${cy - 6}" width="${bw}" height="12" rx="6" fill="${b.color}"/>`,
+        );
+      } else {
+        parts.push(`<circle cx="${round(bx + bw / 2)}" cy="${cy}" r="6" fill="${b.color}"/>`);
+      }
       parts.push(
-        `<circle cx="${cx}" cy="${y + field.rowY + 12}" r="6" fill="${b.color}"/>`,
         text({
-          x: cx, y: y + field.rowY + 15, fill: 'white', size: 8, weight: 700, anchor: 'middle',
+          x: round(bx + bw / 2), y: cy + 3, fill: 'white', size: 8, weight: 700, anchor: 'middle',
           content: b.label,
         }),
       );
-    });
+      bx += bw + BADGE_GAP;
+    }
   }
 
   return parts.join('');
@@ -343,10 +353,49 @@ function refLine (ref: RefLayout, model: DiagramModel, theme: Theme): string {
   const tr = theme.ref;
   const parts: string[] = ['<g>'];
 
-  parts.push(`<path d="${resolved.path.d}" fill="none" stroke="${tr.line}" stroke-width="1.5"/>`);
+  // Line style follows the relationship type (spec 11.13): referential
+  // draws solid, foreign master draws dotted, and an inactive relationship
+  // of either type draws as a line of small open circles.
+  //
+  // The open circles are produced by stroking the path twice with a
+  // round-capped near-zero dash pattern: the first pass paints filled dots
+  // in the line colour, the second paints a narrower dot in the backdrop
+  // colour on top, which opens the centre. That makes the effect depend on
+  // `theme.ref.inactiveRingCore` matching whatever sits behind the diagram.
+  if (ref.inactive) {
+    parts.push(
+      `<path d="${resolved.path.d}" fill="none" stroke="${tr.line}" ` +
+        `stroke-width="${tr.inactiveRingWidth}" stroke-linecap="round" ` +
+        `stroke-dasharray="${tr.inactiveDash}"/>`,
+      `<path d="${resolved.path.d}" fill="none" stroke="${tr.inactiveRingCore}" ` +
+        `stroke-width="${tr.inactiveCoreWidth}" stroke-linecap="round" ` +
+        `stroke-dasharray="${tr.inactiveDash}"/>`,
+    );
+  } else if (ref.relationshipType === 'foreign_master') {
+    parts.push(
+      `<path d="${resolved.path.d}" fill="none" stroke="${tr.line}" stroke-width="1.5" ` +
+        `stroke-linecap="round" stroke-dasharray="${tr.foreignMasterDash}"/>`,
+    );
+  } else {
+    parts.push(`<path d="${resolved.path.d}" fill="none" stroke="${tr.line}" stroke-width="1.5"/>`);
+  }
+
+  // Direction markers for an entity-level relationship (spec 11.16.2).
+  // `>` points at the target, `<` at the source, `undirected: true` marks
+  // both ends, and `-` marks neither.
+  if (ref.entityLevel) {
+    const arrowAtSource = ref.undirected || ref.operator === '<';
+    const arrowAtTarget = ref.undirected || ref.operator === '>';
+    if (arrowAtSource) {
+      parts.push(directionArrow(tr.line, glyphTransform(resolved.source.side, resolved.source.x, resolved.source.y)));
+    }
+    if (arrowAtTarget) {
+      parts.push(directionArrow(tr.line, glyphTransform(resolved.target.side, resolved.target.x, resolved.target.y)));
+    }
+  }
 
   for (const end of [resolved.source, resolved.target]) {
-    parts.push(crowFootGroup(end.card, tr.line, glyphTransform(end.side, end.x, end.y)));
+    if (end.card) parts.push(crowFootGroup(end.card, tr.line, glyphTransform(end.side, end.x, end.y)));
     if (end.label) {
       parts.push(
         text({
@@ -436,21 +485,91 @@ function nameColor (field: FieldLayout, theme: Theme): string {
   return theme.row.nameDefault;
 }
 
-interface Badge { label: string; color: string }
+interface Badge { label: string; color: string; wide?: boolean }
 
+/**
+ * Flag badges for a field row. The four relationship role markers of spec
+ * 11.12 use their two-letter names (fk, fm, dk, dm) rather than initials,
+ * so the diagram reads the same way as the spec table and as Hackolade
+ * Studio; they render as pills rather than circles to fit the extra glyph.
+ * A field carries every marker that applies to it, so an attribute that
+ * parents both relationship kinds shows dk and dm side by side.
+ */
 function fieldBadges (field: FieldLayout, theme: Theme): Badge[] {
   const out: Badge[] = [];
   if (field.flags.pk) out.push({ label: 'P', color: theme.badges.pk });
-  if (field.flags.fk) out.push({ label: 'F', color: theme.badges.fk });
+  if (field.flags.fk) out.push({ label: 'fk', color: theme.badges.fk, wide: true });
+  if (field.flags.fm) out.push({ label: 'fm', color: theme.badges.fm, wide: true });
+  if (field.flags.dk) out.push({ label: 'dk', color: theme.badges.dk, wide: true });
+  if (field.flags.dm) out.push({ label: 'dm', color: theme.badges.dm, wide: true });
   if (field.flags.unique && !field.flags.pk) out.push({ label: 'U', color: theme.badges.unique });
   if (field.flags.notNull) out.push({ label: '!', color: theme.badges.notNull });
   return out;
 }
 
-function badgeX (field: FieldLayout): number {
+/**
+ * A small filled triangle pointing into the entity, used as the direction
+ * marker on an entity-level relationship where no cardinality is stated.
+ * Drawn in the same rotated frame the crow's foot glyphs use, so the
+ * transform coming in already orients it to the side of the box.
+ */
+function directionArrow (color: string, transform: string): string {
+  return `<g transform="${transform}"><path d="M 0 0 L 10 -5 L 10 5 Z" fill="${color}"/></g>`;
+}
+
+/* --------------------------------------------------------- text metrics */
+
+/**
+ * Approximate advance width of one character at 12px in the sans stack.
+ *
+ * SVG offers no measurement at serialization time, and the renderer runs in
+ * Node as well as in the browser, so widths are estimated from character
+ * class. A flat per-character average is not good enough here: it
+ * over-spaces narrow words like `street` and under-spaces wide ones like
+ * `customerName`, and a badge placed from an under-estimate lands on top of
+ * the name. Grouping by class keeps the error inside a couple of pixels for
+ * ordinary identifiers.
+ */
+function charWidth12 (ch: string): number {
+  if (ch === ' ') return 3.4;
+  if ('ijlI|!.,:;\'`'.includes(ch)) return 3.0;
+  if ('ftr()[]{}/\\-'.includes(ch)) return 4.2;
+  if (ch === 'm' || ch === 'M') return 10.0;
+  if (ch === 'w' || ch === 'W') return 9.3;
+  if (ch >= 'A' && ch <= 'Z') return 8.0;
+  return 6.7;
+}
+
+/** Estimated width of a string in the sans stack at the given size/weight. */
+function measureText (s: string, size = 12, weight = 400): number {
+  let w = 0;
+  for (const ch of s) w += charWidth12(ch);
+  return w * (size / 12) * (weight >= 600 ? 1.05 : 1);
+}
+
+/** Trim estimated coordinates to two decimals so goldens stay stable. */
+function round (n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+const BADGE_CIRCLE_W = 12;
+const BADGE_PILL_W = 18;
+const BADGE_GAP = 3;
+const BADGE_NAME_GAP = 8;
+
+function badgeWidth (b: Badge): number {
+  return b.wide ? BADGE_PILL_W : BADGE_CIRCLE_W;
+}
+
+/**
+ * Left edge of the first badge on a row: past the field name, plus a gap.
+ * This is a left edge rather than a centre so a wide pill and a circle sit
+ * the same distance from the name.
+ */
+function badgeLeft (field: FieldLayout): number {
   const nameStart = 12 + field.indent * INDENT_PX + 12;
-  const nameWidth = field.name.length * 6.5;
-  return nameStart + nameWidth + 8;
+  const nameWidth = measureText(field.name, 12, field.flags.pk ? 600 : 400);
+  return nameStart + nameWidth + BADGE_NAME_GAP;
 }
 
 function truncate (s: string, max: number): string {

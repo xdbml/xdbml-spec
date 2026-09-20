@@ -22,7 +22,7 @@ hero:
       rel: noopener
     - theme: alt
       text: Read the spec
-      link: /spec/v0.3
+      link: /spec/current
     - theme: alt
       text: View on GitHub
       link: https://github.com/xdbml/xdbml-spec
@@ -179,7 +179,7 @@ xDBML is a format, not a tool, but a small open ecosystem makes it easy to autho
 
 - **[Read the 5-minute introduction](/learn/)** for a quick tour of what xDBML does and why it exists
 - **[Browse the FAQ](/faq)** for answers to the questions newcomers most often ask
-- **[Read the v0.3 specification](/spec/v0.3)** for the complete language reference
+- **[Read the current specification](/spec/current)** for the complete language reference
 - **[Browse the examples](/examples/)** for realistic schemas across e-commerce, IoT, healthcare, social graphs, and financial services
 - <a href="/playground/index.html?example=02-ecommerce" target="_blank" rel="noopener"><strong>Try it in the playground</strong></a> -- it opens with a live example you can edit, and renders the corresponding Entity-Relationship diagram as you type
 - **[Review the ANTLR4 grammar](/grammar)** and [**parser**](https://github.com/xdbml/xdbml-spec/tree/main/parser)

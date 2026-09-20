@@ -4,9 +4,73 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
+## v0.4 -- 2026
+
+**Status**: Draft -- current
+**Released**: unreleased
+
+Expands relationships with a second relationship type. Every v0.3 document remains valid; documents opting into the new construct declare `xdbml: 0.4`.
+
+### Added
+
+#### Spec
+
+- **Foreign master relationship (§11.10)**: a `Ref` may carry a `foreign_master` flag, which records where a duplicated attribute of denormalized data is mastered. A `Ref` without the flag is referential -- the foreign key xDBML has always expressed. The flag is available in the short, long, and inline declaration forms.
+
+- **`foreign_master` beside an inline `ref:` (§11.10.2)**: the one exception to the rule that settings are not supported on inline `ref:` declarations. A field holds at most one inline `ref:`, so the flag has exactly one relationship to qualify.
+
+- **Foreign master restrictions (§11.11)**: single-attribute endpoints (the composite form of §11.4 is rejected); at most one master per child attribute; no key requirement on either endpoint; and no output from any generator. Path syntax, cardinality, and every other relationship setting follow the referential rules unchanged.
+
+- **Derived attribute roles (§11.12)**: a normative table for `fk`, `fm`, `dk`, and `dm`. An implementation computes all four from the set of `Ref` declarations; no document declares them.
+
+- **Relationship line styles (§11.13)**: a normative table pairing each relationship type with a line style, plus the recommendation that a renderer offer a toggle hiding foreign master relationships.
+
+- **Roles and verbs (§11.14)**: `source_role` / `target_role` name the role the entity at each end plays, and `source_verb` / `target_verb` carry the verb that reads the relationship from that end. Documentation only; no generator emits them. Available on an Edge as well.
+
+- **Constraint type (§11.15)**: `constraint_type: identifying | non_identifying` records whether the child's foreign key participates in the child entity's primary key. It changes no keys and is not derived from them, so it can be stated before the child has a primary key. Absence means unstated, which is distinct from `non_identifying`. §11.15.1 maps the property onto the spellings used by Hackolade Studio, erwin, ER/Studio, and PowerDesigner, whose CDM and LDM call it a Dependent checkbox set per direction.
+
+- **Entity-level relationship endpoints (§11.16)**: a `Ref` endpoint may name an entity rather than an attribute, so a relationship can be drawn between two concepts before either has attributes and then refined in place without changing declaration kind. Such a relationship states no cardinality (§11.8 inference does not apply), produces no `fk` / `fm` / `dk` / `dm` markers, and takes its reading direction from the operator alone, with `-` meaning linked without a stated direction and `<>` rejected. `undirected: true` marks a relationship that reads the same way from both ends, matching `undirected` on an Edge.
+
+- **Settings block on the long `Ref` form (§11.2)**: the long form now accepts a settings block after the relationship expression inside the braces, which puts every setting of §11.9 in all three declaration forms. A long form written without a settings block parses as before.
+
+#### Tooling
+
+- **Parser**: `constraint_type`, `source_role` / `target_role`, `source_verb` / `target_verb` and `undirected` are recognized settings. `constraint_type` takes `identifying` or `non_identifying` and is rejected on a foreign master; `undirected` takes true or false; `<>` is rejected between entities; the documentation settings are gated on `xdbml: 0.4` like the `foreign_master` flag. New diagnostics: `invalid-constraint-type`, `constraint-type-on-foreign-master`, `invalid-undirected`, `entity-level-many-to-many`, `ambiguous-ref-endpoint`. `@xdbml/parse` exports `constraintType`, `isUndirected`, `entityNames` and `isEntityLevelEndpoint`.
+
+- **Renderer**: entity-level endpoints resolve and draw, anchored to the entity boxes. No cardinality is inferred for them, and a direction arrow replaces the crow's foot. `@xdbml/render` exports `collectRefDeclarations`, one definition of the order the diagram numbers relationships in. `RefLayout` carries `relationshipType`, `inactive`, `entityLevel`, `undirected` and `decl`.
+
+- **Playground**: the relationship inspector shows type, direction, constraint type, and the roles, verbs and cardinalities, with the relationship read back as a sentence. The Display dropdown gains a Conceptual toggle alongside foreign key, foreign master and inactive.
+
+- **Example 12, conceptual to denormalized**: one order-management model holding an entity-level relationship, foreign keys carrying roles, verbs and a constraint type, and five foreign masters including one crossing an array.
+
+- **Example 13, denormalization with foreign master**: a storefront order document with eight foreign masters across both declaration forms, including copies inside array elements, and a deliberate counter-example (`unitPrice` is not a foreign master, because the price charged may differ from the catalogue price).
+
+- **MCP server and llms.txt**: both teach `xdbml: 0.4` and the new constructs. CI now fails when `mcp/src/reference.ts` drifts from `public/llms.txt`, the cheatsheet it is generated from.
+
+- **tools/PUBLISH-0.4.md**: the release runbook -- site, npm packages, MCP Worker, rendering API, in order.
+
+### Fixed
+
+#### Tooling
+
+- **Inline refs on nested fields are drawn.** An inline `[ref: ...]` written on a field inside an object or array element was silently dropped by the renderer, with no diagnostic and no line. Where an endpoint pointed was never the problem; where the setting was written had to be a top-level field.
+
+- **The inspector resolves a relationship that came from an inline ref.** The renderer numbered top-level and inline relationships in one sequence while the inspector counted `RefDeclaration` statements alone, so a line from an inline ref opened an empty pane. Both now index into `collectRefDeclarations`.
+
+
+### Changed
+
+#### Spec
+
+- **`inactive` line style (§11.9)**: an inactive relationship renders as a line of small open circles rather than a dotted line, which frees the dotted line for foreign master relationships and matches Hackolade Studio. The change affects rendering only; the flag's meaning is unchanged.
+
+- **§22.2 cross-engine references**: the value-space compatibility table extends to foreign master relationships, at warning level, since a mismatch there reaches no generator.
+
+- **§27 AST, §28 round-trip, §30 conformance, Appendix A, Appendix D**: updated for the new flag. Foreign master relationships are lossy to DBML and to every engine DDL target by design; a generator writing DBML omits them rather than emitting a `Ref` a downstream tool would read as enforceable structure.
+
 ## v0.3.1 -- 2026
 
-**Status**: Draft -- current (point release of v0.3)
+**Status**: Draft -- superseded (point release of v0.3)
 **Released**: 2026-07-03
 
 A backward-compatible point release of the v0.3 draft: one small surface-syntax addition, spec clarifications, and tooling fixes across the parser, renderer, playground, and MCP server. Every v0.3 document remains valid, and documents continue to declare `xdbml: 0.3`.

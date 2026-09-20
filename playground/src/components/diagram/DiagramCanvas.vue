@@ -110,6 +110,39 @@
         </div>
       </div>
 
+      <div ref="displayWrap" class="relative">
+        <button
+          type="button"
+          class="h-7 px-2 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+          :class="{ 'text-blue-600 dark:text-blue-400': !allRelationshipsShown }"
+          @click="displayMenuOpen = !displayMenuOpen"
+          title="Choose which relationship types the diagram draws"
+        >
+          Display
+          <svg viewBox="0 0 16 16" class="w-2.5 h-2.5"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.75" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div
+          v-if="displayMenuOpen"
+          class="absolute bottom-full right-0 mb-1 w-56 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg"
+        >
+          <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Relationships</p>
+          <label
+            v-for="opt in relationshipOptions"
+            :key="opt.key"
+            class="w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              class="w-3 h-3 accent-blue-600"
+              :checked="relationshipVisibility[opt.key]"
+              @change="toggleRelationship(opt.key)"
+            >
+            <span class="flex-1">{{ opt.label }}</span>
+            <span class="text-gray-400 dark:text-slate-500">{{ opt.hint }}</span>
+          </label>
+        </div>
+      </div>
+
       <template v-if="userPositions.size > 0 || edgeOffsets.size > 0">
         <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
         <button
@@ -145,7 +178,11 @@ import { useFileSystemStore } from '@/stores/fileSystemStore';
 import { buildDiagram, autoArrange, darkTheme } from '@xdbml/render';
 import type { ArrangeStrategy } from '@xdbml/render';
 import { mount, ZOOM_LEVELS } from '@xdbml/render/interactive';
-import type { DiagramHandle, Selection as MountSelection } from '@xdbml/render/interactive';
+import type {
+  DiagramHandle,
+  RelationshipVisibility,
+  Selection as MountSelection,
+} from '@xdbml/render/interactive';
 
 import type { Selection } from '@/components/inspector/selection';
 import {
@@ -178,6 +215,7 @@ const POSITIONS_STORAGE_KEY = 'xdbml-playground:entity-positions';
 const EDGE_OFFSETS_STORAGE_KEY = 'xdbml-playground:edge-offsets';
 const COLLAPSE_STORAGE_KEY = 'xdbml-playground:collapsed-paths';
 const ZOOM_STORAGE_KEY = 'xdbml-playground:zoom';
+const RELATIONSHIP_VISIBILITY_STORAGE_KEY = 'xdbml-playground:relationship-visibility';
 const WORKING_DOC_KEY = '__working__';
 
 type EntityPos = { x: number; y: number };
@@ -412,6 +450,66 @@ function redoLayout (): void {
 }
 defineExpose({ undo: undoLayout, redo: redoLayout, canUndo, canRedo });
 
+/* ------------------------------------------ relationship visibility */
+//
+// Which relationship types the diagram draws (spec 11.10, 11.13). Hiding a
+// type takes its lines out of the picture only: the relationships stay in
+// the model, the fk / fm / dk / dm markers stay on the field rows, and the
+// lines come back unchanged when the type is shown again. A heavily
+// denormalized model carries many foreign masters, and hiding them leaves
+// the referential structure legible.
+
+const relationshipOptions = [
+  { key: 'referential' as const,   label: 'Foreign key',    hint: 'solid' },
+  { key: 'foreignMaster' as const, label: 'Foreign master', hint: 'dotted' },
+  { key: 'inactive' as const,      label: 'Inactive',       hint: 'circles' },
+  { key: 'conceptual' as const,    label: 'Conceptual',     hint: 'no attributes' },
+];
+
+function loadRelationshipVisibility (): RelationshipVisibility {
+  const all: RelationshipVisibility = {
+    referential: true, foreignMaster: true, inactive: true, conceptual: true,
+  };
+  try {
+    const raw = localStorage.getItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY);
+    if (!raw) return all;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') {
+      for (const opt of relationshipOptions) {
+        if (typeof parsed[opt.key] === 'boolean') all[opt.key] = parsed[opt.key];
+      }
+    }
+  } catch { /* ignore */ }
+  return all;
+}
+
+const relationshipVisibility = ref<RelationshipVisibility>(loadRelationshipVisibility());
+const allRelationshipsShown = computed(
+  () => relationshipOptions.every((o) => relationshipVisibility.value[o.key]),
+);
+const displayMenuOpen = ref(false);
+const displayWrap = ref<HTMLElement | null>(null);
+
+watch(relationshipVisibility, (v) => {
+  try {
+    localStorage.setItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY, JSON.stringify(v));
+  } catch { /* best-effort */ }
+}, { deep: true });
+
+function toggleRelationship (key: keyof RelationshipVisibility): void {
+  relationshipVisibility.value = {
+    ...relationshipVisibility.value,
+    [key]: !relationshipVisibility.value[key],
+  };
+  handle?.setRelationshipVisibility(relationshipVisibility.value);
+}
+
+function onDisplayOutside (e: MouseEvent): void {
+  if (!displayMenuOpen.value) return;
+  const el = displayWrap.value;
+  if (el && !el.contains(e.target as Node)) displayMenuOpen.value = false;
+}
+
 /* ------------------------------------------------------------ arrange */
 
 const arrangeMenuOpen = ref(false);
@@ -479,6 +577,7 @@ function toMount (s: Selection): MountSelection {
 function ensureMount (): void {
   if (handle || !viewportEl.value || !parser.flatAst) return;
   handle = mount(viewportEl.value, parser.flatAst, {
+    relationshipVisibility: relationshipVisibility.value,
     // In dark mode, hand the renderer its dark palette. The palette also
     // carries the canvas backdrop, so the mount's viewport grid matches.
     // Light mode passes no override and uses the renderer defaults.
@@ -578,9 +677,11 @@ onMounted(() => {
   ready.value = true;
   syncDocument();
   document.addEventListener('mousedown', onArrangeOutside);
+  document.addEventListener('mousedown', onDisplayOutside);
 });
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', onArrangeOutside);
+  document.removeEventListener('mousedown', onDisplayOutside);
   handle?.destroy();
   handle = null;
 });

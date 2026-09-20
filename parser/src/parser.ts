@@ -1667,8 +1667,12 @@ export class Parser {
       spec = this.parseRefSpec();
       settings = this.maybeSettingsBlock();
     } else if (this.match(TokenKind.LBrace)) {
-      // long form: `Ref name { a > b }`
+      // long form: `Ref name { a > b }`, or, since v0.4, with a settings
+      // block after the relationship expression: `Ref name { a > b [flag] }`.
+      // Accepting settings here puts every setting of spec 11.9 in all three
+      // declaration forms; a long form written without one parses as before.
       spec = this.parseRefSpec();
+      settings = this.maybeSettingsBlock();
       this.expect(TokenKind.RBrace, "Expected '}' closing Ref body");
     } else {
       const t = this.peek();

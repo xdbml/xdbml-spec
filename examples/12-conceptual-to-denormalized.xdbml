@@ -1,0 +1,120 @@
+xdbml: 0.4
+
+// ---------------------------------------------------------------------------
+// Order management, from concepts to a denormalized document model.
+//
+// The relationships here sit at three different stages of refinement, which
+// is the point of the example: one model can hold all three at once.
+//
+//   customers -- Campaign    named as entities, no attribute endpoints
+//   Customer -> Order        a foreign key, with roles, verbs and cardinality
+//   Order    -> Customer     foreign masters recording denormalized copies
+//
+// Sections 11.10 through 11.16 of the specification cover the constructs used.
+// ---------------------------------------------------------------------------
+
+Project order_management {
+  targets: [MongoDB]
+  Note: 'Orders keep a copy of the customer name and shipping address so a read needs no join.'
+}
+
+// --- Concepts -------------------------------------------------------------
+//
+// Campaign has been identified as a concept and connected to Customer, but
+// nobody has decided what a campaign holds yet. An entity-level relationship
+// records the connection without forcing a cardinality or a key (11.16).
+
+Collection Campaign { }
+
+// --- Entities -------------------------------------------------------------
+
+Collection customers {
+  Note: 'One document per registered customer. Master of name and address.'
+  customerID objectId [pk]
+  name       string   [not null]
+  email      string   [unique, not null, tags: ['pii']]
+  address object {
+    street  string
+    city    string
+    country string [default: 'BE']
+  }
+}
+
+Collection orders {
+  Note: 'One document per order. Carries copies of the customer fields it displays.'
+  orderID    objectId  [pk]
+  orderDate  Date      [not null]
+  status     string    [not null, default: 'pending']
+
+  // The key reference: this is what locates the master document.
+  customerID objectId  [not null]
+
+  // Copies. Each one is mastered in customers and is declared as such below,
+  // so a change to a customer can be traced to every place it is repeated.
+  customerName string
+  shipTo object {
+    street  string
+    city    string
+    country string
+  }
+
+  lineItems array [
+    lineItem object {
+      sku      string     [not null]
+      qty      int32      [minimum: 1]
+      price    Decimal128
+      // Denormalized from the product catalogue at the time of sale.
+      productName string
+    }
+  ]
+}
+
+Collection products {
+  productID objectId [pk]
+  sku       string   [unique, not null]
+  name      string   [not null]
+  listPrice Decimal128
+}
+
+// --- Conceptual relationship ----------------------------------------------
+//
+// Direction is not stated, so the line carries no marker at either end, and
+// no cardinality is inferred from the operator (11.16.1).
+
+Ref: customers - Campaign [
+  source_role: 'audience',
+  target_role: 'reach',
+  note: 'Campaigns target customers; the shape of a campaign is still open.'
+]
+
+// --- Referential relationships --------------------------------------------
+//
+// Roles and verbs read the relationship in both directions (11.14), and the
+// constraint type records that the foreign key is not part of the order's
+// primary key (11.15).
+
+Ref places: orders.customerID > customers.customerID [
+  source_role: 'shopping cart', source_verb: 'is bought by',
+  target_role: 'buyer',         target_verb: 'places',
+  source: '0..*',               target: '1..1',
+  constraint_type: non_identifying
+]
+
+Ref sold_as: orders.lineItems.[*].sku > products.sku [
+  source_verb: 'sells',
+  target_verb: 'is sold in',
+  constraint_type: non_identifying
+]
+
+// --- Foreign masters ------------------------------------------------------
+//
+// One per duplicated attribute (11.11). None of these reaches a generator:
+// they document where each copied value is mastered.
+
+Ref: orders.customerName > customers.name [foreign_master]
+
+Ref: orders.shipTo.street  > customers.address.street  [foreign_master]
+Ref: orders.shipTo.city    > customers.address.city    [foreign_master]
+Ref: orders.shipTo.country > customers.address.country [foreign_master]
+
+Ref: orders.lineItems.[*].productName > products.name [foreign_master]

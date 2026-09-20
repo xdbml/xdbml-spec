@@ -1,17 +1,22 @@
 ---
 title: Specification
-description: The xDBML specification. v0.3 is the current draft. Apache License 2.0. Backward-compatible additions are MINOR versions; documents declaring a specific version are stable across MINOR and PATCH releases.
+description: The xDBML specification. v0.4 is the current draft. Apache License 2.0. Backward-compatible additions are MINOR versions; documents declaring a specific version are stable across MINOR and PATCH releases.
 ---
 
 # xDBML Specification
 
 This is the canonical home of the xDBML specification. xDBML follows [Semantic Versioning](https://semver.org), adapted for a specification: MAJOR.MINOR.PATCH where MAJOR indicates incompatible changes, MINOR indicates backward-compatible additions, and PATCH indicates clarifications. See [GOVERNANCE.md §9](/governance#_9-versioning-and-stability) for the full stability commitments.
 
+## Stable link
+
+[xdbml.org/spec/current](/spec/current) always serves the newest draft. Bookmark it to follow the specification without editing the link each release. Every version keeps its own permanent URL as well, so a citation or a link in an issue can pin the exact text it refers to.
+
 ## Available versions
 
 | Version | Status | Released | Notes |
 |---------|--------|----------|-------|
-| [v0.3](./v0.3) | Draft -- current | 2026 | Adds remote module sources: `use`/`reuse` may import a module from an `https://` URL in addition to a relative path (§26.17). Strict superset of v0.2. |
+| [v0.4](./v0.4) | Draft -- current | 2026 | Adds the foreign master relationship type: a `Ref` may carry a `foreign_master` flag recording where a duplicated attribute of denormalized data is mastered (§11.10), with the derived `fk`/`fm`/`dk`/`dm` attribute roles (§11.12). Strict superset of v0.3. |
+| [v0.3](./v0.3) | Draft -- superseded | 2026 | Adds remote module sources: `use`/`reuse` may import a module from an `https://` URL in addition to a relative path (§26.17). Strict superset of v0.2. |
 | [v0.2](./v0.2) | Draft -- superseded | 2026 | Adds the module system (`use`/`reuse` directives with optional clone blocks), scalar Named Types, and field-level imports. Strict superset of v0.1. |
 | [v0.1](./v0.1) | Draft -- superseded | 2026 | Initial public draft. Documents declaring `xdbml: 0.1` continue to parse correctly with v0.1 semantics under any v0.2+ parser. |
 
@@ -27,7 +32,7 @@ For documents declaring a specific version (e.g., `xdbml: 0.2` at the top of the
 
 ## Choosing a version
 
-If you are writing new xDBML documents, use the latest draft (currently v0.3). If you are reading documents authored elsewhere, the document's first line declares which version's semantics apply.
+If you are writing new xDBML documents, use the latest draft (currently v0.4). If you are reading documents authored elsewhere, the document's first line declares which version's semantics apply.
 
 If you are an implementation author, support the latest version. Support for older versions is automatic if you implement the version declaration mechanism correctly -- versioned semantics are additive.
 
@@ -35,7 +40,8 @@ If you are an implementation author, support the latest version. Support for old
 
 Each specification version is maintained as a markdown file in this directory:
 
-- [`v0.3.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.3.md) -- current draft
+- [`v0.4.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.4.md) -- current draft
+- [`v0.3.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.3.md) -- superseded
 - [`v0.2.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.2.md) -- superseded
 - [`v0.1.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.1.md) -- superseded
 

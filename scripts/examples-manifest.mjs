@@ -154,4 +154,22 @@ export const examples = [
     description: 'A v0.3 variant of the sales data product in [10-modules-consumer.xdbml](/examples/10-modules-consumer), in the same domain so the only difference is where modules come from. Instead of a local relative path, each `reuse` directive imports from the PUBLISHED library over HTTPS, with the URL pinned to the immutable `v0.2` git tag rather than a mutable branch (spec §26.14.2). It demonstrates the remote module-source feature (spec §26.14): a raw-content URL is recognized by its `https://` scheme, while a non-https scheme, a protocol-relative `//host/...` source, a bare host, or credentials embedded in the URL are rejected with a located error. Each directive keeps a clone block plus `cloned_at`, so the URL records the canonical source and the clone is the archived snapshot -- the file parses offline while documenting provenance. A purely live (reference-only) remote import is demonstrated interactively in the playground rather than here, to keep the hermetic example suite network-free.',
     generators:  [],
   },
+  {
+    file:        '12-conceptual-to-denormalized.xdbml',
+    slug:        '12-conceptual-to-denormalized',
+    title:       'Conceptual to denormalized (v0.4)',
+    domain:      'Order management',
+    paradigm:    'MongoDB document model',
+    description: 'One model holding relationships at three stages of refinement, which is what the v0.4 relationship work is for. `customers - Campaign` is an entity-level relationship (spec \u00a711.16): both endpoints name entities, nothing has been decided about a campaign yet, and no cardinality is inferred from the operator. `orders.customerID > customers.customerID` is an ordinary foreign key carrying the documentation a conceptual or logical model needs -- roles and verbs reading it in both directions (\u00a711.14), explicit cardinality, and `constraint_type: non_identifying` recording that the foreign key is not part of the order\'s primary key (\u00a711.15). The remaining five relationships are foreign masters (\u00a711.10): `orders` keeps copies of the customer name and shipping address, and each line item keeps the product name as sold, so a read needs no join. Each copy is declared separately, since a foreign master takes one attribute on each side, and one of them crosses an array with the explicit `.[*]` form. None of the foreign masters reaches a generator; they record where each duplicated value is mastered.',
+    generators:  [],
+  },
+  {
+    file:        '13-foreign-master-denormalization.xdbml',
+    slug:        '13-foreign-master-denormalization',
+    title:       'Denormalization with foreign master (v0.4)',
+    domain:      'Storefront orders',
+    paradigm:    'MongoDB document model',
+    description: 'A read-optimized order document that keeps copies of values mastered in `customers` and `products`, with every copy declared as a foreign master relationship (spec \u00a711.10). Eight of them: the customer name, the loyalty tier, three address fields, and three catalogue fields inside each line item. Both declaration forms appear, so the example shows they mean the same thing -- top-level `Ref:` statements for the customer copies, the inline `[ref: ..., foreign_master]` form for the line-item copies, one of which sits inside an array element. The example also draws the line that matters in practice: `unitPrice` is NOT a foreign master, because the price charged is a fact about the order rather than a copy of the catalogue price, and a value that may legitimately differ from its source is not replicated data. Contrast the foreign key at the end, which is generated and carries roles, verbs and a constraint type (\u00a711.14, \u00a711.15), with the eight foreign masters above it, which reach no generator at all.',
+    generators:  [],
+  },
 ];

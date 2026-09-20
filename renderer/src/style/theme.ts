@@ -65,7 +65,12 @@ export interface Theme {
 
   badges: {
     pk: string;
+    /** Referential family: child (fk) and parent (dk) markers, spec 11.12. */
     fk: string;
+    dk: string;
+    /** Replication family: child (fm) and parent (dm) markers, spec 11.12. */
+    fm: string;
+    dm: string;
     unique: string;
     notNull: string;
   };
@@ -73,6 +78,22 @@ export interface Theme {
   ref: {
     line: string;
     label: string;
+    /**
+     * Dash pattern for a foreign master relationship line (spec 11.13).
+     * Round line caps turn short dashes into dots.
+     */
+    foreignMasterDash: string;
+    /**
+     * An inactive relationship draws as a line of small open circles
+     * (spec 11.13). The renderer strokes the path twice with this dash
+     * pattern: once in the line colour at `inactiveRingWidth`, then again
+     * in `inactiveRingCore` at `inactiveCoreWidth`, which opens the centre.
+     * `inactiveRingCore` should match the backdrop the diagram sits on.
+     */
+    inactiveDash: string;
+    inactiveRingWidth: number;
+    inactiveCoreWidth: number;
+    inactiveRingCore: string;
   };
 
   edge: {
@@ -150,6 +171,9 @@ export const defaultTheme: Theme = {
   badges: {
     pk: '#ca8a04',
     fk: '#0891b2',
+    dk: '#0e7490',
+    fm: '#0d9488',
+    dm: '#0f766e',
     unique: '#7c3aed',
     notNull: '#dc2626',
   },
@@ -157,6 +181,11 @@ export const defaultTheme: Theme = {
   ref: {
     line: '#64748b',
     label: '#94a3b8',
+    foreignMasterDash: '1.5 4',
+    inactiveDash: '0.1 9',
+    inactiveRingWidth: 5,
+    inactiveCoreWidth: 2.5,
+    inactiveRingCore: '#f8fafc',
   },
 
   edge: {
@@ -237,7 +266,10 @@ export const darkTheme: Theme = {
 
   badges: {
     pk: '#ca8a04',
-    fk: '#0891b2',
+    fk: '#22d3ee',
+    dk: '#0891b2',
+    fm: '#2dd4bf',
+    dm: '#0d9488',
     unique: '#7c3aed',
     notNull: '#dc2626',
   },
@@ -245,6 +277,11 @@ export const darkTheme: Theme = {
   ref: {
     line: '#94a3b8',
     label: '#cbd5e1',
+    foreignMasterDash: '1.5 4',
+    inactiveDash: '0.1 9',
+    inactiveRingWidth: 5,
+    inactiveCoreWidth: 2.5,
+    inactiveRingCore: '#0f172a',
   },
 
   edge: {

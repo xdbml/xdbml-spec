@@ -111,6 +111,65 @@ function containerOverlay (
   return parts.join('');
 }
 
+/**
+ * Widen a dash pattern for a thicker stroke while keeping its period, so the
+ * highlight's dots land exactly on the base line's dots underneath.
+ *
+ * Round caps extend each painted dash by the stroke width, so a wider stroke
+ * with the same pattern fattens the dashes and eats the gaps. Taking the
+ * width increase out of the dash and giving it to the gap keeps both the
+ * painted dot size and the spacing, and leaving the period untouched keeps
+ * the two strokes in phase; a drifting phase would show the grey line
+ * peeking out between the blue dots.
+ */
+function widenDash (dash: string, baseWidth: number, width: number): string {
+  const [d, g] = dash.trim().split(/\s+/).map(Number);
+  if (!Number.isFinite(d) || !Number.isFinite(g)) return dash;
+  const period = d + g;
+  const nd = Math.max(0.1, d - (width - baseWidth));
+  return `${nd} ${Math.max(0.1, period - nd)}`;
+}
+
+/**
+ * The selection highlight for a relationship, drawn over the line itself.
+ * It repeats the line style of spec 11.13 in the selection colour rather
+ * than flattening every selected relationship to a solid stroke: a selected
+ * foreign master stays dotted, and a selected inactive relationship keeps
+ * its open centres.
+ */
+function selectionStroke (
+  d: string,
+  r: DiagramModel['refs'][number],
+  theme: Theme,
+): string[] {
+  const tr = theme.ref;
+  const colour = theme.row.selectStrip;
+
+  if (r.inactive) {
+    const ringWidth = tr.inactiveRingWidth + 1.5;
+    return [
+      `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${ringWidth}" ` +
+        `stroke-linecap="round" stroke-dasharray="${widenDash(tr.inactiveDash, tr.inactiveRingWidth, ringWidth)}" ` +
+        'pointer-events="none"/>',
+      `<path d="${d}" fill="none" stroke="${tr.inactiveRingCore}" stroke-width="${tr.inactiveCoreWidth}" ` +
+        `stroke-linecap="round" stroke-dasharray="${tr.inactiveDash}" pointer-events="none"/>`,
+    ];
+  }
+
+  if (r.relationshipType === 'foreign_master') {
+    const width = 3;
+    return [
+      `<path d="${d}" fill="none" stroke="${colour}" stroke-width="${width}" ` +
+        `stroke-linecap="round" stroke-dasharray="${widenDash(tr.foreignMasterDash, 1.5, width)}" ` +
+        'pointer-events="none"/>',
+    ];
+  }
+
+  return [
+    `<path d="${d}" fill="none" stroke="${colour}" stroke-width="2.5" pointer-events="none"/>`,
+  ];
+}
+
 function refOverlay (
   r: DiagramModel['refs'][number],
   model: DiagramModel,
@@ -123,9 +182,7 @@ function refOverlay (
   const parts: string[] = [`<g data-xdbml="ref" data-id="${id}">`];
 
   if (sel && sel.kind === 'ref' && sel.id === r.id) {
-    parts.push(
-      `<path d="${resolved.path.d}" fill="none" stroke="${theme.row.selectStrip}" stroke-width="2.5" pointer-events="none"/>`,
-    );
+    parts.push(...selectionStroke(resolved.path.d, r, theme));
   }
   // Wide transparent hit path.
   parts.push(

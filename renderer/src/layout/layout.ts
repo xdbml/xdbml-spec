@@ -204,7 +204,14 @@ export interface FieldLayout {
 
 export interface FieldFlags {
   pk: boolean;
+  /** Child attribute of a referential relationship (spec 11.12). */
   fk: boolean;
+  /** Child attribute of a foreign master relationship (spec 11.12). */
+  fm: boolean;
+  /** Parent attribute of a referential relationship (spec 11.12). */
+  dk: boolean;
+  /** Parent attribute of a foreign master relationship (spec 11.12). */
+  dm: boolean;
   unique: boolean;
   notNull: boolean;
   hasDefault: boolean;
@@ -215,6 +222,29 @@ export interface RefLayout {
   id: string;
   /** Cardinality operator: '<' '>' '-' '<>' */
   operator: string;
+  /**
+   * Relationship type (spec 11.10). 'foreign_master' records denormalized
+   * replication and draws dotted; 'referential' is the foreign key and
+   * draws solid.
+   */
+  relationshipType: 'referential' | 'foreign_master';
+  /** The `inactive` flag (spec 11.9). Draws as a line of small open circles. */
+  inactive: boolean;
+  /**
+   * True when both endpoints name an entity with no attribute (spec 11.16).
+   * The line anchors to the entity boxes, the cardinality inference of
+   * spec 11.8 does not apply, and no attribute markers are set.
+   */
+  entityLevel: boolean;
+  /** The `undirected` setting (spec 11.16.2): the relationship reads the same way from both ends. */
+  undirected: boolean;
+  /**
+   * The declaration this line was drawn from: the top-level `Ref` statement,
+   * or the node synthesized for an inline `[ref: ...]` setting. Carried here
+   * so a consumer holding the model reads it directly instead of counting
+   * statements a second time.
+   */
+  decl: RefDeclaration;
   /** Resolved entity+field locator. May be undefined if resolution failed. */
   source?: FieldLocator;
   target?: FieldLocator;
@@ -556,82 +586,87 @@ export function buildDiagram (
     }
   }
 
-  const refLayouts: RefLayout[] = [];
-  let refIndex = 0;
-  for (const stmt of doc.statements) {
-    if (stmt.kind === 'RefDeclaration') {
-      refLayouts.push(buildRefLayout(stmt, entityByName, refIndex));
-      refIndex += 1;
-    }
-  }
+  // Relationship order comes from collectRefDeclarations, which both the
+  // diagram and any consumer that has to map a `ref:<n>` id back to its
+  // declaration use. Keeping one definition of the order is what stops the
+  // two from drifting apart.
+  const refLayouts: RefLayout[] = collectRefDeclarations(doc)
+    .map((decl, index) => buildRefLayout(decl, entityByName, index));
 
-  // Collect inline refs declared as field settings, e.g.
-  //   manager_id int [ref: > employees.id]
+
+  // Mark the four relationship role markers of spec 11.12 on the fields
+  // that participate in a resolved Ref:
   //
-  // These get parsed as RefValue settings on the FieldDeclaration
-  // rather than as top-level RefDeclaration statements, so the loop
-  // above misses them. We synthesize a RefDeclaration-equivalent for
-  // each and run it through the same buildRefLayout machinery so the
-  // diagram treats them identically to top-level refs.
+  //   fk  child attribute of a referential relationship
+  //   fm  child attribute of a foreign master relationship
+  //   dk  parent attribute of a referential relationship
+  //   dm  parent attribute of a foreign master relationship
   //
-  // Source endpoint is implicit -- it's the field on which the
-  // setting was declared. Target endpoint comes from the RefValue.
+  // A field carries every marker that applies to it, so an attribute that
+  // parents both kinds shows dk and dm together.
   //
-  // Only top-level FieldDeclarations are walked (i.e. fields directly
-  // inside an entity body). Inline refs declared on nested fields
-  // (inside ObjectType, ArrayType element types, etc.) are skipped
-  // for now; the source-path construction would need to track the
-  // surrounding type context and that's not part of v1.
-  for (const stmt of doc.statements) {
-    if (stmt.kind === 'EntityDeclaration') {
-      collectInlineRefs(stmt, undefined);
-    } else if (stmt.kind === 'ContainerDeclaration') {
-      for (const item of stmt.body) {
-        if (item.kind === 'EntityDeclaration') collectInlineRefs(item, stmt.name);
+  // Which endpoint is the child follows the cardinality operator: `>` and
+  // `-` put the child on the source side, `<` puts it on the target side,
+  // and `<>` has no single child, so a many-to-many relationship marks
+  // neither side.
+  //
+  // We try to match the deepest visible field row by name; if the path
+  // includes a nested segment (e.g. `line_items.[item].sku`) and that row
+  // is currently expanded, the badge appears on the leaf. If the row is
+  // collapsed, we mark the nearest visible ancestor so the user still sees
+  // an indicator at the collapsed parent.
+  //
+  // Composite relationships (form `entity.(a, b, c)`) flag every
+  // constituent field, not just the visual anchor: all three participate
+  // in the constraint and should display the badge.
+  const markRole = (locator: FieldLocator | undefined, flag: keyof FieldFlags): void => {
+    if (!locator || !locator.fieldName) return;
+    const entity = entityLayouts.find((e) => e.id === locator.entityId);
+    if (!entity) return;
+    const names = locator.compositeFields ?? [locator.fieldName];
+    for (const name of names) {
+      // A non-composite endpoint into a nested field arrives as a dotted
+      // remainder such as `address.street`, so try the row path first.
+      let row = entity.fields.find((f) => f.path === name);
+      // Then exact leaf-name match at any indent (matches dbdiagram.io's
+      // intuition that the endpoint field is whatever has that leaf name).
+      if (!row) row = entity.fields.find((f) => f.name === name);
+      // Then any row whose path ends with the endpoint as a suffix.
+      if (!row) row = entity.fields.find((f) => f.path.endsWith(`.${name}`));
+      // Finally, when the endpoint names a nested field whose parent row is
+      // collapsed, walk up the path and mark the deepest visible ancestor,
+      // so the marker still shows at the collapsed parent.
+      if (!row && name.includes('.')) {
+        const segments = name.split('.');
+        for (let cut = segments.length - 1; cut >= 1 && !row; cut -= 1) {
+          const prefix = segments.slice(0, cut).join('.');
+          row = entity.fields.find((f) => f.path === prefix);
+        }
       }
+      if (row) row.flags[flag] = true;
     }
-  }
+  };
 
-  function collectInlineRefs (entity: EntityDeclaration, containerName: string | undefined): void {
-    for (const item of entity.body) {
-      if (item.kind !== 'FieldDeclaration') continue;
-      for (const setting of item.settings) {
-        if (!setting.value || setting.value.kind !== 'RefValue') continue;
-        const synth = synthesizeRefFromInline(setting.value, entity.name, item.name, containerName);
-        refLayouts.push(buildRefLayout(synth, entityByName, refIndex));
-        refIndex += 1;
-      }
-    }
-  }
-
-  // Mark fk flags on fields that appear as a source in any resolved Ref.
-  // We try to match the deepest visible field row by name; if the source
-  // path includes a nested segment (e.g. `line_items.[item].sku`), and
-  // that row is currently expanded, the badge appears on the leaf. If
-  // the row is collapsed, we mark the nearest visible ancestor so the
-  // user still sees an FK indicator at the collapsed parent.
-  //
-  // Composite FKs (form `entity.(a, b, c)`) flag every constituent
-  // field, not just the visual anchor: all three fields participate in
-  // the foreign-key constraint and should display the FK badge.
   for (const ref of refLayouts) {
-    if (!ref.source || !ref.source.fieldName) continue;
-    const entity = entityLayouts.find((e) => e.id === ref.source!.entityId);
-    if (!entity) continue;
-    const sourceFieldNames = ref.source.compositeFields ?? [ref.source.fieldName];
-    for (const sourceFieldName of sourceFieldNames) {
-      // First try exact name match at any indent (matches dbdiagram.io's
-      // intuition that the "source field" is whatever has that leaf name).
-      let target = entity.fields.find((f) => f.name === sourceFieldName);
-      // Fallback: match by leaf segment of a nested path. Source path
-      // strings here are just the field name; the field name carries no
-      // path info, so this only fires for refs with explicit composite
-      // form. For now, the simple name match is sufficient.
-      if (!target) {
-        target = entity.fields.find((f) => f.path.endsWith(`.${sourceFieldName}`));
-      }
-      if (target) target.flags.fk = true;
+    const master = ref.relationshipType === 'foreign_master';
+    let child: FieldLocator | undefined;
+    let parent: FieldLocator | undefined;
+    switch (ref.operator) {
+      case '>':
+      case '-':
+        child = ref.source;
+        parent = ref.target;
+        break;
+      case '<':
+        child = ref.target;
+        parent = ref.source;
+        break;
+      default:
+        // '<>' has no single child; neither side takes a marker.
+        break;
     }
+    markRole(child, master ? 'fm' : 'fk');
+    markRole(parent, master ? 'dm' : 'dk');
   }
 
   // ---- Edges (property-bearing relationships) ----------------------
@@ -1226,6 +1261,9 @@ function emptyFlags (): FieldFlags {
   return {
     pk: false,
     fk: false,
+    fm: false,
+    dk: false,
+    dm: false,
     unique: false,
     notNull: false,
     hasDefault: false,
@@ -1236,7 +1274,13 @@ function emptyFlags (): FieldFlags {
 function computeFieldFlags (field: FieldDeclaration): FieldFlags {
   const flags: FieldFlags = {
     pk: false,
-    fk: false, // set during ref resolution
+    // fk / fm / dk / dm are set during ref resolution (spec 11.12); they
+    // describe how the field participates in relationships declared
+    // elsewhere, not anything the field declaration itself carries.
+    fk: false,
+    fm: false,
+    dk: false,
+    dm: false,
     unique: false,
     notNull: false,
     hasDefault: false,
@@ -1321,6 +1365,18 @@ function renderScalarLabel (s: ScalarType): string {
  * Refs
  * ----------------------------------------------------------------------- */
 
+/**
+ * The relationship type a Ref declares (spec 11.10): the `foreign_master`
+ * flag marks denormalized replication, and its absence marks a referential
+ * relationship. Mirrors `relationshipType()` in @xdbml/parse; kept local so
+ * the layout has no runtime dependency on the parser package.
+ */
+function relationshipTypeOf (ref: RefDeclaration): 'referential' | 'foreign_master' {
+  return ref.settings.some((s) => s.name === 'foreign_master')
+    ? 'foreign_master'
+    : 'referential';
+}
+
 function buildRefLayout (
   ref: RefDeclaration,
   entityByName: Map<string, EntityLayout>,
@@ -1333,6 +1389,11 @@ function buildRefLayout (
   return {
     id: `ref:${index}`,
     operator: ref.spec.operator,
+    relationshipType: relationshipTypeOf(ref),
+    inactive: ref.settings.some((s) => s.name === 'inactive'),
+    decl: ref,
+    entityLevel: !!source && !!target && !source.fieldName && !target.fieldName,
+    undirected: settingValueAsString(ref.settings, 'undirected') === 'true',
     source,
     target,
     sourceCardinality,
@@ -1357,19 +1418,110 @@ function buildRefLayout (
  * is reused verbatim from the inline RefValue (it already has the
  * right shape).
  *
- * Settings is empty. Inline refs don't carry cardinality settings
- * (the grammar only allows `[ref: > entity.field]`, no separate
- * `[source: '0..*', target: '1..1']`); the operator alone determines
- * cardinality, the same way it does for any other operator-only ref.
+ * Settings carries the `foreign_master` flag when the field's settings
+ * block has it, and nothing else. Spec 11.9 allows no setting beside an
+ * inline `ref:` except that flag (11.10.2), so the rest of the field's
+ * settings describe the field rather than the relationship and would be
+ * wrong to copy here. Cardinality still comes from the operator alone.
  *
  * Span borrows the RefValue's span. The layout doesn't read it but
  * future inspector navigation might.
  */
+/* -------------------------------------------------------------------------
+ * Relationship collection
+ * ----------------------------------------------------------------------- */
+
+/**
+ * Every relationship in a document, in the order the diagram numbers them.
+ * Index `n` in this array is the relationship the diagram gives the id
+ * `ref:<n>`.
+ *
+ * Top-level `Ref` statements come first, in source order, then the inline
+ * `[ref: ...]` settings, entity by entity and field by field, descending
+ * into object and array element types as it goes.
+ *
+ * An inline ref is not a `RefDeclaration` in the AST -- the parser attaches
+ * a `RefValue` to the field instead -- so one is synthesized here, with the
+ * source endpoint naming the field that carried the setting and the target
+ * taken from the RefValue. The synthesized node borrows the setting's span,
+ * so a consumer that jumps to source lands on the line the author wrote.
+ *
+ * Exported because the id is the only thing a diagram click carries, and
+ * anything resolving that id back to a declaration has to agree with the
+ * diagram about the order. Two implementations of this traversal drift; one
+ * does not.
+ */
+export function collectRefDeclarations (doc: XDbmlDocument): RefDeclaration[] {
+  const out: RefDeclaration[] = [];
+
+  for (const stmt of doc.statements) {
+    if (stmt.kind === 'RefDeclaration') out.push(stmt);
+  }
+
+  const collectInline = (entity: EntityDeclaration, containerName: string | undefined): void => {
+    const walk = (items: ReadonlyArray<{ kind: string }>, pathPrefix: string): void => {
+      for (const item of items) {
+        if (item.kind !== 'FieldDeclaration') continue;
+        const field = item as unknown as FieldDeclaration;
+        const fieldPath = pathPrefix ? `${pathPrefix}.${field.name}` : field.name;
+
+        for (const setting of field.settings) {
+          if (!setting.value || setting.value.kind !== 'RefValue') continue;
+          out.push(synthesizeRefFromInline(
+            setting.value, entity.name, fieldPath, containerName, field.settings,
+          ));
+        }
+
+        const nested = nestedFieldDeclarations(field);
+        if (nested.length) walk(nested, fieldPath);
+      }
+    };
+    walk(entity.body as ReadonlyArray<{ kind: string }>, '');
+  };
+
+  for (const stmt of doc.statements) {
+    if (stmt.kind === 'EntityDeclaration') {
+      collectInline(stmt, undefined);
+    } else if (stmt.kind === 'ContainerDeclaration') {
+      for (const item of stmt.body) {
+        if (item.kind === 'EntityDeclaration') collectInline(item as EntityDeclaration, stmt.name);
+      }
+    }
+  }
+
+  return out;
+}
+
+/**
+ * The field declarations directly inside a field's type expression, for the
+ * object and array shapes the AST produces. Returns an empty array for a
+ * scalar field, and does not recurse: the caller walks one level at a time
+ * so it can build the dotted path as it goes.
+ */
+function nestedFieldDeclarations (field: FieldDeclaration): FieldDeclaration[] {
+  const out: FieldDeclaration[] = [];
+  const visit = (node: unknown): void => {
+    if (!node || typeof node !== 'object') return;
+    const rec = node as Record<string, unknown>;
+    if (rec.kind === 'FieldDeclaration') {
+      out.push(rec as unknown as FieldDeclaration);
+      return; // the caller descends into this one itself
+    }
+    for (const value of Object.values(rec)) {
+      if (Array.isArray(value)) value.forEach(visit);
+      else if (value && typeof value === 'object') visit(value);
+    }
+  };
+  visit((field as unknown as Record<string, unknown>).type);
+  return out;
+}
+
 function synthesizeRefFromInline (
   refValue: RefValue,
   entityName: string,
   fieldName: string,
   containerName: string | undefined,
+  fieldSettings: ReadonlyArray<Setting> = [],
 ): RefDeclaration {
   const sourcePathNames = containerName
     ? [containerName, entityName, fieldName]
@@ -1392,7 +1544,7 @@ function synthesizeRefFromInline (
       target: refValue.target,
       span: refValue.span,
     },
-    settings: [],
+    settings: fieldSettings.filter((s) => s.name === 'foreign_master'),
     span: refValue.span,
   };
 }
@@ -1444,6 +1596,18 @@ function locateRefEndpoint (
       };
     }
   }
+
+  // Entity-level endpoint (spec 11.16): the whole path names an entity and
+  // no attribute follows, as in `Ref: Customer > Order` or, with a
+  // container, `Ref: shop.orders > Customer`. Tried after the loop above so
+  // an existing attribute-level reading keeps winning, which leaves every
+  // document that parsed before this meaning what it meant before.
+  if (!hasComposite) {
+    const wholePath = fieldSegments.map((s) => s.name).join('.');
+    const entity = entityByName.get(wholePath);
+    if (entity) return { entityId: entity.id, fieldName: undefined };
+  }
+
   return undefined;
 }
 

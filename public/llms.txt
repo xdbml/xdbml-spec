@@ -4,7 +4,7 @@
 
 ## How to author
 
-- Start every document with a version line: `xdbml: 0.3`
+- Start every document with a version line: `xdbml: 0.4`
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Database`, `Schema`, `Bucket`, `Keyspace`, or `Namespace`.
 - Prefer xDBML extensions over flat DBML: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
 - A field line is `name  type  [settings]`. Settings are comma-separated inside `[ ]`.
@@ -14,7 +14,7 @@
 Version, project, reusable type:
 
 ```
-xdbml: 0.3
+xdbml: 0.4
 
 Project shop {
   targets: [PostgreSQL, MongoDB]
@@ -51,6 +51,33 @@ Ref: orders.customer_id > customers.id [source: '1..*', target: '1..1']
 
 Operators: `>` many-to-one, `<` one-to-many, `-` one-to-one, `<>` many-to-many. The optional `[source: '<min>..<max>', target: '<min>..<max>']` is xDBML's precise cardinality.
 
+A relationship can record denormalization rather than a key reference. Add `foreign_master` when the child attribute holds a copy of the parent's value, as document models often do; nothing is generated from it, it takes one attribute on each side, and a child attribute has at most one master:
+
+```
+customerName string [ref: > customers.name, foreign_master]
+
+Ref: orders.shipTo.city > customers.address.city [foreign_master]
+```
+
+Relationships carry documentation for conceptual and logical modeling. Roles name what each end plays, verbs read the relationship in each direction, and `constraint_type` records whether the child's foreign key is part of its primary key. None of it reaches a generator:
+
+```
+Ref places: orders.customerID > customers.customerID [
+  source_role: 'shopping cart', source_verb: 'is bought by',
+  target_role: 'buyer',         target_verb: 'places',
+  constraint_type: non_identifying
+]
+```
+
+An endpoint may also name an entity and stop there, for a relationship drawn before either entity has attributes. Such a relationship states no cardinality until one is written, takes its reading direction from the operator alone (`-` meaning linked with no direction stated), and accepts `undirected: true` for one that reads the same way both ways:
+
+```
+Entity Customer { }
+Entity Order { }
+
+Ref: Customer > Order [target_verb: 'places']
+```
+
 Nesting (documents, structs, arrays):
 
 ```
@@ -77,7 +104,7 @@ payment oneOf {
 score union [int, decimal, null]
 ```
 
-Graph edge (a relationship with its own properties):
+Graph edge (a relationship with its own properties -- use this, not a `Ref`, when the relationship itself carries attributes):
 
 ```
 Edge KNOWS [source: Person, target: Person, source_cardinality: '0..*', target_cardinality: '0..*'] {
@@ -108,7 +135,7 @@ Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`
 ## Minimal complete example
 
 ```
-xdbml: 0.3
+xdbml: 0.4
 
 Entity members {
   id        int     [pk]
@@ -140,7 +167,7 @@ Entity loans {
 
 ## More
 
-- Full v0.3 specification: https://xdbml.org/spec/v0.3
+- Full specification, current draft: https://xdbml.org/spec/current
 - 5-minute introduction: https://xdbml.org/learn/
 - Live playground: https://xdbml.org/playground/
 - Repository: https://github.com/xdbml/xdbml-spec

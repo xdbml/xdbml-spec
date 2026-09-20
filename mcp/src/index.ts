@@ -48,7 +48,7 @@ const SERVER_INSTRUCTIONS =
   'cardinality, Edge, View, and AI-readiness metadata such as tags, synonyms, ' +
   'and business_term) where they fit. If you are unsure of the syntax, call the ' +
   'xdbml_reference tool first, or read https://xdbml.org/llms.txt and ' +
-  'https://xdbml.org/spec/v0.3. render_xdbml and validate_xdbml accept DBML too, ' +
+  'https://xdbml.org/spec/current. render_xdbml and validate_xdbml accept DBML too, ' +
   'since xDBML is a superset, but prefer xDBML.';
 
 /** Build a fresh MCP server (per request, per the SDK 1.26.0 security model). */

@@ -646,11 +646,18 @@ checkEntry
     : EXPRESSION_LITERAL settingsBlock?
     ;
 
-// ---- §17.10 Ref definitions (overrides upstream refSpec) ------------------
+// ---- §11 Ref definitions (overrides upstream refSpec) --------------------
 // Adds explicit cardinality settings on the Ref. Paths support nested fields.
+//
+// A Ref carries the relationship type in its settings block: the
+// `foreign_master` flag marks denormalized replication, and its absence
+// marks a referential relationship (a foreign key). See §11.10.
+//
+// v0.4 accepts a settings block in the long form as well, so all three
+// declaration forms carry the same settings.
 
 refDefinition
-    : REF IDENTIFIER? LBRACE refSpec RBRACE                       // long form
+    : REF IDENTIFIER? LBRACE refSpec settingsBlock? RBRACE        // long form (settings new in v0.4)
     | REF IDENTIFIER? COLON refSpec settingsBlock?                // short form
     ;
 
@@ -927,6 +934,37 @@ quotedIdentifier options { caseInsensitive=false; }
 //      - relationship settings (§11.9):
 //          * `inactive` is a flag (no value); a visualization hint, not
 //            a structural change. Parser preserves the flag in the AST.
+//      - foreign master relationships (§11.10, new in v0.4):
+//          * `foreign_master` is a flag (no value) on a Ref. Its absence
+//            marks the relationship referential.
+//          * neither endpoint may use the composite form `entity.(a, b)`
+//            (§11.11). The grammar accepts it; the check is semantic so the
+//            error can name the flag rather than fail on syntax alone.
+//          * a given child attribute is the child of at most one foreign
+//            master relationship (§11.11).
+//          * on a field, `foreign_master` qualifies an inline `ref:` in the
+//            same settings block and is an error without one (§11.10.2).
+//          * the flag requires a document declaring `xdbml: 0.4` or later.
+//      - relationship documentation (§11.14, §11.15, new in v0.4):
+//          * `source_role` / `target_role` and `source_verb` / `target_verb`
+//            are free text and never reach a generator.
+//          * `constraint_type` takes `identifying` or `non_identifying`.
+//            Any other value is an error. It does not apply to a foreign
+//            master relationship, which carries no key dependency.
+//          * these settings require a document declaring `xdbml: 0.4`.
+//      - entity-level relationships (§11.16, new in v0.4):
+//          * a Ref endpoint may name an entity and stop there, as in
+//            `Customer` or `shop.orders`. The attribute reading of §11.5 is
+//            tried first, so an endpoint that resolved under v0.3 resolves
+//            the same way; the whole path is tried as an entity only when
+//            that fails.
+//          * a path naming both an entity and a field of another entity is
+//            reported as a warning; the field reading wins.
+//          * the operator carries reading direction alone and the default
+//            cardinality inference of §11.8 does not apply.
+//          * `<>` is rejected between entities: many-to-many states a
+//            cardinality, which is unstated there.
+//          * `undirected` takes true or false (§11.16.2).
 //
 // 5. Conflict resolution with upstream DBML. Where xDBML extends a rule
 //    that exists upstream (tableKeyword, fieldPath, refSpec, indexBlock,

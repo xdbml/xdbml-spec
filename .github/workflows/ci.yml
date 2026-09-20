@@ -7,7 +7,9 @@
 # What gets checked:
 #   1. Parser tests (cd parser && npm test): 60 cases covering the
 #      grammar, keyword consistency, and bundled .xdbml examples.
-#   2. Playground tests (cd playground && npm test): regression suite
+#   2. Renderer tests (cd renderer && npm run test:all): layout, SVG
+#      goldens, viewport math, and the interactive mount.
+#   3. Playground tests (cd playground && npm test): regression suite
 #      for the diagram layout, named-type expansion, recursion handling,
 #      inspector AST lookup, and bundled-example layout.
 #   3. Playground type check (vue-tsc --noEmit): catches TypeScript
@@ -97,6 +99,17 @@ jobs:
 
       - name: Parser tests
         run: npm run test:parser
+
+      - name: MCP reference is in sync with public/llms.txt
+        # mcp/src/reference.ts is generated from the cheatsheet. Editing the
+        # generated file by hand is silently undone on the next deploy, so
+        # the drift is caught here instead.
+        run: cd mcp && npm run check:reference
+
+      - name: Renderer tests
+        # Layout, SVG goldens, viewport math, and the interactive mount.
+        # The renderer's dependencies are installed above.
+        run: npm run test:renderer
 
       - name: Playground tests
         run: npm run test:playground

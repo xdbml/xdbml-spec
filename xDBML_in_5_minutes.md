@@ -286,7 +286,7 @@ The language is the starting point; a small open ecosystem, all of it open sourc
 ## Where to go from here
 
 - **Browse the [FAQ](/faq)** for answers to the questions newcomers most often ask after reading this introduction.
-- **Read the [v0.3 specification](/spec/v0.3)** for the full language reference.
+- **Read the [current specification](/spec/current)** for the full language reference.
 - **Browse the [examples](/examples/)** -- real schemas covering e-commerce, healthcare, IoT, financial services, social graphs, and a relational blog.
 - **Try it in the <a href="/playground/index.html?example=02-ecommerce" target="_blank" rel="noopener">playground</a>** -- it opens with a live example you can edit, and renders the corresponding Entity-Relationship diagram as you type.
 - **Star or contribute on [GitHub](https://github.com/xdbml/xdbml-spec)** -- the spec, the grammar, the reference parser, the importers and exporters, all open source under Apache 2.0.
