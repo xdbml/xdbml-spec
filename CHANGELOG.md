@@ -47,7 +47,9 @@ Expands relationships with a second relationship type. Every v0.3 document remai
 
 - **MCP server and llms.txt**: both teach `xdbml: 0.4` and the new constructs. CI now fails when `mcp/src/reference.ts` drifts from `public/llms.txt`, the cheatsheet it is generated from.
 
-- **tools/PUBLISH-0.4.md**: the release runbook -- site, npm packages, MCP Worker, rendering API, in order.
+- **tools/RELEASE.md, tools/release.cmd, tools/release-preflight.cmd**: the release is now a script rather than a list of manual edits. Preflight checks npm login, whether the version is already taken, wrangler auth, missing dev tooling, `NODE_ENV=production`, generated-file drift and the test suites, and changes nothing. The release script bumps every version and dependency range through `npm version` and `npm pkg set` so `package.json` and `package-lock.json` move together, waits for each package to become visible on the registry before the next step depends on it, and stops at the first failure. RELEASE.md carries the same sequence by hand, plus the expected-but-harmless output and the genuinely wrong output, separated.
+
+- **MCP `SERVER_VERSION`** now reads `package.json` instead of restating the version in `src/index.ts`, removing a second place to bump that could drift.
 
 ### Fixed
 

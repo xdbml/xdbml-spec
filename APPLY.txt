@@ -123,7 +123,7 @@ VERIFICATION RUN HERE (Linux, Node 22)
                           8 foreign master
   mcp check:reference     in sync with public/llms.txt
 
-FILES (55)
+FILES (59)
 ----------
   spec/v0.4.md                      NEW   the specification
   spec/index.md, CHANGELOG.md             version table, stable link, v0.4 entry
@@ -148,7 +148,10 @@ FILES (55)
   playground/test/run-tests.ts            +3 cases
   examples/12-conceptual-to-denormalized.xdbml  NEW
   examples/13-foreign-master-denormalization.xdbml NEW
-  tools/PUBLISH-0.4.md                  NEW   release runbook
+  tools/RELEASE.md                      NEW   release runbook
+  tools/release.cmd                     NEW   the release script
+  tools/release-preflight.cmd           NEW   pre-release checks
+  mcp/src/index.ts                            SERVER_VERSION reads package.json
   examples/README.md                      regenerated table
   mcp/src/{index,reference}.ts            teaches v0.4
   public/llms.txt                         teaches v0.4
@@ -157,45 +160,50 @@ FILES (55)
 
 RELEASING: PUBLISH AND DEPLOY
 ------------------------------
-tools/PUBLISH-0.4.md in this package is the full runbook. The short version,
-in order, because the steps depend on each other:
+Two scripts, run from the repo root. Neither asks you to edit a file.
 
-  1. Site      push to main; deploy.yml does the rest. Independent of npm --
-               the site aliases the parser and renderer SOURCE, so it carries
-               v0.4 as soon as it is pushed.
+  tools\release-preflight.cmd 0.4.0     checks everything, changes nothing
+  tools\release.cmd 0.4.0               publishes and deploys
 
-  2. parser    version 0.3.2 -> 0.4.0, then npm publish.
-               New exports and diagnostics, no removals.
+Run preflight first. It is the only point in a release where stopping costs
+nothing, because a published npm version can never be republished.
 
-  3. renderer  version 0.3.1 -> 0.4.0 AND its @xdbml/parse range ^0.3.0 ->
-               ^0.4.0, then npm publish. Must come after step 2: the range
-               cannot resolve until the parser is on npm.
-               Note the visible change -- the fk marker is now a two-letter
-               pill, so a consumer with its own SVG snapshots will see diffs.
+Preflight checks: npm login and scope access; whether 0.4.0 is already taken
+on either package; wrangler installed locally and authenticated; dev tooling
+actually present (tsc in node_modules\.bin); NODE_ENV not forcing production;
+mcp/src/reference.ts in sync with public/llms.txt; every test suite green; a
+clean git tree.
 
-  4. mcp       ranges -> ^0.4.0, version 0.2.0 -> 0.3.0, SERVER_VERSION in
-               src/index.ts to match, npm install, then npm run deploy
-               (wrangler). Commit the refreshed lockfile: the Worker bundles
-               from it, so an uncommitted lockfile means the deployed bundle
-               does not match the repo.
+The release script then does parser, renderer, mcp, api in order, halting at
+the first failure. It bumps versions and dependency ranges with `npm version`
+and `npm pkg set` so package.json and package-lock.json move together, and it
+POLLS the registry after each publish rather than assuming the version is
+immediately visible -- the renderer's install resolves @xdbml/parse from npm
+and fails confusingly if it is not there yet.
 
-  5. api       @xdbml/render range -> ^0.4.0, npm install, npm run deploy.
+tools\RELEASE.md has the same sequence written out for running by hand, plus
+two sections worth reading once: output that is expected and harmless (the
+wrangler -> miniflare -> sharp / undici advisories, which are the local Worker
+emulator and never bundled), and output that means something is actually
+wrong.
 
-This package deliberately leaves every version and dependency range as it is
-today, so the repo stays buildable and `npm ci` keeps working before any of
-the above is done. Bumping a range to a version that is not yet on npm breaks
-the install for everyone in between.
+The site is not in this sequence. It aliases the parser and renderer SOURCE
+through its Vite config, so pushing to main ships v0.4 whatever is on npm.
+
+ONE FEWER THING TO EDIT
+------------------------
+mcp/src/index.ts had SERVER_VERSION restated as a literal beside the version
+in package.json. It now reads package.json, so a release bumps one number
+instead of two that can drift. Verified with wrangler deploy --dry-run: the
+Worker still bundles.
 
 ONE THING TO KNOW ABOUT THE MCP SERVER
 ---------------------------------------
 mcp/src/reference.ts is GENERATED from public/llms.txt and is what the
 xdbml_reference tool returns. `npm run predeploy` regenerates it, so a hand
 edit to the generated file is silently undone at deploy time. Edit
-public/llms.txt and commit the regenerated file.
-
-I hit this while updating the cheatsheet for v0.4: I edited both files and
-they drifted, which `npm run check:reference` caught. Both now say the same
-thing, and ci.yml runs that check so the drift cannot recur.
+public/llms.txt and commit the regenerated file. Preflight and CI both check
+this now.
 
 KNOWN GAPS, FOR AFTER THE DRAFT LANDS
 --------------------------------------

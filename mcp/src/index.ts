@@ -30,8 +30,12 @@ import { validateXdbmlTool, type ValidateArgs } from './validate-tool.js';
 import { svgToPngBase64 } from './rasterize.js';
 import { XDBML_REFERENCE } from './reference.js';
 
+import pkg from '../package.json' with { type: 'json' };
+
 const SERVER_NAME = 'xdbml';
-const SERVER_VERSION = '0.2.0';
+// Read from package.json rather than restated here, so a release bumps one
+// number instead of two that can drift apart silently.
+const SERVER_VERSION = pkg.version;
 
 /**
  * Server-level grounding shown to the model at initialize by clients that
