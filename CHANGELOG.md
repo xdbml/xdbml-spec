@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.5 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-09-21
 
 Adds supertype groups: generalization of entities into a supertype and subtypes, with inherited attributes and the intended materialization. Every v0.4 document remains valid; documents using the new construct declare `xdbml: 0.5`.
 
@@ -45,7 +45,7 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 #### Tooling
 
-- **`scripts/spec-playground-links.mjs`**: checks that every "View in playground" button in `spec/vN.M.md` opens the snippet below it (113 buttons across v0.1 to v0.5 at this point) and, with `--write`, regenerates the ones that do not, including a new button written with an empty `#s=`. Runs as `npm run check:spec-links`, in `npm test`, and in CI.
+- **`scripts/spec-playground-links.mjs`**: checks that every "View in playground" button in `spec/vN.M.md` opens the snippet below it (113 buttons across v0.1 to v0.5 at this point) and, with `--write`, regenerates the ones that do not, including a new button written with an empty `#s=`. Runs as `npm run check:spec-links`, in `npm test`, and in CI. Arguments that are not `.md` files are ignored with a warning, since `npm test` passes its own extra arguments to this last script in its chain.
 
 - **Parser**: `SupertypeGroup` parses to a `SupertypeGroupDeclaration` with `SupertypeGroupMember` children, each member carrying its own settings. Members are separated like TableGroup members. A group without a name is a parse error. `supertypegroup` is a selective-import element type and survives aliasing, clone blocks and `flatten()`. The keyword joins `DECLARATION_KEYWORDS`, so the playground editor highlights it.
 

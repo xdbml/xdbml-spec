@@ -1,69 +1,146 @@
-xDBML -- v0.5 Delta 9a: roles, verbs and constraint type in the help; help in the Learn menus
-Base: Deltas 1-9 applied and committed locally on top of origin/main fb985b1.
+xDBML -- v0.5 Delta 10: release 0.5.0
+Base: Deltas 1-9a applied and committed locally on top of origin/main fb985b1.
 
-WHY
----
-1. The relationships help page named roles, verbs and the constraint type
-   only in passing. It now explains them.
-2. The playground help was reachable only from the playground's Help
-   button; no site page or menu linked it.
+This file has two parts. Part 1 applies two small changes and commits them.
+Part 2 is the release itself, command by command. Nothing in either part
+asks you to open or edit a file: every version bump, dependency range and
+lockfile change is made by tools\release.cmd.
 
-WHAT CHANGED
-------------
-playground\help\relationships-crows-foot.md
-  New section "Roles, verbs and constraint type", after Conceptual
-  relationships:
-    Roles and verbs    two reading directions, a role per end and a verb
-                       per direction, the four settings in one example,
-                       which end each verb reads from, one/both/neither,
-                       the inspector's Reading section, documentation only
-    Identifying and    what each means (order line vs order), both written
-    non-identifying    out, intent only (adds and checks no key), absent
-                       means unstated rather than non-identifying, foreign
-                       keys only, drawn the same way, shown as Constraint
-                       in the inspector
-.vitepress\config.ts
-  "Playground help" -> /playground/help/getting-started, after Examples,
-  in the top-level Learn menu and in the four "Learn xDBML" sidebar
-  groups.
-CHANGELOG.md
-  Playground help entry mentions the new section; Changed > Tooling gains
-  the Learn-menu link.
+The commands use C:\Repos\Hackolade\xdbml-spec, the path in your console
+output. Run everything from a cmd.exe window, not PowerShell.
 
-FILES
------
-  playground\help\relationships-crows-foot.md   EDIT
-  .vitepress\config.ts                          EDIT
-  CHANGELOG.md                                  EDIT
+=============================================================================
+PART 1 -- apply Delta 10 and commit (about 5 minutes)
+=============================================================================
 
-APPLY (cmd.exe -- set REPO to your working clone)
--------------------------------------------------
-set REPO=C:\path\to\xdbml-spec
-set DELTA=%CD%
+What Delta 10 changes
+  scripts\spec-playground-links.mjs
+      Arguments that are not .md files are now ignored, with a warning.
+      Cause of the error you saw: something ran
+          npm test # Runs parser + playground tests, ~3 seconds
+      cmd.exe does not treat # as a comment, and npm hands any extra
+      arguments of `npm test` to the LAST script in its chain. That used to
+      be check:vsix, which ignores arguments; since Delta 7 it is
+      check:spec-links, which read "#" as a file name. Reproduced here and
+      fixed; the same line now prints "ignoring 8 argument(s)" and passes.
+  CHANGELOG.md
+      v0.5 "Released: 2026-09-21". If you release on another day, change
+      that one date before the Part 1 commit; nothing else depends on it.
+      The spec-links entry mentions the argument handling.
 
-copy /Y "%DELTA%\playground\help\relationships-crows-foot.md"  "%REPO%\playground\help\relationships-crows-foot.md"
-copy /Y "%DELTA%\.vitepress\config.ts"                         "%REPO%\.vitepress\config.ts"
-copy /Y "%DELTA%\CHANGELOG.md"                                 "%REPO%\CHANGELOG.md"
+Step 1.1 -- copy the files
 
-VERIFY
-------
-  cd /d %REPO%
+  set REPO=C:\Repos\Hackolade\xdbml-spec
+  set DELTA=%CD%
+  copy /Y "%DELTA%\scripts\spec-playground-links.mjs"  "%REPO%\scripts\spec-playground-links.mjs"
+  copy /Y "%DELTA%\CHANGELOG.md"                       "%REPO%\CHANGELOG.md"
+
+Step 1.2 -- check and commit (do not push yet)
+
+  cd /d C:\Repos\Hackolade\xdbml-spec
   npm run check
-  npm run docs:dev
-  - Learn menu (top bar): "Playground help" opens Getting started, with the
-    help sidebar
-  - http://localhost:5173/playground/help/relationships-crows-foot, section
-    "Roles, verbs and constraint type"
+  git add -A
+  git commit -m "release prep 0.5.0: release date; spec-links ignores non-.md arguments"
 
-  Then commit WITHOUT pushing:
+  `npm run check` must end with "build complete". If it does not, stop and
+  send me the output.
+
+=============================================================================
+PART 2 -- release 0.5.0 (about 15 minutes)
+=============================================================================
+
+Step 2.1 -- preflight (changes nothing)
+
+  cd /d C:\Repos\Hackolade\xdbml-spec
+  tools\release-preflight.cmd 0.5.0
+
+  Expected last line: "Preflight clean. Run:  tools\release.cmd 0.5.0"
+  If it reports a problem, fix it with the command the script prints, then
+  rerun the preflight. The usual ones:
+    [FAIL] not logged in to npm        ->  npm login
+    [FAIL] wrangler is not authenticated
+                                       ->  cd mcp && npm install --include=dev && npx wrangler login && cd ..
+    [FAIL] NODE_ENV=production         ->  set NODE_ENV=
+  A [WARN] about uncommitted changes means Step 1.2 was skipped.
+
+Step 2.2 -- publish and deploy
+
+  tools\release.cmd 0.5.0
+
+  What it does, in order, stopping at the first failure:
+    [1/5] @xdbml/parse 0.5.0: version, install, tests, npm publish, then
+          waits until the registry serves it
+    [2/5] @xdbml/render 0.5.0: version, dependency @xdbml/parse ^0.5.0,
+          install, tests, npm publish (the publish builds with tsc), waits
+    [3/5] MCP server: dependencies ^0.5.0, version 0.5.0, reference check,
+          type-check, tests, wrangler deploy
+    [4/5] rendering API: dependency @xdbml/render ^0.5.0, type-check,
+          wrangler deploy
+    [5/5] prints what npm now serves
+  Expected end: "Done. Every version and lockfile changed on disk."
+
+  If it fails: read the message, fix, and rerun `tools\release.cmd 0.5.0`.
+  Completed steps are safe to repeat, except an npm publish that already
+  went through: npm then says "cannot publish over", and you continue from
+  the next step by hand, running the commands of that step shown above in
+  the corresponding folder.
+
+Step 2.3 -- commit the version bumps and push
 
   git add -A
-  git commit -m "Help: roles, verbs and constraint type; playground help in the Learn menus"
+  git commit -m "release 0.5.0"
+  git push
+
+  The push carries all the local v0.5 commits. On main, the "Build and
+  deploy site" workflow publishes the site: /spec/current becomes v0.5,
+  the Learn menu gains "Playground help", and the playground ships
+  supertype groups. CI runs the full suite on Node 22 and 24.
+
+Step 2.4 -- tag and GitHub release
+
+  tools\github-release.cmd 0.5
+
+  It generates the notes from the CHANGELOG v0.5 section, checks that the
+  tree is clean and that local HEAD matches origin/main, then creates tag
+  v0.5 and the release. It needs the GitHub CLI (`gh auth login` once); if
+  gh is missing, it writes RELEASE-NOTES-v0.5.md and prints the exact manual
+  steps instead.
+
+=============================================================================
+PART 3 -- check what is live (5 minutes)
+=============================================================================
+
+  npm view @xdbml/parse version            -> 0.5.0
+  npm view @xdbml/render dependencies      -> '@xdbml/parse': '^0.5.0'
+
+  After the deploy workflow finishes (GitHub > Actions):
+    https://xdbml.org/spec/current           browser tab "Specification v0.5";
+                                             the chapter list shows
+                                             "12. Supertype group"
+    https://xdbml.org/playground/index.html  Examples > "Supertype groups (v0.5)"
+    any "View in playground" button in spec chapter 12 opens its snippet
+    https://xdbml.org/llms.txt               starts from `xdbml: 0.5` and has
+                                             the SupertypeGroup paragraph
+
+  MCP server, from any assistant connected to it:
+    xdbml_reference                          mentions SupertypeGroup
+    validate_xdbml on the Appendix C.5 example -> valid, 9 entities
+
+=============================================================================
+Not in this release
+=============================================================================
+  - A diagnostic for constraint_type on a many-to-many (`<>`) relationship.
+    Spec 11.15 says the setting does not apply there; the parser accepts it
+    silently. A candidate for 0.5.1 if you want it.
+  - A new VS Code extension package (.vsix). Its grammar is updated in the
+    repo; building and publishing it stays your call.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check    exit 0, docs build with dead-link check; the built FAQ
-                   page links /playground/help/getting-started
-  claims checked   the parser reports constraint_type on a foreign master
-                   (constraint-type-on-foreign-master) but not on `<>`, so
-                   the page says only the former is reported
+  npm run check                       exit 0, spec links 113
+  the failing invocation              `npm test -- # Runs parser + playground
+                                      tests` now warns and passes
+  renderer type-check against the     clean (what release step 2 compiles
+  0.5 parser source                   when it publishes)
+  parser build (tsconfig.build.json)  clean (what release step 1 compiles)
+  release notes for 0.5               generated from the CHANGELOG, 15 kB

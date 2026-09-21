@@ -121,7 +121,16 @@ function main () {
   const write = args.includes('--write');
   const vIdx = args.indexOf('--version');
   const explicitVersion = vIdx >= 0 ? args[vIdx + 1] : undefined;
-  const fileArgs = args.filter((a, i) => !a.startsWith('--') && !(vIdx >= 0 && i === vIdx + 1));
+  // Only `.md` arguments name files. Anything else is ignored: `npm test`
+  // appends its own extra arguments to the last script in its chain, which
+  // is this one, and cmd.exe does not treat `#` as a comment, so a line such
+  // as `npm test # runs the suites` would otherwise arrive here as file names.
+  const positional = args.filter((a, i) => !a.startsWith('--') && !(vIdx >= 0 && i === vIdx + 1));
+  const fileArgs = positional.filter((a) => a.toLowerCase().endsWith('.md'));
+  const ignored = positional.filter((a) => !a.toLowerCase().endsWith('.md'));
+  if (ignored.length > 0) {
+    console.warn(`spec-playground-links: ignoring ${ignored.length} argument(s) that are not .md files: ${ignored.join(' ')}`);
+  }
   const specDir = path.join(repoRoot, 'spec');
   const files = fileArgs.length > 0
     ? fileArgs.map((f) => path.resolve(f))
