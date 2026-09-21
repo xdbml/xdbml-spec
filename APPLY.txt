@@ -1,135 +1,79 @@
-xDBML -- Delta 4: the GitHub release is a command, and the caret fix
-Base: origin/main at e5bc4f0 (v0.4 released).
+xDBML -- v0.5 Delta 3: inherited attributes without derivation leakage
+Base: Delta 2 applied and committed locally on top of origin/main fb985b1.
 
 WHY
 ---
-The release runbook stopped at "push the tag", then described what to paste
-into a web form. That left the last step manual, which is the thing you asked
-me to stop doing. It also meant the release notes were retyped rather than
-taken from the CHANGELOG, so the two can drift.
+12.5 defined an ordered "effective attribute set" and built rules on it
+that assume a physical shape: a root-first attribute order (a roll-down
+column order), paths through a subtype reaching supertype attributes
+(true under roll-down only), and a computed "effective primary key"
+(preserved-hierarchy key propagation). Placing attributes and keys in
+stored structures is the derivation tool's job, not the spec's.
 
-WHAT THIS ADDS
---------------
-  tools\github-release.cmd 0.5
-  tools\github-release.cmd 0.5 --prerelease
+WHAT CHANGED
+------------
+spec/v0.5.md
+  12.5  Rewritten. A subtype declares only its own attributes; the
+        supertypes' attributes apply to its instances without being copied
+        or redeclared; a derivation tool places them per the strategy.
+        Redeclaring a supertype attribute stays an error, with a reason
+        that no longer relies on a computed set. A path through a subtype
+        names its own attributes only; a relationship to a subtype uses an
+        entity-level endpoint, e.g.
+          Ref assigned: Assignment.employee_id > Employee [source: '0..*', target: '1..1']
+        Indexes and records on a subtype name its own attributes, with no
+        special rule. The ordering and the dk-marker paragraph are gone.
+  12.6  Rewritten. A subtype without a key shares its supertype's identity;
+        the key each stored structure receives is derivation output. A
+        subtype may still declare its own key.
+  12.4.1, 12.4.3, 12.7.3, 12.10, chapter intro: wording no longer refers
+        to an effective set.
+  12.8  Index row removed; redeclaration row reworded.
+  12.9  Bullet about listing inherited attributes in a subtype's box removed.
+  28.5  Retitled "Supertype chains": computed for the structural and
+        redeclaration checks only; no attribute or key of a physical model
+        is computed.
+  31    Conformance item 13 no longer asks for effective sets or keys.
+  C.5   Adds an Assignment entity and a relationship pointing at Employee
+        as an entity; the "what an implementation computes" bullets become
+        "what the document states, and what it leaves to derivation".
+  "What's new" paragraph adjusted to match.
 
-One command: generates the notes, refuses to tag a dirty tree or a HEAD that
-differs from origin/main, creates and pushes the annotated tag with those
-notes as its message, then creates the GitHub release through `gh`. Safe to
-rerun -- an existing tag is left alone, an existing release has its notes
-updated rather than duplicated.
+CHANGELOG.md: the 12.5, 12.6, AST and C.5 entries of the v0.5 section.
 
-Notes come from the `## v<version>` section of CHANGELOG.md via
-scripts/release-notes.mjs, which also works standalone:
-
-  node scripts\release-notes.mjs 0.4
-  node scripts\release-notes.mjs 0.4 --out RELEASE-NOTES-v0.4.md
-
-It strips the Status and Released lines (GitHub shows its own status) and
-appends links to the versioned spec, the current draft, and the tagged
-CHANGELOG. It exits non-zero when the version has no section, so a release
-cannot be created with empty notes.
-
-Without the GitHub CLI installed, the script still tags and pushes, writes
-the notes file, and prints the exact URL and file to paste. Installing it
-once removes that:
-
-  winget install GitHub.cli
-  gh auth login
-
-ALSO: THE CARETS
-----------------
-cmd.exe treats `^` as its escape character, so every
-`npm pkg set dependencies.@xdbml/parse=^0.4.0` you ran stored `0.4.0` with no
-caret. main currently pins all four @xdbml dependency ranges exactly. It
-resolves correctly, but a future 0.4.1 patch of the parser would not reach
-the renderer, the MCP server or the API without a manual bump in each.
-
-This package carries the corrected ranges:
-
-  renderer  @xdbml/parse   ^0.4.0
-  mcp       @xdbml/parse   ^0.4.0
-            @xdbml/render  ^0.4.0
-  api       @xdbml/render  ^0.4.0
-
-Nothing else in those files changed -- the diff is four lines. No republish
-is needed: the ranges affect future installs from source and the next
-publish, not the packages already on npm. The published @xdbml/render@0.4.0
-keeps its exact pin on parse 0.4.0, which is harmless and not worth a
-republish to change.
-
-In cmd.exe the caret must be doubled: `npm pkg set ...=^^0.4.0`. release.cmd
-already does this, which is why it was not a problem there.
-
-ALSO: tools/PUBLISH-0.4.md is deleted. RELEASE.md supersedes it, and two
-runbooks drift.
+Parser probe (v0.4 parser, current main): an attribute endpoint on one end
+and an entity endpoint on the other, with explicit cardinality, resolves
+with no diagnostic from resolveNames or checkRelationships.
 
 FILES
 -----
-  tools\github-release.cmd      NEW   tag + release in one command
-  scripts\release-notes.mjs     NEW   notes from CHANGELOG.md
-  tools\RELEASE.md              EDIT  step 6 added; the three commands listed at the top
-  tools\release.cmd             EDIT  final message points at github-release.cmd
-  CHANGELOG.md                  EDIT  the tooling entry
-  parser\package.json           EDIT  (no @xdbml deps; included so the set is complete)
-  renderer\package.json         EDIT  caret restored
-  mcp\package.json              EDIT  carets restored
-  api\package.json              EDIT  caret restored
-
-  DELETE tools\PUBLISH-0.4.md   (superseded by RELEASE.md)
+  spec\v0.5.md    EDIT
+  CHANGELOG.md    EDIT
 
 APPLY (cmd.exe -- set REPO to your working clone)
 -------------------------------------------------
 set REPO=C:\path\to\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\tools\github-release.cmd"  "%REPO%\tools\github-release.cmd"
-copy /Y "%DELTA%\tools\RELEASE.md"          "%REPO%\tools\RELEASE.md"
-copy /Y "%DELTA%\tools\release.cmd"         "%REPO%\tools\release.cmd"
-copy /Y "%DELTA%\scripts\release-notes.mjs" "%REPO%\scripts\release-notes.mjs"
-copy /Y "%DELTA%\CHANGELOG.md"              "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\parser\package.json"       "%REPO%\parser\package.json"
-copy /Y "%DELTA%\renderer\package.json"     "%REPO%\renderer\package.json"
-copy /Y "%DELTA%\mcp\package.json"          "%REPO%\mcp\package.json"
-copy /Y "%DELTA%\api\package.json"          "%REPO%\api\package.json"
-del "%REPO%\tools\PUBLISH-0.4.md"
+copy /Y "%DELTA%\spec\v0.5.md"   "%REPO%\spec\v0.5.md"
+copy /Y "%DELTA%\CHANGELOG.md"   "%REPO%\CHANGELOG.md"
 
 VERIFY
 ------
   cd /d %REPO%
-  node scripts\release-notes.mjs 0.4
-  npm test
+  npm run check
+  npm run docs:dev
 
-  Then refresh the lockfiles the ranges belong to and commit:
+  Review http://localhost:5173/spec/current#_12-5-inherited-attributes
+  and #_12-6-identity, and Appendix C.5. Then commit WITHOUT pushing:
 
-  cd renderer && npm install && cd ..
-  cd mcp && npm install --include=dev && cd ..
-  cd api && npm install --include=dev && cd ..
-  git add -A
-  git commit -m "release tooling: github-release script, notes from CHANGELOG, caret ranges"
-  git push
-
-  No republish and no redeploy: nothing in the shipped code changed.
+  git add spec\v0.5.md CHANGELOG.md
+  git commit -m "spec v0.5 draft: inherited attributes and identity without derivation assumptions"
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  node scripts/release-notes.mjs 0.4     7.4 KB of notes, correct section,
-                                         Status/Released stripped, links appended
-  node scripts/release-notes.mjs 9.9     reports the missing section and lists
-                                         the ones that exist
-  npm test                               all suites green, 429 cases
-  npm run docs:build                     build complete, sitemap generated
-  dependency ranges                      four lines changed, nothing else
-
-  As before, the cmd.exe control flow was not executed on Windows. The node
-  script it calls was, and RELEASE.md step 6 has the manual equivalent.
-
-ON v0.4, WHICH IS ALREADY RELEASED
------------------------------------
-The v0.4 tag points at e5bc4f0 and the release exists, so nothing here needs
-applying retroactively. If you want the release notes regenerated from the
-CHANGELOG rather than what you pasted:
-
-  node scripts\release-notes.mjs 0.4 --out RELEASE-NOTES-v0.4.md
-  gh release edit v0.4 --notes-file RELEASE-NOTES-v0.4.md
-  del RELEASE-NOTES-v0.4.md
+  npm run check         exit 0: all suites green, playground type-check,
+                        docs build complete, /spec/current serves v0.5
+  section references    every one in v0.5.md resolves
+  leftover wording      no "effective attribute set" or "effective
+                        primary key" remains in v0.5.md

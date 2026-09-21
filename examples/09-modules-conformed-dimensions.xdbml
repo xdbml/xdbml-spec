@@ -9,9 +9,9 @@
 //  that imports from this file is 10-modules-consumer.xdbml.
 //
 //  v0.2 features exercised:
-//    - Scalar Named Types (spec §14.7): `Type Email varchar [...]`
+//    - Scalar Named Types (spec §15.7): `Type Email varchar [...]`
 //    - Entity-level checks block (§10): `checks { `expr` [name: ...] }`
-//    - `color:` setting on TableGroup (§16.2)
+//    - `color:` setting on TableGroup (§17.2)
 //    - Quoted hex color strings (`'#0a7d3f'`)
 //
 //  NOTE: until the reference parser implements the above v0.2 features,

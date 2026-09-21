@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 930 206" role="img" aria-labelledby="title desc">
+  <title id="title">Supertype group notation</title>
+  <desc id="desc">Five variants of the supertype group symbol, a half-circle with its rounded side toward the supertype and its flat base toward the subtypes. Total disjoint shows a cross and a bar just above the base. Total overlapping shows the bar only. Partial disjoint shows the cross only. Partial overlapping shows neither. With both settings unstated, the cross and the bar are drawn dashed.</desc>
+
+  <style>
+    .label  { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; fill: #1b1b1f; }
+    .note   { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-style: italic; fill: #67676c; }
+    .stroke { stroke: #2c2c30; stroke-width: 3; stroke-linecap: butt; fill: none; }
+    .shape  { stroke: #2c2c30; stroke-width: 3; stroke-linejoin: miter; fill: #ffffff; }
+    .dash   { stroke-dasharray: 5 4; }
+  </style>
+
+  <text class="note" x="163" y="64" text-anchor="end">to supertype</text>
+  <text class="note" x="163" y="186" text-anchor="end">to subtypes</text>
+
+  <g aria-label="Total, disjoint">
+    <text class="label" x="175" y="30" text-anchor="middle">Total, disjoint</text>
+    <line class="stroke" x1="175" y1="44" x2="175" y2="106"/>
+    <path class="shape" d="M 131 150 A 44 44 0 0 1 219 150 Z"/>
+    <line class="stroke" x1="175" y1="150" x2="175" y2="194"/>
+    <line class="stroke" x1="144" y1="118.8" x2="195" y2="141"/>
+    <line class="stroke" x1="206" y1="118.8" x2="155" y2="141"/>
+    <line class="stroke" x1="131.9" y1="141" x2="218.1" y2="141"/>
+  </g>
+
+  <g aria-label="Total, overlapping">
+    <text class="label" x="340" y="30" text-anchor="middle">Total, overlapping</text>
+    <line class="stroke" x1="340" y1="44" x2="340" y2="106"/>
+    <path class="shape" d="M 296 150 A 44 44 0 0 1 384 150 Z"/>
+    <line class="stroke" x1="340" y1="150" x2="340" y2="194"/>
+    <line class="stroke" x1="296.9" y1="141" x2="383.1" y2="141"/>
+  </g>
+
+  <g aria-label="Partial, disjoint">
+    <text class="label" x="505" y="30" text-anchor="middle">Partial, disjoint</text>
+    <line class="stroke" x1="505" y1="44" x2="505" y2="106"/>
+    <path class="shape" d="M 461 150 A 44 44 0 0 1 549 150 Z"/>
+    <line class="stroke" x1="505" y1="150" x2="505" y2="194"/>
+    <line class="stroke" x1="474" y1="118.8" x2="525" y2="141"/>
+    <line class="stroke" x1="536" y1="118.8" x2="485" y2="141"/>
+  </g>
+
+  <g aria-label="Partial, overlapping">
+    <text class="label" x="670" y="30" text-anchor="middle">Partial, overlapping</text>
+    <line class="stroke" x1="670" y1="44" x2="670" y2="106"/>
+    <path class="shape" d="M 626 150 A 44 44 0 0 1 714 150 Z"/>
+    <line class="stroke" x1="670" y1="150" x2="670" y2="194"/>
+  </g>
+
+  <g aria-label="Unstated">
+    <text class="label" x="835" y="30" text-anchor="middle">Unstated</text>
+    <line class="stroke" x1="835" y1="44" x2="835" y2="106"/>
+    <path class="shape" d="M 791 150 A 44 44 0 0 1 879 150 Z"/>
+    <line class="stroke" x1="835" y1="150" x2="835" y2="194"/>
+    <line class="stroke dash" x1="804" y1="118.8" x2="855" y2="141"/>
+    <line class="stroke dash" x1="866" y1="118.8" x2="815" y2="141"/>
+    <line class="stroke dash" x1="791.9" y1="141" x2="878.1" y2="141"/>
+  </g>
+</svg>

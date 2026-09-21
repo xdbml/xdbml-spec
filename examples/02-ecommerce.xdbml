@@ -59,7 +59,7 @@ Type MonetaryAmount {
   Decimal monetary value with ISO 4217 currency code. Used throughout
   commerce flows in both relational and document contexts.
   Decimal128 is the BSON-native fixed-format decimal; in Oracle/PostgreSQL
-  Containers, it lowers to NUMBER(38,4) / numeric(34,4) per spec §21.3.
+  Containers, it lowers to NUMBER(38,4) / numeric(34,4) per spec §23.2.
   '''
 
   amount   Decimal128 [not null,

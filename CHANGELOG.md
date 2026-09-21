@@ -4,10 +4,71 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.4 -- 2026
+## v0.5 -- 2026
 
 **Status**: Draft -- current
 **Released**: unreleased
+
+Adds supertype groups: generalization of entities into a supertype and subtypes, with inherited attributes and the intended materialization. Every v0.4 document remains valid; documents using the new construct declare `xdbml: 0.5`.
+
+### Added
+
+#### Spec
+
+- **Supertype group (§12)**: a new top-level `SupertypeGroup` declaration, placed as chapter 12 ahead of Edge. A group names one supertype in its settings and lists its subtypes in its body, one per line (§12.1). The name is required; a writer exporting a group that has no name in its source tool emits `undefinedGroup1`, `undefinedGroup2`, and so on.
+
+- **Completeness and exclusivity (§12.3)**: `completeness: total | partial` and `exclusivity: disjoint | overlapping`, set per group, so one supertype can carry a total, disjoint axis and a partial, overlapping one. Absence means unstated, as with `constraint_type`.
+
+- **Value aliases (§12.2)**: each canonical value accepts the spellings of other tools and of ORM frameworks (`complete`, `incomplete`, `exclusive`, `non_exclusive`, `class_table`, `joined`, `single_table`, `concrete_table`, `table_per_class`, `flat_with_discriminator`). The normalized AST holds the canonical value, and writers emit it.
+
+- **Hierarchies (§12.4)**: several levels, several axes per supertype, and single inheritance on the subtype side -- an entity listed as a subtype in two groups is an error. Cycles, self-subtyping, and duplicate members are rejected.
+
+- **Inherited attributes (§12.5)**: a subtype declares only its own attributes. The attributes of its supertypes apply to its instances without being copied or declared again, and their placement in stored structures is left to derivation. Redeclaring an attribute of a supertype is an error. A path through a subtype names its own attributes only, and a relationship that points at a subtype names it as an entity-level endpoint.
+
+- **Identity (§12.6)**: a subtype without a primary key shares the identity of its supertype, and a subtype may declare a key of its own. The key each stored structure receives is derivation output.
+
+- **Materialization intent (§12.7)**: `strategy: preserved_hierarchy | roll_up | roll_down`, `merge: flat | nested` for roll-up, and `discriminator`, which reuses the keyword of §21.2 and is rejected on an overlapping group. A subtype member may carry its own `strategy`, which takes precedence for that pair. The settings record intent for a derivation tool and add nothing to the document's structure.
+
+- **Validation summary, diagram notation, relationship to other constructs, and Hackolade Studio interchange (§12.8 to §12.11)**, including the half-circle notation: rounded side toward the supertype, a cross for disjoint, a bar just above the base for total, and dashed marks for unstated settings, with a figure of the five variants (`/diagrams/supertype-group-notation.svg`).
+
+- **Diagram View (§18)**: a `SupertypeGroups` category.
+
+- **Module system (§27.3)**: `supertypegroup` is an importable element type.
+
+- **AST (§28)**: a `SupertypeGroup` node with `Subtype` children. Supertype chains are computed for the structural and redeclaration checks rather than stored (§28.5); no attribute or key of a physical model is computed.
+
+- **Scope (§1.1)**: physical derivation listed as out of scope, with xDBML recording intent where a construct carries one.
+
+- **Appendix C.5**: a worked example with two axes, three levels, a per-subtype strategy, and a relationship that points at a subtype.
+
+### Changed
+
+#### Spec
+
+- **Chapter numbering**: the new §12 moves every chapter from Edge onward up by one (Edge §13, View §14, ... Conformance §31). All cross-references inside v0.5 follow. Earlier versions keep their own numbering.
+
+- **Conversion to DBML is no longer specified**: xDBML is a superset of DBML that DBML parsers are not expected to read, and the specification does not govern DBML output. §29.1 lists DBML in the `DBML → xDBML` direction only and drops the sentence about emitting xDBML-only constructs as comments when downgrading. §29.2 no longer lists foreign master relationships as lossy to DBML. Appendix D items 10 and 11 of v0.4, which instructed a generator writing DBML, are replaced by one item stating that the specification defines no conversion from xDBML to DBML.
+
+- **§4.1**: `xdbml: 0.4` is parsed by 0.4+ parsers; `xdbml: 0.5` is refused by a 0.4 parser.
+
+#### Examples
+
+- **Section references follow the v0.5 numbering** in the comments and notes of examples 02, 09, 10 and 11 and in the example descriptions of `scripts/examples-manifest.mjs`. The reference in example 02 to the Decimal128 lowering pointed at the wrong chapter and now names §23.2.
+
+#### Tooling
+
+- **Site shows v0.5 as the current draft**: the specification index, the three specification menus in `.vitepress/config.ts`, and the README list v0.5 as current and v0.4 as superseded. `/spec/current` follows from `scripts/prepare-spec.mjs` with no change. The FAQ reference to the module system names §27.
+
+### Fixed
+
+#### Spec
+
+- **§3.9**: the subsection on element and field separators was numbered 3.8 a second time; it is now 3.9.
+
+## v0.4 -- 2026
+
+**Status**: Draft -- superseded by v0.5
+**Released**: 2026-09-20
 
 Expands relationships with a second relationship type. Every v0.3 document remains valid; documents opting into the new construct declare `xdbml: 0.4`.
 

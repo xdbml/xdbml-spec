@@ -7,7 +7,7 @@ description: "The consumer half of a multi-file example pair. A sales data mart 
 
 **File:** `10-modules-consumer.xdbml` &nbsp;·&nbsp; **Target:** Consumer file with module imports
 
-The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) and also imports the complex object-form `Address` Type from [02-ecommerce.xdbml](/examples/02-ecommerce). Demonstrates the four principal reuse patterns side-by-side: Container-scoped entity imports (entities become `sales.dim_customer` not `core.dim_customer`); file-scope scalar Type imports for shared validation surfaces (Email, CountryCode, etc.); file-scope complex Type import for the structured `Address` Type with its nested `location` object; and a file-scope field-level import (`reuse { field core.dim_customer.engagement_score }`, spec §26.8) that brings a single field's validation surface in as a usable type, placed on `fact_sales.engagement_at_sale` as an SCD snapshot. Address is then placed on `sales.dim_customer.primary_address` as a consumer-side enhancement of the canonical dimension. Every `reuse` carries an inline clone block with `cloned_at` metadata, so the file is fully self-contained -- it parses correctly even when the library files are unavailable.
+The consumer half of a multi-file example pair. A sales data mart that imports canonical dimensions from [09-modules-conformed-dimensions.xdbml](/examples/09-modules-conformed-dimensions) and also imports the complex object-form `Address` Type from [02-ecommerce.xdbml](/examples/02-ecommerce). Demonstrates the four principal reuse patterns side-by-side: Container-scoped entity imports (entities become `sales.dim_customer` not `core.dim_customer`); file-scope scalar Type imports for shared validation surfaces (Email, CountryCode, etc.); file-scope complex Type import for the structured `Address` Type with its nested `location` object; and a file-scope field-level import (`reuse { field core.dim_customer.engagement_score }`, spec §27.8) that brings a single field's validation surface in as a usable type, placed on `fact_sales.engagement_at_sale` as an SCD snapshot. Address is then placed on `sales.dim_customer.primary_address` as a consumer-side enhancement of the canonical dimension. Every `reuse` carries an inline clone block with `cloned_at` metadata, so the file is fully self-contained -- it parses correctly even when the library files are unavailable.
 
 <div style="display: flex; gap: 12px; margin: 24px 0; flex-wrap: wrap;">
   <a href="/examples/10-modules-consumer.xdbml" download="10-modules-consumer.xdbml"
@@ -37,17 +37,17 @@ The consumer half of a multi-file example pair. A sales data mart that imports c
 //  paired example; both files have their own page in the examples directory.
 //
 //  v0.2 features exercised:
-//    - Module system (§26): `reuse { ... } from './...'` directives
-//    - Clone blocks (§26.6): inline embedded content for file autonomy
-//    - Field-level imports (§26.8): `reuse { field <path> }` for individual fields
+//    - Module system (§27): `reuse { ... } from './...'` directives
+//    - Clone blocks (§27.6): inline embedded content for file autonomy
+//    - Field-level imports (§27.8): `reuse { field <path> }` for individual fields
 //    - Cross-example complex Type import: `reuse { type Address }` brings the
 //      object-form Named Type Address (with its nested `location` sub-object)
 //      from 02-ecommerce.xdbml into this consumer file's scope
-//    - `cloned_at` metadata (§26.6)
-//    - Container-scoped imports (§26.5): directives inside Container body
-//    - Scalar Named Types (§14.7): imported via `reuse { type Email, ... }`
+//    - `cloned_at` metadata (§27.6)
+//    - Container-scoped imports (§27.5): directives inside Container body
+//    - Scalar Named Types (§15.7): imported via `reuse { type Email, ... }`
 //    - Entity-level checks block (§10): `checks { `expr` [name: ...] }`
-//    - `color:` settings on TableGroups (§16.2)
+//    - `color:` settings on TableGroups (§17.2)
 //
 //  NOTE: until the reference parser implements the above v0.2 features,
 //  this file will not parse cleanly in the playground. The test runner
@@ -264,7 +264,7 @@ reuse { type Email, type CountryCode, type CurrencyCode, type PhoneE164 }
 
 
 // -----------------------------------------------------------------------------
-//  File-scope imports: individual field shape (§26.8)
+//  File-scope imports: individual field shape (§27.8)
 //
 //  `engagement_score` is declared inline on dim_customer (not as a separate
 //  Type) but the sales fact wants the same validation surface for its SCD

@@ -8,17 +8,17 @@
 //  paired example; both files have their own page in the examples directory.
 //
 //  v0.2 features exercised:
-//    - Module system (§26): `reuse { ... } from './...'` directives
-//    - Clone blocks (§26.6): inline embedded content for file autonomy
-//    - Field-level imports (§26.8): `reuse { field <path> }` for individual fields
+//    - Module system (§27): `reuse { ... } from './...'` directives
+//    - Clone blocks (§27.6): inline embedded content for file autonomy
+//    - Field-level imports (§27.8): `reuse { field <path> }` for individual fields
 //    - Cross-example complex Type import: `reuse { type Address }` brings the
 //      object-form Named Type Address (with its nested `location` sub-object)
 //      from 02-ecommerce.xdbml into this consumer file's scope
-//    - `cloned_at` metadata (§26.6)
-//    - Container-scoped imports (§26.5): directives inside Container body
-//    - Scalar Named Types (§14.7): imported via `reuse { type Email, ... }`
+//    - `cloned_at` metadata (§27.6)
+//    - Container-scoped imports (§27.5): directives inside Container body
+//    - Scalar Named Types (§15.7): imported via `reuse { type Email, ... }`
 //    - Entity-level checks block (§10): `checks { `expr` [name: ...] }`
-//    - `color:` settings on TableGroups (§16.2)
+//    - `color:` settings on TableGroups (§17.2)
 //
 //  NOTE: until the reference parser implements the above v0.2 features,
 //  this file will not parse cleanly in the playground. The test runner
@@ -235,7 +235,7 @@ reuse { type Email, type CountryCode, type CurrencyCode, type PhoneE164 }
 
 
 // -----------------------------------------------------------------------------
-//  File-scope imports: individual field shape (§26.8)
+//  File-scope imports: individual field shape (§27.8)
 //
 //  `engagement_score` is declared inline on dim_customer (not as a separate
 //  Type) but the sales fact wants the same validation surface for its SCD
