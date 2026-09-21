@@ -75,7 +75,7 @@ if not exist "%ROOT%\mcp\node_modules\wrangler" (
 cd /d "%ROOT%\mcp" 2>nul
 call npx --no-install wrangler whoami >nul 2>&1
 if errorlevel 1 (
-  echo [FAIL] wrangler is not authenticated (or not installed).
+  echo [FAIL] wrangler is not authenticated, or not installed.
   echo        Fix: cd mcp ^&^& npm install --include=dev ^&^& npx wrangler login
   set /a PROBLEMS+=1
 ) else (
@@ -131,7 +131,7 @@ if errorlevel 1 (
 REM --- clean git tree --------------------------------------------------------
 for /f %%s in ('git status --porcelain ^| find /c /v ""') do set DIRTY=%%s
 if not "%DIRTY%"=="0" (
-  echo [WARN] %DIRTY% uncommitted change(s). The release edits versions and
+  echo [WARN] %DIRTY% uncommitted changes. The release edits versions and
   echo        lockfiles, so commit or stash first to keep the diff readable.
 )
 
@@ -140,7 +140,7 @@ echo ============================================================
 if "%PROBLEMS%"=="0" (
   echo  Preflight clean. Run:  tools\release.cmd %VER%
 ) else (
-  echo  %PROBLEMS% problem(s) above. Fix them before releasing.
+  echo  Problems found above: %PROBLEMS%. Fix them before releasing.
 )
 echo.
 echo  Expected and NOT a problem: `npm install` reporting

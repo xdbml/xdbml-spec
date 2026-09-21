@@ -1,0 +1,4 @@
+# Windows batch files need CRLF line endings: with LF only, cmd.exe can
+# fail to find a GOTO or CALL label, and tools/release.cmd uses several.
+*.cmd text eol=crlf
+*.bat text eol=crlf

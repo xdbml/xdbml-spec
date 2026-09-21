@@ -45,7 +45,7 @@ if errorlevel 1 (
 REM --- working tree must be clean --------------------------------------------
 for /f %%s in ('git status --porcelain ^| find /v "RELEASE-NOTES" ^| find /c /v ""') do set DIRTY=%%s
 if not "%DIRTY%"=="0" (
-  echo ERROR: %DIRTY% uncommitted change(s). A tag should point at a pushed
+  echo ERROR: %DIRTY% uncommitted changes. A tag should point at a pushed
   echo        commit, so commit and push before tagging.
   exit /b 1
 )

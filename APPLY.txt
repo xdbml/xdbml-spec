@@ -1,146 +1,83 @@
-xDBML -- v0.5 Delta 10: release 0.5.0
-Base: Deltas 1-9a applied and committed locally on top of origin/main fb985b1.
+xDBML -- v0.5 Delta 10a: fix ". was unexpected at this time" in the release tools
+Base: Delta 10 applied and committed (Part 1 of its APPLY.txt).
 
-This file has two parts. Part 1 applies two small changes and commits them.
-Part 2 is the release itself, command by command. Nothing in either part
-asks you to open or edit a file: every version bump, dependency range and
-lockfile change is made by tools\release.cmd.
+WHAT HAPPENED
+-------------
+cmd.exe reads a whole `if ... ( ... )` block before running it, and inside a
+block an unescaped `)` ends the block, even in the text of an echo. In
+tools\release-preflight.cmd the wrangler check contains
 
-The commands use C:\Repos\Hackolade\xdbml-spec, the path in your console
-output. Run everything from a cmd.exe window, not PowerShell.
+    echo [FAIL] wrangler is not authenticated (or not installed).
 
-=============================================================================
-PART 1 -- apply Delta 10 and commit (about 5 minutes)
-=============================================================================
+The `)` after "installed" closed the block early, which left a lone "."
+behind: ". was unexpected at this time." It fails even when wrangler is
+fine, because the block is read whether or not its branch runs. So the
+preflight stopped right after the npm checks: the wrangler, dev-tooling,
+NODE_ENV, MCP-reference, test-suite and git checks never ran. Nothing was
+changed or published.
 
-What Delta 10 changes
-  scripts\spec-playground-links.mjs
-      Arguments that are not .md files are now ignored, with a warning.
-      Cause of the error you saw: something ran
-          npm test # Runs parser + playground tests, ~3 seconds
-      cmd.exe does not treat # as a comment, and npm hands any extra
-      arguments of `npm test` to the LAST script in its chain. That used to
-      be check:vsix, which ignores arguments; since Delta 7 it is
-      check:spec-links, which read "#" as a file name. Reproduced here and
-      fixed; the same line now prints "ignoring 8 argument(s)" and passes.
-  CHANGELOG.md
-      v0.5 "Released: 2026-09-21". If you release on another day, change
-      that one date before the Part 1 commit; nothing else depends on it.
-      The spec-links entry mentions the argument handling.
+The same pattern sat in two more preflight lines ("change(s)",
+"problem(s)") and one line of tools\github-release.cmd. release.cmd has
+none. Those scripts arrived after the 0.4.0 release, so this is their first
+real run.
 
-Step 1.1 -- copy the files
+WHAT THIS CHANGES
+-----------------
+tools\release-preflight.cmd  three echo lines reworded without parentheses
+tools\github-release.cmd     one echo line reworded without parentheses
+tools\release.cmd            content unchanged; delivered with CRLF endings
+.gitattributes (NEW)         *.cmd and *.bat get CRLF in the working tree
+                             on every checkout. The repository stored the
+                             three scripts with LF only, and with LF-only
+                             lines cmd.exe can fail to find a GOTO label,
+                             which release.cmd uses at every step. Git keeps
+                             LF in the repository, so the commit shows only
+                             the text changes above.
+The three scripts in this package already have CRLF endings.
 
-  set REPO=C:\Repos\Hackolade\xdbml-spec
-  set DELTA=%CD%
-  copy /Y "%DELTA%\scripts\spec-playground-links.mjs"  "%REPO%\scripts\spec-playground-links.mjs"
-  copy /Y "%DELTA%\CHANGELOG.md"                       "%REPO%\CHANGELOG.md"
+A scan of all three scripts finds no other unescaped parenthesis inside a
+block (the `for /f ... in ('npm whoami')` group is real syntax, not text).
 
-Step 1.2 -- check and commit (do not push yet)
+FILES
+-----
+  .gitattributes                 NEW
+  tools\release-preflight.cmd    EDIT
+  tools\github-release.cmd       EDIT
+  tools\release.cmd              line endings only
 
-  cd /d C:\Repos\Hackolade\xdbml-spec
-  npm run check
-  git add -A
-  git commit -m "release prep 0.5.0: release date; spec-links ignores non-.md arguments"
+APPLY (cmd.exe)
+---------------
+set REPO=C:\Repos\Hackolade\xdbml-spec
+set DELTA=%CD%
 
-  `npm run check` must end with "build complete". If it does not, stop and
-  send me the output.
+copy /Y "%DELTA%\.gitattributes"                "%REPO%\.gitattributes"
+copy /Y "%DELTA%\tools\release-preflight.cmd"   "%REPO%\tools\release-preflight.cmd"
+copy /Y "%DELTA%\tools\github-release.cmd"      "%REPO%\tools\github-release.cmd"
+copy /Y "%DELTA%\tools\release.cmd"             "%REPO%\tools\release.cmd"
 
-=============================================================================
-PART 2 -- release 0.5.0 (about 15 minutes)
-=============================================================================
+cd /d C:\Repos\Hackolade\xdbml-spec
+git add -A
+git commit -m "release tools: no parentheses inside cmd blocks; CRLF for batch files"
 
-Step 2.1 -- preflight (changes nothing)
+THEN
+----
+Run the preflight again from the start:
 
-  cd /d C:\Repos\Hackolade\xdbml-spec
   tools\release-preflight.cmd 0.5.0
 
-  Expected last line: "Preflight clean. Run:  tools\release.cmd 0.5.0"
-  If it reports a problem, fix it with the command the script prints, then
-  rerun the preflight. The usual ones:
-    [FAIL] not logged in to npm        ->  npm login
-    [FAIL] wrangler is not authenticated
-                                       ->  cd mcp && npm install --include=dev && npx wrangler login && cd ..
-    [FAIL] NODE_ENV=production         ->  set NODE_ENV=
-  A [WARN] about uncommitted changes means Step 1.2 was skipped.
+This time it should go on past the npm checks to wrangler, dev tooling,
+NODE_ENV, the MCP reference, the test suites (about a minute, silent) and
+the git tree, and end with:
 
-Step 2.2 -- publish and deploy
+  Preflight clean. Run:  tools\release.cmd 0.5.0
 
-  tools\release.cmd 0.5.0
+Then continue with Step 2.2 of Delta 10's APPLY.txt.
 
-  What it does, in order, stopping at the first failure:
-    [1/5] @xdbml/parse 0.5.0: version, install, tests, npm publish, then
-          waits until the registry serves it
-    [2/5] @xdbml/render 0.5.0: version, dependency @xdbml/parse ^0.5.0,
-          install, tests, npm publish (the publish builds with tsc), waits
-    [3/5] MCP server: dependencies ^0.5.0, version 0.5.0, reference check,
-          type-check, tests, wrangler deploy
-    [4/5] rendering API: dependency @xdbml/render ^0.5.0, type-check,
-          wrangler deploy
-    [5/5] prints what npm now serves
-  Expected end: "Done. Every version and lockfile changed on disk."
-
-  If it fails: read the message, fix, and rerun `tools\release.cmd 0.5.0`.
-  Completed steps are safe to repeat, except an npm publish that already
-  went through: npm then says "cannot publish over", and you continue from
-  the next step by hand, running the commands of that step shown above in
-  the corresponding folder.
-
-Step 2.3 -- commit the version bumps and push
-
-  git add -A
-  git commit -m "release 0.5.0"
-  git push
-
-  The push carries all the local v0.5 commits. On main, the "Build and
-  deploy site" workflow publishes the site: /spec/current becomes v0.5,
-  the Learn menu gains "Playground help", and the playground ships
-  supertype groups. CI runs the full suite on Node 22 and 24.
-
-Step 2.4 -- tag and GitHub release
-
-  tools\github-release.cmd 0.5
-
-  It generates the notes from the CHANGELOG v0.5 section, checks that the
-  tree is clean and that local HEAD matches origin/main, then creates tag
-  v0.5 and the release. It needs the GitHub CLI (`gh auth login` once); if
-  gh is missing, it writes RELEASE-NOTES-v0.5.md and prints the exact manual
-  steps instead.
-
-=============================================================================
-PART 3 -- check what is live (5 minutes)
-=============================================================================
-
-  npm view @xdbml/parse version            -> 0.5.0
-  npm view @xdbml/render dependencies      -> '@xdbml/parse': '^0.5.0'
-
-  After the deploy workflow finishes (GitHub > Actions):
-    https://xdbml.org/spec/current           browser tab "Specification v0.5";
-                                             the chapter list shows
-                                             "12. Supertype group"
-    https://xdbml.org/playground/index.html  Examples > "Supertype groups (v0.5)"
-    any "View in playground" button in spec chapter 12 opens its snippet
-    https://xdbml.org/llms.txt               starts from `xdbml: 0.5` and has
-                                             the SupertypeGroup paragraph
-
-  MCP server, from any assistant connected to it:
-    xdbml_reference                          mentions SupertypeGroup
-    validate_xdbml on the Appendix C.5 example -> valid, 9 entities
-
-=============================================================================
-Not in this release
-=============================================================================
-  - A diagnostic for constraint_type on a many-to-many (`<>`) relationship.
-    Spec 11.15 says the setting does not apply there; the parser accepts it
-    silently. A candidate for 0.5.1 if you want it.
-  - A new VS Code extension package (.vsix). Its grammar is updated in the
-    repo; building and publishing it stays your call.
-
-VERIFICATION RUN HERE (Linux, Node 22)
----------------------------------------
-  npm run check                       exit 0, spec links 113
-  the failing invocation              `npm test -- # Runs parser + playground
-                                      tests` now warns and passes
-  renderer type-check against the     clean (what release step 2 compiles
-  0.5 parser source                   when it publishes)
-  parser build (tsconfig.build.json)  clean (what release step 1 compiles)
-  release notes for 0.5               generated from the CHANGELOG, 15 kB
+VERIFICATION RUN HERE (Linux)
+-----------------------------
+  No cmd.exe is available here, so the scripts were not executed. Checked
+  instead: a block-aware scan of all three scripts for parentheses in echo
+  text (none left), CRLF endings in the packaged copies, release.cmd
+  byte-identical apart from line endings, and `git ls-files --eol` showing
+  LF in the index and CRLF in the working tree once .gitattributes is in
+  place.
