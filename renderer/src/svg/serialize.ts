@@ -452,13 +452,13 @@ function refLine (ref: RefLayout, model: DiagramModel, theme: Theme, showNames =
  */
 function supertypeGroupShape (g: SupertypeGroupGeometry, theme: Theme, showNames: boolean): string {
   const line = theme.ref.line;
-  const dash = ' stroke-dasharray="2.2 1.8"';
+  const dash = ' stroke-dasharray="3.5 2.5"';
   const parts: string[] = [`<g data-supertype-group-shape="${escapeXml(g.group.id)}">`];
   parts.push(`<path d="${g.stem}" fill="none" stroke="${line}" stroke-width="1.5"/>`);
   parts.push(`<path d="${g.branches}" fill="none" stroke="${line}" stroke-width="1.5"/>`);
   parts.push(`<path d="${g.shape}" fill="${theme.canvas.background}" stroke="${line}" stroke-width="1.5" stroke-linejoin="miter"/>`);
-  if (g.cross) parts.push(`<path d="${g.cross.d}" fill="none" stroke="${line}" stroke-width="1.3"${g.cross.dashed ? dash : ''}/>`);
-  if (g.bar) parts.push(`<path d="${g.bar.d}" fill="none" stroke="${line}" stroke-width="1.3"${g.bar.dashed ? dash : ''}/>`);
+  if (g.cross) parts.push(`<path d="${g.cross.d}" fill="none" stroke="${line}" stroke-width="1.5"${g.cross.dashed ? dash : ''}/>`);
+  if (g.bar) parts.push(`<path d="${g.bar.d}" fill="none" stroke="${line}" stroke-width="1.5"${g.bar.dashed ? dash : ''}/>`);
   if (showNames) {
     parts.push(
       text({

@@ -39,9 +39,13 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Scope (§1.1)**: physical derivation listed as out of scope, with xDBML recording intent where a construct carries one.
 
+- **View in playground buttons (§12, Appendix C.5)**: seven snippets open in the playground. A fragment opens with an `xdbml: 0.5` line and empty declarations of the entities its groups name, after a marker comment, so the diagram has something to draw; the §12.4.3 snippet opens on the diagnostic it illustrates. The snippets shown in the spec are unchanged.
+
 - **Appendix C.5**: a worked example with two axes, three levels, a per-subtype strategy, and a relationship that points at a subtype.
 
 #### Tooling
+
+- **`scripts/spec-playground-links.mjs`**: checks that every "View in playground" button in `spec/vN.M.md` opens the snippet below it (113 buttons across v0.1 to v0.5 at this point) and, with `--write`, regenerates the ones that do not, including a new button written with an empty `#s=`. Runs as `npm run check:spec-links`, in `npm test`, and in CI.
 
 - **Parser**: `SupertypeGroup` parses to a `SupertypeGroupDeclaration` with `SupertypeGroupMember` children, each member carrying its own settings. Members are separated like TableGroup members. A group without a name is a parse error. `supertypegroup` is a selective-import element type and survives aliasing, clone blocks and `flatten()`. The keyword joins `DECLARATION_KEYWORDS`, so the playground editor highlights it.
 

@@ -97,6 +97,9 @@ jobs:
         # cache-dependency-path above so the npm download cache is reused.
         run: cd renderer && npm ci --no-audit --no-fund
 
+      - name: Spec playground buttons open their snippets
+        run: npm run check:spec-links
+
       - name: Parser tests
         run: npm run test:parser
 

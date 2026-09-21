@@ -20,11 +20,11 @@
 
 import type { DiagramModel, EntityLayout, SupertypeGroupLayout } from '../layout/layout.ts';
 
-export const SYMBOL_RADIUS = 11;
+export const SYMBOL_RADIUS = 22;
 /** Supertype bottom edge to the top of the curve. */
 export const SYMBOL_STEM = 16;
 /** Distance of the total-completeness bar above the base. */
-const BAR_INSET = 3.5;
+const BAR_INSET = 6;
 /** Minimum run from the base down to the bus. */
 const BUS_MIN = 12;
 /** Bus distance above the nearest subtype below it. */

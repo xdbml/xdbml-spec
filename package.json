@@ -18,7 +18,8 @@
     "test:playground": "cd playground && npm test",
     "test:renderer": "cd renderer && npm run test:all",
     "check:vsix": "node scripts/check-vsix.mjs",
-    "test": "npm run test:parser && npm run test:renderer && npm run test:mcp && npm run test:from-mongodb && npm run test:playground && npm run check:vsix",
+    "check:spec-links": "node --experimental-strip-types scripts/spec-playground-links.mjs",
+    "test": "npm run test:parser && npm run test:renderer && npm run test:mcp && npm run test:from-mongodb && npm run test:playground && npm run check:vsix && npm run check:spec-links",
     "check": "npm test && cd playground && npm run type-check && cd .. && npm run docs:build"
   },
   "devDependencies": {
