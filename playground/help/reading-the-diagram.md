@@ -20,7 +20,9 @@ Should show: a moderately complex schema like the e-commerce example, with at le
 
 [**Containers**](./containers): the dashed boxes that wrap groups of entities. What the container types mean, how they're styled, and when they don't appear at all.
 
-[**Relationships & crow's foot notation**](./relationships-crows-foot): the curved lines between entities, the symbols at each endpoint, and what cardinality each combination represents.
+[**Relationships & crow's foot notation**](./relationships-crows-foot): the lines between entities, their styles (foreign key, foreign master, inactive, conceptual), the symbols at each endpoint, and what cardinality each combination represents.
+
+[**Supertype groups**](./supertype-groups): the half-circle between a supertype and its subtypes, and what the cross and the bar inside it mean.
 
 [**Nested fields**](./nested-fields): how objects, arrays, polymorphism alternatives, maps, sets, and tuples are visualized inside an entity card. Includes the expand/collapse caret and synthetic-row notation.
 
@@ -41,6 +43,7 @@ The diagram is meant to be read at a glance. That guides three design choices:
 Most of it follows long-established conventions:
 
 - **Crow's foot notation** for cardinality has been the dominant style in ERD tools since the 1980s. Same shapes you'd see in Lucidchart, DataGrip, dbdiagram.io, or older tools like ERwin.
+- **The half-circle for supertype groups** is the usual ER notation for a generalization, with a cross for disjoint and a bar for total. Drawing an unstated setting dashed follows Hackolade Studio.
 - **Header bands** with a colored top strip on entity cards is borrowed from dbdiagram.io and Hackolade Studio.
 - **Container styling** (dashed border, colored header band) is similar to how UML tools draw packages and how dbdiagram.io draws table groups.
 - **Nested-field indentation** mirrors how IDE code outlines and JSON tree views show hierarchy.

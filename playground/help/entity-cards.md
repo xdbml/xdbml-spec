@@ -41,14 +41,22 @@ The card auto-sizes to fit its contents. There's a minimum width so small entiti
 
 ## Field row badges
 
-Four kinds of badges can appear on a field row:
+Three flag badges come from the field's own settings:
 
-- **PK** (yellow): the field is marked `[pk]` or `[primary key]`. Composite keys show the badge on every member field.
-- **UNIQUE** (purple): the field is marked `[unique]`.
-- **REQUIRED** (red): the field is marked `[not null]` or `[required]` (the parser normalizes the two to the same canonical form).
-- **AUTO** (blue): the field is marked `[increment]`. Mainly relevant for surrogate-key columns on relational targets.
+- **P** (yellow circle): the field is marked `[pk]` or `[primary key]`. Composite keys show the badge on every member field.
+- **U** (purple circle): the field is marked `[unique]`. A primary key doesn't repeat it.
+- **!** (red circle): the field is marked `[not null]` or `[required]` (the parser normalizes the two to the same canonical form).
 
-Badges appear after the field name, before the type label. A field can have multiple badges; a typical primary key shows as `id [PK] int` and a typical required unique constraint as `email [UNIQUE] [REQUIRED] varchar`.
+Four relationship markers, drawn as small pills, come from the relationships that use the field. You never write them yourself:
+
+- **fk**: the child side of a foreign key; **dk**: the parent side of a foreign key.
+- **fm**: the child side of a foreign master (a denormalized copy of another attribute); **dm**: the parent side of a foreign master.
+
+A field that parents both kinds of relationship shows dk and dm side by side. See [**Relationships & crow's foot notation**](./relationships-crows-foot).
+
+Badges appear after the field name, before the type label. A field can have several: a typical primary key shows as `id P int`, and a required unique email as `email U ! varchar`.
+
+`[increment]` gets no badge on the card; select the field to see it in the [**Inspector pane**](./inspector-pane).
 
 Other settings (default values, regex patterns, length constraints, custom `x_*` properties) don't get badges on the card. They show in the inspector when you select the field. The diagram's job is shape, not detail.
 

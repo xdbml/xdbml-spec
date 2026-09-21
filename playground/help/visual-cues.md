@@ -31,12 +31,17 @@ A quick reference table covering every visual signal in the diagram. Bookmark th
 
 ## Field badges
 
-| Badge | Color | What it means | Source setting |
+| Badge | Color | What it means | Source |
 |---|---|---|---|
-| PK | Yellow | Primary key | `[pk]` or `[primary key]` |
-| UNIQUE | Purple | Unique constraint | `[unique]` |
-| REQUIRED | Red | Not nullable | `[not null]` or `[required]` |
-| AUTO | Blue | Auto-increment | `[increment]` |
+| **P** | Yellow circle | Primary key | `[pk]` or `[primary key]` |
+| **U** | Purple circle | Unique constraint (not shown on a primary key) | `[unique]` |
+| **!** | Red circle | Not nullable | `[not null]` or `[required]` |
+| **fk** | Cyan pill | Child side of a foreign key | computed from the `Ref`s |
+| **dk** | Dark cyan pill | Parent side of a foreign key | computed from the `Ref`s |
+| **fm** | Teal pill | Child side of a foreign master | computed from the `Ref`s |
+| **dm** | Dark teal pill | Parent side of a foreign master | computed from the `Ref`s |
+
+The four relationship markers are never written by hand: the diagram derives them from the relationships. A field that parents both kinds shows dk and dm side by side.
 
 Composite primary keys show the PK badge on every member field, not just the first one.
 
@@ -67,7 +72,16 @@ Carets only appear on rows whose field has structured-type children. See [Nested
 
 ## Relationships
 
-The curved line between two entities is a `Ref:`. Each endpoint carries a symbol indicating cardinality and optionality:
+A line between two entities is a `Ref:`. Its style gives the relationship type:
+
+| Line | Meaning |
+|---|---|
+| Solid | Foreign key (referential) |
+| Dotted | Foreign master (denormalized replication) |
+| Small open circles | Inactive relationship, of either kind |
+| Line to a card edge, small filled triangle | Conceptual relationship between entities, reading toward the triangle |
+
+Each endpoint carries a symbol indicating cardinality and optionality:
 
 | Symbol | Cardinality | Reads as |
 |---|---|---|
@@ -82,14 +96,29 @@ When the line is **blue and thicker**, the relationship is currently selected.
 
 Cardinality text labels (`0..*`, `1..1`, etc.) appear next to the glyphs as the source of truth. Glyphs are the visual shorthand; text is exact.
 
+With **Display > Relationship names** on, a named `Ref` shows its name in italics at the middle of its line.
+
+## Supertype groups
+
+| What you see | What it means |
+|---|---|
+| Half-circle below an entity, lines to entities below it | A supertype group: the entity above is the supertype, the entities below are its subtypes |
+| Cross inside the half-circle | `exclusivity: disjoint`: at most one subtype per instance |
+| Bar just above the base | `completeness: total`: every instance is at least one subtype |
+| Dashed cross or bar | That setting is not stated |
+| Several half-circles on one entity | One group per axis of specialization |
+
+See [Supertype groups](./supertype-groups).
+
 ## Colors
 
 | Color | Where it appears | What it means |
 |---|---|---|
 | Blue (`#2563eb`) | Selection outlines, accents | Currently selected element |
-| Yellow | PK badge | Primary key |
-| Purple | UNIQUE badge | Unique constraint |
-| Red | REQUIRED badge, error squiggles, diagnostics errors | Required field, or a parse error |
+| Yellow | P badge | Primary key |
+| Purple | U badge | Unique constraint |
+| Cyan, teal | fk, dk, fm, dm badges | Relationship roles of a field |
+| Red | ! badge, error squiggles, diagnostics errors | Required field, or an error |
 | Amber | Warning indicators, screenshot placeholders in help | Warning or todo |
 | Grey | Type labels, cardinality text, indent guides | Subordinate information |
 | Container accent colors | Container header bands, member entity header bands | Container identity (deterministic from name) |
@@ -99,7 +128,7 @@ Cardinality text labels (`0..*`, `1..1`, etc.) appear next to the glyphs as the 
 | Cursor | Where | What it indicates |
 |---|---|---|
 | Default (arrow) | Empty canvas | No action available; click to deselect |
-| Pointer (hand) | Anywhere clickable: entity headers, field rows, container bodies, relationship lines | Clickable to select |
+| Pointer (hand) | Anywhere clickable: entity headers, field rows, container bodies, relationship lines, supertype group symbols | Clickable to select |
 | Grab / grabbing | Entity header band when held | Drag in progress |
 | Col-resize | Pane dividers | Drag to resize the pane |
 

@@ -5,7 +5,7 @@ description: How relationship lines are drawn and what the symbols at each endpo
 
 # Relationships & crow's foot notation
 
-Every `Ref:` declaration in your schema becomes a curved line in the diagram, connecting the source field to the target field. The shape of the line tells you which two fields are related; the symbols at each end tell you the cardinality and optionality of that relationship.
+Every `Ref:` declaration in your schema becomes a line in the diagram, connecting the source field to the target field. The shape of the line tells you which two fields are related; the symbols at each end tell you the cardinality and optionality of that relationship.
 
 ::: screenshot
 **[Screenshot needed]**
@@ -108,26 +108,102 @@ The exact text is shown alongside the glyph as a small label, so the precise val
 
 ## The line itself
 
-Relationship lines are drawn as smooth cubic Bezier curves between endpoints. The exact path is chosen to:
+Relationship lines are drawn with horizontal and vertical segments only. The path is chosen to:
 
-- Start and end on the left or right edge of each entity card, whichever side is closer to the other endpoint
-- Anchor at the vertical midpoint of the source or target field's row
-- Curve out horizontally before bending toward the other endpoint, which keeps line crossings legible
+- Leave and enter each entity card on the side that faces the other endpoint
+- Anchor at the vertical midpoint of the source or target field's row, when the endpoint names a field
+- Turn at right angles, which keeps crossings legible on a busy diagram
 
-The curve is purely visual. The semantic content is in the two endpoints' field paths and the symbols at each end.
+The path is purely visual. The meaning is in the two endpoints and the symbols at each end.
+
+## Relationship types and line styles
+
+The line style tells you what kind of relationship it is:
+
+| Line | Relationship | Written as |
+|---|---|---|
+| Solid | Foreign key (referential) | `Ref: orders.customer_id > customers.id` |
+| Dotted | Foreign master (denormalized replication) | `Ref: orders.customer_name > customers.name [foreign_master]` |
+| Small open circles | Inactive, of either kind | `[inactive]` on the Ref |
+
+A **foreign master** records that the child attribute holds a copy of the parent's value, as document models often do. Nothing is generated from it; it documents where the copy comes from.
+
+Each endpoint field also gets a marker badge, so you can tell a field's role without following the line:
+
+- **fk** on the child side and **dk** on the parent side of a foreign key
+- **fm** on the child side and **dm** on the parent side of a foreign master
+
+A field that is the parent of both kinds shows dk and dm side by side. See [**Entity cards**](./entity-cards) for the other badges.
+
+## Conceptual relationships
+
+In a conceptual or early logical model, a relationship may name entities rather than fields:
+
+```xdbml
+Entity Customer { }
+Entity Order { }
+
+Ref: Customer > Order [target_verb: 'places']
+```
+
+The line then attaches to the edge of each card that faces the other card, not to a field row. It shows no cardinality glyph until a cardinality is written with `[source: ..., target: ...]`. A small filled triangle marks the direction it reads: `>` puts the triangle at the target, `<` at the source, `undirected: true` at both ends, and `-` nowhere, meaning linked with no direction stated.
+
+A relationship to a subtype of a [supertype group](./supertype-groups) is written this way too, since a subtype declares only its own attributes: `Ref: Assignment.employee_id > Employee`.
+
+## Roles, verbs and constraint type
+
+A relationship can also carry the wording a conceptual or logical model reads it with, and whether the child depends on its parent for its identity. None of this changes how the line is drawn. Select the line and the inspector shows it.
+
+### Roles and verbs
+
+A relationship reads in two directions, and each direction has its own wording. In "a Customer plays the role of buyer and places zero or more Orders", `buyer` is a role and `places` is a verb. Read the other way: "an Order is a shopping cart that is bought by exactly one Customer". A role belongs to the entity at one end; a verb belongs to a reading direction. Four settings carry them:
+
+```xdbml
+Ref places: orders.customer_id > customers.id [
+  source_role: 'shopping cart', source_verb: 'is bought by',
+  target_role: 'buyer',         target_verb: 'places',
+  source: '0..*',               target: '1..1'
+]
+```
+
+`source_verb` reads from the source toward the target, and `target_verb` from the target toward the source. The two are usually converses of each other, and nothing checks that; you may state one, both, or neither. In the inspector, the **Reading** section lists the roles, verbs and cardinalities and reads them back as sentences, one per direction.
+
+Roles and verbs are documentation: nothing is generated from them. They work the same on an entity-level relationship, which is where a conceptual model usually needs them.
+
+### Identifying and non-identifying
+
+A foreign key relationship is **identifying** when the child's foreign key attributes are part of the child's primary key: an order line cannot be identified without its order. It is **non-identifying** when the child stands on its own and merely points at its parent: an order points at its customer.
+
+```xdbml
+Ref: order_lines.order_id > orders.id [constraint_type: identifying]
+Ref: orders.customer_id > customers.id [constraint_type: non_identifying]
+```
+
+The setting records the modeler's intent. It adds no key and checks none, so it can be stated before the child has a primary key, or any attributes at all. Leaving it out means the constraint type is not stated yet, which is different from `non_identifying`. It applies to foreign keys only: a foreign master has no key dependency, and a many-to-many relationship has no single child. On a foreign master it is reported as an error.
+
+The diagram draws identifying and non-identifying relationships the same way. The inspector shows the value as **Constraint**.
+
+## Relationship names
+
+A named relationship (`Ref places: ...`) can show its name at the middle of its line. Turn on **Display > Relationship names** in the diagram toolbar; the option is off by default and also shows the names of supertype groups.
+
+## Showing and hiding relationships
+
+The **Display** menu in the diagram toolbar has a checkbox per kind: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**, plus **Relationship names** under Labels. The choices are remembered between sessions. When a relationship kind is hidden, the Display button is highlighted so you know something is off screen.
 
 ## Selection
 
-Clicking on a relationship line selects it. The line and both endpoint glyphs turn blue and the stroke thickens. The inspector pane opens showing the operator, source path, target path, optional name, and any settings.
+Clicking on a relationship line selects it. The line and both endpoint glyphs turn blue and the stroke thickens. The inspector pane opens showing the operator, source and target, the name if there is one, the relationship type (foreign key or foreign master), the reading direction, the constraint type (identifying or non-identifying) when stated, and a Reading section with the roles, verbs and cardinalities, read back as sentences. See [**Inspector pane**](./inspector-pane).
 
 The hit area for clicking is wider than the visible line, since the visible 1.5-pixel line would be hard to target precisely. You can click within a few pixels of the line and it counts as a click on the line.
 
 ## What if I want a different notation?
 
-The playground uses crow's foot notation only. Other ERD notations (Chen, Bachman, UML's filled-and-open-arrows) are not currently supported. If you'd find them useful, [open an issue](https://github.com/xdbml/xdbml-spec/issues) and we'll track interest.
+The playground uses crow's foot notation for relationships and the half-circle for [supertype groups](./supertype-groups). Other ERD notations (Chen, Bachman, UML's filled-and-open-arrows) are not currently supported. If you'd find them useful, [open an issue](https://github.com/xdbml/xdbml-spec/issues) and we'll track interest.
 
 ## What's next
 
 - [**Entity cards**](./entity-cards): the cards the lines connect.
 - [**Containers**](./containers): cross-container relationships.
+- [**Supertype groups**](./supertype-groups): the half-circle between a supertype and its subtypes.
 - [**Visual cues at a glance**](./visual-cues): the compact visual reference for all of the symbols.

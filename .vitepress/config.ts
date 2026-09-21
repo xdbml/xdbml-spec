@@ -119,6 +119,7 @@ export default defineConfig({
         items: [
           { text: '5-minute introduction',  link: '/learn/' },
           { text: 'Examples',                link: '/examples/' },
+          { text: 'Playground help',         link: '/playground/help/getting-started' },
           { text: 'FAQ',                     link: '/faq' },
           { text: 'Use from AI assistants',  link: '/ai-assistants' },
           { text: 'Recipes',                 link: '/recipes/' },
@@ -205,6 +206,7 @@ export default defineConfig({
           items: [
             { text: '5-minute introduction', link: '/learn/' },
             { text: 'Examples',               link: '/examples/' },
+            { text: 'Playground help',        link: '/playground/help/getting-started' },
             { text: 'FAQ',                    link: '/faq' },
             { text: 'Use from AI assistants', link: '/ai-assistants' },
             { text: 'Recipes',                link: '/recipes/' },
@@ -225,6 +227,7 @@ export default defineConfig({
           items: [
             { text: '5-minute introduction', link: '/learn/' },
             { text: 'Examples',               link: '/examples/' },
+            { text: 'Playground help',        link: '/playground/help/getting-started' },
             { text: 'FAQ',                    link: '/faq' },
             { text: 'Use from AI assistants', link: '/ai-assistants' },
           ]
@@ -237,6 +240,7 @@ export default defineConfig({
           items: [
             { text: '5-minute introduction', link: '/learn/' },
             { text: 'Examples',               link: '/examples/' },
+            { text: 'Playground help',        link: '/playground/help/getting-started' },
             { text: 'FAQ',                    link: '/faq' },
             { text: 'Use from AI assistants', link: '/ai-assistants' },
             { text: 'Recipes',                link: '/recipes/' },
@@ -250,6 +254,7 @@ export default defineConfig({
           items: [
             { text: '5-minute introduction', link: '/learn/' },
             { text: 'Examples',               link: '/examples/' },
+            { text: 'Playground help',        link: '/playground/help/getting-started' },
             { text: 'FAQ',                    link: '/faq' },
             { text: 'Use from AI assistants', link: '/ai-assistants' },
             { text: 'Recipes',                link: '/recipes/' },

@@ -22,8 +22,9 @@ The diagram is built from your schema's parsed AST. Every parseable change in th
 
 - **Containers** (Schema, Database, Keyspace, etc.) are drawn as labeled boxes wrapping their member entities.
 - **Entities** (Table, Entity, Collection, Record) appear as cards with their fields listed.
-- **Fields** are rows inside each entity card, showing name, type, and small badges for primary keys, unique constraints, required (not null), and auto-increment flags.
-- **Relationships** (`Ref:` declarations) are drawn as curved lines between source and target fields, with crow's foot notation at each end indicating cardinality.
+- **Fields** are rows inside each entity card, showing name, type, and small badges for primary keys, unique constraints and required (not null) fields, plus the relationship markers fk, dk, fm and dm.
+- **Relationships** (`Ref:` declarations) are drawn as lines between source and target fields, with crow's foot notation at each end indicating cardinality: solid for a foreign key, dotted for a foreign master, small open circles when inactive. A conceptual relationship names entities and attaches to the card edges.
+- **Supertype groups** are drawn as a half-circle below the supertype, with lines down to its subtypes. See [**Supertype groups**](./supertype-groups).
 - **Nested fields** (objects, arrays, polymorphism alternatives) appear as indented rows with disclosure carets that let you collapse or expand them.
 
 When parsing fails, the diagram keeps showing the last valid state. The diagnostics panel at the bottom lists the errors. See [**When parsing fails**](./when-parsing-fails) for details.
@@ -43,6 +44,13 @@ Three families of interactions:
 When a field has a structured type (object, array, oneOf, anyOf, allOf, map, set, tuple), its row has a disclosure caret on the left. Click the caret to collapse or expand the children inline.
 
 The collapse state persists across page reloads, scoped per field path within each entity. Collapsing a deeply-nested object you don't care about lets you focus on the structure that matters for the conversation.
+
+## The diagram toolbar
+
+The diagram's toolbar holds undo and redo for layout changes, and two menus:
+
+- **Arrange** lays the diagram out again. **Relational** places related entities near each other and puts each supertype above its subtypes; **Star schema** places the most-referencing entity at the center.
+- **Display** chooses what the diagram draws. Under Relationships: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**. Under Labels: **Relationship names**, which shows the names of named `Ref`s and of supertype groups, off by default. The choices are remembered between sessions, and the Display button is highlighted while a relationship kind is hidden.
 
 ## Controls in the corners
 

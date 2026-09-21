@@ -16,12 +16,13 @@ Should show: the playground with a field selected in the diagram (the row visibl
 
 ## When it appears
 
-The inspector slides in from the right when you select something in the diagram. Four kinds of things are selectable:
+The inspector slides in from the right when you select something in the diagram. Five kinds of things are selectable:
 
 - **Containers** (Schema, Database, Keyspace, etc.)
 - **Entities** (Table, Entity, Collection, Record)
 - **Fields** (any field row, at any nesting depth)
 - **Relationships** (`Ref:` declaration lines)
+- **Supertype groups** (the half-circle symbols; see [**Supertype groups**](./supertype-groups))
 
 Selecting anything opens the inspector if it was closed. Clicking the empty canvas deselects and hides the inspector.
 
@@ -36,7 +37,7 @@ Once closed manually, the inspector stays hidden until you make a new selection.
 
 ## What's in each kind of inspector
 
-The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD`, `REF`) and the element's name. Below that, the body is organized into labeled sections that vary by kind.
+The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD`, `REF`, `SUPERTYPE GROUP`) and the element's name. Below that, the body is organized into labeled sections that vary by kind.
 
 **Container inspector** shows:
 - Identification: keyword (Container / Schema / Database / etc.), name, member count
@@ -45,6 +46,7 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 
 **Entity inspector** shows:
 - Identification: keyword (Table / Entity / Collection / etc.), name, parent container (if any), field stats (total / primary keys / required / nested)
+- Supertype groups, when the entity takes part in one: as a supertype, each group it anchors with that group's subtypes; as a subtype, its group and its supertype; an entity that is both shows both
 - Settings: any settings on the entity declaration
 - Note: the entity's `Note: '...'` body if present
 
@@ -57,8 +59,20 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - Note: the field's `Note: '...'` body if present
 
 **Relationship inspector** shows:
-- Identification: operator (`>` `<` `-` `<>`), source path, target path, and a name if the Ref was declared with one
-- Settings: any cardinality strings, tags, or other settings on the Ref declaration
+- Identification: operator (`>` `<` `-` `<>`), source and target (a field path, or an entity for a conceptual relationship), the name if the Ref was declared with one, the type (foreign key or foreign master), the reading direction (source to target, target to source, both ways, or not stated), and the constraint type (identifying or non-identifying) when stated
+- Reading, when any is written: the roles and verbs of each end and the cardinalities, read back as sentences
+- Settings: any other settings on the Ref declaration
+
+**Supertype group inspector** shows:
+- Identification: the group name, the supertype, completeness and exclusivity ("Unstated" when absent), and a sentence reading them back, such as "Every Party is exactly one of: Person, Organization."
+- Subtypes: each subtype with its own strategy, or "follows the group"
+- Materialization: strategy, merge and discriminator, the intent for a later physical derivation
+- Settings: custom or unrecognized settings
+- Note: the group's note if present
+
+## Links between panes
+
+Names shown as links in the entity and supertype group inspectors select what they name: click a group to open its pane, or a supertype or subtype to open that entity's pane. The diagram selection moves with it, so the highlighted element always matches the pane.
 
 ## Read-only
 

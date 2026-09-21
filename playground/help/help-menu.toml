@@ -81,6 +81,9 @@ slug  = "containers"
 title = "Relationships & crow's foot notation"
 slug  = "relationships-crows-foot"
 [[nodes.children]]
+title = "Supertype groups"
+slug  = "supertype-groups"
+[[nodes.children]]
 title = "Nested fields"
 slug  = "nested-fields"
 [[nodes.children]]

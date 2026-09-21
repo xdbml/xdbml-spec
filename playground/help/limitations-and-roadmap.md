@@ -11,9 +11,9 @@ The playground is an active project, deliberately scoped to be lightweight. Seve
 
 **No code generation.** The playground doesn't emit Oracle DDL, MongoDB validators, Avro schemas, JSON Schema, or any other target artifact. xDBML is the source format; the rendering tools that produce target artifacts from xDBML live in separate projects. The playground's job is authoring and visualizing the source.
 
-**No file import or export.** You can't upload an `.xdbml` file from your computer to load it into the editor, and you can't download the current editor content as a file. The intended workflows are: paste content into the editor for input, copy content out of the editor for output, and use [**Sharing via URL**](./sharing-via-url) for distribution.
+**No format conversion.** **Open** and **Save** in the header read and write `.xdbml` files (see [**Open and save files**](./open-and-save-files)), but the playground reads and writes no other format. To move a schema to another tool, save the file or copy the editor content, and use [**Sharing via URL**](./sharing-via-url) for distribution.
 
-**No DBML import.** [DBML](https://dbml.dbdiagram.io) is the language the playground's xDBML is based on. There's no built-in converter from DBML to xDBML; if you have an existing DBML file, you'll need to migrate it manually. Most simple DBML constructs map directly to xDBML, but some details (containers, polymorphism, nested types) are xDBML-specific and don't have DBML equivalents.
+**No DBML conversion.** [DBML](https://dbml.dbdiagram.io) is the language xDBML extends, and a DBML document parses as it is: without an `xdbml:` line, the playground reads it with DBML's rules. Nothing turns it into richer xDBML, such as containers, polymorphism, nested types or supertype groups; that part is manual.
 
 **No multi-user collaboration.** No accounts, no live cursors, no comments, no real-time co-editing. Sharing is via copyable URLs, which work fine for asynchronous review and "look at this" linking, but not for synchronous teamwork. Use a third-party tool (Slack, screen sharing) for live discussion.
 
@@ -25,9 +25,9 @@ The playground is an active project, deliberately scoped to be lightweight. Seve
 
 **Container resize is not real-time.** Dragging an entity out of a container doesn't shrink or grow the container as you drag. The container redraws to fit on the next layout pass (typically after an edit). See [**Repositioning entities**](./diagram-drag).
 
-**No alternative ERD notations.** Only crow's foot is supported. Chen notation, Bachman notation, and UML-style filled-and-open-arrows are not available.
+**No alternative ERD notations.** Relationships use crow's foot and supertype groups use the half-circle of spec §12.9. Chen notation, Bachman notation, and UML-style filled-and-open-arrows are not available.
 
-**Limited diagram layout strategies.** The auto-layout is a single algorithm. There's no choice of force-directed, layered, columnar, or other layouts. For schemas larger than about a dozen entities, manual positioning is often required.
+**Limited diagram layout strategies.** **Arrange** offers two strategies, Relational and Star schema; there's no force-directed, layered or columnar layout. Supertype groups assume their subtypes sit below the supertype. For schemas larger than about a dozen entities, manual positioning is often required.
 
 ## Rough roadmap
 
@@ -37,13 +37,11 @@ The xDBML project is actively evolving. The playground tracks the language; feat
 
 **Search within the schema.** Find an entity, a field, or a relationship by name without scrolling through a large diagram. Probably arrives alongside any meaningful schema-size improvements.
 
-**Warning-level diagnostics.** The parser currently emits only errors. Semantic analysis (e.g. "this Ref points at a non-existent field" or "this type isn't defined") will produce warnings, which the diagnostics panel is already shaped to handle.
-
 **Naming-convention checks.** A pass that flags fields and entities whose names don't match a chosen convention (snake_case, camelCase, PascalCase). Useful for keeping a large schema internally consistent.
 
 **Improved auto-layout.** Better defaults for large schemas; possibly a choice between layout strategies (relational, document-tree-style, graph-style).
 
-**More bundled examples.** The current six cover the main modeling styles, but examples of specific patterns (event-sourcing, CDC streams, multi-tenancy) would be useful additions.
+**More bundled examples.** The current fourteen cover the main modeling styles, but examples of specific patterns (event-sourcing, CDC streams, multi-tenancy) would be useful additions.
 
 ## What's NOT on the roadmap
 
