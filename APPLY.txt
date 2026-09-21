@@ -1,146 +1,141 @@
-xDBML -- v0.5 Delta 4: parser and grammar for supertype groups
-Base: Deltas 1-3 applied and committed locally on top of origin/main fb985b1.
+xDBML -- v0.5 Delta 5: renderer, example 14, parser-source test hook
+Base: Deltas 1-4 applied and committed locally on top of origin/main fb985b1.
 
 WHY
 ---
-First implementation phase of v0.5: the parser reads SupertypeGroup and
-reports every rule of spec 12.8. The playground runs the parser from repo
-source, so after this delta a v0.5 document with groups parses in
-docs:dev, its diagnostics appear in the panel with squiggles, and the
-diagram shows the entities. The group symbol arrives with Delta 5.
+Second implementation phase: the diagram draws supertype groups (spec 12.9),
+so the playground shows what Delta 4 parses. Also closes the gap you spotted:
+the parser suite only parsed private, drifted copies of examples 01-11.
 
 WHAT THIS ADDS
 --------------
-Parser (parser\src)
-  ast.ts            SupertypeGroupDeclaration and SupertypeGroupMember
-                    (each member keeps its own settings); element-type note.
-  parser.ts         SupertypeGroup dispatch and parseSupertypeGroup():
-                    name required (message points at undefinedGroupN),
-                    members separated by newline, comma or semicolon,
-                    case-insensitive keyword. `supertypegroup` added to the
-                    import element types. ParseError gains an optional
-                    `code`; a declared version above SUPPORTED_XDBML_VERSION
-                    (0.5) is refused with code `unsupported-version`
-                    (spec 4.1). compareVersions() treats 0.10 as newer
-                    than 0.5.
-  supertypes.ts     NEW. Value/alias table and canonicalization, member
-                    resolution (bare or container-qualified; ambiguous and
-                    non-entity cases get their own message), supertype
-                    chains, and checkSupertypeGroups() with the 12.8 rules.
-  name-resolver.ts  resolveNames() runs the group checks as pass 4 on the
-                    flattened document; new diagnostic codes in the union.
-  module-resolver.ts  selective import and aliasing of `supertypegroup`.
-  keywords.ts       'supertypegroup' in DECLARATION_KEYWORDS (Monaco
-                    highlighting in the playground follows).
-  index.ts          exports: supertypeGroupSettings, subtypeStrategy,
-                    canonicalSupertypeGroupValue, SUPERTYPE_GROUP_VALUES,
-                    resolveSupertypeGroups, supertypeChains,
-                    checkSupertypeGroups, SUPPORTED_XDBML_VERSION,
-                    compareVersions, and the related types.
-  Comments citing chapters 12-30 renumbered by topic, not by +1: several
-  already cited an older numbering (Named Type as 13, View as 12, Records
-  as 24, path syntax as 18) and now name the right chapter. References
-  pinned to a version ("v0.2 §26", "v0.3 §26.14") are unchanged.
+Renderer
+  - Groups draw below the supertype: stem from the bottom edge to the top of
+    the half-circle; cross for disjoint, bar just above the base for total,
+    each dashed when unstated; one line from the base to a bus, then an
+    orthogonal drop to each subtype. Geometry is computed at draw time from
+    current bounds, so it follows a drag.
+  - Several groups on one supertype leave its bottom edge at evenly spaced
+    points, in declaration order, with staggered buses so two never read as
+    one line. A relationship line attaching to an edge a group uses moves
+    near the left corner instead of landing on the stem.
+  - Relationship names (option, off by default): named Refs get their name
+    at the middle of the line's longest segment; groups get theirs beside the
+    symbol, left of it for groups in the left half of the edge.
+  - Interactive mount: clicking a symbol selects { kind: 'supertypeGroup' }
+    and highlights the symbol and its branches. RelationshipVisibility gains
+    supertypeGroups (default shown) and relationshipNames (default off).
+  - Auto-arrange (relational): each hierarchy is placed first, supertype
+    centred above the subtypes of all its groups, levels stacked, extra row
+    spacing for the symbols; everything else is arranged around it.
+  - Group members come from the parser's resolveSupertypeGroups(), so the
+    diagram and the diagnostics agree on what a path names.
 
-New diagnostic codes
-  errors:   missing-supertype, unresolved-supertype-group-member,
-            invalid-supertype-group-value, duplicate-subtype,
-            supertype-is-subtype, subtype-in-multiple-groups,
-            supertype-cycle, supertype-attribute-redeclared,
-            discriminator-on-overlapping-group
-  warnings: empty-supertype-group, merge-without-roll-up
-  reused:   duplicate-declaration (group names),
-            construct-requires-version (group in a < 0.5 document)
+Playground (minimal; the Display toggles and inspector are Delta 6)
+  - Compiles against the extended mount API: groups shown, names off.
+  - Selecting a group clears the inspector until its pane exists.
 
-Tests (parser\test\run-tests.ts): 24 new cases, 207 in total.
+Example 14, supertype groups: the Appendix C.5 model, with manifest entry,
+README row, and a new golden SVG. The 13 existing goldens are unchanged.
 
-Grammar
-  xDBML.g4          supertypeGroupDefinition, its settings and member
-                    rules, SUPERTYPE_GROUP and SEMICOLON tokens, added to
-                    topLevelStatement and cloneContent.
-  test-cases.md     "§12 SupertypeGroup (v0.5)": five VALID and five
-                    INVALID cases. Nothing runs this file automatically;
-                    all ten were checked against the parser here.
-
-Spec (spec\v0.5.md)
-  3.9 table: "TableGroup, SupertypeGroup | members | newline, comma or
-  semicolon". 12.1 reworded to match.
-
-CHANGELOG.md: Added > Tooling (parser, checks, exports, grammar);
-Changed > Spec (3.9 / 12.1); Changed > Tooling (version refusal, comment
-renumbering).
+Tests
+  - Renderer: +46 checks (all five notation variants plus the mixed case and
+    aliases, stem position, one drop per subtype, reserved edges, spread on
+    a shared supertype, unresolved groups, names on and off). Interactive:
+    +4 (hit area, click selects, hide toggle, names toggle).
+  - Test hook: renderer and playground tests resolve @xdbml/parse to
+    parser\src (renderer\test\ and playground\test\parser-from-source*.mjs,
+    wired into their package.json test scripts), as the playground's Vite
+    alias already does. Without it, example 14 could not be rendered in
+    tests until parser 0.5.0 is on npm. Published packages are unaffected.
+  - Parser: the example suite reads the repository's examples\ instead of
+    parser\test\examples. All 14 parse; the stale copies are deleted below.
 
 FILES
 -----
-  parser\src\ast.ts               EDIT
-  parser\src\parser.ts            EDIT
-  parser\src\module-resolver.ts   EDIT
-  parser\src\name-resolver.ts     EDIT
-  parser\src\keywords.ts          EDIT
-  parser\src\index.ts             EDIT
-  parser\src\supertypes.ts        NEW
-  parser\test\run-tests.ts        EDIT
-  grammar\xDBML.g4                EDIT
-  grammar\test-cases.md           EDIT
-  spec\v0.5.md                    EDIT
-  CHANGELOG.md                    EDIT
+  renderer\src\geometry\supertype-symbol.ts            NEW
+  renderer\src\geometry\ref-path.ts                    EDIT
+  renderer\src\layout\layout.ts                        EDIT
+  renderer\src\layout\auto-arrange.ts                  EDIT
+  renderer\src\svg\serialize.ts                        EDIT
+  renderer\src\interactive\overlay.ts                  EDIT
+  renderer\src\interactive\mount.ts                    EDIT
+  renderer\src\index.ts                                EDIT
+  renderer\test\run-tests.ts                           EDIT
+  renderer\test\run-interactive-tests.ts               EDIT
+  renderer\test\parser-from-source.mjs                 NEW
+  renderer\test\parser-from-source-hooks.mjs           NEW
+  renderer\test\goldens\14-supertype-groups.svg        NEW
+  renderer\package.json                                EDIT
+  playground\package.json                              EDIT
+  playground\test\parser-from-source.mjs               NEW
+  playground\test\parser-from-source-hooks.mjs         NEW
+  playground\src\components\diagram\DiagramCanvas.vue  EDIT
+  parser\test\run-tests.ts                             EDIT
+  examples\14-supertype-groups.xdbml                   NEW
+  examples\README.md                                   EDIT
+  scripts\examples-manifest.mjs                        EDIT
+  CHANGELOG.md                                         EDIT
+
+  DELETE parser\test\examples   (11 drifted copies of examples 01-11)
 
 APPLY (cmd.exe -- set REPO to your working clone)
 -------------------------------------------------
 set REPO=C:\path\to\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\parser\src\ast.ts"               "%REPO%\parser\src\ast.ts"
-copy /Y "%DELTA%\parser\src\parser.ts"            "%REPO%\parser\src\parser.ts"
-copy /Y "%DELTA%\parser\src\module-resolver.ts"   "%REPO%\parser\src\module-resolver.ts"
-copy /Y "%DELTA%\parser\src\name-resolver.ts"     "%REPO%\parser\src\name-resolver.ts"
-copy /Y "%DELTA%\parser\src\keywords.ts"          "%REPO%\parser\src\keywords.ts"
-copy /Y "%DELTA%\parser\src\index.ts"             "%REPO%\parser\src\index.ts"
-copy /Y "%DELTA%\parser\src\supertypes.ts"        "%REPO%\parser\src\supertypes.ts"
-copy /Y "%DELTA%\parser\test\run-tests.ts"        "%REPO%\parser\test\run-tests.ts"
-copy /Y "%DELTA%\grammar\xDBML.g4"                "%REPO%\grammar\xDBML.g4"
-copy /Y "%DELTA%\grammar\test-cases.md"           "%REPO%\grammar\test-cases.md"
-copy /Y "%DELTA%\spec\v0.5.md"                    "%REPO%\spec\v0.5.md"
-copy /Y "%DELTA%\CHANGELOG.md"                    "%REPO%\CHANGELOG.md"
-
-OPTIONAL -- housekeeping, only if you agree:
-parser\0.3.2 is a tracked, empty file, most likely left by a cmd.exe
-redirect when an `npm pkg set ...=^0.3.2` line ran with an undoubled caret.
-To remove it, also run:
-  git -C "%REPO%" rm parser/0.3.2
+mkdir "%REPO%\playground\test" 2>nul
+copy /Y "%DELTA%\renderer\src\geometry\supertype-symbol.ts" "%REPO%\renderer\src\geometry\supertype-symbol.ts"
+copy /Y "%DELTA%\renderer\src\geometry\ref-path.ts" "%REPO%\renderer\src\geometry\ref-path.ts"
+copy /Y "%DELTA%\renderer\src\layout\layout.ts" "%REPO%\renderer\src\layout\layout.ts"
+copy /Y "%DELTA%\renderer\src\layout\auto-arrange.ts" "%REPO%\renderer\src\layout\auto-arrange.ts"
+copy /Y "%DELTA%\renderer\src\svg\serialize.ts" "%REPO%\renderer\src\svg\serialize.ts"
+copy /Y "%DELTA%\renderer\src\interactive\overlay.ts" "%REPO%\renderer\src\interactive\overlay.ts"
+copy /Y "%DELTA%\renderer\src\interactive\mount.ts" "%REPO%\renderer\src\interactive\mount.ts"
+copy /Y "%DELTA%\renderer\src\index.ts" "%REPO%\renderer\src\index.ts"
+copy /Y "%DELTA%\renderer\test\run-tests.ts" "%REPO%\renderer\test\run-tests.ts"
+copy /Y "%DELTA%\renderer\test\run-interactive-tests.ts" "%REPO%\renderer\test\run-interactive-tests.ts"
+copy /Y "%DELTA%\renderer\test\parser-from-source.mjs" "%REPO%\renderer\test\parser-from-source.mjs"
+copy /Y "%DELTA%\renderer\test\parser-from-source-hooks.mjs" "%REPO%\renderer\test\parser-from-source-hooks.mjs"
+copy /Y "%DELTA%\renderer\test\goldens\14-supertype-groups.svg" "%REPO%\renderer\test\goldens\14-supertype-groups.svg"
+copy /Y "%DELTA%\renderer\package.json" "%REPO%\renderer\package.json"
+copy /Y "%DELTA%\playground\package.json" "%REPO%\playground\package.json"
+copy /Y "%DELTA%\playground\test\parser-from-source.mjs" "%REPO%\playground\test\parser-from-source.mjs"
+copy /Y "%DELTA%\playground\test\parser-from-source-hooks.mjs" "%REPO%\playground\test\parser-from-source-hooks.mjs"
+copy /Y "%DELTA%\playground\src\components\diagram\DiagramCanvas.vue" "%REPO%\playground\src\components\diagram\DiagramCanvas.vue"
+copy /Y "%DELTA%\parser\test\run-tests.ts" "%REPO%\parser\test\run-tests.ts"
+copy /Y "%DELTA%\examples\14-supertype-groups.xdbml" "%REPO%\examples\14-supertype-groups.xdbml"
+copy /Y "%DELTA%\examples\README.md" "%REPO%\examples\README.md"
+copy /Y "%DELTA%\scripts\examples-manifest.mjs" "%REPO%\scripts\examples-manifest.mjs"
+copy /Y "%DELTA%\CHANGELOG.md" "%REPO%\CHANGELOG.md"
+git -C "%REPO%" rm -r -q parser/test/examples
 
 VERIFY
 ------
   cd /d %REPO%
-  cd parser && npx tsc --noEmit && npm test && cd ..
   npm run check
   npm run docs:dev
 
-  In the playground (http://localhost:5173/playground/index.html), paste
-  the Appendix C.5 example from /spec/v0.5: no diagnostics, nine entities
-  drawn, no group symbol yet. Then try, one at a time:
-    - list Person in two groups             -> subtype-in-multiple-groups
-    - add `name varchar` to Person          -> supertype-attribute-redeclared
-    - add `discriminator: role` to business_role -> discriminator-on-overlapping-group
-    - change the first line to xdbml: 0.6   -> refused (unsupported-version)
+  Open http://localhost:5173/playground/index.html, choose example 14 in the
+  Examples menu:
+    - Party on top with two symbols on its bottom edge: legal_nature (cross
+      and bar) on the left, business_role (plain) on the right; Person,
+      Organization, Customer, Supplier below; Employee and Contractor below
+      Person under person_role (cross, no bar)
+    - drag a subtype: its drop follows
+    - click a symbol: the symbol highlights (inspector pane comes in Delta 6)
+  Group names and the two Display toggles arrive with Delta 6.
 
   Then commit WITHOUT pushing:
 
   git add -A
-  git commit -m "v0.5 parser: SupertypeGroup, spec 12.8 checks, version refusal; grammar"
+  git commit -m "v0.5 renderer: supertype groups, relationship names option, group-aware arrange; example 14"
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  parser tsc --noEmit     clean
-  parser tests            207 passed, 0 failed (24 new)
-  npm run check           exit 0: renderer 151 + 14 + 38, mcp, from-mongodb,
-                          playground tests and type-check (renderer source
-                          compiled against the new parser union), vsix
-                          check, docs build complete
-  grammar test cases      10 of 10 behave as labeled
-  Appendix C.5 example    resolveNames: no diagnostics; renderToSVG with the
-                          new parser draws all nine entities, group ignored
-
-  Not exercised here: the renderer's and the MCP server's own test suites
-  run against @xdbml/parse 0.4.0 from npm, not this source. They pick up
-  the new parser at the 0.5.0 release; the playground already uses it.
+  npm run check           exit 0: parser 210 (14 examples), renderer 198 +
+                          14 + 42, mcp, from-mongodb 49, playground 50 (bundles
+                          example 14), playground type-check, docs build
+  goldens                 01-13 byte-identical; 14 new
+  example 14              no diagnostics; rendered and inspected as PNG with
+                          names on and off

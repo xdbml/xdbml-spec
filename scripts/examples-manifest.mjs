@@ -172,4 +172,13 @@ export const examples = [
     description: 'A read-optimized order document that keeps copies of values mastered in `customers` and `products`, with every copy declared as a foreign master relationship (spec \u00a711.10). Eight of them: the customer name, the loyalty tier, three address fields, and three catalogue fields inside each line item. Both declaration forms appear, so the example shows they mean the same thing -- top-level `Ref:` statements for the customer copies, the inline `[ref: ..., foreign_master]` form for the line-item copies, one of which sits inside an array element. The example also draws the line that matters in practice: `unitPrice` is NOT a foreign master, because the price charged is a fact about the order rather than a copy of the catalogue price, and a value that may legitimately differ from its source is not replicated data. Contrast the foreign key at the end, which is generated and carries roles, verbs and a constraint type (\u00a711.14, \u00a711.15), with the eight foreign masters above it, which reach no generator at all.',
     generators:  [],
   },
+  {
+    file:        '14-supertype-groups.xdbml',
+    slug:        '14-supertype-groups',
+    title:       'Supertype groups (v0.5)',
+    domain:      'Parties and roles',
+    paradigm:    'Logical model',
+    description: 'A logical model of parties with three supertype groups (spec \u00a712). Party is specialized along two independent axes: `legal_nature` (Person or Organization, total and disjoint) and `business_role` (Customer and Supplier, partial and overlapping), so one supertype anchors two groups. Person is specialized a second time by `person_role`, which makes a three-level hierarchy. Each subtype declares only its own attributes; the attributes of its supertypes apply to it without being declared again (\u00a712.5). The groups record the intended materialization for a later derivation (\u00a712.7): a flat roll-up with a `nature` discriminator, preserved hierarchy for the overlapping axis, and a per-subtype roll-down for Contractor. Organization declares a key of its own, which a truck owner points at; Employee declares none, so an assignment points at Employee as an entity-level endpoint (\u00a711.16).',
+    generators:  [],
+  },
 ];

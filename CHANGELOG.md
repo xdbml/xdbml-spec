@@ -51,6 +51,16 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Grammar**: `supertypeGroupDefinition` and its settings and member rules in `grammar/xDBML.g4`, with a `SEMICOLON` token; ten cases in `grammar/test-cases.md`, each verified against the parser.
 
+- **Renderer**: supertype groups draw per spec §12.9. `DiagramModel.supertypeGroups` carries each group resolved against the canvas, with members resolved by the parser's `resolveSupertypeGroups()` so the diagram and the diagnostics agree. Geometry is computed at draw time from current bounds, so it follows a drag: a stem from the supertype's bottom edge to the top of a half-circle, a cross for disjoint and a bar for total, each dashed when unstated, and one line from the base to a bus with an orthogonal drop to each subtype. Subtypes are expected below the supertype in this first phase. Several groups on one supertype leave its bottom edge at evenly spaced points, in declaration order, with staggered buses. A relationship line attaching to an edge a group uses moves near the left corner. `@xdbml/render` exports `layoutSupertypeGroups()`, `supertypeGroupAnchorX()`, `SYMBOL_RADIUS`, `SYMBOL_STEM` and the `SupertypeGroupLayout` and `SupertypeGroupGeometry` types.
+
+- **Relationship names**: a `showRelationshipNames` render option, and a `relationshipNames` visibility key in the interactive mount, draw the name of a named `Ref` at the middle of its line's longest segment and each supertype group's name beside its symbol. Off by default, so existing diagrams are unchanged.
+
+- **Interactive mount**: a click on a group symbol selects `{ kind: 'supertypeGroup', id }`; the selected group's symbol and branches are highlighted. `RelationshipVisibility` gains `supertypeGroups` (default shown) and `relationshipNames` (default off).
+
+- **Auto-arrange**: in the relational strategy, each supertype hierarchy is placed first, supertype above and centred over the subtypes of all its groups, levels stacked, with extra row spacing for the symbols; the rest of the component is arranged around it. Supertype-subtype pairs count as links, so a hierarchy with no relationship lines stays together. The star strategy is unchanged.
+
+- **Example 14, supertype groups**: the Appendix C.5 model, with three groups over two axes and three levels, a per-subtype strategy, and relationships to a subtype's own key and to a subtype as an entity-level endpoint. Its golden SVG is new; the thirteen existing goldens are byte-identical.
+
 ### Changed
 
 #### Spec
@@ -72,6 +82,10 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 - **The parser refuses a newer version (spec §4.1)**: a document declaring a version above `SUPPORTED_XDBML_VERSION` (0.5) fails with a `ParseError` whose new optional `code` is `unsupported-version`. Until now a parser accepted any declared version silently. Documents declaring 0.1 to 0.5, and DBML documents with no declaration, are unaffected. `compareVersions()` is exported.
 
 - **Section references in parser comments and test names** follow the v0.5 numbering. References already pinned to a version, such as "v0.2 §26", are unchanged; references that pointed at an earlier numbering (Named Type as §13, View as §12, Records as §24, path syntax as §18) now name the right chapter.
+
+- **Renderer and playground tests run against the parser source**: a test-only module hook (`test/parser-from-source.mjs` in `renderer/` and `playground/`) resolves `@xdbml/parse` to `parser/src`, as the playground's Vite alias already does. A renderer change that depends on a parser change in the same release can then be tested before the parser is published. The published packages resolve `@xdbml/parse` normally.
+
+- **Parser tests parse the repository's examples**: the suite now reads `examples/` rather than private copies under `parser/test/examples`, which had drifted from the published files and stopped at example 11. All fourteen examples are parsed; the copies are removed.
 
 - **Site shows v0.5 as the current draft**: the specification index, the three specification menus in `.vitepress/config.ts`, and the README list v0.5 as current and v0.4 as superseded. `/spec/current` follows from `scripts/prepare-spec.mjs` with no change. The FAQ reference to the module system names §27.
 

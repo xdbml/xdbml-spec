@@ -169,6 +169,7 @@ export type {
   FieldLayout,
   FieldFlags,
   RefLayout,
+  SupertypeGroupLayout,
   FieldLocator,
   Rect,
   CollapsedKey,
@@ -177,6 +178,13 @@ export type {
 } from './layout/layout.ts';
 
 export { collectRefDeclarations } from './layout/layout.ts';
+export {
+  layoutSupertypeGroups,
+  supertypeGroupAnchorX,
+  SYMBOL_RADIUS,
+  SYMBOL_STEM,
+  type SupertypeGroupGeometry,
+} from './geometry/supertype-symbol.ts';
 export { autoArrange, type ArrangeStrategy } from './layout/auto-arrange.ts';
 
 export { serializeDiagram, type SerializeOptions } from './svg/serialize.ts';

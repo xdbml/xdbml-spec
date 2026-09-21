@@ -29,6 +29,7 @@ import { glyphTransform, labelAnchor } from '../geometry/placement.ts';
 import { refLabelX, refLabelY, resolveRef } from '../geometry/ref-path.ts';
 import { edgeConnectors, edgeLabelX, edgeLabelY } from '../geometry/edge-path.ts';
 import { escapeXml } from './util.ts';
+import { layoutSupertypeGroups, longestSegmentMidpoint, type SupertypeGroupGeometry } from '../geometry/supertype-symbol.ts';
 
 const HEADER_HEIGHT = 32;
 const INDENT_PX = 14;
@@ -69,6 +70,12 @@ export interface SerializeOptions {
    * the source text and the share codec.
    */
   playgroundLink?: { href: string; label: string };
+  /**
+   * Draw relationship names: the name of a named `Ref` on its line, and the
+   * name of each supertype group beside its symbol (spec §12.9). Off by
+   * default.
+   */
+  showRelationshipNames?: boolean;
 }
 
 export function serializeDiagram (model: DiagramModel, options: SerializeOptions = {}): string {
@@ -98,7 +105,9 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
   }
 
   for (const c of model.containers) parts.push(container(c, theme));
-  for (const r of model.refs) parts.push(refLine(r, model, theme));
+  const showNames = options.showRelationshipNames === true;
+  for (const r of model.refs) parts.push(refLine(r, model, theme, showNames));
+  for (const g of layoutSupertypeGroups(model)) parts.push(supertypeGroupShape(g, theme, showNames));
   for (const e of model.edges) parts.push(edgeLine(e, model.entities, theme));
   for (const e of model.entities) parts.push(entityCard(e, collapsed, theme, options.selectedField));
   for (const e of model.edges) parts.push(entityCard(e.box, collapsed, theme, options.selectedField));
@@ -347,7 +356,7 @@ function fieldRow (
 
 /* -------------------------------------------------------------- ref line */
 
-function refLine (ref: RefLayout, model: DiagramModel, theme: Theme): string {
+function refLine (ref: RefLayout, model: DiagramModel, theme: Theme, showNames = false): string {
   const resolved = resolveRef(ref, model.entities, model.containers);
   if (!resolved) return '';
   const tr = theme.ref;
@@ -411,6 +420,59 @@ function refLine (ref: RefLayout, model: DiagramModel, theme: Theme): string {
     }
   }
 
+  // Relationship name, at the middle of the line's longest segment.
+  if (showNames && ref.decl.name) {
+    const mid = longestSegmentMidpoint(resolved.path.d);
+    if (mid) {
+      parts.push(
+        text({
+          x: mid.horizontal ? mid.x : mid.x + 5,
+          y: mid.horizontal ? mid.y - 4 : mid.y + 3,
+          fill: tr.label,
+          size: 10,
+          weight: 500,
+          anchor: mid.horizontal ? 'middle' : 'start',
+          italic: true,
+          content: escapeXml(ref.decl.name),
+        }),
+      );
+    }
+  }
+
+  parts.push('</g>');
+  return parts.join('');
+}
+
+/* ------------------------------------------------------ supertype group */
+
+/**
+ * One supertype group (spec §12.9): stem from the supertype, half-circle
+ * with its marks, and the branches to the subtypes. Drawn above
+ * relationship lines and below entity cards.
+ */
+function supertypeGroupShape (g: SupertypeGroupGeometry, theme: Theme, showNames: boolean): string {
+  const line = theme.ref.line;
+  const dash = ' stroke-dasharray="2.2 1.8"';
+  const parts: string[] = [`<g data-supertype-group-shape="${escapeXml(g.group.id)}">`];
+  parts.push(`<path d="${g.stem}" fill="none" stroke="${line}" stroke-width="1.5"/>`);
+  parts.push(`<path d="${g.branches}" fill="none" stroke="${line}" stroke-width="1.5"/>`);
+  parts.push(`<path d="${g.shape}" fill="${theme.canvas.background}" stroke="${line}" stroke-width="1.5" stroke-linejoin="miter"/>`);
+  if (g.cross) parts.push(`<path d="${g.cross.d}" fill="none" stroke="${line}" stroke-width="1.3"${g.cross.dashed ? dash : ''}/>`);
+  if (g.bar) parts.push(`<path d="${g.bar.d}" fill="none" stroke="${line}" stroke-width="1.3"${g.bar.dashed ? dash : ''}/>`);
+  if (showNames) {
+    parts.push(
+      text({
+        x: g.label.x,
+        y: g.label.y,
+        fill: theme.ref.label,
+        size: 10,
+        weight: 500,
+        anchor: g.label.anchor,
+        italic: true,
+        content: escapeXml(g.group.name),
+      }),
+    );
+  }
   parts.push('</g>');
   return parts.join('');
 }

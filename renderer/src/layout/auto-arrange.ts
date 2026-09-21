@@ -29,6 +29,10 @@ const GUTTER_X = 64;    // horizontal gap between entity columns
 const GUTTER_Y = 56;    // vertical gap between entity rows
 const BLOCK_GAP = 96;   // gap between packed container / component blocks
 const SWEEPS = 3;       // barycentre refinement passes (relational)
+// Extra row spacing in a component that holds a supertype hierarchy: room
+// between a supertype and its subtypes for the stem, the symbol and the
+// buses of several groups (spec 12.9).
+const HIERARCHY_GAP = 36;
 
 interface XY { x: number; y: number; }
 interface Cell { col: number; row: number; }
@@ -124,6 +128,17 @@ function buildGraph (members: EntityLayout[], diagram: DiagramModel): Graph {
     if (ref.operator === '>') refsOut.get(s)?.add(t);
     else if (ref.operator === '<') refsOut.get(t)?.add(s);
   }
+  // A supertype and its subtypes belong together (spec 12): each pair
+  // counts as a link, so a hierarchy with no relationship lines still
+  // forms one component.
+  for (const g of diagram.supertypeGroups ?? []) {
+    if (g.unresolved || !idSet.has(g.supertypeId)) continue;
+    for (const s of g.subtypeIds) {
+      if (s === g.supertypeId || !idSet.has(s)) continue;
+      bump(g.supertypeId, s);
+      bump(s, g.supertypeId);
+    }
+  }
   return { ids, adj, refsOut };
 }
 
@@ -159,8 +174,9 @@ function layoutRelational (
   // component blocks side by side.
   const compBlocks: Block[] = [];
   for (const comp of comps) {
-    const cells = gridPlace(comp, g.adj);
-    const pos = cellsToPixels(cells, laneW, laneH);
+    const fixed = hierarchyCells(comp, diagram);
+    const cells = gridPlace(comp, g.adj, fixed);
+    const pos = cellsToPixels(cells, laneW, fixed.size > 0 ? laneH + HIERARCHY_GAP : laneH);
     compBlocks.push(toBlock(pos, sizeOf));
   }
   const pos = new Map<string, XY>();
@@ -170,15 +186,74 @@ function layoutRelational (
   return pos;
 }
 
-function gridPlace (comp: string[], adj: Map<string, Map<string, number>>): Map<string, Cell> {
+/**
+ * Cells for the supertype hierarchies inside a component (spec 12.9, first
+ * phase): each supertype sits one row above its subtypes and is centred over
+ * them; the subtypes of all its groups sit side by side in declaration
+ * order, so each group's symbol ends up above its own subtypes; deeper
+ * levels stack below. Hierarchies are placed side by side with a free
+ * column between them. Empty when the component holds no group.
+ */
+function hierarchyCells (comp: string[], diagram: DiagramModel): Map<string, Cell> {
+  const inComp = new Set(comp);
+  const children = new Map<string, string[]>();
+  const hasParent = new Set<string>();
+  for (const g of diagram.supertypeGroups ?? []) {
+    if (g.unresolved || !inComp.has(g.supertypeId)) continue;
+    for (const s of g.subtypeIds) {
+      if (s === g.supertypeId || !inComp.has(s) || hasParent.has(s)) continue;
+      hasParent.add(s);
+      const list = children.get(g.supertypeId) ?? [];
+      list.push(s);
+      children.set(g.supertypeId, list);
+    }
+  }
+  const cells = new Map<string, Cell>();
+  if (children.size === 0) return cells;
+  const roots = comp.filter((id) => children.has(id) && !hasParent.has(id));
+  let nextCol = 0;
+  const visiting = new Set<string>();
+  const place = (id: string, row: number): number => {
+    const done = cells.get(id);
+    if (done) return done.col;
+    visiting.add(id);
+    const kids = (children.get(id) ?? []).filter((k) => !cells.has(k) && !visiting.has(k));
+    let col: number;
+    if (kids.length === 0) {
+      col = nextCol++;
+    } else {
+      const cols = kids.map((k) => place(k, row + 1));
+      col = Math.floor(((cols[0] as number) + (cols[cols.length - 1] as number)) / 2);
+    }
+    cells.set(id, { col, row });
+    return col;
+  };
+  for (const root of roots) {
+    place(root, 0);
+    nextCol += 1;
+  }
+  return cells;
+}
+
+function gridPlace (
+  comp: string[],
+  adj: Map<string, Map<string, number>>,
+  fixed: Map<string, Cell> = new Map(),
+): Map<string, Cell> {
   const cell = new Map<string, Cell>();
-  if (comp.length === 1) {
+  if (comp.length === 1 && fixed.size === 0) {
     cell.set(comp[0] as string, { col: 0, row: 0 });
     return cell;
   }
   const occupied = new Set<string>();
   const key = (c: Cell): string => `${c.col},${c.row}`;
-  const order = bfsOrder(comp, adj);
+  // Preplaced cells (a supertype hierarchy) stay where they are; the rest
+  // of the component is placed around them.
+  for (const [id, c] of fixed) {
+    cell.set(id, c);
+    occupied.add(key(c));
+  }
+  const order = bfsOrder(comp, adj).filter((n) => !fixed.has(n));
 
   for (const node of order) {
     const placed = neighbors(node, adj).filter((n) => cell.has(n));

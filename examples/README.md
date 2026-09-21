@@ -35,6 +35,7 @@ These files serve three audiences:
 | Module system: remote sources (v0.3)               | Sales data product              | Consumer file with remote (URL) imports | [View](./11-modules-remote) · <a href="/examples/11-modules-remote.xdbml" download="11-modules-remote.xdbml">Download</a>                                                 |
 | Conceptual to denormalized (v0.4)                  | Order management                | MongoDB document model                  | [View](./12-conceptual-to-denormalized) · <a href="/examples/12-conceptual-to-denormalized.xdbml" download="12-conceptual-to-denormalized.xdbml">Download</a>             |
 | Denormalization with foreign master (v0.4)         | Storefront orders               | MongoDB document model                  | [View](./13-foreign-master-denormalization) · <a href="/examples/13-foreign-master-denormalization.xdbml" download="13-foreign-master-denormalization.xdbml">Download</a> |
+| Supertype groups (v0.5)                            | Parties and roles               | Logical model                           | [View](./14-supertype-groups) · <a href="/examples/14-supertype-groups.xdbml" download="14-supertype-groups.xdbml">Download</a>                                           |
 <!-- examples-table:end -->
 
 The **View** link opens the rendered example with syntax highlighting and the VitePress theme. The **Download** link serves the raw `.xdbml` file for use with parsers, generators, or your own tooling.

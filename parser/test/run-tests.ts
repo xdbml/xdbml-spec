@@ -29,7 +29,11 @@ import {
 } from '../src/keywords.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const examplesDir = join(__dirname, 'examples');
+// The repository's own examples, the same files the site publishes and the
+// renderer's golden tests draw, so every example is parsed here as it is
+// added. (Earlier, this suite parsed private copies under test/examples that
+// had drifted from the published files and stopped at example 11.)
+const examplesDir = join(__dirname, '..', '..', 'examples');
 
 const isTTY = process.stdout.isTTY;
 const RED = isTTY ? '\x1b[31m' : '';

@@ -31,6 +31,7 @@
  * Adding any of those is additive to this module rather than a rewrite.
  */
 
+import { resolveSupertypeGroups } from '@xdbml/parse';
 import type {
   ContainerDeclaration,
   EdgeDeclaration,
@@ -41,6 +42,7 @@ import type {
   RefValue,
   ScalarType,
   Setting,
+  SupertypeGroupDeclaration,
   TypeDeclaration,
   TypeExpression,
   ViewDeclaration,
@@ -57,9 +59,33 @@ export interface DiagramModel {
   refs: RefLayout[];
   /** Property-bearing relationships, drawn as a box on the line. */
   edges: EdgeLayout[];
+  /** Supertype groups (spec §12), drawn as a half-circle below the supertype. */
+  supertypeGroups: SupertypeGroupLayout[];
   /** Overall canvas size needed to hold the laid-out content. */
   width: number;
   height: number;
+}
+
+/**
+ * A supertype group (spec §12) resolved against the entities on the canvas.
+ * Geometry is computed at draw time from the entities' current bounds; see
+ * `layoutSupertypeGroups()`.
+ */
+export interface SupertypeGroupLayout {
+  /** `supertype-group:<name>` (a numeric suffix keeps duplicate names apart). */
+  id: string;
+  name: string;
+  /** Entity id of the supertype, or '' when it does not resolve. */
+  supertypeId: string;
+  /** Entity ids of the subtypes that resolve, in declaration order, without duplicates. */
+  subtypeIds: string[];
+  /** Canonical values; undefined when unstated (or not recognized). */
+  completeness?: 'total' | 'partial';
+  exclusivity?: 'disjoint' | 'overlapping';
+  /** True when there is nothing to draw: no supertype, or no subtype on the canvas. */
+  unresolved: boolean;
+  /** The declaration this group was built from. */
+  decl: SupertypeGroupDeclaration;
 }
 
 export interface ContainerLayout {
@@ -85,6 +111,14 @@ export interface ContainerLayout {
 
 export interface EntityLayout {
   id: string;
+  /**
+   * Set when a supertype group leaves this entity's bottom edge (spec §12.9),
+   * so a relationship line attaching to that edge moves aside rather than
+   * landing on the group's stem.
+   */
+  reservedBottom?: boolean;
+  /** Set when a supertype group drops onto this entity's top edge. */
+  reservedTop?: boolean;
   name: string;
   /** e.g. 'Entity' | 'Table' | 'Collection' | 'Record' | 'View' */
   keyword: string;
@@ -716,6 +750,9 @@ export function buildDiagram (
   }
   positionEdges(entityLayouts, edges);
 
+  // ---- Supertype groups (spec §12) ---------------------------------
+  const supertypeGroups = buildSupertypeGroups(doc, entityLayouts);
+
   let width = Math.max(cursorX, CANVAS_MARGIN * 2 + 200);
   let height = maxBottom + CANVAS_MARGIN;
   for (const e of edges) {
@@ -728,9 +765,50 @@ export function buildDiagram (
     entities: entityLayouts,
     refs: refLayouts,
     edges,
+    supertypeGroups,
     width,
     height,
   };
+}
+
+/**
+ * Resolve the document's supertype groups against the laid-out entities.
+ * Member resolution comes from the parser (`resolveSupertypeGroups`), so the
+ * diagram and the diagnostics agree on which entity a path names. Marks the
+ * entities whose top or bottom edge a group uses.
+ */
+function buildSupertypeGroups (doc: XDbmlDocument, entities: EntityLayout[]): SupertypeGroupLayout[] {
+  const byId = new Map<string, EntityLayout>();
+  for (const e of entities) byId.set(e.id, e);
+  const out: SupertypeGroupLayout[] = [];
+  const usedIds = new Set<string>();
+  for (const g of resolveSupertypeGroups(doc)) {
+    const supertypeId = g.supertype && byId.has(g.supertype) ? g.supertype : '';
+    const subtypeIds: string[] = [];
+    for (const s of g.subtypes) {
+      if (!s.entity || s.entity === supertypeId || !byId.has(s.entity)) continue;
+      if (!subtypeIds.includes(s.entity)) subtypeIds.push(s.entity);
+    }
+    let id = `supertype-group:${g.declaration.name}`;
+    for (let k = 2; usedIds.has(id); k++) id = `supertype-group:${g.declaration.name}#${k}`;
+    usedIds.add(id);
+    const unresolved = supertypeId === '' || subtypeIds.length === 0;
+    if (!unresolved) {
+      (byId.get(supertypeId) as EntityLayout).reservedBottom = true;
+      for (const s of subtypeIds) (byId.get(s) as EntityLayout).reservedTop = true;
+    }
+    out.push({
+      id,
+      name: g.declaration.name,
+      supertypeId,
+      subtypeIds,
+      completeness: g.settings.completeness,
+      exclusivity: g.settings.exclusivity,
+      unresolved,
+      decl: g.declaration,
+    });
+  }
+  return out;
 }
 
 /**
@@ -824,6 +902,7 @@ function emptyDiagram (): DiagramModel {
     entities: [],
     refs: [],
     edges: [],
+    supertypeGroups: [],
     width: 400,
     height: 200,
   };
@@ -1800,6 +1879,7 @@ export function applyUserPositions (
     entities: newEntities,
     refs: diagram.refs,
     edges: newEdges,
+    supertypeGroups: diagram.supertypeGroups,
     width: Math.max(diagram.width, canvasMaxX + CANVAS_MARGIN),
     height: Math.max(diagram.height, canvasMaxY + CANVAS_MARGIN),
   };

@@ -18,7 +18,7 @@
     "build": "npm run prepare:assets && vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit",
-    "test": "node --experimental-strip-types test/run-tests.ts"
+    "test": "node --experimental-strip-types --import ./test/parser-from-source.mjs test/run-tests.ts"
   },
   "dependencies": {
     "lodash-es": "^4.17.21",

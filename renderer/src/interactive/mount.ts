@@ -56,6 +56,14 @@ export interface RelationshipVisibility {
   inactive: boolean;
   /** Relationships between entities with no attribute endpoints (spec 11.16). */
   conceptual: boolean;
+  /** Supertype groups: symbol, stem and branches (spec 12.9). */
+  supertypeGroups: boolean;
+  /**
+   * Relationship names: the name of a named `Ref` on its line and each
+   * supertype group's name beside its symbol. A label option rather than a
+   * relationship type, so it is off by default.
+   */
+  relationshipNames: boolean;
 }
 
 export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
@@ -63,6 +71,8 @@ export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
   foreignMaster: true,
   inactive: true,
   conceptual: true,
+  supertypeGroups: true,
+  relationshipNames: false,
 };
 
 export interface LayoutState {
@@ -181,7 +191,9 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
 
   function visibleModel (): DiagramModel {
     const refs = model.refs.filter(refVisible);
-    return refs.length === model.refs.length ? model : { ...model, refs };
+    const groupsHidden = !refVisibility.supertypeGroups && model.supertypeGroups.length > 0;
+    if (refs.length === model.refs.length && !groupsHidden) return model;
+    return { ...model, refs, supertypeGroups: groupsHidden ? [] : model.supertypeGroups };
   }
 
   function render (): void {
@@ -189,6 +201,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
       inner: true,
       collapsedPaths: collapsed,
       theme: options.theme,
+      showRelationshipNames: refVisibility.relationshipNames,
       selectedField: selection && selection.kind === 'field'
         ? { entityId: selection.id, path: selection.path }
         : undefined,
@@ -409,6 +422,8 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
       setSelection({ kind: 'field', id: field.getAttribute('data-id') ?? '', path: field.getAttribute('data-field') ?? '' });
       return;
     }
+    const group = t.closest('[data-supertype-group]');
+    if (group) { setSelection({ kind: 'supertypeGroup', id: group.getAttribute('data-supertype-group') ?? '' }); return; }
     const ref = t.closest('[data-ref]');
     if (ref) { setSelection({ kind: 'ref', id: ref.getAttribute('data-ref') ?? '' }); return; }
     const cont = t.closest('[data-select-container]');

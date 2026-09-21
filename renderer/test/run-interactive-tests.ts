@@ -189,7 +189,7 @@ check('visibility: inactive flag is carried',
 
 check('visibility: defaults to all types shown',
   JSON.stringify(visHandle.getRelationshipVisibility())
-    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true }));
+    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false }));
 
 const beforeHide = visHost.innerHTML;
 visHandle.setRelationshipVisibility({ foreignMaster: false });
@@ -198,7 +198,7 @@ check('visibility: getter reflects the change',
   visHandle.getRelationshipVisibility().foreignMaster === false);
 check('visibility: change callback fires',
   JSON.stringify(lastVisibility)
-    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true }));
+    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false }));
 check('visibility: the model keeps every relationship',
   visHandle.getModel().refs.length === 3);
 
@@ -263,6 +263,31 @@ handle.destroy();
 check('destroy removes the viewport', !host.querySelector('svg'));
 
 // ---- report ----
+// ---- supertype groups (spec 12.9) ----
+{
+  const sgHost = window.document.createElement('div');
+  window.document.body.appendChild(sgHost);
+  let sgSelect: unknown = 'unset';
+  const sgHandle = mount(sgHost,
+    'xdbml: 0.5\nEntity P {\n  id int [pk]\n}\nEntity A {\n  a int\n}\n' +
+    'SupertypeGroup g [supertype: P, completeness: total] {\n  A\n}\n',
+    { onSelect: (s) => { sgSelect = s; } });
+  const hit = sgHost.querySelector('[data-supertype-group]');
+  check('supertype group: the symbol has a hit area', !!hit);
+  if (hit) {
+    fire(hit, 'click');
+    const sel = sgSelect as { kind?: string; id?: string } | null;
+    check('supertype group: a click selects the group',
+      !!sel && sel.kind === 'supertypeGroup' && sel.id === 'supertype-group:g', JSON.stringify(sel));
+  }
+  sgHandle.setRelationshipVisibility({ supertypeGroups: false });
+  check('supertype group: hidden by its toggle', !sgHost.querySelector('[data-supertype-group-shape]'));
+  sgHandle.setRelationshipVisibility({ supertypeGroups: true, relationshipNames: true });
+  check('supertype group: shown again, with its name under the names toggle',
+    !!sgHost.querySelector('[data-supertype-group-shape]') && sgHost.innerHTML.includes('>g</text>'));
+  sgHandle.destroy();
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failures.length) { console.log(failures.join('\n')); process.exit(1); }
 console.log('All interactive-mount checks passed.');

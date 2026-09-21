@@ -202,10 +202,12 @@ function anchorOnSide (entity: EntityLayout, side: Side, fieldName: string | und
       }
       return { x: side === 'right' ? right : left, y, side };
     }
+    // A supertype group uses the middle of these edges (spec §12.9); a
+    // relationship attaching there moves near the left corner instead.
     case 'top':
-      return { x: centerX, y: top, side };
+      return { x: entity.reservedTop ? left + Math.max(12, entity.bounds.width * 0.12) : centerX, y: top, side };
     case 'bottom':
-      return { x: centerX, y: bottom, side };
+      return { x: entity.reservedBottom ? left + Math.max(12, entity.bounds.width * 0.12) : centerX, y: bottom, side };
   }
 }
 

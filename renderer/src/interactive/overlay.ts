@@ -18,6 +18,7 @@ import type { DiagramModel, EntityLayout } from '../layout/layout.ts';
 import { CONTAINER_HEADER_HEIGHT, ENTITY_HEADER_HEIGHT } from '../layout/layout.ts';
 import type { Theme } from '../style/theme.ts';
 import { resolveRef } from '../geometry/ref-path.ts';
+import { layoutSupertypeGroups, type SupertypeGroupGeometry } from '../geometry/supertype-symbol.ts';
 
 const INDENT_PX = 14;
 
@@ -26,6 +27,8 @@ export type Selection =
   | { kind: 'field'; id: string; path: string }
   | { kind: 'ref'; id: string }
   | { kind: 'container'; name: string }
+  /** A supertype group (spec §12), selected by clicking its symbol. `id` is the group layout id. */
+  | { kind: 'supertypeGroup'; id: string }
   | null;
 
 export function buildOverlay (model: DiagramModel, selection: Selection, theme: Theme): string {
@@ -33,6 +36,7 @@ export function buildOverlay (model: DiagramModel, selection: Selection, theme: 
 
   for (const c of model.containers) parts.push(containerOverlay(c, selection, theme));
   for (const r of model.refs) parts.push(refOverlay(r, model, selection, theme));
+  for (const g of layoutSupertypeGroups(model)) parts.push(supertypeGroupOverlay(g, selection, theme));
   for (const e of model.entities) parts.push(entityOverlay(e, 'entity', selection, theme));
   for (const e of model.edges) parts.push(entityOverlay(e.box, 'edge', selection, theme));
 
@@ -190,6 +194,26 @@ function refOverlay (
     `data-ref="${id}" style="cursor:pointer"/>`,
   );
 
+  parts.push('</g>');
+  return parts.join('');
+}
+
+function supertypeGroupOverlay (g: SupertypeGroupGeometry, sel: Selection, theme: Theme): string {
+  const id = attr(g.group.id);
+  const cy = g.baseY - g.r / 2;
+  const parts: string[] = [`<g data-xdbml="supertype-group" data-id="${id}">`];
+  if (sel && sel.kind === 'supertypeGroup' && sel.id === g.group.id) {
+    parts.push(
+      `<path d="${g.stem} ${g.branches}" fill="none" stroke="${theme.row.selectStrip}" stroke-width="2.5" ` +
+      'stroke-opacity="0.55" pointer-events="none"/>',
+      `<circle cx="${g.cx}" cy="${cy}" r="${g.r + 5}" fill="none" stroke="${theme.row.selectStrip}" ` +
+      'stroke-width="2" pointer-events="none"/>',
+    );
+  }
+  parts.push(
+    `<circle cx="${g.cx}" cy="${cy}" r="${g.r + 7}" fill="transparent" ` +
+    `data-supertype-group="${id}" style="cursor:pointer"/>`,
+  );
   parts.push('</g>');
   return parts.join('');
 }

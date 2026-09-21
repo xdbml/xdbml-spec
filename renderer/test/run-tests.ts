@@ -21,6 +21,7 @@ import {
   applyUserPositions,
   autoArrange,
   serializeDiagram,
+  layoutSupertypeGroups,
   type DiagramModel,
 } from '../src/index.ts';
 
@@ -181,6 +182,66 @@ check('08: has an entity with a composite PK', multiPkEntities.length > 0,
     break;
   }
   check('found a collapsible field to probe', probed);
+}
+
+/* ---- Supertype groups (spec §12.9) ---------------------------------- */
+
+{
+  const doc = (settings: string, extra = ''): ReturnType<typeof flatten> => flatten(parse(
+    `xdbml: 0.5\nEntity P {\n  id int [pk]\n}\nEntity A {\n  a int\n}\nEntity B {\n  b int\n}\n${extra}` +
+    `SupertypeGroup g [supertype: P${settings ? `, ${settings}` : ''}] {\n  A\n  B\n}\n`,
+  ));
+  const cases: Array<[string, string, 'solid' | 'dashed' | 'none', 'solid' | 'dashed' | 'none']> = [
+    ['total, disjoint', 'completeness: total, exclusivity: disjoint', 'solid', 'solid'],
+    ['total, overlapping', 'completeness: total, exclusivity: overlapping', 'none', 'solid'],
+    ['partial, disjoint', 'completeness: partial, exclusivity: disjoint', 'solid', 'none'],
+    ['partial, overlapping', 'completeness: partial, exclusivity: overlapping', 'none', 'none'],
+    ['both unstated', '', 'dashed', 'dashed'],
+    ['completeness only (mixed)', 'completeness: total', 'dashed', 'solid'],
+    ['aliases', 'completeness: complete, exclusivity: exclusive', 'solid', 'solid'],
+  ];
+  const state = (m?: { dashed: boolean }): 'solid' | 'dashed' | 'none' => (m ? (m.dashed ? 'dashed' : 'solid') : 'none');
+  for (const [label, settings, cross, bar] of cases) {
+    const geo = layoutSupertypeGroups(buildDiagram(doc(settings)))[0];
+    check(`supertype group ${label}: drawn`, !!geo);
+    if (!geo) continue;
+    check(`supertype group ${label}: cross ${cross}`, state(geo.cross) === cross, `got ${state(geo.cross)}`);
+    check(`supertype group ${label}: bar ${bar}`, state(geo.bar) === bar, `got ${state(geo.bar)}`);
+  }
+
+  const model = buildDiagram(doc('completeness: total'));
+  const p = model.entities.find((e) => e.id === 'P')!;
+  const geo = layoutSupertypeGroups(model)[0]!;
+  check('supertype group: stem leaves the middle of the supertype bottom edge',
+    geo.cx === p.bounds.x + p.bounds.width / 2 && geo.stem.startsWith(`M ${geo.cx} ${p.bounds.y + p.bounds.height}`));
+  check('supertype group: rounded side up, base below the curve', geo.baseY > geo.topY);
+  check('supertype group: one drop per subtype', (geo.branches.match(/ M /g) ?? []).length === 2);
+  check('supertype group: edges reserved for the group',
+    p.reservedBottom === true && model.entities.filter((e) => e.reservedTop).length === 2);
+
+  const two = buildDiagram(flatten(parse(
+    'xdbml: 0.5\nEntity P {\n  id int [pk]\n}\nEntity A { }\nEntity B { }\nEntity C { }\nEntity D { }\n' +
+    'SupertypeGroup g1 [supertype: P] {\n  A\n  B\n}\nSupertypeGroup g2 [supertype: P] {\n  C\n  D\n}\n',
+  )));
+  const [g1, g2] = layoutSupertypeGroups(two);
+  const tp = two.entities.find((e) => e.id === 'P')!;
+  check('supertype groups on one supertype spread across its bottom edge',
+    !!g1 && !!g2 && g1.cx < g2.cx && g1.cx > tp.bounds.x && g2.cx < tp.bounds.x + tp.bounds.width);
+
+  const unresolved = buildDiagram(flatten(parse(
+    'xdbml: 0.5\nEntity P {\n  id int [pk]\n}\nSupertypeGroup g [supertype: P] {\n  Missing\n}\n',
+  )));
+  check('supertype group without a drawable subtype draws nothing', layoutSupertypeGroups(unresolved).length === 0);
+
+  const src = 'xdbml: 0.5\nEntity P {\n  id int [pk]\n}\nEntity A {\n  p_id int\n}\nEntity B { }\n' +
+    'SupertypeGroup legal [supertype: P, completeness: total, exclusivity: disjoint] {\n  A\n  B\n}\n' +
+    'Ref owns: A.p_id > P.id\n';
+  const plain = renderToSVG(src);
+  const named = renderToSVG(src, { showRelationshipNames: true });
+  assertWellFormed('supertype group svg', named);
+  check('relationship names are off by default', !plain.includes('>legal</text>') && !plain.includes('>owns</text>'));
+  check('relationship names draw the group name and the Ref name',
+    named.includes('>legal</text>') && named.includes('>owns</text>'));
 }
 
 /* ---- Report -------------------------------------------------------- */

@@ -1,0 +1,108 @@
+xdbml: 0.5
+
+// ---------------------------------------------------------------------------
+// Supertype groups: two axes, three levels, mixed strategies.
+//
+// A logical model of parties (spec 12, Appendix C.5). Party is specialized
+// along two independent axes: its legal nature (a Person or an Organization,
+// never both, and always one of them) and its business role (a Customer, a
+// Supplier, both or neither). Person is specialized a second time by the
+// role a person plays in the workforce.
+//
+// Each subtype declares only its own attributes (12.5). The attributes of
+// Party apply to every Person, Organization, Customer, Supplier, Employee and
+// Contractor without being declared again; where they end up in stored
+// structures is decided when a physical model is derived, following the
+// materialization settings (12.7):
+//   - legal_nature asks for a flat roll-up with a discriminator named `nature`
+//   - business_role is overlapping, so it states no discriminator
+//   - person_role states no strategy for the group; the Contractor pair
+//     asks for roll-down, the Employee pair is left to the derivation tool
+//
+// Organization declares a key of its own, which `owns` targets. Employee
+// declares none, so `assigned` names Employee as an entity-level endpoint
+// (11.16) and the derivation supplies the key it refers to.
+// ---------------------------------------------------------------------------
+
+Project party_model {
+  Note: 'Logical model: parties, their legal nature and business roles, and the people who work for us.'
+}
+
+Entity Party {
+  party_id   int       [pk]
+  name       varchar   [not null]
+  email      varchar
+  created_at timestamp [not null]
+}
+
+Entity Person {
+  birth_date  date
+  national_id varchar [unique]
+}
+
+Entity Organization {
+  tax_number varchar [pk]
+  legal_form varchar
+}
+
+Entity Customer {
+  customer_since date
+  credit_limit   decimal(12,2)
+}
+
+Entity Supplier {
+  payment_terms varchar
+}
+
+Entity Employee {
+  employee_number varchar [unique, not null]
+  hire_date       date
+}
+
+Entity Contractor {
+  agency     varchar
+  daily_rate decimal(10,2)
+}
+
+Entity Assignment {
+  assignment_id int     [pk]
+  employee_id   int     [not null]
+  project       varchar
+}
+
+Entity Truck {
+  truck_id  int     [pk]
+  plate     varchar [not null]
+  owner_tax varchar
+}
+
+SupertypeGroup legal_nature [
+  supertype: Party,
+  completeness: total,
+  exclusivity: disjoint,
+  strategy: roll_up,
+  merge: flat,
+  discriminator: nature,
+  note: 'Every party is a person or an organization, never both'
+] {
+  Person
+  Organization
+}
+
+SupertypeGroup business_role [
+  supertype: Party,
+  completeness: partial,
+  exclusivity: overlapping,
+  strategy: preserved_hierarchy
+] {
+  Customer
+  Supplier
+}
+
+SupertypeGroup person_role [supertype: Person, completeness: partial, exclusivity: disjoint] {
+  Employee
+  Contractor [strategy: roll_down]
+}
+
+Ref owns: Truck.owner_tax > Organization.tax_number [source: '0..*', target: '0..1']
+Ref assigned: Assignment.employee_id > Employee [source: '0..*', target: '1..1']

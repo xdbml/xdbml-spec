@@ -467,8 +467,11 @@ const relationshipOptions = [
 ];
 
 function loadRelationshipVisibility (): RelationshipVisibility {
+  // Supertype groups are drawn and relationship names are off until the
+  // Display menu offers their toggles (spec 12.9).
   const all: RelationshipVisibility = {
     referential: true, foreignMaster: true, inactive: true, conceptual: true,
+    supertypeGroups: true, relationshipNames: false,
   };
   try {
     const raw = localStorage.getItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY);
@@ -564,6 +567,9 @@ function toInspector (s: MountSelection): Selection {
   if (s.kind === 'entity') return { kind: 'entity', entityId: s.id };
   if (s.kind === 'field') return { kind: 'field', entityId: s.id, path: s.path };
   if (s.kind === 'ref') return { kind: 'ref', refId: s.id };
+  // A supertype group has no inspector pane yet; selecting one clears the
+  // inspector rather than opening an unrelated pane.
+  if (s.kind === 'supertypeGroup') return null;
   return { kind: 'container', containerName: s.name };
 }
 function toMount (s: Selection): MountSelection {
