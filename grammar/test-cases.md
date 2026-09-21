@@ -1205,6 +1205,177 @@ line string'''
 
 ---
 
+## §12 SupertypeGroup (v0.5)
+
+### VALID -- one group with completeness and exclusivity
+
+```
+xdbml: 0.5
+
+Entity Party {
+  party_id int [pk]
+  name varchar [not null]
+}
+Entity Person {
+  birth_date date
+}
+Entity Organization {
+  legal_form varchar
+}
+
+SupertypeGroup legal_nature [supertype: Party, completeness: total, exclusivity: disjoint] {
+  Person
+  Organization
+}
+```
+
+### VALID -- materialization settings, a per-subtype strategy, and TableGroup-style separators
+
+```
+xdbml: 0.5
+
+Entity Vehicle { vehicle_id int [pk] }
+Entity Car { seats int }
+Entity Motorcycle { sidecar boolean }
+Entity Truck { payload decimal }
+
+SupertypeGroup vehicle_kind [supertype: Vehicle, completeness: total, exclusivity: disjoint, strategy: roll_up, merge: flat, discriminator: kind] {
+  Car, Motorcycle; Truck [strategy: roll_down]
+}
+```
+
+### VALID -- aliases normalize to canonical values
+
+```
+xdbml: 0.5
+
+Entity A { id int [pk] }
+Entity B { b int }
+Entity C { c int }
+
+SupertypeGroup g [supertype: A, completeness: complete, exclusivity: non_exclusive, strategy: joined] {
+  B
+  C [strategy: table_per_class]
+}
+```
+
+### VALID -- several axes on one supertype, and a second level
+
+```
+xdbml: 0.5
+
+Entity Party { party_id int [pk] }
+Entity Person { birth_date date }
+Entity Organization { legal_form varchar }
+Entity Customer { since date }
+Entity Supplier { terms varchar }
+Entity Employee { hire_date date }
+
+SupertypeGroup legal_nature [supertype: Party, completeness: total, exclusivity: disjoint] {
+  Person
+  Organization
+}
+SupertypeGroup business_role [supertype: Party, completeness: partial, exclusivity: overlapping] {
+  Customer
+  Supplier
+}
+SupertypeGroup person_role [supertype: Person] {
+  Employee
+}
+```
+
+### VALID -- a relationship names a subtype as an entity-level endpoint
+
+```
+xdbml: 0.5
+
+Entity Party { party_id int [pk] }
+Entity Employee { hire_date date }
+Entity Assignment {
+  assignment_id int [pk]
+  employee_id int [not null]
+}
+
+SupertypeGroup g [supertype: Party] {
+  Employee
+}
+
+Ref assigned: Assignment.employee_id > Employee [source: '0..*', target: '1..1']
+```
+
+### INVALID -- group without a name (parse error)
+
+```
+xdbml: 0.5
+
+Entity A { id int [pk] }
+Entity B { b int }
+
+SupertypeGroup [supertype: A] {
+  B
+}
+```
+
+### INVALID -- an entity listed as a subtype in two groups (subtype-in-multiple-groups)
+
+```
+xdbml: 0.5
+
+Entity Party { party_id int [pk] }
+Entity Worker { worker_id int [pk] }
+Entity Person { birth_date date }
+
+SupertypeGroup legal_nature [supertype: Party] {
+  Person
+}
+SupertypeGroup workforce [supertype: Worker] {
+  Person
+}
+```
+
+### INVALID -- a subtype redeclares a supertype attribute (supertype-attribute-redeclared)
+
+```
+xdbml: 0.5
+
+Entity Party {
+  party_id int [pk]
+  name varchar
+}
+Entity Person {
+  name varchar
+}
+
+SupertypeGroup legal_nature [supertype: Party] {
+  Person
+}
+```
+
+### INVALID -- discriminator on an overlapping group (discriminator-on-overlapping-group)
+
+```
+xdbml: 0.5
+
+Entity Party { party_id int [pk] }
+Entity Customer { since date }
+Entity Supplier { terms varchar }
+
+SupertypeGroup business_role [supertype: Party, exclusivity: overlapping, discriminator: role] {
+  Customer
+  Supplier
+}
+```
+
+### INVALID -- a newer version than the parser supports (unsupported-version)
+
+```
+xdbml: 0.6
+
+Entity A { id int [pk] }
+```
+
+---
+
 ## Test runner
 
 A reference TypeScript test harness (planned at `grammar/test-runner.ts`) parses each example, captures the resulting AST, and compares it against expected ASTs in `grammar/expected/*.json`. Implementations in other languages can run the same corpus with language-appropriate harnesses.

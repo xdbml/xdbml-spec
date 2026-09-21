@@ -1,5 +1,5 @@
 /**
- * Name resolution pass (spec §26.10 / §26.15, parser batch P6).
+ * Name resolution pass (spec §27.10 / §27.15, parser batch P6).
  *
  * `resolveNames(doc)` walks an xDBML document (the flattened view; clone
  * blocks have been merged) and produces:
@@ -56,6 +56,7 @@ import type {
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
+import { checkSupertypeGroups } from './supertypes.ts';
 
 /* -------------------------------------------------------------------------
  * Public types
@@ -123,7 +124,19 @@ export type DiagnosticCode =
   | 'invalid-constraint-type'
   | 'constraint-type-on-foreign-master'
   | 'invalid-undirected'
-  | 'entity-level-many-to-many';
+  | 'entity-level-many-to-many'
+  // Supertype groups (spec §12, v0.5)
+  | 'missing-supertype'
+  | 'unresolved-supertype-group-member'
+  | 'invalid-supertype-group-value'
+  | 'duplicate-subtype'
+  | 'supertype-is-subtype'
+  | 'subtype-in-multiple-groups'
+  | 'supertype-cycle'
+  | 'supertype-attribute-redeclared'
+  | 'discriminator-on-overlapping-group'
+  | 'merge-without-roll-up'
+  | 'empty-supertype-group';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -263,6 +276,9 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 3: relationship rules that the grammar cannot express (spec 11.11).
   diagnostics.push(...checkRelationships(flat));
+
+  // Pass 4: supertype group rules (spec 12.8).
+  diagnostics.push(...checkSupertypeGroups(flat));
 
   return { diagnostics, symbols };
 }

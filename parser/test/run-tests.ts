@@ -19,6 +19,7 @@ import {
   parse, flatten, resolveNames,
   isForeignMaster, pathToString, refChildEndpoint, refParentEndpoint, relationshipType,
   constraintType, isUndirected,
+  resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
 } from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
@@ -1109,7 +1110,7 @@ Project lib_project {
 Entity X { id int [pk] }`,
       };
       return {
-        name: 'P5: ImportAll skips ProjectDeclaration (spec §26.4)',
+        name: 'P5: ImportAll skips ProjectDeclaration (spec §27.4)',
         source: `xdbml: 0.2
 reuse * from './lib'`,
         options: {
@@ -1184,7 +1185,7 @@ reuse { entity A_local } from './cycle-a'
 Entity X { id int [pk] }`,
       };
       return {
-        name: 'P5: circular imports do not crash (spec §26.15)',
+        name: 'P5: circular imports do not crash (spec §27.15)',
         source: files['/test/cycle-a.xdbml'],
         options: {
           filePath: '/test/cycle-a.xdbml',
@@ -1333,7 +1334,7 @@ reuse { entity Y } from './other' {
       };
     })(),
     /* -------------------------------------------------------------------
-     * v0.3: remote (URL) module sources  (spec §26.14)
+     * v0.3: remote (URL) module sources  (spec §27.14)
      * -----------------------------------------------------------------
      * Hermetic: the in-memory file map is keyed by the resolved key the
      * parser produces (a normalized https href), so no network is touched.
@@ -2588,7 +2589,7 @@ reuse { field core.dim_customer.no_such_field } from './lib'`,
           readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
         },
         assert: (doc) => {
-          // Per spec §26.13: failures are silent at module resolution.
+          // Per spec §27.13: failures are silent at module resolution.
           // The directive's clone block exists but is empty.
           const dir = doc.statements[0];
           if (dir.kind !== 'ModuleImportDirective') return 'expected directive';
@@ -2943,6 +2944,452 @@ Table t {
           const flag = f.settings.find((s) => s.value === null);
           if (!flag) return `${fieldName} has no flag`;
           if (flag.name !== 'not null') return `${fieldName} canonical name should be 'not null', got '${flag.name}'`;
+        }
+        return null;
+      },
+    },
+    /* -----------------------------------------------------------------
+     * SG: supertype groups (spec §12, v0.5)
+     * ----------------------------------------------------------------- */
+    {
+      name: 'SG: a group parses with its name, settings and members',
+      source: `xdbml: 0.5
+Entity Party {
+  party_id int [pk]
+}
+Entity Person { }
+Entity Organization { }
+SupertypeGroup legal_nature [supertype: Party, completeness: total, exclusivity: disjoint] {
+  Person
+  Organization [strategy: roll_down]
+}`,
+      assert: (doc) => {
+        const g = doc.statements.find((s) => s.kind === 'SupertypeGroupDeclaration');
+        if (!g || g.kind !== 'SupertypeGroupDeclaration') return 'no SupertypeGroupDeclaration';
+        if (g.name !== 'legal_nature') return `name ${g.name}`;
+        if (g.members.map((m) => m.name).join(',') !== 'Person,Organization') return `members ${g.members.map((m) => m.name).join(',')}`;
+        if (g.members[1].settings[0]?.name !== 'strategy') return 'member setting missing';
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+      },
+    },
+    {
+      name: 'SG: members separate by newline, comma or semicolon, like TableGroup',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+Entity C { }
+Entity D { }
+SupertypeGroup g [supertype: A] { B, C; D }`,
+      assert: (doc) => {
+        const g = doc.statements.find((s) => s.kind === 'SupertypeGroupDeclaration');
+        if (!g || g.kind !== 'SupertypeGroupDeclaration') return 'no group';
+        return g.members.map((m) => m.name).join(',') === 'B,C,D' ? null : `members ${g.members.map((m) => m.name).join(',')}`;
+      },
+    },
+    {
+      name: 'SG: a group without a name is a parse error',
+      source: `xdbml: 0.5
+Entity A { }
+SupertypeGroup [supertype: A] { }`,
+      assert: () => 'should have thrown',
+      expectError: true,
+    },
+    {
+      name: 'SG: the keyword is case-insensitive',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+supertypegroup g [supertype: A] {
+  B
+}`,
+      assert: (doc) => doc.statements.some((s) => s.kind === 'SupertypeGroupDeclaration') ? null : 'not parsed as a group',
+    },
+    {
+      name: 'SG: container-qualified members resolve',
+      source: `xdbml: 0.5
+Container crm [type: schema] {
+  Entity Party {
+    id int [pk]
+  }
+  Entity Person { }
+}
+SupertypeGroup g [supertype: crm.Party] {
+  crm.Person
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length > 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const groups = resolveSupertypeGroups(flatten(doc));
+        return groups[0].supertype === 'crm.Party' && groups[0].subtypes[0].entity === 'crm.Person'
+          ? null : `resolved ${groups[0].supertype} / ${groups[0].subtypes[0].entity}`;
+      },
+    },
+    {
+      name: 'SG: aliases normalize to canonical values',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+Entity C { }
+Entity D { }
+SupertypeGroup g [supertype: A, completeness: complete, exclusivity: exclusive, strategy: single_table, merge: flat_with_discriminator] {
+  B [strategy: joined]
+  C [strategy: table_per_class]
+  D [strategy: CONCRETE_TABLE]
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length > 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const g = doc.statements.find((s) => s.kind === 'SupertypeGroupDeclaration');
+        if (!g || g.kind !== 'SupertypeGroupDeclaration') return 'no group';
+        const s = supertypeGroupSettings(g);
+        const got = [s.completeness, s.exclusivity, s.strategy, s.merge, ...g.members.map((m) => subtypeStrategy(m))].join(',');
+        const want = 'total,disjoint,roll_up,flat,preserved_hierarchy,roll_down,roll_down';
+        return got === want ? null : `got ${got}`;
+      },
+    },
+    {
+      name: 'SG: an unknown value is reported, on the group and on a member',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+SupertypeGroup g [supertype: A, completeness: mostly] {
+  B [strategy: sideways]
+}`,
+      assert: (doc) => {
+        const n = resolveNames(doc).diagnostics.filter((d) => d.code === 'invalid-supertype-group-value').length;
+        return n === 2 ? null : `expected 2 invalid-supertype-group-value, got ${n}`;
+      },
+    },
+    {
+      name: 'SG: a group without supertype: is reported',
+      source: `xdbml: 0.5
+Entity B { }
+SupertypeGroup g {
+  B
+}`,
+      assert: (doc) => resolveNames(doc).diagnostics.some((d) => d.code === 'missing-supertype') ? null : 'expected missing-supertype',
+    },
+    {
+      name: 'SG: unresolved, non-entity and ambiguous members are reported',
+      source: `xdbml: 0.5
+Container a [type: schema] {
+  Entity X { }
+}
+Container b [type: schema] {
+  Entity X { }
+}
+Entity A { }
+View V {
+  id int
+}
+SupertypeGroup g [supertype: A] {
+  Nope
+  V
+  X
+}`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'unresolved-supertype-group-member');
+        if (hits.length !== 3) return `expected 3, got ${hits.length}: ${hits.map((d) => d.message).join(' | ')}`;
+        if (!hits.some((d) => /names a View/.test(d.message))) return 'no View message';
+        if (!hits.some((d) => /several containers/.test(d.message))) return 'no ambiguity message';
+        return null;
+      },
+    },
+    {
+      name: 'SG: duplicate group names are reported',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+Entity C { }
+SupertypeGroup g [supertype: A] {
+  B
+}
+SupertypeGroup g [supertype: A] {
+  C
+}`,
+      assert: (doc) => resolveNames(doc).diagnostics.some((d) => d.code === 'duplicate-declaration' && /SupertypeGroup/.test(d.message)) ? null : 'expected duplicate-declaration',
+    },
+    {
+      name: 'SG: a subtype listed twice, and a supertype listed as its own subtype, are reported',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+SupertypeGroup g [supertype: A] {
+  B
+  B
+  A
+}`,
+      assert: (doc) => {
+        const codes = resolveNames(doc).diagnostics.map((d) => d.code);
+        return codes.includes('duplicate-subtype') && codes.includes('supertype-is-subtype') ? null : `got ${codes.join(', ')}`;
+      },
+    },
+    {
+      name: 'SG: an entity that is a subtype in two groups is reported',
+      source: `xdbml: 0.5
+Entity Party { }
+Entity Worker { }
+Entity Person { }
+SupertypeGroup legal_nature [supertype: Party] {
+  Person
+}
+SupertypeGroup workforce [supertype: Worker] {
+  Person
+}`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'subtype-in-multiple-groups');
+        return hits.length === 1 ? null : `expected 1, got ${hits.length}`;
+      },
+    },
+    {
+      name: 'SG: one supertype may anchor several axes, and levels may stack',
+      source: `xdbml: 0.5
+Entity Party {
+  party_id int [pk]
+  name varchar
+}
+Entity Person {
+  birth_date date
+}
+Entity Organization { }
+Entity Customer { }
+Entity Supplier { }
+Entity Employee {
+  hire_date date
+}
+SupertypeGroup legal_nature [supertype: Party, completeness: total, exclusivity: disjoint] {
+  Person
+  Organization
+}
+SupertypeGroup business_role [supertype: Party, completeness: partial, exclusivity: overlapping] {
+  Customer
+  Supplier
+}
+SupertypeGroup person_role [supertype: Person] {
+  Employee
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length > 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const chains = supertypeChains(flatten(doc));
+        const e = (chains.get('Employee') ?? []).join(',');
+        return e === 'Person,Party' ? null : `Employee chain ${e}`;
+      },
+    },
+    {
+      name: 'SG: a cycle across levels is reported once',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+SupertypeGroup g1 [supertype: A] {
+  B
+}
+SupertypeGroup g2 [supertype: B] {
+  A
+}`,
+      assert: (doc) => {
+        const n = resolveNames(doc).diagnostics.filter((d) => d.code === 'supertype-cycle').length;
+        return n === 1 ? null : `expected 1 supertype-cycle, got ${n}`;
+      },
+    },
+    {
+      name: 'SG: redeclaring a supertype attribute is reported, at any level',
+      source: `xdbml: 0.5
+Entity Party {
+  party_id int [pk]
+  name varchar
+}
+Entity Person {
+  name varchar
+}
+Entity Employee {
+  party_id int
+}
+SupertypeGroup legal_nature [supertype: Party] {
+  Person
+}
+SupertypeGroup person_role [supertype: Person] {
+  Employee
+}`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'supertype-attribute-redeclared');
+        return hits.length === 2 ? null : `expected 2, got ${hits.length}: ${hits.map((d) => d.message).join(' | ')}`;
+      },
+    },
+    {
+      name: 'SG: redeclaration through a TablePartial is reported, on either side',
+      source: `xdbml: 0.5
+TablePartial audited {
+  created_at timestamp
+}
+TablePartial named {
+  name varchar
+}
+Entity Party {
+  party_id int [pk]
+  name varchar
+  ~audited
+}
+Entity Person {
+  ~named
+}
+Entity Organization {
+  created_at timestamp
+}
+SupertypeGroup legal_nature [supertype: Party] {
+  Person
+  Organization
+}`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'supertype-attribute-redeclared');
+        if (hits.length !== 2) return `expected 2, got ${hits.length}: ${hits.map((d) => d.message).join(' | ')}`;
+        return hits.some((d) => /through TablePartial 'named'/.test(d.message)) ? null : 'partial not named in message';
+      },
+    },
+    {
+      name: 'SG: a path through a subtype does not reach supertype attributes',
+      source: `xdbml: 0.5
+Entity Party {
+  party_id int [pk]
+  email varchar
+}
+Entity Person { }
+Entity Assignment {
+  person_email varchar
+}
+SupertypeGroup g [supertype: Party] {
+  Person
+}
+Ref: Assignment.person_email > Person.email`,
+      assert: (doc) => resolveNames(doc).diagnostics.some((d) => d.severity === 'error') ? null : 'expected an unresolved endpoint',
+    },
+    {
+      name: 'SG: a relationship names a subtype as an entity-level endpoint',
+      source: `xdbml: 0.5
+Entity Party {
+  party_id int [pk]
+}
+Entity Employee { }
+Entity Assignment {
+  assignment_id int [pk]
+  employee_id int [not null]
+}
+SupertypeGroup g [supertype: Party] {
+  Employee
+}
+Ref assigned: Assignment.employee_id > Employee [source: '0..*', target: '1..1']`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+      },
+    },
+    {
+      name: 'SG: discriminator is rejected on an overlapping group only',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+Entity C { }
+Entity D { }
+Entity E { }
+Entity F { }
+SupertypeGroup g1 [supertype: A, exclusivity: overlapping, discriminator: kind] {
+  B
+}
+SupertypeGroup g2 [supertype: C, exclusivity: disjoint, discriminator: kind] {
+  D
+}
+SupertypeGroup g3 [supertype: E, discriminator: kind] {
+  F
+}`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'discriminator-on-overlapping-group');
+        return hits.length === 1 ? null : `expected 1, got ${hits.length}`;
+      },
+    },
+    {
+      name: 'SG: merge warns without roll-up, and is satisfied by a member roll-up',
+      source: `xdbml: 0.5
+Entity A { }
+Entity B { }
+Entity C { }
+Entity D { }
+SupertypeGroup g1 [supertype: A, merge: nested] {
+  B
+}
+SupertypeGroup g2 [supertype: C, merge: flat] {
+  D [strategy: roll_up]
+}`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'merge-without-roll-up');
+        if (hits.length !== 1) return `expected 1, got ${hits.length}`;
+        return hits[0].severity === 'warning' ? null : 'should be a warning';
+      },
+    },
+    {
+      name: 'SG: an empty group is a warning, not an error',
+      source: `xdbml: 0.5
+Entity A { }
+SupertypeGroup g [supertype: A] { }`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        return d.length === 1 && d[0].code === 'empty-supertype-group' && d[0].severity === 'warning'
+          ? null : `got ${d.map((x) => `${x.severity}:${x.code}`).join(', ')}`;
+      },
+    },
+    {
+      name: 'SG: the construct requires xdbml: 0.5',
+      source: `xdbml: 0.4
+Entity A { }
+Entity B { }
+SupertypeGroup g [supertype: A] {
+  B
+}`,
+      assert: (doc) => resolveNames(doc).diagnostics.some((d) => d.code === 'construct-requires-version') ? null : 'expected construct-requires-version',
+    },
+    (() => {
+      const files: Record<string, string> = {
+        '/test/party.xdbml': `xdbml: 0.5
+Entity Party {
+  party_id int [pk]
+}
+Entity Person { }
+SupertypeGroup legal_nature [supertype: Party, completeness: total] {
+  Person
+}`,
+      };
+      return {
+        name: 'SG: a group imports with reuse { supertypegroup ... }',
+        source: `xdbml: 0.5
+reuse { entity Party, entity Person, supertypegroup legal_nature } from './party'`,
+        options: {
+          filePath: '/test/consumer.xdbml',
+          readFile: (p: string) => {
+            if (!(p in files)) throw new Error(`not found: ${p}`);
+            return files[p];
+          },
+        },
+        assert: (doc: XDbmlDocument) => {
+          const flat = flatten(doc);
+          if (!flat.statements.some((s) => s.kind === 'SupertypeGroupDeclaration' && s.name === 'legal_nature')) return 'group not imported';
+          const r = resolveNames(doc);
+          return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        },
+      };
+    })(),
+    {
+      name: 'Version: xdbml 0.5 is accepted; a newer version is refused with unsupported-version',
+      source: `xdbml: 0.5
+Entity A { }`,
+      assert: (doc) => {
+        if (doc.version?.version !== '0.5') return 'version 0.5 not parsed';
+        for (const v of ['0.6', '1.0', '0.10']) {
+          try {
+            parse(`xdbml: ${v}\nEntity A { }`);
+            return `xdbml: ${v} was accepted`;
+          } catch (e) {
+            if ((e as { code?: string }).code !== 'unsupported-version') return `xdbml: ${v}: wrong error ${(e as Error).message}`;
+          }
         }
         return null;
       },

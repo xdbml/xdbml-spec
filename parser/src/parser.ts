@@ -67,6 +67,8 @@ import type {
   SettingValue,
   Span,
   StringValue,
+  SupertypeGroupDeclaration,
+  SupertypeGroupMember,
   TableGroupDeclaration,
   TablePartialDeclaration,
   TopLevelRecordsDeclaration,
@@ -91,10 +93,36 @@ import type { ParseFn } from './module-resolver.ts';
 
 export class ParseError extends Error {
   position: Position;
-  constructor (message: string, position: Position) {
+  /**
+   * Optional machine-readable reason. Set for the errors a caller may want
+   * to tell apart from a plain syntax error: `unsupported-version` when a
+   * document declares a newer version than this parser supports (spec 4.1).
+   */
+  code?: string;
+  constructor (message: string, position: Position, code?: string) {
     super(`${message} (line ${position.line}, column ${position.column})`);
     this.position = position;
+    if (code) this.code = code;
   }
+}
+
+/**
+ * The newest specification version this parser implements. A document
+ * declaring a later version is refused (spec 4.1) rather than parsed with
+ * semantics it does not have.
+ */
+export const SUPPORTED_XDBML_VERSION = '0.5';
+
+/** Compare dotted version strings numerically: -1, 0 or 1. */
+export function compareVersions (a: string, b: string): number {
+  const pa = a.split('.').map((n) => Number(n) || 0);
+  const pb = b.split('.').map((n) => Number(n) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = pa[i] ?? 0;
+    const y = pb[i] ?? 0;
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
 }
 
 /* -------------------------------------------------------------------------
@@ -113,13 +141,13 @@ const ENTITY_KEYWORDS = new Set(['table', 'entity', 'collection', 'record']);
 
 /**
  * Element-type keywords accepted in module-system import items
- * (spec §26.3). Stored lowercased; matching is case-insensitive.
+ * (spec §27.3). Stored lowercased; matching is case-insensitive.
  *
  * `field` is recognized but explicitly rejected by parseImportItem in P4
  * (field-level imports have special declaration-vs-placement semantics
  * that will land in a later batch).
  *
- * `project` is intentionally excluded -- spec §26.1 forbids importing
+ * `project` is intentionally excluded -- spec §27.1 forbids importing
  * Project declarations.
  */
 const IMPORT_ELEMENT_TYPES = new Set([
@@ -127,7 +155,7 @@ const IMPORT_ELEMENT_TYPES = new Set([
   'enum', 'tablepartial', 'note',
   'schema', 'container', 'tablegroup',
   'type', 'edge', 'view', 'diagramview',
-  'field',
+  'field', 'supertypegroup',
 ]);
 
 const STRUCTURAL_TYPE_KEYWORDS = new Set([
@@ -185,7 +213,7 @@ export class Parser {
    * The set of file paths currently being parsed in the resolution chain.
    * Used for cycle detection: when resolving a directive whose `from` path
    * is already in this set, the parser produces an empty clone for that
-   * directive rather than recursing (matching spec §26.15: cycles are
+   * directive rather than recursing (matching spec §27.15: cycles are
    * allowed; name resolution handles them). The set is passed by reference
    * across recursive parse() calls so all transitive levels see it.
    *
@@ -281,6 +309,15 @@ export class Parser {
     this.advance(); // xdbml
     this.expect(TokenKind.Colon, "Expected ':' after 'xdbml'");
     const numTok = this.expect(TokenKind.NumberLiteral, 'Expected version number');
+    if (compareVersions(numTok.text, SUPPORTED_XDBML_VERSION) > 0) {
+      throw new ParseError(
+        `This document declares 'xdbml: ${numTok.text}', which is newer than the ` +
+        `latest version this parser supports (${SUPPORTED_XDBML_VERSION}). ` +
+        'Use a newer parser, or declare a supported version.',
+        numTok.start,
+        'unsupported-version',
+      );
+    }
     return {
       kind: 'VersionDeclaration',
       version: numTok.text,
@@ -329,6 +366,7 @@ export class Parser {
     if (k === 'ref') return this.parseRef();
     if (k === 'tablepartial') return this.parseTablePartial();
     if (k === 'tablegroup') return this.parseTableGroup();
+    if (k === 'supertypegroup') return this.parseSupertypeGroup();
     if (k === 'note') return this.parseNoteDeclaration();
     if (k === 'records') return this.parseTopLevelRecords();
     if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
@@ -577,7 +615,7 @@ export class Parser {
   }
 
   /**
-   * Parse a `records { ... }` block inside an entity body (§25.1, implicit
+   * Parse a `records { ... }` block inside an entity body (§26.1, implicit
    * column list). Values are stored as SettingValue cells; row boundaries
    * are determined by source line (see `parseRecordRow`).
    */
@@ -598,7 +636,7 @@ export class Parser {
   }
 
   /**
-   * Top-level records declaration (§25.2, new in v0.2):
+   * Top-level records declaration (§26.2, new in v0.2):
    *
    *     records users (id, name, email) { ... }
    *     records core.users (id, name, email) { ... }
@@ -689,7 +727,7 @@ export class Parser {
     };
   }
 
-  /* ----- Module-system directives (spec §26, new in v0.2) ----- */
+  /* ----- Module-system directives (spec §27, new in v0.2) ----- */
 
   /**
    * Parse a `use` or `reuse` directive. Called from both the top-level
@@ -825,7 +863,7 @@ export class Parser {
             resolvedPath = result.resolvedPath;
             break;
           case 'cycle':
-            // Per spec §26.15, cycles are allowed; the parser produces a
+            // Per spec §27.15, cycles are allowed; the parser produces a
             // directive with no clone, and name resolution (P6+) is
             // expected to bridge the cycle. We leave clone undefined.
             resolvedPath = result.resolvedPath;
@@ -897,13 +935,13 @@ export class Parser {
       );
     }
     if (elementType === 'field' && context !== 'file-scope') {
-      // Spec §26.8: field imports must appear at file scope. Inside a
+      // Spec §27.8: field imports must appear at file scope. Inside a
       // Container body, the field's eventual placement (as a Named Type)
       // would have no meaningful container scope -- field imports are
       // always lifted to file scope by flatten(), regardless of where
       // the directive sits.
       throw new ParseError(
-        `Field-level imports must appear at file scope, not inside a Container body (spec §26.8).`,
+        `Field-level imports must appear at file scope, not inside a Container body (spec §27.8).`,
         elemTok.start,
       );
     }
@@ -949,12 +987,12 @@ export class Parser {
    * that match the import items by name and element type (matching is
    * downstream-consumer's job; the parser is permissive).
    *
-   * Per spec §26.6, clone content uses the importing file's vocabulary
+   * Per spec §27.6, clone content uses the importing file's vocabulary
    * (aliases already applied) and is parsed under the importing file's
    * xdbml version directive.
    *
    * Most clone-block content uses TopLevelStatement shapes (Entity, Type,
-   * Container, etc.). The exception is field imports (§26.8): when the
+   * Container, etc.). The exception is field imports (§27.8): when the
    * directive imports one or more fields via `field <path>` items, the
    * clone block holds each field as a bare FieldDeclaration with no entity
    * wrapper. The dispatch below checks whether the next token starts a
@@ -969,7 +1007,7 @@ export class Parser {
       if (this.isCloneTopLevelStart()) {
         statements.push(this.parseTopLevelStatement());
       } else {
-        // Bare field declaration -- the field-import case. Per spec §26.6
+        // Bare field declaration -- the field-import case. Per spec §27.6
         // the field appears without an entity wrapper.
         statements.push(this.parseFieldDeclaration());
       }
@@ -1446,7 +1484,7 @@ export class Parser {
     throw new ParseError(`Expected type parameter, got ${t.kind}`, t.start);
   }
 
-  /* ----- Type declaration (§13) ----- */
+  /* ----- Type declaration (§15) ----- */
 
   private parseTypeDecl (): TypeDeclaration {
     const start = this.peek().start;
@@ -1457,7 +1495,7 @@ export class Parser {
     //
     //   { ... }                           v0.1 object form, no pre-body settings
     //   [ settings ] { ... }              v0.1 object form, pre-body settings (permissive)
-    //   typeExpression                    v0.2 scalar form (spec §14.7)
+    //   typeExpression                    v0.2 scalar form (spec §15.7)
     //   typeExpression [ settings ]       v0.2 scalar form with field-level settings
     //
     // Note that LBrace and LBracket are distinct from any start-of-type-expression
@@ -1748,7 +1786,7 @@ export class Parser {
   }
 
   /**
-   * Parse a dotted path with the §18 segment vocabulary:
+   * Parse a dotted path with the §20 segment vocabulary:
    *
    *   IDENTIFIER                  -- a field segment
    *   .IDENTIFIER                 -- field
@@ -1911,6 +1949,73 @@ export class Parser {
     this.expect(TokenKind.RBrace, "Expected '}' closing TableGroup");
     return {
       kind: 'TableGroupDeclaration',
+      name,
+      settings,
+      members,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /* ----- SupertypeGroup (spec §12, new in v0.5) ----- */
+
+  /**
+   * `SupertypeGroup <name> [supertype: X, ...] { Sub1  Sub2 [strategy: y] }`.
+   * Members are separated like TableGroup members: newline, comma or
+   * semicolon (spec §3.9). A name is required (§12.1); a writer exporting a
+   * group that has none emits `undefinedGroup1`, `undefinedGroup2`, ... so
+   * the parser never supplies one. Values are validated after parsing, by
+   * `checkSupertypeGroups()`, so an unknown value gets a located diagnostic
+   * rather than stopping the parse.
+   */
+  private parseSupertypeGroup (): SupertypeGroupDeclaration {
+    const start = this.peek().start;
+    this.advance(); // SupertypeGroup
+    const nameTok = this.peek();
+    if (nameTok.kind !== TokenKind.Identifier && nameTok.kind !== TokenKind.QuotedIdentifier) {
+      throw new ParseError(
+        'Expected a name after SupertypeGroup. Every group has a name (spec §12.1); ' +
+        'a group exported without one is written undefinedGroup1, undefinedGroup2, ...',
+        nameTok.start,
+      );
+    }
+    const name = this.parseIdentLikeName('SupertypeGroup name');
+    const settings = this.maybeSettingsBlock();
+    this.expect(TokenKind.LBrace, "Expected '{' after SupertypeGroup name and settings");
+    const members: SupertypeGroupMember[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      const t = this.peek();
+      if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
+        const memberStart = t.start;
+        this.advance();
+        let n = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
+        while (this.check(TokenKind.Dot)) {
+          this.advance();
+          const next = this.peek();
+          if (next.kind !== TokenKind.Identifier && next.kind !== TokenKind.QuotedIdentifier) {
+            throw new ParseError('Expected identifier after dot in subtype path', next.start);
+          }
+          this.advance();
+          n += `.${next.kind === TokenKind.QuotedIdentifier ? (next.value ?? '') : next.text}`;
+        }
+        const memberSettings = this.maybeSettingsBlock();
+        members.push({
+          kind: 'SupertypeGroupMember',
+          name: n,
+          settings: memberSettings,
+          span: this.spanFrom(memberStart),
+        });
+      } else if (t.kind === TokenKind.Semicolon || t.kind === TokenKind.Comma) {
+        this.advance();
+      } else {
+        throw new ParseError(
+          `Unexpected ${t.kind} in SupertypeGroup body; expected a subtype entity name`,
+          t.start,
+        );
+      }
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing SupertypeGroup");
+    return {
+      kind: 'SupertypeGroupDeclaration',
       name,
       settings,
       members,

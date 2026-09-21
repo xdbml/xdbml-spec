@@ -70,6 +70,7 @@ export const DECLARATION_KEYWORDS = [
   'note',
   'tablepartial',
   'tablegroup',
+  'supertypegroup',
   'diagramview',
 ] as const;
 

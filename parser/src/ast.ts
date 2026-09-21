@@ -59,6 +59,7 @@ export type TopLevelStatement =
   | RefDeclaration
   | TablePartialDeclaration
   | TableGroupDeclaration
+  | SupertypeGroupDeclaration
   | NoteDeclaration
   | TopLevelRecordsDeclaration
   | ModuleImportDirective;
@@ -290,14 +291,14 @@ export interface JsonType {
 }
 
 /* -------------------------------------------------------------------------
- * Named Type (§13)
+ * Named Type (§15)
  * ----------------------------------------------------------------------- */
 
 export interface TypeDeclaration {
   kind: 'TypeDeclaration';
   name: string;
   /**
-   * v0.2 scalar form (spec §14.7): when present, this Type is an alias
+   * v0.2 scalar form (spec §15.7): when present, this Type is an alias
    * for the given type expression rather than an object-shaped record.
    * Examples:
    *
@@ -333,7 +334,7 @@ export interface EdgeDeclaration {
 }
 
 /* -------------------------------------------------------------------------
- * View (§12)
+ * View (§14)
  * ----------------------------------------------------------------------- */
 
 export interface ViewDeclaration {
@@ -533,6 +534,33 @@ export interface TableGroupDeclaration {
   span: Span;
 }
 
+/* -------------------------------------------------------------------------
+ * SupertypeGroup (spec §12, new in v0.5)
+ *
+ * One supertype and its immediate subtypes along one axis of
+ * specialization. The supertype is named by the `supertype:` setting; the
+ * body lists the subtypes, separated like TableGroup members (newline,
+ * comma or semicolon). Setting values are kept as written: canonical
+ * values and aliases are resolved by `supertypeGroupSettings()`.
+ * ----------------------------------------------------------------------- */
+
+export interface SupertypeGroupDeclaration {
+  kind: 'SupertypeGroupDeclaration';
+  name: string;
+  settings: Setting[];
+  members: SupertypeGroupMember[];
+  span: Span;
+}
+
+export interface SupertypeGroupMember {
+  kind: 'SupertypeGroupMember';
+  /** Entity path as written: `Person` or `crm.Person`. */
+  name: string;
+  /** Member settings; `strategy` is the only recognized one (spec §12.7.4). */
+  settings: Setting[];
+  span: Span;
+}
+
 export interface PartialInjection {
   kind: 'PartialInjection';
   /** Identifier after the `~`. */
@@ -541,22 +569,22 @@ export interface PartialInjection {
 }
 
 /* -------------------------------------------------------------------------
- * Records (sample data, §24)
+ * Records (sample data, §26)
  * ----------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------------------
- * Records (spec §25, expanded in v0.2)
+ * Records (spec §26, expanded in v0.2)
  *
  * Records declare sample data inline in the schema. Two forms:
  *
- *   - Inside an entity body, implicit column list (§25.1):
+ *   - Inside an entity body, implicit column list (§26.1):
  *       records {
  *         1, 'Alice', 'alice@example.com'
  *         2, 'Bob',   'bob@example.com'
  *       }
  *     Values are assigned to fields in declaration order.
  *
- *   - Top-level, explicit column list (§25.2, new in v0.2):
+ *   - Top-level, explicit column list (§26.2, new in v0.2):
  *       records users (id, name, email) {
  *         1, 'Alice', 'alice@example.com'
  *       }
@@ -568,7 +596,7 @@ export interface PartialInjection {
  * uses the comma's line vs the next-value's line, so a triple-quoted value
  * doesn't break row continuation).
  *
- * Value forms (§25.4): strings, multi-line strings, numbers, booleans, null,
+ * Value forms (§26.4): strings, multi-line strings, numbers, booleans, null,
  * ISO 8601 dates (lexed as strings), enum values (dotted identifiers like
  * Status.active), and backtick expressions. We reuse SettingValue for cell
  * values -- it's a superset (it also covers ListValue and RefValue, which
@@ -624,15 +652,15 @@ export interface NoteBlock {
 }
 
 /* -------------------------------------------------------------------------
- * Module system (spec §26, new in v0.2)
+ * Module system (spec §27, new in v0.2)
  *
  * `use` and `reuse` directives import declarations from another xDBML file.
  * The directive can appear at file scope or inside a Container body; its
  * location determines where the imported elements live in the merged AST
- * (the "directive's location is the placement location" rule, §26.5).
+ * (the "directive's location is the placement location" rule, §27.5).
  *
  * Each directive may carry an optional clone block embedding the imported
- * declarations directly in the importing file (§26.6). When a clone block
+ * declarations directly in the importing file (§27.6). When a clone block
  * is present, the parser uses it as authoritative and does not open the
  * referenced file. When absent, the parser must open the referenced file
  * (P5 work; P4 only supports clone-present directives).
@@ -655,7 +683,7 @@ export interface ModuleImportDirective {
   /**
    * Directive mode:
    *   - `'reuse'`: transitive (visible to files that further import this file).
-   *     The recommended default per spec §26.4.
+   *     The recommended default per spec §27.4.
    *   - `'use'`: non-transitive (private to this file).
    */
   mode: 'use' | 'reuse';
@@ -693,9 +721,10 @@ export type ImportSpec =
  *     type Email as PII_Email
  *     field core.dim_customer.email
  *
- * The element type is one of the keywords from §26.3 (table, entity,
+ * The element type is one of the keywords from §27.3 (table, entity,
  * collection, record, enum, tablepartial, note, schema, container,
- * tablegroup, type, edge, view, diagramview, field). Stored lowercased.
+ * tablegroup, type, edge, view, diagramview, field, and from v0.5
+ * supertypegroup). Stored lowercased.
  *
  * The source path follows xDBML's standard dotted form. Container.Entity
  * for an entity inside a Container; Container.Entity.Field for a field.
@@ -717,7 +746,7 @@ export interface ImportItem {
  * an entity, type, container, etc. clone). Field imports are not supported
  * in P4 -- when they land, this type may grow to a wider union.
  *
- * Per spec §26.6, the clone contains exactly the imported declaration(s),
+ * Per spec §27.6, the clone contains exactly the imported declaration(s),
  * without surrounding wrappers from the source file. For an entity clone
  * the content is the EntityDeclaration alone (no container wrapper); for a
  * container clone the content is the ContainerDeclaration including its
@@ -729,7 +758,7 @@ export interface CloneBlock {
    * Statements that the importing file pulls in from the source. Most are
    * top-level shapes (Entity, Type, Enum, Container, etc.). The one
    * exception is `FieldDeclaration`: when the parent directive imports
-   * one or more fields via `field <path>` items (spec §26.8), each field
+   * one or more fields via `field <path>` items (spec §27.8), each field
    * appears here as a bare FieldDeclaration with no entity wrapper.
    * The `flatten()` pass lifts each bare field into a synthetic
    * TypeDeclaration at file scope so downstream consumers see a normal
@@ -742,7 +771,7 @@ export interface CloneBlock {
 /* -------------------------------------------------------------------------
  * Settings (the bracket-list grammar shared by ~everything)
  *
- * The settings vocabulary is open by spec design (§22.5). To keep the AST
+ * The settings vocabulary is open by spec design (§24.5). To keep the AST
  * simple, every setting is represented as a name/value pair. Specific
  * recognized settings (flags like `pk`, `not null`; key-value like
  * `default: 'x'`; validation like `pattern: '...'`; AI-readiness like
@@ -750,7 +779,7 @@ export interface CloneBlock {
  * pure flags.
  *
  * Downstream passes (a future semantic-analysis stage) interpret the
- * setting name against the recognized vocabulary in spec §22 and §23.
+ * setting name against the recognized vocabulary in spec §24 and §25.
  * ----------------------------------------------------------------------- */
 
 export interface Setting {
@@ -863,7 +892,7 @@ export interface ParseOptions {
    * Because this reader is synchronous, a host that supports remote sources
    * must return the fetched text from a cache it populated beforehand. The
    * network fetch, and its SSRF / redirect / size / timeout obligations
-   * (spec §26.14.5), live in the host's resolver, not in the parser.
+   * (spec §27.14.5), live in the host's resolver, not in the parser.
    *
    * If absent, reference-only directives fall back to the P4 rejection
    * with a clear "no resolver available" message. Clone-block-bearing

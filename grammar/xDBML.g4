@@ -139,6 +139,10 @@ EDGE                : 'Edge' ;
 
 VIEW                : 'View' ;
 
+// ---- §12 SupertypeGroup (spec v0.5) ---------------------------------------
+
+SUPERTYPE_GROUP     : 'SupertypeGroup' ;
+
 // ---- §17.2 Structural type keywords ---------------------------------------
 
 OBJECT              : 'object' ;
@@ -251,6 +255,7 @@ topLevelStatement
     | refDefinition                // upstream DBML, extended for cardinality (§17.10)
     | tablePartialDefinition       // upstream DBML
     | tableGroupDefinition         // upstream DBML
+    | supertypeGroupDefinition     // spec §12 (new in v0.5)
     | diagramViewDefinition        // upstream DBML
     | noteDefinition               // upstream DBML
     | useDirective                 //§25  (new in v0.2)
@@ -366,6 +371,7 @@ cloneContent
     | enumDefinition
     | tablePartialDefinition
     | tableGroupDefinition
+    | supertypeGroupDefinition      // spec §12 (new in v0.5)
     | diagramViewDefinition
     | noteDefinition
     | fieldDeclaration              // for field-level imports
@@ -430,6 +436,52 @@ viewBody
     : 'source_query' COLON multilineString    // also allowed inside body for readability
     | fieldDeclaration
     | noteDefinition
+    ;
+
+// ---- §12 SupertypeGroup (new in v0.5) -------------------------------------
+//
+// One supertype and its immediate subtypes along one axis of
+// specialization. The name is required: a writer exporting a group that has
+// none emits undefinedGroup1, undefinedGroup2, ... Members are separated like
+// TableGroup members, by newline, comma or semicolon (spec §3.9).
+//
+// The grammar accepts any identifier as a value. The rules of spec §12.8 are
+// checked after parsing: `supertype:` is required, values must be canonical
+// or an accepted alias (§12.2), an entity is a subtype in one group only,
+// and so on. That keeps a mistyped value a located diagnostic rather than a
+// parse failure.
+
+supertypeGroupDefinition
+    : SUPERTYPE_GROUP IDENTIFIER supertypeGroupSettingsBlock? LBRACE
+        (supertypeGroupMember (COMMA | SEMICOLON)?)*
+      RBRACE
+    ;
+
+supertypeGroupSettingsBlock
+    : LBRACK supertypeGroupSetting (COMMA supertypeGroupSetting)* COMMA? RBRACK
+    ;
+
+supertypeGroupSetting
+    : 'supertype'      COLON entityReference                  //§12.1
+    | 'completeness'   COLON IDENTIFIER   // total | partial                     §12.3
+    | 'exclusivity'    COLON IDENTIFIER   // disjoint | overlapping              §12.3
+    | 'strategy'       COLON IDENTIFIER   // preserved_hierarchy | roll_up | roll_down  §12.7.1
+    | 'merge'          COLON IDENTIFIER   // flat | nested                       §12.7.2
+    | 'discriminator'  COLON (IDENTIFIER | STRING_LITERAL)    //§12.7.3
+    | generalSetting                      // note, x_* custom properties
+    ;
+
+supertypeGroupMember
+    : entityReference subtypeSettingsBlock?
+    ;
+
+subtypeSettingsBlock
+    : LBRACK subtypeSetting (COMMA subtypeSetting)* COMMA? RBRACK
+    ;
+
+subtypeSetting
+    : 'strategy' COLON IDENTIFIER                              //§12.7.4
+    | generalSetting                      // x_* custom properties
     ;
 
 // ---- §17.2 Type expressions (the core recursive type rule) ----------------
@@ -845,6 +897,7 @@ LPAREN              : '(' ;
 RPAREN              : ')' ;
 COLON               : ':' ;
 COMMA               : ',' ;
+SEMICOLON           : ';' ;
 DOT                 : '.' ;
 TILDE               : '~' ;
 LANGLE              : '<' ;

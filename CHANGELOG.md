@@ -15,7 +15,7 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 #### Spec
 
-- **Supertype group (§12)**: a new top-level `SupertypeGroup` declaration, placed as chapter 12 ahead of Edge. A group names one supertype in its settings and lists its subtypes in its body, one per line (§12.1). The name is required; a writer exporting a group that has no name in its source tool emits `undefinedGroup1`, `undefinedGroup2`, and so on.
+- **Supertype group (§12)**: a new top-level `SupertypeGroup` declaration, placed as chapter 12 ahead of Edge. A group names one supertype in its settings and lists its subtypes in its body, separated like TableGroup members (§12.1, §3.9). The name is required; a writer exporting a group that has no name in its source tool emits `undefinedGroup1`, `undefinedGroup2`, and so on.
 
 - **Completeness and exclusivity (§12.3)**: `completeness: total | partial` and `exclusivity: disjoint | overlapping`, set per group, so one supertype can carry a total, disjoint axis and a partial, overlapping one. Absence means unstated, as with `constraint_type`.
 
@@ -41,6 +41,16 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Appendix C.5**: a worked example with two axes, three levels, a per-subtype strategy, and a relationship that points at a subtype.
 
+#### Tooling
+
+- **Parser**: `SupertypeGroup` parses to a `SupertypeGroupDeclaration` with `SupertypeGroupMember` children, each member carrying its own settings. Members are separated like TableGroup members. A group without a name is a parse error. `supertypegroup` is a selective-import element type and survives aliasing, clone blocks and `flatten()`. The keyword joins `DECLARATION_KEYWORDS`, so the playground editor highlights it.
+
+- **Supertype group checks (spec §12.8)**, run by `resolveNames()` on the flattened document so the playground and the MCP `validate_xdbml` tool report them: `missing-supertype`, `unresolved-supertype-group-member` (unresolved, ambiguous across containers, or naming a View, Edge, Type or other non-entity), `invalid-supertype-group-value`, `duplicate-subtype`, `supertype-is-subtype`, `subtype-in-multiple-groups`, `supertype-cycle`, `supertype-attribute-redeclared` (including attributes arriving through a TablePartial, on either side), `discriminator-on-overlapping-group`, and the warnings `empty-supertype-group` and `merge-without-roll-up`. Duplicate group names reuse `duplicate-declaration`; a group in a document declaring less than 0.5 reuses `construct-requires-version`.
+
+- **`@xdbml/parse` exports** `supertypeGroupSettings()` and `subtypeStrategy()` (canonical values), `canonicalSupertypeGroupValue()` and `SUPERTYPE_GROUP_VALUES` (the alias table), `resolveSupertypeGroups()` (members resolved to entity ids), `supertypeChains()` (nearest supertype first), and `checkSupertypeGroups()`. None of them computes the attributes or keys of a physical model.
+
+- **Grammar**: `supertypeGroupDefinition` and its settings and member rules in `grammar/xDBML.g4`, with a `SEMICOLON` token; ten cases in `grammar/test-cases.md`, each verified against the parser.
+
 ### Changed
 
 #### Spec
@@ -51,11 +61,17 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **§4.1**: `xdbml: 0.4` is parsed by 0.4+ parsers; `xdbml: 0.5` is refused by a 0.4 parser.
 
+- **§3.9 and §12.1**: SupertypeGroup members are separated like TableGroup members, by newline, comma or semicolon. The separators table lists TableGroup for the first time; the parser has always accepted those separators there.
+
 #### Examples
 
 - **Section references follow the v0.5 numbering** in the comments and notes of examples 02, 09, 10 and 11 and in the example descriptions of `scripts/examples-manifest.mjs`. The reference in example 02 to the Decimal128 lowering pointed at the wrong chapter and now names §23.2.
 
 #### Tooling
+
+- **The parser refuses a newer version (spec §4.1)**: a document declaring a version above `SUPPORTED_XDBML_VERSION` (0.5) fails with a `ParseError` whose new optional `code` is `unsupported-version`. Until now a parser accepted any declared version silently. Documents declaring 0.1 to 0.5, and DBML documents with no declaration, are unaffected. `compareVersions()` is exported.
+
+- **Section references in parser comments and test names** follow the v0.5 numbering. References already pinned to a version, such as "v0.2 §26", are unchanged; references that pointed at an earlier numbering (Named Type as §13, View as §12, Records as §24, path syntax as §18) now name the right chapter.
 
 - **Site shows v0.5 as the current draft**: the specification index, the three specification menus in `.vitepress/config.ts`, and the README list v0.5 as current and v0.4 as superseded. `/spec/current` follows from `scripts/prepare-spec.mjs` with no change. The FAQ reference to the module system names §27.
 

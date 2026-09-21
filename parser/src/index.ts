@@ -28,7 +28,7 @@
 export * from './ast.ts';
 export { tokenize, TokenKind, LexError } from './lexer.ts';
 export type { Token } from './lexer.ts';
-export { parse, Parser, ParseError } from './parser.ts';
+export { parse, Parser, ParseError, SUPPORTED_XDBML_VERSION, compareVersions } from './parser.ts';
 export { flatten } from './module-resolver.ts';
 export {
   classifyModuleSource,
@@ -55,6 +55,24 @@ export {
   isUndirected,
 } from './relationships.ts';
 export type { RelationshipType, ConstraintType } from './relationships.ts';
+export {
+  SUPERTYPE_GROUP_VALUES,
+  canonicalSupertypeGroupValue,
+  checkSupertypeGroups,
+  resolveSupertypeGroups,
+  subtypeStrategy,
+  supertypeChains,
+  supertypeGroupSettings,
+} from './supertypes.ts';
+export type {
+  Completeness,
+  Exclusivity,
+  MaterializationStrategy,
+  MergeOption,
+  ResolvedSupertypeGroup,
+  SupertypeGroupSettings,
+  SupertypeGroupValueSetting,
+} from './supertypes.ts';
 export type {
   Diagnostic,
   DiagnosticCode,

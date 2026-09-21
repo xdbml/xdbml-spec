@@ -1,79 +1,146 @@
-xDBML -- v0.5 Delta 3: inherited attributes without derivation leakage
-Base: Delta 2 applied and committed locally on top of origin/main fb985b1.
+xDBML -- v0.5 Delta 4: parser and grammar for supertype groups
+Base: Deltas 1-3 applied and committed locally on top of origin/main fb985b1.
 
 WHY
 ---
-12.5 defined an ordered "effective attribute set" and built rules on it
-that assume a physical shape: a root-first attribute order (a roll-down
-column order), paths through a subtype reaching supertype attributes
-(true under roll-down only), and a computed "effective primary key"
-(preserved-hierarchy key propagation). Placing attributes and keys in
-stored structures is the derivation tool's job, not the spec's.
+First implementation phase of v0.5: the parser reads SupertypeGroup and
+reports every rule of spec 12.8. The playground runs the parser from repo
+source, so after this delta a v0.5 document with groups parses in
+docs:dev, its diagnostics appear in the panel with squiggles, and the
+diagram shows the entities. The group symbol arrives with Delta 5.
 
-WHAT CHANGED
-------------
-spec/v0.5.md
-  12.5  Rewritten. A subtype declares only its own attributes; the
-        supertypes' attributes apply to its instances without being copied
-        or redeclared; a derivation tool places them per the strategy.
-        Redeclaring a supertype attribute stays an error, with a reason
-        that no longer relies on a computed set. A path through a subtype
-        names its own attributes only; a relationship to a subtype uses an
-        entity-level endpoint, e.g.
-          Ref assigned: Assignment.employee_id > Employee [source: '0..*', target: '1..1']
-        Indexes and records on a subtype name its own attributes, with no
-        special rule. The ordering and the dk-marker paragraph are gone.
-  12.6  Rewritten. A subtype without a key shares its supertype's identity;
-        the key each stored structure receives is derivation output. A
-        subtype may still declare its own key.
-  12.4.1, 12.4.3, 12.7.3, 12.10, chapter intro: wording no longer refers
-        to an effective set.
-  12.8  Index row removed; redeclaration row reworded.
-  12.9  Bullet about listing inherited attributes in a subtype's box removed.
-  28.5  Retitled "Supertype chains": computed for the structural and
-        redeclaration checks only; no attribute or key of a physical model
-        is computed.
-  31    Conformance item 13 no longer asks for effective sets or keys.
-  C.5   Adds an Assignment entity and a relationship pointing at Employee
-        as an entity; the "what an implementation computes" bullets become
-        "what the document states, and what it leaves to derivation".
-  "What's new" paragraph adjusted to match.
+WHAT THIS ADDS
+--------------
+Parser (parser\src)
+  ast.ts            SupertypeGroupDeclaration and SupertypeGroupMember
+                    (each member keeps its own settings); element-type note.
+  parser.ts         SupertypeGroup dispatch and parseSupertypeGroup():
+                    name required (message points at undefinedGroupN),
+                    members separated by newline, comma or semicolon,
+                    case-insensitive keyword. `supertypegroup` added to the
+                    import element types. ParseError gains an optional
+                    `code`; a declared version above SUPPORTED_XDBML_VERSION
+                    (0.5) is refused with code `unsupported-version`
+                    (spec 4.1). compareVersions() treats 0.10 as newer
+                    than 0.5.
+  supertypes.ts     NEW. Value/alias table and canonicalization, member
+                    resolution (bare or container-qualified; ambiguous and
+                    non-entity cases get their own message), supertype
+                    chains, and checkSupertypeGroups() with the 12.8 rules.
+  name-resolver.ts  resolveNames() runs the group checks as pass 4 on the
+                    flattened document; new diagnostic codes in the union.
+  module-resolver.ts  selective import and aliasing of `supertypegroup`.
+  keywords.ts       'supertypegroup' in DECLARATION_KEYWORDS (Monaco
+                    highlighting in the playground follows).
+  index.ts          exports: supertypeGroupSettings, subtypeStrategy,
+                    canonicalSupertypeGroupValue, SUPERTYPE_GROUP_VALUES,
+                    resolveSupertypeGroups, supertypeChains,
+                    checkSupertypeGroups, SUPPORTED_XDBML_VERSION,
+                    compareVersions, and the related types.
+  Comments citing chapters 12-30 renumbered by topic, not by +1: several
+  already cited an older numbering (Named Type as 13, View as 12, Records
+  as 24, path syntax as 18) and now name the right chapter. References
+  pinned to a version ("v0.2 §26", "v0.3 §26.14") are unchanged.
 
-CHANGELOG.md: the 12.5, 12.6, AST and C.5 entries of the v0.5 section.
+New diagnostic codes
+  errors:   missing-supertype, unresolved-supertype-group-member,
+            invalid-supertype-group-value, duplicate-subtype,
+            supertype-is-subtype, subtype-in-multiple-groups,
+            supertype-cycle, supertype-attribute-redeclared,
+            discriminator-on-overlapping-group
+  warnings: empty-supertype-group, merge-without-roll-up
+  reused:   duplicate-declaration (group names),
+            construct-requires-version (group in a < 0.5 document)
 
-Parser probe (v0.4 parser, current main): an attribute endpoint on one end
-and an entity endpoint on the other, with explicit cardinality, resolves
-with no diagnostic from resolveNames or checkRelationships.
+Tests (parser\test\run-tests.ts): 24 new cases, 207 in total.
+
+Grammar
+  xDBML.g4          supertypeGroupDefinition, its settings and member
+                    rules, SUPERTYPE_GROUP and SEMICOLON tokens, added to
+                    topLevelStatement and cloneContent.
+  test-cases.md     "§12 SupertypeGroup (v0.5)": five VALID and five
+                    INVALID cases. Nothing runs this file automatically;
+                    all ten were checked against the parser here.
+
+Spec (spec\v0.5.md)
+  3.9 table: "TableGroup, SupertypeGroup | members | newline, comma or
+  semicolon". 12.1 reworded to match.
+
+CHANGELOG.md: Added > Tooling (parser, checks, exports, grammar);
+Changed > Spec (3.9 / 12.1); Changed > Tooling (version refusal, comment
+renumbering).
 
 FILES
 -----
-  spec\v0.5.md    EDIT
-  CHANGELOG.md    EDIT
+  parser\src\ast.ts               EDIT
+  parser\src\parser.ts            EDIT
+  parser\src\module-resolver.ts   EDIT
+  parser\src\name-resolver.ts     EDIT
+  parser\src\keywords.ts          EDIT
+  parser\src\index.ts             EDIT
+  parser\src\supertypes.ts        NEW
+  parser\test\run-tests.ts        EDIT
+  grammar\xDBML.g4                EDIT
+  grammar\test-cases.md           EDIT
+  spec\v0.5.md                    EDIT
+  CHANGELOG.md                    EDIT
 
 APPLY (cmd.exe -- set REPO to your working clone)
 -------------------------------------------------
 set REPO=C:\path\to\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\spec\v0.5.md"   "%REPO%\spec\v0.5.md"
-copy /Y "%DELTA%\CHANGELOG.md"   "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\parser\src\ast.ts"               "%REPO%\parser\src\ast.ts"
+copy /Y "%DELTA%\parser\src\parser.ts"            "%REPO%\parser\src\parser.ts"
+copy /Y "%DELTA%\parser\src\module-resolver.ts"   "%REPO%\parser\src\module-resolver.ts"
+copy /Y "%DELTA%\parser\src\name-resolver.ts"     "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\src\keywords.ts"          "%REPO%\parser\src\keywords.ts"
+copy /Y "%DELTA%\parser\src\index.ts"             "%REPO%\parser\src\index.ts"
+copy /Y "%DELTA%\parser\src\supertypes.ts"        "%REPO%\parser\src\supertypes.ts"
+copy /Y "%DELTA%\parser\test\run-tests.ts"        "%REPO%\parser\test\run-tests.ts"
+copy /Y "%DELTA%\grammar\xDBML.g4"                "%REPO%\grammar\xDBML.g4"
+copy /Y "%DELTA%\grammar\test-cases.md"           "%REPO%\grammar\test-cases.md"
+copy /Y "%DELTA%\spec\v0.5.md"                    "%REPO%\spec\v0.5.md"
+copy /Y "%DELTA%\CHANGELOG.md"                    "%REPO%\CHANGELOG.md"
+
+OPTIONAL -- housekeeping, only if you agree:
+parser\0.3.2 is a tracked, empty file, most likely left by a cmd.exe
+redirect when an `npm pkg set ...=^0.3.2` line ran with an undoubled caret.
+To remove it, also run:
+  git -C "%REPO%" rm parser/0.3.2
 
 VERIFY
 ------
   cd /d %REPO%
+  cd parser && npx tsc --noEmit && npm test && cd ..
   npm run check
   npm run docs:dev
 
-  Review http://localhost:5173/spec/current#_12-5-inherited-attributes
-  and #_12-6-identity, and Appendix C.5. Then commit WITHOUT pushing:
+  In the playground (http://localhost:5173/playground/index.html), paste
+  the Appendix C.5 example from /spec/v0.5: no diagnostics, nine entities
+  drawn, no group symbol yet. Then try, one at a time:
+    - list Person in two groups             -> subtype-in-multiple-groups
+    - add `name varchar` to Person          -> supertype-attribute-redeclared
+    - add `discriminator: role` to business_role -> discriminator-on-overlapping-group
+    - change the first line to xdbml: 0.6   -> refused (unsupported-version)
 
-  git add spec\v0.5.md CHANGELOG.md
-  git commit -m "spec v0.5 draft: inherited attributes and identity without derivation assumptions"
+  Then commit WITHOUT pushing:
+
+  git add -A
+  git commit -m "v0.5 parser: SupertypeGroup, spec 12.8 checks, version refusal; grammar"
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0: all suites green, playground type-check,
-                        docs build complete, /spec/current serves v0.5
-  section references    every one in v0.5.md resolves
-  leftover wording      no "effective attribute set" or "effective
-                        primary key" remains in v0.5.md
+  parser tsc --noEmit     clean
+  parser tests            207 passed, 0 failed (24 new)
+  npm run check           exit 0: renderer 151 + 14 + 38, mcp, from-mongodb,
+                          playground tests and type-check (renderer source
+                          compiled against the new parser union), vsix
+                          check, docs build complete
+  grammar test cases      10 of 10 behave as labeled
+  Appendix C.5 example    resolveNames: no diagnostics; renderToSVG with the
+                          new parser draws all nine entities, group ignored
+
+  Not exercised here: the renderer's and the MCP server's own test suites
+  run against @xdbml/parse 0.4.0 from npm, not this source. They pick up
+  the new parser at the 0.5.0 release; the playground already uses it.
