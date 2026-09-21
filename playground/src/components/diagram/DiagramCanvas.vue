@@ -116,7 +116,7 @@
           class="h-7 px-2 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
           :class="{ 'text-blue-600 dark:text-blue-400': !allRelationshipsShown }"
           @click="displayMenuOpen = !displayMenuOpen"
-          title="Choose which relationship types the diagram draws"
+          title="Choose which relationships and labels the diagram draws"
         >
           Display
           <svg viewBox="0 0 16 16" class="w-2.5 h-2.5"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.75" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -128,6 +128,21 @@
           <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Relationships</p>
           <label
             v-for="opt in relationshipOptions"
+            :key="opt.key"
+            class="w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              class="w-3 h-3 accent-blue-600"
+              :checked="relationshipVisibility[opt.key]"
+              @change="toggleRelationship(opt.key)"
+            >
+            <span class="flex-1">{{ opt.label }}</span>
+            <span class="text-gray-400 dark:text-slate-500">{{ opt.hint }}</span>
+          </label>
+          <p class="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Labels</p>
+          <label
+            v-for="opt in labelOptions"
             :key="opt.key"
             class="w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
           >
@@ -464,11 +479,19 @@ const relationshipOptions = [
   { key: 'foreignMaster' as const, label: 'Foreign master', hint: 'dotted' },
   { key: 'inactive' as const,      label: 'Inactive',       hint: 'circles' },
   { key: 'conceptual' as const,    label: 'Conceptual',     hint: 'no attributes' },
+  { key: 'supertypeGroups' as const, label: 'Supertype groups', hint: 'half-circle' },
+];
+
+// Label options sit under their own heading: turning names off hides no
+// relationship, so they do not count toward the Display button's
+// "something is hidden" highlight.
+const labelOptions = [
+  { key: 'relationshipNames' as const, label: 'Relationship names', hint: 'Refs and groups' },
 ];
 
 function loadRelationshipVisibility (): RelationshipVisibility {
-  // Supertype groups are drawn and relationship names are off until the
-  // Display menu offers their toggles (spec 12.9).
+  // Supertype groups are drawn and relationship names are off by default
+  // (spec 12.9).
   const all: RelationshipVisibility = {
     referential: true, foreignMaster: true, inactive: true, conceptual: true,
     supertypeGroups: true, relationshipNames: false,
@@ -478,7 +501,7 @@ function loadRelationshipVisibility (): RelationshipVisibility {
     if (!raw) return all;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === 'object') {
-      for (const opt of relationshipOptions) {
+      for (const opt of [...relationshipOptions, ...labelOptions]) {
         if (typeof parsed[opt.key] === 'boolean') all[opt.key] = parsed[opt.key];
       }
     }
@@ -567,9 +590,11 @@ function toInspector (s: MountSelection): Selection {
   if (s.kind === 'entity') return { kind: 'entity', entityId: s.id };
   if (s.kind === 'field') return { kind: 'field', entityId: s.id, path: s.path };
   if (s.kind === 'ref') return { kind: 'ref', refId: s.id };
-  // A supertype group has no inspector pane yet; selecting one clears the
-  // inspector rather than opening an unrelated pane.
-  if (s.kind === 'supertypeGroup') return null;
+  // Renderer ids are `supertype-group:<name>`, with `#<n>` added to keep a
+  // duplicate name apart; the inspector addresses the group by name.
+  if (s.kind === 'supertypeGroup') {
+    return { kind: 'supertypeGroup', groupName: s.id.replace(/^supertype-group:/, '').replace(/#\d+$/, '') };
+  }
   return { kind: 'container', containerName: s.name };
 }
 function toMount (s: Selection): MountSelection {
@@ -577,6 +602,7 @@ function toMount (s: Selection): MountSelection {
   if (s.kind === 'entity') return { kind: 'entity', id: s.entityId };
   if (s.kind === 'field') return { kind: 'field', id: s.entityId, path: s.path };
   if (s.kind === 'ref') return { kind: 'ref', id: s.refId };
+  if (s.kind === 'supertypeGroup') return { kind: 'supertypeGroup', id: `supertype-group:${s.groupName}` };
   return { kind: 'container', name: s.containerName };
 }
 

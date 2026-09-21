@@ -18,6 +18,29 @@
       </dl>
     </InspectorSection>
 
+    <!-- Supertype groups (spec §12): the groups this entity anchors, each
+         with its subtypes, and the group it belongs to with its supertype. -->
+    <InspectorSection v-if="groups.asSupertype.length > 0 || groups.asSubtype.length > 0" title="Supertype groups">
+      <div v-for="g in groups.asSubtype" :key="`sub:${g.declaration.name}`" class="text-xs mb-2">
+        <span class="text-gray-500 dark:text-slate-400">Subtype in </span>
+        <button type="button" class="font-mono text-blue-700 dark:text-blue-300 hover:underline" @click="selectGroup(g.declaration.name)">{{ g.declaration.name }}</button>
+        <span class="text-gray-500 dark:text-slate-400">, supertype </span>
+        <button v-if="g.supertype" type="button" class="font-mono text-blue-700 dark:text-blue-300 hover:underline" @click="selectEntity(g.supertype)">{{ g.supertype }}</button>
+        <span v-else class="font-mono text-gray-400 dark:text-slate-500">unresolved</span>
+      </div>
+      <div v-for="g in groups.asSupertype" :key="`sup:${g.declaration.name}`" class="text-xs mb-2">
+        <span class="text-gray-500 dark:text-slate-400">Supertype of </span>
+        <button type="button" class="font-mono text-blue-700 dark:text-blue-300 hover:underline" @click="selectGroup(g.declaration.name)">{{ g.declaration.name }}</button>
+        <span class="text-gray-500 dark:text-slate-400">: </span>
+        <template v-for="(s, i) in g.subtypes" :key="s.member.name">
+          <span v-if="i > 0" class="text-gray-400 dark:text-slate-500">, </span>
+          <button v-if="s.entity" type="button" class="font-mono text-blue-700 dark:text-blue-300 hover:underline" @click="selectEntity(s.entity)">{{ s.entity }}</button>
+          <span v-else class="font-mono text-gray-400 dark:text-slate-500">{{ s.member.name }}</span>
+        </template>
+        <span v-if="g.subtypes.length === 0" class="text-gray-400 dark:text-slate-500">no subtype yet</span>
+      </div>
+    </InspectorSection>
+
     <InspectorSection title="Settings">
       <SettingsTable :settings="standardSettings" />
     </InspectorSection>
@@ -61,15 +84,35 @@ import SettingsTable      from './SettingsTable.vue';
 import NoteDisplay        from './NoteDisplay.vue';
 import EditInSourceButton from './EditInSourceButton.vue';
 import { highlightSql }   from './sqlHighlight';
+import { supertypeGroupsOf } from './ast-lookup';
+import type { Selection } from './selection';
+import { useParserStore } from '@/stores/parserStore';
 
 const props = defineProps<{
   entity: EntityDeclaration | ViewDeclaration | EdgeDeclaration;
   container: ContainerDeclaration | null;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   'edit-source': [span: Span];
+  select: [selection: Selection];
 }>();
+
+const parser = useParserStore();
+
+// Entity id as the diagram and the parser use it: container-qualified
+// inside a Container, bare otherwise.
+const entityId = computed(() => (props.container ? `${props.container.name}.${props.entity.name}` : props.entity.name));
+
+const groups = computed(() => supertypeGroupsOf(parser.flatAst, entityId.value));
+
+function selectEntity (id: string): void {
+  emit('select', { kind: 'entity', entityId: id });
+}
+
+function selectGroup (groupName: string): void {
+  emit('select', { kind: 'supertypeGroup', groupName });
+}
 
 /**
  * Views and Edges don't have a `keyword` field in the AST (their kind

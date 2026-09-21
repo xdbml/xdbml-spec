@@ -59,6 +59,8 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Auto-arrange**: in the relational strategy, each supertype hierarchy is placed first, supertype above and centred over the subtypes of all its groups, levels stacked, with extra row spacing for the symbols; the rest of the component is arranged around it. Supertype-subtype pairs count as links, so a hierarchy with no relationship lines stays together. The star strategy is unchanged.
 
+- **Playground**: a supertype group inspector opens when a group symbol is clicked. It shows the supertype and the subtypes as links, completeness and exclusivity ("Unstated" when absent) read back as a sentence such as "Every Party is exactly one of: Person, Organization.", each subtype's own strategy or "follows the group", the materialization intent (strategy, merge, discriminator), remaining settings, and the note. The entity inspector gains a "Supertype groups" section: a supertype lists each group it anchors with that group's subtypes, a subtype lists its group and its supertype, and an entity that is both shows both. Every group and entity name in either pane selects it, and the diagram selection follows. The Display menu gains "Supertype groups" under Relationships and a "Labels" heading with "Relationship names" (off by default); both persist like the other toggles, and the label option does not count as something hidden.
+
 - **Example 14, supertype groups**: the Appendix C.5 model, with three groups over two axes and three levels, a per-subtype strategy, and relationships to a subtype's own key and to a subtype as an entity-level endpoint. Its golden SVG is new; the thirteen existing goldens are byte-identical.
 
 ### Changed

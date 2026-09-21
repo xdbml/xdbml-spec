@@ -41,6 +41,7 @@
         :entity="resolved.node"
         :container="resolved.container"
         @edit-source="onEditSource"
+        @select="onSelect"
       />
       <FieldInspector
         v-else-if="resolved.kind === 'field'"
@@ -55,6 +56,12 @@
         :ref-decl="resolved.node"
         :index="resolved.index"
         @edit-source="onEditSource"
+      />
+      <SupertypeGroupInspector
+        v-else-if="resolved.kind === 'supertypeGroup'"
+        :group="resolved.group"
+        @edit-source="onEditSource"
+        @select="onSelect"
       />
     </div>
     <div v-else class="flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-xs px-4 text-center">
@@ -104,6 +111,7 @@ import ContainerInspector from './ContainerInspector.vue';
 import EntityInspector    from './EntityInspector.vue';
 import FieldInspector     from './FieldInspector.vue';
 import RefInspector       from './RefInspector.vue';
+import SupertypeGroupInspector from './SupertypeGroupInspector.vue';
 
 const props = defineProps<{
   selection: Selection;
@@ -112,6 +120,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
   'edit-source': [span: Span];
+  /** Navigation from a link inside a pane (a group's supertype, an entity's group). */
+  select: [selection: Selection];
 }>();
 
 const parser = useParserStore();
@@ -131,6 +141,7 @@ const kindLabel = computed(() => {
         : resolved.value.node.keyword;
     case 'field':     return 'Field';
     case 'ref':       return 'Ref';
+    case 'supertypeGroup': return 'Supertype group';
   }
 });
 
@@ -145,6 +156,7 @@ const kindBadgeClass = computed(() => {
         : 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300';
     case 'field':     return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
     case 'ref':       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
+    case 'supertypeGroup': return 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300';
   }
 });
 
@@ -155,10 +167,15 @@ const titleLabel = computed(() => {
     case 'entity':    return resolved.value.node.name;
     case 'field':     return resolved.value.node.name;
     case 'ref':       return `Ref #${resolved.value.index + 1}`;
+    case 'supertypeGroup': return resolved.value.group.declaration.name;
   }
 });
 
 function onEditSource (span: Span): void {
   emit('edit-source', span);
+}
+
+function onSelect (selection: Selection): void {
+  emit('select', selection);
 }
 </script>

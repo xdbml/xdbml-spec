@@ -44,6 +44,7 @@ import type {
 // runner, which resolves relative paths but not the Vite alias. The
 // layout module only type-imports @xdbml/parse, so nothing else follows.
 import { collectRefDeclarations } from '../../../../renderer/src/layout/layout.ts';
+import { resolveSupertypeGroups, type ResolvedSupertypeGroup } from '@xdbml/parse';
 
 import type { Selection } from './selection';
 
@@ -71,6 +72,7 @@ export type ResolvedSelection =
       container: ContainerDeclaration | null;
     }
   | { kind: 'ref'; node: RefDeclaration; index: number }
+  | { kind: 'supertypeGroup'; group: ResolvedSupertypeGroup }
   | null;
 
 export function resolveSelection (doc: XDbmlDocument | undefined, sel: Selection): ResolvedSelection {
@@ -80,7 +82,29 @@ export function resolveSelection (doc: XDbmlDocument | undefined, sel: Selection
     case 'entity':    return resolveEntity(doc, sel.entityId);
     case 'field':     return resolveField(doc, sel.entityId, sel.path);
     case 'ref':       return resolveRef(doc, sel.refId);
+    case 'supertypeGroup': {
+      const group = resolveSupertypeGroups(doc).find((g) => g.declaration.name === sel.groupName);
+      return group ? { kind: 'supertypeGroup', group } : null;
+    }
   }
+}
+
+/**
+ * The supertype groups an entity takes part in (spec §12): the groups it
+ * anchors as supertype, and the group it belongs to as a subtype. Entity ids
+ * are container-qualified for entities in a Container, as in the diagram.
+ */
+export function supertypeGroupsOf (
+  doc: XDbmlDocument | undefined,
+  entityId: string,
+): { asSupertype: ResolvedSupertypeGroup[]; asSubtype: ResolvedSupertypeGroup[] } {
+  const out = { asSupertype: [] as ResolvedSupertypeGroup[], asSubtype: [] as ResolvedSupertypeGroup[] };
+  if (!doc) return out;
+  for (const g of resolveSupertypeGroups(doc)) {
+    if (g.supertype === entityId) out.asSupertype.push(g);
+    if (g.subtypes.some((s) => s.entity === entityId)) out.asSubtype.push(g);
+  }
+  return out;
 }
 
 /**

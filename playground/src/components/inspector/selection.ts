@@ -22,6 +22,8 @@ export type Selection =
   | { kind: 'entity'; entityId: string }
   | { kind: 'field'; entityId: string; path: string }
   | { kind: 'ref'; refId: string }
+  /** A supertype group (spec §12), by declaration name. */
+  | { kind: 'supertypeGroup'; groupName: string }
   | null;
 
 /**
@@ -41,5 +43,7 @@ export function selectionEquals (a: Selection, b: Selection): boolean {
       return b.kind === 'field' && a.entityId === b.entityId && a.path === b.path;
     case 'ref':
       return b.kind === 'ref' && a.refId === b.refId;
+    case 'supertypeGroup':
+      return b.kind === 'supertypeGroup' && a.groupName === b.groupName;
   }
 }

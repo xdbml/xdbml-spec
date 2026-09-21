@@ -1,114 +1,84 @@
-xDBML -- v0.5 Delta 5: renderer, example 14, parser-source test hook
-Base: Deltas 1-4 applied and committed locally on top of origin/main fb985b1.
+xDBML -- v0.5 Delta 6: playground inspector and Display options for supertype groups
+Base: Deltas 1-5 applied and committed locally on top of origin/main fb985b1.
 
 WHY
 ---
-Second implementation phase: the diagram draws supertype groups (spec 12.9),
-so the playground shows what Delta 4 parses. Also closes the gap you spotted:
-the parser suite only parsed private, drifted copies of examples 01-11.
+Third implementation phase: what you asked for in the plan review.
+  - an inspector pane for a selected group;
+  - the supertype's entity inspector lists its group(s) and their subtypes;
+  - a subtype's entity inspector lists its group and its supertype;
+  - Display toggles for supertype groups and for relationship names.
 
 WHAT THIS ADDS
 --------------
-Renderer
-  - Groups draw below the supertype: stem from the bottom edge to the top of
-    the half-circle; cross for disjoint, bar just above the base for total,
-    each dashed when unstated; one line from the base to a bus, then an
-    orthogonal drop to each subtype. Geometry is computed at draw time from
-    current bounds, so it follows a drag.
-  - Several groups on one supertype leave its bottom edge at evenly spaced
-    points, in declaration order, with staggered buses so two never read as
-    one line. A relationship line attaching to an edge a group uses moves
-    near the left corner instead of landing on the stem.
-  - Relationship names (option, off by default): named Refs get their name
-    at the middle of the line's longest segment; groups get theirs beside the
-    symbol, left of it for groups in the left half of the edge.
-  - Interactive mount: clicking a symbol selects { kind: 'supertypeGroup' }
-    and highlights the symbol and its branches. RelationshipVisibility gains
-    supertypeGroups (default shown) and relationshipNames (default off).
-  - Auto-arrange (relational): each hierarchy is placed first, supertype
-    centred above the subtypes of all its groups, levels stacked, extra row
-    spacing for the symbols; everything else is arranged around it.
-  - Group members come from the parser's resolveSupertypeGroups(), so the
-    diagram and the diagnostics agree on what a path names.
+Group inspector (SupertypeGroupInspector.vue, NEW), opened by clicking a
+symbol. Header badge "Supertype group" with the group name.
+  Identification  name; supertype (link); completeness and exclusivity,
+                  "Unstated" when absent; the pair read back as a sentence:
+                    total + disjoint        Every Party is exactly one of: ...
+                    total + overlapping     Every Party is at least one of: ..., possibly several.
+                    partial + disjoint      A Party is at most one of: ..., or none of them.
+                    partial + overlapping   A Party may be any of: ..., several, or none of them.
+                    one or both unstated    says which part is unstated
+  Subtypes        each as a link, with its own strategy or "follows the group";
+                  unresolved members shown greyed
+  Materialization strategy (or "Unstated, the derivation tool applies its
+                  default"), merge, discriminator, with a one-line reminder
+                  that this is intent for a derivation (spec 12.7)
+  Settings        custom and unrecognized settings only
+  Note, Edit in source
 
-Playground (minimal; the Display toggles and inspector are Delta 6)
-  - Compiles against the extended mount API: groups shown, names off.
-  - Selecting a group clears the inspector until its pane exists.
+Entity inspector: a "Supertype groups" section when the entity takes part.
+  as supertype    "Supertype of legal_nature: Person, Organization"
+  as subtype      "Subtype in legal_nature, supertype Party"
+  both            both lines (Person in example 14)
+  Every group and entity name is a link. The inspector forwards a `select`
+  event to App.vue, so the diagram selection and highlight follow.
 
-Example 14, supertype groups: the Appendix C.5 model, with manifest entry,
-README row, and a new golden SVG. The 13 existing goldens are unchanged.
+Display menu
+  Relationships   + "Supertype groups" (half-circle), on by default
+  Labels (new)    "Relationship names" (Refs and groups), off by default
+  Both persist in localStorage like the other toggles. Turning names off
+  does not light up the Display button, since it hides no relationship.
 
-Tests
-  - Renderer: +46 checks (all five notation variants plus the mixed case and
-    aliases, stem position, one drop per subtype, reserved edges, spread on
-    a shared supertype, unresolved groups, names on and off). Interactive:
-    +4 (hit area, click selects, hide toggle, names toggle).
-  - Test hook: renderer and playground tests resolve @xdbml/parse to
-    parser\src (renderer\test\ and playground\test\parser-from-source*.mjs,
-    wired into their package.json test scripts), as the playground's Vite
-    alias already does. Without it, example 14 could not be rendered in
-    tests until parser 0.5.0 is on npm. Published packages are unaffected.
-  - Parser: the example suite reads the repository's examples\ instead of
-    parser\test\examples. All 14 parse; the stale copies are deleted below.
+Plumbing
+  selection.ts    { kind: 'supertypeGroup', groupName } and equality
+  ast-lookup.ts   resolves a group selection; supertypeGroupsOf(doc, id)
+                  for the entity inspector (both use the parser's
+                  resolveSupertypeGroups, so pane, diagram and diagnostics
+                  agree)
+  DiagramCanvas   maps renderer group ids (supertype-group:<name>) both ways
+
+Tests: playground +1 case (group selection resolves with normalized values,
+unknown group resolves to null, supertypeGroupsOf for supertype, subtype and
+both, selection equality); 51 in total.
 
 FILES
 -----
-  renderer\src\geometry\supertype-symbol.ts            NEW
-  renderer\src\geometry\ref-path.ts                    EDIT
-  renderer\src\layout\layout.ts                        EDIT
-  renderer\src\layout\auto-arrange.ts                  EDIT
-  renderer\src\svg\serialize.ts                        EDIT
-  renderer\src\interactive\overlay.ts                  EDIT
-  renderer\src\interactive\mount.ts                    EDIT
-  renderer\src\index.ts                                EDIT
-  renderer\test\run-tests.ts                           EDIT
-  renderer\test\run-interactive-tests.ts               EDIT
-  renderer\test\parser-from-source.mjs                 NEW
-  renderer\test\parser-from-source-hooks.mjs           NEW
-  renderer\test\goldens\14-supertype-groups.svg        NEW
-  renderer\package.json                                EDIT
-  playground\package.json                              EDIT
-  playground\test\parser-from-source.mjs               NEW
-  playground\test\parser-from-source-hooks.mjs         NEW
-  playground\src\components\diagram\DiagramCanvas.vue  EDIT
-  parser\test\run-tests.ts                             EDIT
-  examples\14-supertype-groups.xdbml                   NEW
-  examples\README.md                                   EDIT
-  scripts\examples-manifest.mjs                        EDIT
-  CHANGELOG.md                                         EDIT
-
-  DELETE parser\test\examples   (11 drifted copies of examples 01-11)
+  playground\src\App.vue                                       EDIT  forwards inspector navigation
+  playground\src\components\diagram\DiagramCanvas.vue          EDIT  Display toggles, id mapping
+  playground\src\components\inspector\EntityInspector.vue      EDIT  "Supertype groups" section
+  playground\src\components\inspector\Inspector.vue            EDIT  routes the new pane, forwards select
+  playground\src\components\inspector\ast-lookup.ts            EDIT
+  playground\src\components\inspector\selection.ts             EDIT
+  playground\src\components\inspector\SupertypeGroupInspector.vue  NEW
+  playground\test\run-tests.ts                                 EDIT
+  CHANGELOG.md                                                 EDIT
 
 APPLY (cmd.exe -- set REPO to your working clone)
 -------------------------------------------------
 set REPO=C:\path\to\xdbml-spec
 set DELTA=%CD%
 
-mkdir "%REPO%\playground\test" 2>nul
-copy /Y "%DELTA%\renderer\src\geometry\supertype-symbol.ts" "%REPO%\renderer\src\geometry\supertype-symbol.ts"
-copy /Y "%DELTA%\renderer\src\geometry\ref-path.ts" "%REPO%\renderer\src\geometry\ref-path.ts"
-copy /Y "%DELTA%\renderer\src\layout\layout.ts" "%REPO%\renderer\src\layout\layout.ts"
-copy /Y "%DELTA%\renderer\src\layout\auto-arrange.ts" "%REPO%\renderer\src\layout\auto-arrange.ts"
-copy /Y "%DELTA%\renderer\src\svg\serialize.ts" "%REPO%\renderer\src\svg\serialize.ts"
-copy /Y "%DELTA%\renderer\src\interactive\overlay.ts" "%REPO%\renderer\src\interactive\overlay.ts"
-copy /Y "%DELTA%\renderer\src\interactive\mount.ts" "%REPO%\renderer\src\interactive\mount.ts"
-copy /Y "%DELTA%\renderer\src\index.ts" "%REPO%\renderer\src\index.ts"
-copy /Y "%DELTA%\renderer\test\run-tests.ts" "%REPO%\renderer\test\run-tests.ts"
-copy /Y "%DELTA%\renderer\test\run-interactive-tests.ts" "%REPO%\renderer\test\run-interactive-tests.ts"
-copy /Y "%DELTA%\renderer\test\parser-from-source.mjs" "%REPO%\renderer\test\parser-from-source.mjs"
-copy /Y "%DELTA%\renderer\test\parser-from-source-hooks.mjs" "%REPO%\renderer\test\parser-from-source-hooks.mjs"
-copy /Y "%DELTA%\renderer\test\goldens\14-supertype-groups.svg" "%REPO%\renderer\test\goldens\14-supertype-groups.svg"
-copy /Y "%DELTA%\renderer\package.json" "%REPO%\renderer\package.json"
-copy /Y "%DELTA%\playground\package.json" "%REPO%\playground\package.json"
-copy /Y "%DELTA%\playground\test\parser-from-source.mjs" "%REPO%\playground\test\parser-from-source.mjs"
-copy /Y "%DELTA%\playground\test\parser-from-source-hooks.mjs" "%REPO%\playground\test\parser-from-source-hooks.mjs"
-copy /Y "%DELTA%\playground\src\components\diagram\DiagramCanvas.vue" "%REPO%\playground\src\components\diagram\DiagramCanvas.vue"
-copy /Y "%DELTA%\parser\test\run-tests.ts" "%REPO%\parser\test\run-tests.ts"
-copy /Y "%DELTA%\examples\14-supertype-groups.xdbml" "%REPO%\examples\14-supertype-groups.xdbml"
-copy /Y "%DELTA%\examples\README.md" "%REPO%\examples\README.md"
-copy /Y "%DELTA%\scripts\examples-manifest.mjs" "%REPO%\scripts\examples-manifest.mjs"
-copy /Y "%DELTA%\CHANGELOG.md" "%REPO%\CHANGELOG.md"
-git -C "%REPO%" rm -r -q parser/test/examples
+copy /Y "%DELTA%\playground\src\App.vue"                                    "%REPO%\playground\src\App.vue"
+copy /Y "%DELTA%\playground\src\components\diagram\DiagramCanvas.vue"       "%REPO%\playground\src\components\diagram\DiagramCanvas.vue"
+copy /Y "%DELTA%\playground\src\components\inspector\EntityInspector.vue"   "%REPO%\playground\src\components\inspector\EntityInspector.vue"
+copy /Y "%DELTA%\playground\src\components\inspector\Inspector.vue"         "%REPO%\playground\src\components\inspector\Inspector.vue"
+copy /Y "%DELTA%\playground\src\components\inspector\ast-lookup.ts"         "%REPO%\playground\src\components\inspector\ast-lookup.ts"
+copy /Y "%DELTA%\playground\src\components\inspector\selection.ts"          "%REPO%\playground\src\components\inspector\selection.ts"
+copy /Y "%DELTA%\playground\src\components\inspector\SupertypeGroupInspector.vue" "%REPO%\playground\src\components\inspector\SupertypeGroupInspector.vue"
+copy /Y "%DELTA%\playground\test\run-tests.ts"                              "%REPO%\playground\test\run-tests.ts"
+copy /Y "%DELTA%\CHANGELOG.md"                                              "%REPO%\CHANGELOG.md"
 
 VERIFY
 ------
@@ -116,26 +86,29 @@ VERIFY
   npm run check
   npm run docs:dev
 
-  Open http://localhost:5173/playground/index.html, choose example 14 in the
-  Examples menu:
-    - Party on top with two symbols on its bottom edge: legal_nature (cross
-      and bar) on the left, business_role (plain) on the right; Person,
-      Organization, Customer, Supplier below; Employee and Contractor below
-      Person under person_role (cross, no bar)
-    - drag a subtype: its drop follows
-    - click a symbol: the symbol highlights (inspector pane comes in Delta 6)
-  Group names and the two Display toggles arrive with Delta 6.
-
+  Open http://localhost:5173/playground/index.html, choose example 14:
+    - click the legal_nature symbol: group pane with "Every Party is exactly
+      one of: Person, Organization." and strategy Roll-up, merge Flat,
+      discriminator nature
+    - click the person_role symbol: Contractor shows "Roll-down (own)",
+      Employee "follows the group", strategy Unstated
+    - click Supertype "Party" in the pane: the Party entity pane opens and
+      the diagram selection moves to Party
+    - Party's pane lists both groups with their subtypes; Person's lists
+      "Subtype in legal_nature" and "Supertype of person_role"
+    - Display > Relationship names: owns, assigned and the three group
+      names appear; Display > Supertype groups off: symbols disappear
   Then commit WITHOUT pushing:
 
   git add -A
-  git commit -m "v0.5 renderer: supertype groups, relationship names option, group-aware arrange; example 14"
+  git commit -m "v0.5 playground: supertype group inspector, entity group sections, Display toggles"
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check           exit 0: parser 210 (14 examples), renderer 198 +
-                          14 + 42, mcp, from-mongodb 49, playground 50 (bundles
-                          example 14), playground type-check, docs build
-  goldens                 01-13 byte-identical; 14 new
-  example 14              no diagnostics; rendered and inspected as PNG with
-                          names on and off
+  npm run check           exit 0: parser 210, renderer 198 + 14 + 42, mcp,
+                          from-mongodb 49, playground 51, playground
+                          type-check (vue-tsc checks the templates too),
+                          playground build, docs build
+  Not run here: a browser. The panes were checked by type-check, build and
+  the resolution tests, not by eye; the VERIFY clicks above are the first
+  visual pass.

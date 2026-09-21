@@ -56,6 +56,7 @@
           :selection="selection"
           @close="onInspectorClose"
           @edit-source="onEditSource"
+          @select="onSelect"
         />
       </section>
     </main>

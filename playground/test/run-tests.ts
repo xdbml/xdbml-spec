@@ -37,7 +37,8 @@ import { buildDiagram, applyUserPositions } from '../../renderer/src/layout/layo
 import type { DiagramModel } from '../../renderer/src/layout/layout.ts';
 import { autoArrange } from '../../renderer/src/layout/auto-arrange.ts';
 import type { ArrangeStrategy } from '../../renderer/src/layout/auto-arrange.ts';
-import { resolveSelection } from '../src/components/inspector/ast-lookup.ts';
+import { resolveSelection, supertypeGroupsOf } from '../src/components/inspector/ast-lookup.ts';
+import { selectionEquals } from '../src/components/inspector/selection.ts';
 import {
   emptyHistory, seedHistory, commitHistory, undoHistory, redoHistory,
   canUndo as histCanUndo, canRedo as histCanRedo, currentSnapshot,
@@ -1070,6 +1071,48 @@ Container g [type: keyspace] {
   // Every bundled .xdbml example must parse AND lay out without errors.
   // Generated below as a single test per example, so a failure in any
   // one example doesn't hide failures in the others.
+
+  {
+    name: 'a supertype group resolves in the inspector, and entities list their groups',
+    source: `xdbml: 0.5
+Container crm [type: schema] {
+  Entity Party {
+    party_id int [pk]
+  }
+  Entity Person { }
+  Entity Organization { }
+  Entity Employee { }
+}
+SupertypeGroup legal_nature [supertype: crm.Party, completeness: complete, exclusivity: disjoint] {
+  crm.Person
+  crm.Organization [strategy: single_table]
+}
+SupertypeGroup person_role [supertype: crm.Person] {
+  crm.Employee
+}
+`,
+    check: ({ ast, diagram }) => {
+      assertEq(diagram.supertypeGroups.length, 2, 'two groups in the diagram model');
+      const resolved = resolveSelection(ast, { kind: 'supertypeGroup', groupName: 'legal_nature' });
+      assertTrue(resolved !== null && resolved.kind === 'supertypeGroup', 'group selection resolves');
+      const g = (resolved as { group: { supertype?: string; settings: { completeness?: string }; subtypes: Array<{ entity?: string; strategy?: string }> } }).group;
+      assertEq(g.supertype, 'crm.Party', 'supertype resolved to its entity id');
+      assertEq(g.settings.completeness, 'total', 'alias normalized');
+      assertEq(g.subtypes.map((s) => s.entity).join(','), 'crm.Person,crm.Organization', 'subtypes resolved');
+      assertEq(g.subtypes[1]?.strategy, 'roll_up', 'per-subtype strategy normalized');
+      assertTrue(resolveSelection(ast, { kind: 'supertypeGroup', groupName: 'nope' }) === null, 'unknown group resolves to null');
+
+      const person = supertypeGroupsOf(ast, 'crm.Person');
+      assertEq(person.asSubtype.map((x) => x.declaration.name).join(','), 'legal_nature', 'Person is a subtype in legal_nature');
+      assertEq(person.asSupertype.map((x) => x.declaration.name).join(','), 'person_role', 'Person anchors person_role');
+      const party = supertypeGroupsOf(ast, 'crm.Party');
+      assertEq(party.asSupertype.length, 1, 'Party anchors one group');
+      assertEq(party.asSubtype.length, 0, 'Party is no subtype');
+
+      assertTrue(selectionEquals({ kind: 'supertypeGroup', groupName: 'a' }, { kind: 'supertypeGroup', groupName: 'a' }), 'equal group selections');
+      assertTrue(!selectionEquals({ kind: 'supertypeGroup', groupName: 'a' }, { kind: 'supertypeGroup', groupName: 'b' }), 'different group selections');
+    },
+  },
 ];
 
 // Examples that exercise v0.2 features the current parser does not yet
