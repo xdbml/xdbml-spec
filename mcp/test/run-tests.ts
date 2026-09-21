@@ -103,6 +103,57 @@ Namespace empty {
 });
 
 /* -------------------------------------------------------------------------
+ * Supertype groups (spec 12, v0.5)
+ * ---------------------------------------------------------------------- */
+
+test('supertype group document validates and counts its entities', () => {
+  const r = validateXdbml(`xdbml: 0.5
+
+Entity Party {
+  party_id int [pk]
+}
+Entity Person { }
+Entity Organization { }
+
+SupertypeGroup legal_nature [supertype: Party, completeness: total, exclusivity: disjoint] {
+  Person
+  Organization
+}
+`);
+  assertEqual(r.valid, true, 'valid');
+  assertEqual(r.entityCount, 3, 'entityCount');
+});
+
+test('supertype group rules surface as diagnostics', () => {
+  const r = validateXdbml(`xdbml: 0.5
+
+Entity Party {
+  party_id int [pk]
+  name varchar
+}
+Entity Worker { }
+Entity Person {
+  name varchar
+}
+
+SupertypeGroup legal_nature [supertype: Party] {
+  Person
+}
+SupertypeGroup workforce [supertype: Worker] {
+  Person
+}
+`);
+  assertEqual(r.valid, false, 'valid');
+  const codes = r.diagnostics.map((d) => (d as { code?: string }).code).sort().join(',');
+  assertEqual(codes, 'subtype-in-multiple-groups,supertype-attribute-redeclared', 'codes');
+});
+
+test('a newer version than the parser supports is refused', () => {
+  const r = validateXdbml('xdbml: 0.6\n\nEntity a { id int [pk] }\n');
+  assertEqual(r.valid, false, 'valid');
+});
+
+/* -------------------------------------------------------------------------
  * Summary wording
  * ---------------------------------------------------------------------- */
 

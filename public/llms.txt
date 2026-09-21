@@ -4,9 +4,9 @@
 
 ## How to author
 
-- Start every document with a version line: `xdbml: 0.4`
+- Start every document with a version line: `xdbml: 0.5`
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Database`, `Schema`, `Bucket`, `Keyspace`, or `Namespace`.
-- Prefer xDBML extensions over flat DBML: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
+- Prefer xDBML extensions over flat DBML: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, supertype groups for generalization, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
 - A field line is `name  type  [settings]`. Settings are comma-separated inside `[ ]`.
 
 ## Core constructs
@@ -14,7 +14,7 @@
 Version, project, reusable type:
 
 ```
-xdbml: 0.4
+xdbml: 0.5
 
 Project shop {
   targets: [PostgreSQL, MongoDB]
@@ -78,6 +78,28 @@ Entity Order { }
 Ref: Customer > Order [target_verb: 'places']
 ```
 
+Generalization (supertype and subtypes) is a `SupertypeGroup`: one supertype, its subtypes along one axis, and whether every supertype instance is one of them (`completeness: total | partial`) and whether it can be several (`exclusivity: disjoint | overlapping`); leave either out when it is not known. Each subtype declares only its own attributes; never repeat the supertype's, that is an error. Use one group per axis: a supertype may anchor several groups, an entity is a subtype in one group only, and a subtype may be the supertype of another group. The group name is required and names the axis:
+
+```
+Entity Party {
+  party_id int [pk]
+  name     varchar
+}
+Entity Person {
+  birth_date date
+}
+Entity Organization {
+  legal_form varchar
+}
+
+SupertypeGroup legal_nature [supertype: Party, completeness: total, exclusivity: disjoint, strategy: roll_up, merge: flat, discriminator: nature] {
+  Person
+  Organization [strategy: roll_down]
+}
+```
+
+`strategy` (`preserved_hierarchy`, `roll_up`, `roll_down`, also per subtype), `merge` (`flat`, `nested`) and `discriminator` record how a physical model is meant to be derived; they add nothing to the logical model, and `discriminator` is not allowed on an overlapping group. To point a relationship at a subtype, name the subtype as an entity: `Ref: assignments.employee_id > Employee`, not `Employee.party_id`.
+
 Nesting (documents, structs, arrays):
 
 ```
@@ -135,7 +157,7 @@ Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`
 ## Minimal complete example
 
 ```
-xdbml: 0.4
+xdbml: 0.5
 
 Entity members {
   id        int     [pk]

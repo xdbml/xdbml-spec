@@ -210,6 +210,12 @@ export const SETTING_KEYS = [
   'target_verb',
   'constraint_type',
   'discriminator',
+  // v0.5 supertype groups (spec 12.2); `discriminator` is listed above
+  'supertype',
+  'completeness',
+  'exclusivity',
+  'strategy',
+  'merge',
   'source_query',
   'materialized',
   'refresh_schedule',

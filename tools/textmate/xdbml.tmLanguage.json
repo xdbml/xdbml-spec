@@ -94,7 +94,7 @@
       "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name).",
       "patterns": [
         {
-          "match": "\\b((?i:tablepartial|diagramview|collection|tablegroup|container|namespace|database|keyspace|project|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
+          "match": "\\b((?i:supertypegroup|tablepartial|diagramview|collection|tablegroup|container|namespace|database|keyspace|project|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
           "captures": {
             "1": {
               "name": "keyword.declaration.xdbml"
@@ -192,7 +192,7 @@
     },
     "setting-keys": {
       "comment": "Setting keys appear before a colon. Matched only here inside the settings block.",
-      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|constraint_type|source_database|storage_options|default_charset|database_type|discriminator|minproperties|maxproperties|business_term|source_query|materialized|headercolor|source_role|target_role|source_verb|target_verb|uniqueitems|granularity|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|minlength|maxlength|cloned_at|minitems|maxitems|synonyms|location|default|targets|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|note|name|type|tags|ref|as))\\b(\\s*)(:)",
+      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|constraint_type|source_database|storage_options|default_charset|database_type|discriminator|minproperties|maxproperties|business_term|completeness|source_query|materialized|headercolor|source_role|target_role|source_verb|target_verb|exclusivity|uniqueitems|granularity|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|supertype|minlength|maxlength|cloned_at|strategy|minitems|maxitems|synonyms|location|default|targets|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|merge|note|name|type|tags|ref|as))\\b(\\s*)(:)",
       "captures": {
         "1": {
           "name": "variable.parameter.setting.xdbml"

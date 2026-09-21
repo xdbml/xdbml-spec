@@ -12,7 +12,7 @@
     "predeploy": "npm run generate:reference",
     "deploy": "wrangler deploy",
     "type-check": "tsc --noEmit",
-    "test": "node --experimental-strip-types test/run-tests.ts"
+    "test": "node --experimental-strip-types --import ./test/parser-from-source.mjs test/run-tests.ts"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
