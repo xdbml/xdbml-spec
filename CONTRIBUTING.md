@@ -27,7 +27,7 @@ Contributions to xDBML take many forms. All of them are welcome, and none of the
 - **Adding example schemas** -- realistic domains that demonstrate features not yet covered by the existing examples
 - **Proposing new specification constructs** -- new keywords, settings, vocabulary additions, target-format support
 - **Building parsers, generators, or importers** -- implementations in any programming language ecosystem
-- **Coordinating with adjacent standards** -- bridging xDBML to ODCS, OSI, JSON Schema, Avro, OpenAPI, and other formats
+- **Coordinating with adjacent standards** -- bridging xDBML to ODCS, Apache Ossie, JSON Schema, Avro, OpenAPI, and other formats
 - **Reviewing pull requests** -- substantive review by community members is invaluable and counted toward maintainership eligibility
 
 If you're not sure where to start, look for issues tagged [`good first issue`](https://github.com/xdbml/xdbml-spec/labels/good%20first%20issue) -- these are curated by maintainers to be approachable for newcomers.
@@ -136,7 +136,7 @@ generator should handle that case (warning, drop, approximation).
 
 ## Adjacent standards
 
-How does this construct relate to similar concepts in ODCS, OSI, OWL,
+How does this construct relate to similar concepts in ODCS, Apache Ossie, OWL,
 JSON Schema, OpenAPI, or other adjacent standards? Is it borrowing a
 pattern, complementing an existing standard, or doing something
 genuinely new?

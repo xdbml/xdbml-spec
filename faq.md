@@ -114,16 +114,34 @@ No. Each of those serves a specific consumer in a specific context:
 
 xDBML is the layer *above* these. From one xDBML document, generators emit a JSON Schema for runtime validation, an OpenAPI spec for the HTTP API, an Avro schema for the Kafka stream, GraphQL types for the query layer, and SQL DDL for the database. Each downstream format describes one specific consumer; xDBML describes the conceptual schema once and lowers to all of them.
 
-## What's the relationship between xDBML and ODCS, OSI, OWL?
+## What's the relationship between xDBML and ODCS, Apache Ossie, OWL?
 
 These are adjacent standards that layer above and below xDBML:
 
 - **ODCS** (Open Data Contract Standard) wraps an xDBML schema with contractual metadata: quality rules, SLAs, ownership, pricing, lifecycle.
-- **OSI** (Open Semantic Interchange) and **dbt MetricFlow** describe measures, metrics, and aggregations -- the computational meaning that xDBML deliberately leaves to the semantic layer.
+- **[Apache Ossie](https://ossie.apache.org/)** (incubating, formerly Open Semantic Interchange, OSI) and **dbt MetricFlow** describe measures, metrics, dimensions, and aggregations -- the computational meaning that xDBML deliberately leaves to the semantic layer. An Ossie dataset points at a physical table and lists its keys, fields, and join relationships; an xDBML entity supplies those, together with the synonyms of spec §24.1 for Ossie's `ai_context`.
 - **OWL** and RDF-star handle inferential reasoning and knowledge-graph semantics.
 - **OpenLineage** tracks data flow and lineage at runtime.
 
-xDBML generates the schemas these standards reference and consumes nothing they own. The same xDBML document can feed an ODCS contract's schema section, an OSI semantic model's underlying tables, a SHACL validator's target shapes, and the SQL DDL that creates them.
+xDBML generates the schemas these standards reference and consumes nothing they own. The same xDBML document can feed an ODCS contract's schema section, an Apache Ossie semantic model's datasets, a SHACL validator's target shapes, and the SQL DDL that creates them.
+
+## How does xDBML compare with LinkML?
+
+[LinkML](https://linkml.io/) is the closest neighbor of xDBML among open schema languages. Both describe entities, attributes, enumerations, inheritance and relationships once, independently of any engine, and both generate artifacts for many targets from that description. They were built for different jobs.
+
+LinkML comes from scientific data standards. It is written in YAML, gives every class, slot and enumeration a URI, maps them to ontology terms, and generates linked-data artifacts (JSON-LD, RDF, OWL, SHACL, ShEx) alongside JSON Schema, SQL DDL and Python classes. Its typical use is exchanging and validating instance data among organizations that share a vocabulary.
+
+xDBML comes from database and data-platform design. It is a compact text syntax, a superset of DBML, and it models what engines need:
+
+- containers such as schemas, databases and keyspaces;
+- engine-specific types;
+- nested and polymorphic document structures;
+- graph edges with properties;
+- relationships with cardinality, roles, verbs and constraint type;
+- supertype groups with materialization intent;
+- the path from conceptual to logical to physical models.
+
+LinkML fits when the vocabulary and its identifiers are the deliverable, as in a research data standard. xDBML fits when the schemas of databases and data platforms are the deliverable. The two can describe the same model side by side: classes map to entities, slots to fields, `is_a` to a supertype group, enumerations to enums. A translation in either direction is lossy. LinkML's URIs, mixins and ontology mappings have no direct xDBML counterpart, though `business_term` or an `x_` property can carry an identifier. xDBML's containers, engine types, cardinality notation and materialization settings have no equivalent in LinkML.
 
 ## How does xDBML relate to Google's Open Knowledge Format (OKF)?
 

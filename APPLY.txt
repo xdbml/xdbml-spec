@@ -1,83 +1,83 @@
-xDBML -- v0.5 Delta 10a: fix ". was unexpected at this time" in the release tools
-Base: Delta 10 applied and committed (Part 1 of its APPLY.txt).
+xDBML -- positioning update: Apache Ossie (formerly OSI) and LinkML
+Base: origin/main 56de507 (release 0.5.0).
 
-WHAT HAPPENED
--------------
-cmd.exe reads a whole `if ... ( ... )` block before running it, and inside a
-block an unescaped `)` ends the block, even in the text of an echo. In
-tools\release-preflight.cmd the wrangler check contains
+WHAT CHANGED
+------------
+Open Semantic Interchange is now Apache Ossie (incubating). Every current
+narrative uses the new name, with "formerly Open Semantic Interchange" at the
+first mention of a page, and links to ossie.apache.org or github.com/apache/
+ossie. LinkML is positioned as the closest peer at the schema layer.
 
-    echo [FAIL] wrangler is not authenticated (or not installed).
+faq.md
+  - "What's the relationship between xDBML and ODCS, Apache Ossie, OWL?":
+    the Ossie bullet now names what an xDBML entity supplies to an Ossie
+    dataset (source table, keys, fields, join relationships, and the §24.1
+    synonyms for Ossie's ai_context); closing sentence says "datasets".
+  - NEW "How does xDBML compare with LinkML?", as reviewed, with your
+    wording: "...materialization settings have no equivalent in LinkML."
+spec\v0.5.md -- informative text only; no version change
+  - abstract, §1.1 (out of scope), §24 intro: Apache Ossie
+  - §30 layer diagram: "Ossie, dbt MetricFlow, Cube" (the full name would
+    overflow the box; column alignment verified)
+  - §30 table: Apache Ossie row with the dataset handoff; new LinkML row
+    "Schema (linked data) | Peer at the schema layer; partial translation
+    both ways"
+  - §30 closing: Ossie in the "does not attempt to be" list, plus one
+    sentence on LinkML linking to the new FAQ entry
+  - references: Apache Ossie link replaces the old OSI repository; LinkML
+    added
+README.md, index.md, xDBML_in_5_minutes.md
+  Ossie name (xDBML in 5 minutes drops "Snowflake's").
+ecosystem.md
+  desired bridges: "xDBML <-> Apache Ossie" (Ossie dataset definitions from
+  xDBML entities) and a new "xDBML <-> LinkML".
+GOVERNANCE.md, CONTRIBUTING.md
+  Ossie name.
+CHANGELOG.md
+  one line under v0.5 > Changed > Spec, marked as an editorial update after
+  the 0.5.0 release, with no new version.
 
-The `)` after "installed" closed the block early, which left a lone "."
-behind: ". was unexpected at this time." It fails even when wrangler is
-fine, because the block is read whether or not its branch runs. So the
-preflight stopped right after the npm checks: the wrangler, dev-tooling,
-NODE_ENV, MCP-reference, test-suite and git checks never ran. Nothing was
-changed or published.
-
-The same pattern sat in two more preflight lines ("change(s)",
-"problem(s)") and one line of tools\github-release.cmd. release.cmd has
-none. Those scripts arrived after the 0.4.0 release, so this is their first
-real run.
-
-WHAT THIS CHANGES
------------------
-tools\release-preflight.cmd  three echo lines reworded without parentheses
-tools\github-release.cmd     one echo line reworded without parentheses
-tools\release.cmd            content unchanged; delivered with CRLF endings
-.gitattributes (NEW)         *.cmd and *.bat get CRLF in the working tree
-                             on every checkout. The repository stored the
-                             three scripts with LF only, and with LF-only
-                             lines cmd.exe can fail to find a GOTO label,
-                             which release.cmd uses at every step. Git keeps
-                             LF in the repository, so the commit shows only
-                             the text changes above.
-The three scripts in this package already have CRLF endings.
-
-A scan of all three scripts finds no other unescaped parenthesis inside a
-block (the `for /f ... in ('npm whoami')` group is real syntax, not text).
+Left alone: spec v0.1-v0.4 (historical), llms.txt and the MCP reference
+(neither mentions OSI or LinkML).
 
 FILES
 -----
-  .gitattributes                 NEW
-  tools\release-preflight.cmd    EDIT
-  tools\github-release.cmd       EDIT
-  tools\release.cmd              line endings only
+  faq.md, spec\v0.5.md, README.md, index.md, xDBML_in_5_minutes.md,
+  ecosystem.md, GOVERNANCE.md, CONTRIBUTING.md, CHANGELOG.md   (all EDIT)
 
 APPLY (cmd.exe)
 ---------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\.gitattributes"                "%REPO%\.gitattributes"
-copy /Y "%DELTA%\tools\release-preflight.cmd"   "%REPO%\tools\release-preflight.cmd"
-copy /Y "%DELTA%\tools\github-release.cmd"      "%REPO%\tools\github-release.cmd"
-copy /Y "%DELTA%\tools\release.cmd"             "%REPO%\tools\release.cmd"
+copy /Y "%DELTA%\faq.md"                  "%REPO%\faq.md"
+copy /Y "%DELTA%\spec\v0.5.md"            "%REPO%\spec\v0.5.md"
+copy /Y "%DELTA%\README.md"               "%REPO%\README.md"
+copy /Y "%DELTA%\index.md"                "%REPO%\index.md"
+copy /Y "%DELTA%\xDBML_in_5_minutes.md"   "%REPO%\xDBML_in_5_minutes.md"
+copy /Y "%DELTA%\ecosystem.md"            "%REPO%\ecosystem.md"
+copy /Y "%DELTA%\GOVERNANCE.md"           "%REPO%\GOVERNANCE.md"
+copy /Y "%DELTA%\CONTRIBUTING.md"         "%REPO%\CONTRIBUTING.md"
+copy /Y "%DELTA%\CHANGELOG.md"            "%REPO%\CHANGELOG.md"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
+npm run docs:build
+npm run docs:dev
+  Check /faq (both entries), /spec/current#_30-relationship-to-other-standards,
+  and /ecosystem.
 git add -A
-git commit -m "release tools: no parentheses inside cmd blocks; CRLF for batch files"
+git commit -m "Positioning: Apache Ossie (formerly OSI), LinkML"
+git push
 
-THEN
-----
-Run the preflight again from the start:
+The push redeploys the site. If the deploy stops again with the artifact
+403, start a new run: gh workflow run deploy.yml --ref main
 
-  tools\release-preflight.cmd 0.5.0
-
-This time it should go on past the npm checks to wrangler, dev tooling,
-NODE_ENV, the MCP reference, the test suites (about a minute, silent) and
-the git tree, and end with:
-
-  Preflight clean. Run:  tools\release.cmd 0.5.0
-
-Then continue with Step 2.2 of Delta 10's APPLY.txt.
-
-VERIFICATION RUN HERE (Linux)
------------------------------
-  No cmd.exe is available here, so the scripts were not executed. Checked
-  instead: a block-aware scan of all three scripts for parentheses in echo
-  text (none left), CRLF endings in the packaged copies, release.cmd
-  byte-identical apart from line endings, and `git ls-files --eol` showing
-  LF in the index and CRLF in the working tree once .gitattributes is in
-  place.
+VERIFICATION RUN HERE (Linux, Node 22)
+---------------------------------------
+  docs:build        build complete, VitePress dead-link check included
+  FAQ anchor        faq.html has id "how-does-xdbml-compare-with-linkml",
+                    which the spec's §30 link targets
+  spec links        113 playground buttons still open their snippets
+  leftovers         no "OSI" or "Open Semantic Interchange" outside the
+                    historical specs, except as "formerly" notes
+  §30 diagram       every box line is 72 characters

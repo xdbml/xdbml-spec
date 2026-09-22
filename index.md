@@ -54,7 +54,7 @@ features:
 
   - icon: 🏛️
     title: The schema layer
-    details: "xDBML describes what data is -- entities, tables, classes, attributes, fields, columns, relationships, data types, classifications. <br>Higher layers build on top of xDBML: ODCS for contracts, OSI for measures and metrics, <br>JSON Schema for validation, OWL for inference. <br>xDBML tooling generates the schemas they reference."
+    details: "xDBML describes what data is -- entities, tables, classes, attributes, fields, columns, relationships, data types, classifications. <br>Higher layers build on top of xDBML: ODCS for contracts, Apache Ossie for measures and metrics, <br>JSON Schema for validation, OWL for inference. <br>xDBML tooling generates the schemas they reference."
 
   - icon: 🆓
     title: Open standard
@@ -167,7 +167,7 @@ xDBML describes the **structural and semantic layer** of data: entities, fields,
 
 xDBML is **not** the round-trip format between a data modeling tool and a target technology. That tool-to-target round-trip happens in **native DDL or schema** -- the tool understands the target's complete capability surface (partitioning, sharding, tablespaces, replication, PL/SQL, triggers, identity columns, advanced constraints, refresh schedules) and preserves it in the tool's own canonical model. xDBML carries the parts of that model with meaning across boundaries.
 
-Operational features (partitions, storage configuration, replication), procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, OSI and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage, and Google's Open Knowledge Format (OKF) for the curated, agent-facing knowledge context that an xDBML schema can populate. Diagramming languages such as Mermaid ER render a picture of a schema; xDBML is the schema that picture is generated from.
+Operational features (partitions, storage configuration, replication), procedural code (PL/SQL, T-SQL, triggers, server-side functions), wire-protocol concerns (Avro evolution rules, Protobuf reserved fields, GraphQL federation directives), and query languages of any kind stay where they live. Adjacent standards layer above and below: ODCS for contracts, Apache Ossie and dbt MetricFlow for measures, OWL for inference, OpenLineage for lineage, and Google's Open Knowledge Format (OKF) for the curated, agent-facing knowledge context that an xDBML schema can populate. Diagramming languages such as Mermaid ER render a picture of a schema; xDBML is the schema that picture is generated from.
 
 xDBML is a format, not a data modeling tool. The <a href="/playground/index.html" target="_blank" rel="noopener">playground at xdbml.org</a> demonstrates the language and works well for learning, prototyping, and small schemas, but sustained enterprise data modeling -- live-database reverse-engineering, target-native DDL generation across many engines, schema diffing and impact analysis, lineage and governance integration, and multi-user collaboration -- requires a purpose-built data modeling tool like ER/Studio, Erwin Data Modeler, or Hackolade. xDBML is designed as the textual exchange format and AI interaction surface that those tools can read, write, and round-trip with: complementing them, not replacing them.
 

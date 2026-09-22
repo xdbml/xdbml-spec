@@ -245,7 +245,7 @@ Entity customers [
 ] { ... }
 ```
 
-These settings round-trip cleanly to Snowflake's Open Semantic Interchange (OSI), Collibra/DataHub/Open Metadata/Purview/Atlan metadata management systems, Avro `aliases`, OpenAPI descriptions, and JSON Schema annotations.
+These settings round-trip cleanly to Apache Ossie (incubating, formerly Open Semantic Interchange), Collibra/DataHub/Open Metadata/Purview/Atlan metadata management systems, Avro `aliases`, OpenAPI descriptions, and JSON Schema annotations.
 
 ---
 
@@ -266,7 +266,7 @@ The following are *not* xDBML's job:
 - **Identity and sequencing details.** IDENTITY columns, sequences, auto-increment configuration. xDBML can declare a field as a primary key with auto-generation; the exact sequence configuration is engine-specific.
 - **Wire-protocol and evolution rules.** Avro schema evolution rules, Protobuf reserved fields, GraphQL federation directives, OpenAPI endpoints (xDBML describes the *types*, not the *operations*).
 - **Query languages.** xDBML doesn't replace or is a functional superset of SQL, Cypher, MQL, or GraphQL queries. The xDBML tool may generate DDL; you still write `SELECT`.
-- **Metrics, measures, aggregations.** Those belong in OSI, dbt MetricFlow, or LookML -- the semantic layer above xDBML.
+- **Metrics, measures, aggregations.** Those belong in Apache Ossie, dbt MetricFlow, or LookML -- the semantic layer above xDBML.
 - **Data quality rules, SLAs, ownership, pricing.** Those belong in ODCS (Open Data Contract Standard), which wraps an xDBML schema with contractual metadata.
 - **Reasoning and inference.** OWL and knowledge graphs operate at a different layer.
 - **Provisioning and operations.** Terraform, database operators, security policies -- these handle the infrastructure layer.

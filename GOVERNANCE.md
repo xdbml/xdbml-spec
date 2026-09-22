@@ -16,7 +16,7 @@ xDBML is currently a **draft pre-stable specification**, on the path toward v1.0
 - Specification surface area is stable in design but subject to refinement based on early-adopter feedback.
 - Backward compatibility is preserved across MINOR versions (per the version-declaration mechanism in §4 of the specification).
 - Experimental features may be introduced and changed without backward-compatibility guarantees, gated by the explicit `experimental:` opt-in clause.
-- v1.0 will be declared when the specification has been validated by independent implementations, at least one production deployment, and review by at least one adjacent-standard community (ODCS, OSI, Avro, or similar).
+- v1.0 will be declared when the specification has been validated by independent implementations, at least one production deployment, and review by at least one adjacent-standard community (ODCS, Apache Ossie, Avro, or similar).
 
 The project does not yet have a formal release cadence. Patch versions are issued as needed to correct ambiguities and typographic errors. Minor versions are anticipated annually as the language gains constructs in response to community feedback.
 
@@ -30,7 +30,7 @@ The xDBML specification is currently **stewarded by Hackolade** (IntegrIT SA/NV 
 - Reviews and accepts contributions via pull request.
 - Coordinates with the DBML upstream maintainers at Holistics on matters affecting compatibility.
 - Funds the canonical hosting (xdbml.org, playground.xdbml.org), the reference implementations, and the integration generators.
-- Represents xDBML to adjacent-standard communities (ODCS, OSI, JSON Schema, OpenAPI working groups).
+- Represents xDBML to adjacent-standard communities (ODCS, Apache Ossie, JSON Schema, OpenAPI working groups).
 
 **What Hackolade does not do:**
 
@@ -133,7 +133,7 @@ The xDBML project is structured with the explicit intent of moving to neutral fo
 A single-vendor-stewarded specification has structural limitations:
 
 - Adopters reasonably worry about steward priorities diverging from community priorities.
-- Adjacent standards bodies (ODCS, OSI, JSON Schema) are easier to coordinate with when xDBML carries similar institutional weight.
+- Adjacent standards bodies (ODCS, Apache Ossie, JSON Schema) are easier to coordinate with when xDBML carries similar institutional weight.
 - Long-term continuity of the specification is more credible under a foundation than under any single company.
 
 Neutral governance does not solve every concern, but it is the standard institutional pattern for open specifications that survive beyond their founders.
@@ -144,7 +144,7 @@ The xDBML project will pursue transition to neutral governance when the followin
 
 - **Independent implementations**: at least three independent implementations of the parser and generators exist in different programming language ecosystems.
 - **Production adoption**: at least five organizations report production use of xDBML at conference or community forum venues.
-- **Ecosystem coordination**: formal coordination relationships are established with at least two adjacent-standard communities (candidates: Bitol/ODCS, Open Semantic Interchange, Avro, JSON Schema).
+- **Ecosystem coordination**: formal coordination relationships are established with at least two adjacent-standard communities (candidates: Bitol/ODCS, Apache Ossie, Avro, JSON Schema).
 - **Maintainer diversity**: at least three maintainers exist outside Hackolade, representing different organizations.
 
 These are guideposts rather than rigid requirements. Substantial progress on most of them suffices.

@@ -51,7 +51,8 @@ Integration tooling that bridges xDBML to adjacent standards:
 *No published bridges yet.* Particularly desired:
 
 - **xDBML ↔ ODCS** -- bidirectional bridge to the Open Data Contract Standard
-- **xDBML ↔ OSI** -- bridge to the Open Semantic Interchange schema layer
+- **xDBML ↔ Apache Ossie** -- generation of Ossie dataset definitions (source, keys, fields, relationships, synonyms) from xDBML entities
+- **xDBML ↔ LinkML** -- translation between LinkML schemas and xDBML models, for projects that publish a vocabulary and also design the databases behind it
 - **xDBML ↔ dbt** -- generation of dbt model `schema.yml` from xDBML
 - **xDBML ↔ Confluent Schema Registry** -- Avro round-trip via the Confluent Schema Registry
 

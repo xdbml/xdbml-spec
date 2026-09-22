@@ -77,6 +77,8 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 #### Spec
 
+- **Adjacent standards, editorial update after the 0.5.0 release** (no change to the language, no new version): Open Semantic Interchange is now Apache Ossie (incubating), with its new name and repository link in the abstract, §1.1, §24, §30 and the references; §30 gains a LinkML row and a sentence on how the two languages differ, and LinkML joins the references. The site pages (FAQ, README, home page, xDBML in 5 minutes, ecosystem, governance, contributing) follow, and the FAQ gains "How does xDBML compare with LinkML?".
+
 - **Chapter numbering**: the new §12 moves every chapter from Edge onward up by one (Edge §13, View §14, ... Conformance §31). All cross-references inside v0.5 follow. Earlier versions keep their own numbering.
 
 - **Conversion to DBML is no longer specified**: xDBML is a superset of DBML that DBML parsers are not expected to read, and the specification does not govern DBML output. §29.1 lists DBML in the `DBML → xDBML` direction only and drops the sentence about emitting xDBML-only constructs as comments when downgrading. §29.2 no longer lists foreign master relationships as lossy to DBML. Appendix D items 10 and 11 of v0.4, which instructed a generator writing DBML, are replaced by one item stating that the specification defines no conversion from xDBML to DBML.
