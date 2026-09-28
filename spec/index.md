@@ -1,6 +1,6 @@
 ---
 title: Specification
-description: The xDBML specification. v0.5 is the current draft. Apache License 2.0. Backward-compatible additions are MINOR versions; documents declaring a specific version are stable across MINOR and PATCH releases.
+description: The xDBML specification. v0.6 is the current draft. Apache License 2.0. Backward-compatible additions are MINOR versions; documents declaring a specific version are stable across MINOR and PATCH releases.
 ---
 
 # xDBML Specification
@@ -15,7 +15,8 @@ This is the canonical home of the xDBML specification. xDBML follows [Semantic V
 
 | Version | Status | Released | Notes |
 |---------|--------|----------|-------|
-| [v0.5](./v0.5) | Draft -- current | 2026 | Adds supertype groups: a `SupertypeGroup` declares a supertype and its subtypes along one axis of specialization, with completeness and exclusivity, inherited attributes and identity, and the materialization strategy intended for physical derivation (§12). Chapters from Edge onward move up by one. Strict superset of v0.4. |
+| [v0.6](./v0.6) | Draft -- current | 2026 | Adds constraints: a `constraints { }` block declares the primary key, unique keys and check expressions of an entity, each with an optional constraint name; keys may be composite and, in document stores, nested (§10). Check expressions are written in single quotes, with backticks as an alias. A referential relationship must reference a key of an entity that declares keys, for relational targets and logical models (§11.17). Every v0.5 document remains valid: in documents declaring earlier versions, a parser reports the new rules on older constructs as warnings. |
+| [v0.5](./v0.5) | Draft -- superseded | 2026 | Adds supertype groups: a `SupertypeGroup` declares a supertype and its subtypes along one axis of specialization, with completeness and exclusivity, inherited attributes and identity, and the materialization strategy intended for physical derivation (§12). Chapters from Edge onward move up by one. Strict superset of v0.4. |
 | [v0.4](./v0.4) | Draft -- superseded | 2026 | Adds the foreign master relationship type: a `Ref` may carry a `foreign_master` flag recording where a duplicated attribute of denormalized data is mastered (§11.10), with the derived `fk`/`fm`/`dk`/`dm` attribute roles (§11.12). Strict superset of v0.3. |
 | [v0.3](./v0.3) | Draft -- superseded | 2026 | Adds remote module sources: `use`/`reuse` may import a module from an `https://` URL in addition to a relative path (§26.17). Strict superset of v0.2. |
 | [v0.2](./v0.2) | Draft -- superseded | 2026 | Adds the module system (`use`/`reuse` directives with optional clone blocks), scalar Named Types, and field-level imports. Strict superset of v0.1. |
@@ -33,7 +34,7 @@ For documents declaring a specific version (e.g., `xdbml: 0.2` at the top of the
 
 ## Choosing a version
 
-If you are writing new xDBML documents, use the latest draft (currently v0.5). If you are reading documents authored elsewhere, the document's first line declares which version's semantics apply.
+If you are writing new xDBML documents, use the latest draft (currently v0.6). If you are reading documents authored elsewhere, the document's first line declares which version's semantics apply.
 
 If you are an implementation author, support the latest version. Support for older versions is automatic if you implement the version declaration mechanism correctly -- versioned semantics are additive.
 
@@ -41,7 +42,8 @@ If you are an implementation author, support the latest version. Support for old
 
 Each specification version is maintained as a markdown file in this directory:
 
-- [`v0.5.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.5.md) -- current draft
+- [`v0.6.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.6.md) -- current draft
+- [`v0.5.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.5.md) -- superseded
 - [`v0.4.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.4.md) -- superseded
 - [`v0.3.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.3.md) -- superseded
 - [`v0.2.md`](https://github.com/xdbml/xdbml-spec/blob/main/spec/v0.2.md) -- superseded

@@ -129,7 +129,8 @@ export default defineConfig({
         items: [
           { text: 'Current draft',         link: '/spec/current' },
           { text: 'All versions',          link: '/spec/' },
-          { text: 'v0.5',                  link: '/spec/v0.5' },
+          { text: 'v0.6',                  link: '/spec/v0.6' },
+          { text: 'v0.5 (superseded)',     link: '/spec/v0.5' },
           { text: 'v0.4 (superseded)',     link: '/spec/v0.4' },
           { text: 'v0.3 (superseded)',     link: '/spec/v0.3' },
           { text: 'v0.2 (superseded)',     link: '/spec/v0.2' },
@@ -184,7 +185,8 @@ export default defineConfig({
           items: [
             { text: 'All versions',           link: '/spec/' },
             { text: 'Current draft',          link: '/spec/current' },
-            { text: 'v0.5',                   link: '/spec/v0.5' },
+            { text: 'v0.6',                   link: '/spec/v0.6' },
+            { text: 'v0.5 (superseded)',      link: '/spec/v0.5' },
             { text: 'v0.4 (superseded)',      link: '/spec/v0.4' },
             { text: 'v0.3 (superseded)',      link: '/spec/v0.3' },
             { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },
@@ -319,7 +321,8 @@ export default defineConfig({
           items: [
             { text: 'All versions',           link: '/spec/' },
             { text: 'Current draft',          link: '/spec/current' },
-            { text: 'v0.5',                   link: '/spec/v0.5' },
+            { text: 'v0.6',                   link: '/spec/v0.6' },
+            { text: 'v0.5 (superseded)',      link: '/spec/v0.5' },
             { text: 'v0.4 (superseded)',      link: '/spec/v0.4' },
             { text: 'v0.3 (superseded)',      link: '/spec/v0.3' },
             { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },

@@ -1,85 +1,114 @@
-xDBML -- delta 6 of 6: prepare and release 0.5.1
-Base: deltas 1 to 5 applied on origin/main 81125b5. Apply them first.
+xDBML -- v0.6 Delta 1: specification text (constraints, referenced keys)
+Base: origin/main 6cf136e (release 0.5.1).
+
+This delta adds spec/v0.6.md and makes it the current draft on the site. The
+parser does not read v0.6 yet: the playground refuses `xdbml: 0.6`, so the
+new "View in playground" buttons only work after the parser delta. Commit
+locally and do NOT push, as with the v0.5 spec.
 
 WHAT CHANGED
 ------------
+spec\v0.6.md (NEW, copied from v0.5.md, then edited)
+  10     Rewritten in place as "Constraints -- keys and checks"; no chapter
+         is renumbered, so the §11.4 anchor stays.
+         10.1  constraints { } block: key lines (pk | unique) and quoted
+               check lines; in Entity, TablePartial and Edge bodies; one
+               block per body; `constraints` is a keyword only before `{`.
+         10.2  key settings pk, unique, name, note; key order; nested paths
+               through objects only (no array, tuple or map); supporting
+               index and enforcement left to each target.
+         10.3  inline vs block (Studio convention); multi-field [pk] kept
+               for DBML with SHOULD NOT / MUST NOT; multi-field [unique] =
+               separate keys; DBML `indexes` pk entry = the primary key.
+         10.4  one primary key, one place; partial vs entity follows §17.1;
+               pk fields not null in the AST; `null` on a pk field = error.
+         10.5  checks in single quotes, backticks as alias; writer rule.
+         10.6-10.8  former 10.3-10.5, examples in single quotes.
+         10.9  checks { } block kept and equivalent.
+         10.10 validation summary + the version rule (see DECISIONS).
+  11.2   Ref name = foreign key constraint name in SQL targets.
+  11.4   referenced fields form a key (§11.17).
+  11.11  cross-reference to §11.17.
+  11.17  NEW "Referenced keys": the rule, operator sides, exemptions.
+  5.1    Db2, 'Db2 for z/OS', Teradata rows; "Relational targets" list.
+  1.1, 3.5, 4 / 4.1, 8.8, 9 (example now uses constraints), 28 tree,
+  28.6 NEW "Constraints", 29.2, 31 (items 13-14 new), Appendices A, B, D,
+  front matter, table of contents, "What's new in v0.6".
+spec\index.md, README.md, .vitepress\config.ts
+  v0.6 current, v0.5 superseded (same pattern as the v0.5 spec commit).
 CHANGELOG.md
-  NEW "## v0.5.1 -- 2026" section above v0.5, released 2026-09-28 (change
-  the date only if you release on another day). Every entry that deltas 1
-  to 5 and the Ossie/LinkML update placed under v0.5 "after the 0.5.0
-  release" moves there, without that marker: Added (native type colors),
-  Changed > Spec (§16 clarification, adjacent standards), Changed >
-  Tooling (Diagnostics help, llms.txt/MCP), Fixed > Parser (target-native
-  type names, container-qualified Enums), plus Packages and Not changed
-  (compatibility), as in v0.3.1. The v0.5 status becomes "superseded by
-  v0.5.1", as v0.3 did for v0.3.1.
-scripts\release-notes.mjs -- two fixes needed for a point release
-  - The heading regex used `\b` after the version, so `0.5` also matched
-    `## v0.5.1`, the first section in the file. It now requires whitespace
-    or end of line. Checked: 0.5.1, 0.5, 0.4, 0.3.1, 0.3 each pick their
-    own section.
-  - The specification link used the full version (spec/v0.5.1, a 404). It
-    now uses major.minor.
-  - A trailing `---` in a section is dropped, so the notes no longer show
-    two rules before the links (v0.3.1 had the same doubled rule).
-tools\RELEASE.md
-  "Point releases" section: same three scripts with the full version.
+  NEW "## v0.6 -- 2026" section (unreleased); v0.5.1 status becomes
+  "superseded by v0.6".
+
+DECISIONS WRITTEN INTO THE TEXT -- please confirm (details in chat)
+  1. Version rule (10.10, 11.17): the new conditions are errors in documents
+     declaring xdbml: 0.6+, and warnings in documents declaring an earlier
+     version or none. Keeps the MINOR-version stability promise and leaves
+     §1.2 principle 1 ("every valid DBML document is valid xDBML") intact.
+  2. constraints { } allowed in Entity, TablePartial and Edge bodies.
+  3. Entity and injected partial both declaring a pk: the entity wins
+     (§17.1 conflict resolution), rather than an error.
+  4. DBML `indexes` pk entry: its `name` is the constraint name.
+  5. Normalized AST: every key and check becomes a Constraint node,
+     whatever form declared it (28.6); the raw AST keeps the form.
+  6. Relational targets: Oracle, PostgreSQL, SQL Server, MySQL, MariaDB,
+     SQLite, Db2, Db2 for z/OS, Teradata, Snowflake, Databricks, BigQuery,
+     Redshift, Synapse Analytics, TimescaleDB. ClickHouse excluded.
+     Unlisted names count as non-relational.
+
+FOR THE PARSER DELTA (not in this one)
+  examples/08-university-registrar.xdbml (course_offerings, enrollments)
+  and examples/10-modules-consumer.xdbml (fact_sales) use [pk] on several
+  fields; they move to constraints { } when they can declare xdbml: 0.6.
+  Grammar, parser, playground, llms.txt/MCP, help pages follow.
 
 FILES
 -----
+  .vitepress\config.ts
   CHANGELOG.md
-  scripts\release-notes.mjs
-  tools\RELEASE.md
+  README.md
+  spec\index.md
+  spec\v0.6.md
 
 APPLY (cmd.exe)
 ---------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
+copy /Y "%DELTA%\.vitepress\config.ts"                                 "%REPO%\.vitepress\config.ts"
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\scripts\release-notes.mjs"                            "%REPO%\scripts\release-notes.mjs"
-copy /Y "%DELTA%\tools\RELEASE.md"                                     "%REPO%\tools\RELEASE.md"
+copy /Y "%DELTA%\README.md"                                            "%REPO%\README.md"
+copy /Y "%DELTA%\spec\index.md"                                        "%REPO%\spec\index.md"
+copy /Y "%DELTA%\spec\v0.6.md"                                         "%REPO%\spec\v0.6.md"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: parser 227 passed, 0 failed; docs build complete.
-node scripts\release-notes.mjs 0.5.1
-  Read the notes: they start "A backward-compatible point release of the
-  v0.5 draft" and end with the spec/v0.5 link.
+  Expect: every suite unchanged (parser 227 passed); "prepare-spec: wrote
+  spec/current.md from spec/v0.6.md (v0.6)"; "161 button(s) open the
+  snippet below them"; docs build complete.
+npm run docs:dev
+  Review, at the local URL VitePress prints:
+    /spec/current#_10-constraints-keys-and-checks   (all of chapter 10)
+    /spec/current#_11-17-referenced-keys
+    /spec/current#_5-1-target-name-vocabulary       (relational targets)
+    /spec/current#_28-6-constraints
+    /spec/current#appendix-d-compatibility-with-dbml-3-13-6
+  Stop the dev server with Ctrl+C.
 git add -A
-git commit -m "Prepare 0.5.1: CHANGELOG v0.5.1 section, release notes for point releases"
-git push
-  The push redeploys the site and playground with deltas 1 to 6. If the
-  deploy stops with the artifact 403: gh workflow run deploy.yml --ref main
+git commit -m "spec v0.6 draft: constraints (keys and checks) and referenced keys"
 
-RELEASE (from the repo root; each script stops at the first failure)
--------
-tools\release-preflight.cmd 0.5.1
-  Must end with no problem reported. It needs a clean tree, which the
-  commit above gives it.
-tools\release.cmd 0.5.1
-  Publishes @xdbml/parse and @xdbml/render 0.5.1, repoints mcp and api,
-  deploys both Workers, prints the dist-tags.
-git add -A
-git commit -m "release 0.5.1"
-git push
-tools\github-release.cmd 0.5.1
-  Tags v0.5.1 with the notes from the v0.5.1 section.
-
-AFTER DEPLOYING
----------------
-  - MCP xdbml_reference: the "Types:" paragraph mentions possible-type-typo.
-  - MCP validate_xdbml on F1Data_Tables.xdbml: valid, 0 diagnostics.
-  - npm view @xdbml/render dependencies --prefer-online: see the note on
-    the dependency pin in chat.
+Do NOT push: the playground cannot open v0.6 snippets until the parser delta.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         parser 227/0, renderer 198/0, viewport 14/0,
-                        interactive 42/0, mcp 12/0, from-mongodb 24/0,
-                        playground 51/0, vsix OK, 114 spec links OK,
-                        playground type-check clean, docs build complete
-  release notes         generated for 0.5.1, 0.5, 0.4, 0.3.1, 0.3: each
-                        picks its own section, one rule before the links
-  site CHANGELOG page   has the v0.5.1 heading (anchor v0-5-1-2026)
-  Not run here: the release scripts themselves (npm publish, wrangler).
+  npm run check         exit 0: all suites green, playground type-check,
+                        161 spec buttons match, docs build complete,
+                        /spec/current serves v0.6
+  section references    every § reference in v0.6.md resolves to a heading
+  anchors               _10-constraints-keys-and-checks, _10-10-validation-
+                        summary, _11-4-composite-foreign-keys, _11-17-
+                        referenced-keys, _28-6-constraints present in the
+                        built page
+  em-dashes             none in any changed file
+  snippets              the new §10 and §11.17 snippets use v0.6 syntax the
+                        current parser does not read, by design

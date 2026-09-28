@@ -4,9 +4,52 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
+## v0.6 -- 2026
+
+**Status**: Draft -- current
+**Released**: unreleased
+
+Adds constraints: one entity-level block for the primary key, unique keys and check expressions, each with an optional constraint name, with composite keys listed in key order and nested keys for document stores. A referential relationship must reference a key of the entity it points at. Every v0.5 document remains valid; documents using the new constructs declare `xdbml: 0.6`.
+
+### Added
+
+#### Spec
+
+- **Constraints block (§10.1)**: `constraints { }` in the body of an Entity, a TablePartial or an Edge. A line naming one field or a parenthesized list declares a key with `pk` or `unique`; a quoted line declares a check. `constraints` starts a block only when `{` follows, so a field may keep that name.
+
+- **Keys (§10.2)**: `name` and `note` settings, fields listed in key order, and nested fields reached through objects; a key path never crosses an array, a tuple position or a map key. The index behind a key and whether the database enforces it stay with each target.
+
+- **Inline and block declarations (§10.3)**: a key on one field without a name MAY stay inline as `[pk]` or `[unique]`; a named or multi-field key goes in `constraints`. `[pk]` on several fields still reads as one composite key, for DBML compatibility, but authors SHOULD NOT use it and tools that write xDBML MUST NOT produce it. `[unique]` on several fields declares separate keys. A `pk` entry in `indexes` reads as the primary key, with its `name` as the constraint name.
+
+- **Primary key (§10.4)**: at most one per entity, declared in one place, with the conflict resolution of §17.1 for TablePartials. Its fields are `not null` in the AST whether or not the document says so, and `null` written on one of them is an error.
+
+- **Quoted check expressions (§10.5)**: a check is written in single quotes, with backticks as an alias, in `constraints`, in `checks { }` and in the field-level `check:` setting. Elsewhere a quoted value stays a string. Tools that write xDBML switch to backticks when the expression contains a single quote.
+
+- **Validation summary (§10.10)**: the new errors, with one rule on versions: in a document declaring an earlier version, or none, the conditions that concern constructs earlier versions accept (an index on an undeclared field, a second primary key, `null` on a primary key field, a relationship to a non-key) are warnings, so every valid v0.5 or DBML document stays valid.
+
+- **Referenced keys (§11.17)**: the fields at the referenced end of a referential relationship must be the primary key or a unique key of the referenced entity (a DBML `unique` index counts), when that entity declares keys. Exempt: entities without keys, which a tool MAY give a primary key on import; many-to-many, foreign master and entity-level relationships; and entities with a non-relational target.
+
+- **Relationship names as constraint names (§11.2)**: the name of a `Ref` is the name of its foreign key constraint in SQL targets.
+
+- **Relational targets (§5.1)**: the targets subject to §11.17, with Db2, Db2 for z/OS and Teradata added to the target table.
+
+- **Constraint nodes (§28.6)**: in the normalized AST, every key and check of an entity is a Constraint node, whichever form declared it, so the primary key sits in one place.
+
+### Changed
+
+#### Spec
+
+- **Chapter 10** is renamed from "Checks -- entity-level constraints" to "Constraints -- keys and checks" and rewritten in place, so no chapter is renumbered. The `checks { }` block of v0.2 remains valid and equivalent (§10.9); the former §10.3 to §10.5 are now §10.6 to §10.8.
+
+- **§8.8, §9**: the `pk`, `unique` and `check:` rows point to §10; the §9 example declares its primary key in `constraints`; every field an index names must be declared.
+
+- **§3.5, §4.1, §11.4, §11.11, §29.2, §31, Appendices A, B and D**: aligned with §10 and §11.17. Conformance gains items 13 and 14.
+
+---
+
 ## v0.5.1 -- 2026
 
-**Status**: Draft -- current (point release of v0.5)
+**Status**: Draft -- superseded by v0.6
 **Released**: 2026-09-28
 
 A backward-compatible point release of the v0.5 draft. The parser accepts any type name, as §1.2 always stated, reads container-qualified Enums in their DBML form, and warns about a type name that looks like a misspelled Type or Enum; editors color the common types of each target. §16 gains a clarification and an example. Every v0.5 document remains valid, and documents continue to declare `xdbml: 0.5`.
