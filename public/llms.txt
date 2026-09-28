@@ -4,7 +4,7 @@
 
 ## How to author
 
-- Start every document with a version line: `xdbml: 0.5`
+- Start every document with a version line: `xdbml: 0.6`
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Database`, `Schema`, `Bucket`, `Keyspace`, or `Namespace`.
 - Prefer xDBML extensions over flat DBML: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, supertype groups for generalization, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
 - A field line is `name  type  [settings]`. Settings are comma-separated inside `[ ]`.
@@ -14,7 +14,7 @@
 Version, project, reusable type:
 
 ```
-xdbml: 0.5
+xdbml: 0.6
 
 Project shop {
   targets: [PostgreSQL, MongoDB]
@@ -41,6 +41,25 @@ Entity customers {
 
 Common field settings: `pk`, `unique`, `not null`, `default: <v>`, `note: '...'`, `pattern: '...'`, `minimum: N`, `maximum: N`, `maxLength: N`, `tags: [...]`, `synonyms: [...]`, `business_term: '...'`, `granularity: <unit>`.
 
+Keys and checks: put a key on one field without a name inline (`[pk]`, `[unique]`). Put every named key, every key on several fields, and every check in the entity's `constraints` block, fields listed in key order. Never mark several fields `[pk]` for a composite key; several `[unique]` fields are separate keys, not one. Checks go in single quotes, or backticks when the expression holds a quote. Primary key fields are never null; still write `not null` on them.
+
+```
+Table pitstops {
+  raceid   int [not null]
+  driverid int [not null]
+  stop     int [not null]
+  lap      int [not null]
+  constraints {
+    (raceid, driverid, stop) [pk, name: 'pk_pitstops']
+    (raceid, driverid, lap)  [unique, name: 'uk_pitstops_lap']
+    'stop >= 1'              [name: 'chk_pitstops_stop']
+    `lap IN (1, 2)`
+  }
+}
+```
+
+A key may name a nested field (`identity.driverref`) but never cross an array. In a document store, keys follow the same syntax.
+
 Relationships (foreign keys), inline or as a block:
 
 ```
@@ -49,7 +68,9 @@ copy_id int [ref: > copies.id, not null]
 Ref: orders.customer_id > customers.id [source: '1..*', target: '1..1']
 ```
 
-Operators: `>` many-to-one, `<` one-to-many, `-` one-to-one, `<>` many-to-many. The optional `[source: '<min>..<max>', target: '<min>..<max>']` is xDBML's precise cardinality.
+Operators: `>` many-to-one, `<` one-to-many, `-` one-to-one, `<>` many-to-many. The optional `[source: '<min>..<max>', target: '<min>..<max>']` is xDBML's precise cardinality. `Ref fk_orders_customer: ...` names the foreign key constraint.
+
+A foreign key must reference the primary key or a unique key of the referenced entity, matching all its fields (`orders.(a, b) > merchants.(id, cc)` for a composite key); otherwise validation reports `ref-target-not-key`. Declare the referenced fields `unique` when they are not the key. The rule does not apply when the referenced entity declares no key, to document or graph targets, or to `<>` and `foreign_master` relationships.
 
 A relationship can record denormalization rather than a key reference. Add `foreign_master` when the child attribute holds a copy of the parent's value, as document models often do; nothing is generated from it, it takes one attribute on each side, and a child attribute has at most one master:
 
@@ -157,7 +178,7 @@ Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`
 ## Minimal complete example
 
 ```
-xdbml: 0.5
+xdbml: 0.6
 
 Entity members {
   id        int     [pk]

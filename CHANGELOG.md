@@ -49,6 +49,8 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 
 - **Playground**: the entity inspector gains a Constraints section listing the primary key, unique keys and checks with their names, whichever form declares them, and counts primary key fields from any form. The help pages on the inspector, entity cards, visual cues and the diagnostics panel describe the constraints block, the badges it sets, and the conditions whose severity follows the declared version.
 
+- **MCP server and llms.txt**: both teach `xdbml: 0.6`, when a key goes inline and when in `constraints` (never several `[pk]` fields for a composite key), checks in single quotes, named foreign keys, and the rule that a foreign key references a key, with its exemptions. `mcp/src/reference.ts` is regenerated; the server serves it once redeployed with 0.6.0.
+
 ### Changed
 
 #### Spec

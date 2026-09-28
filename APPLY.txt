@@ -1,31 +1,23 @@
-xDBML -- v0.6 Delta 4 of 6: playground inspector and help pages
-Base: Deltas 2 and 3 applied.
+xDBML -- v0.6 Delta 5 of 6: llms.txt and MCP reference
+Base: Deltas 2 to 4 applied.
 
 WHAT CHANGED
 ------------
-playground\src\components\inspector\EntityInspector.vue
-  New "Constraints" section: primary key, unique keys and checks, with
-  names, from every declaration form (inline, DBML indexes and checks
-  forms are labeled). The PK count in Identification now counts the key's
-  fields whatever form declares it.
-playground\help\inspector-pane.md, entity-cards.md, visual-cues.md
-  The new section; P and U badges from constraints lines; composite unique
-  keys show no U badge; pk fields show the required marker in 0.6.
-playground\help\diagnostics-panel.md
-  Resolution also checks key and index fields and foreign key targets; the
-  four conditions whose severity follows the declared version
-  (ref-target-not-key, duplicate-primary-key, null-in-primary-key,
-  unresolved-index-field).
-CHANGELOG.md  Added > Tooling: playground.
+public\llms.txt
+  xdbml: 0.6 throughout; a "Keys and checks" paragraph with a pitstops
+  example (inline only for one unnamed field; never several [pk] fields;
+  checks in single quotes); Ref names as FK constraint names; the rule that
+  a foreign key references a key, with its exemptions.
+mcp\src\reference.ts  regenerated (check:reference passes)
+CHANGELOG.md          Added > Tooling: MCP server and llms.txt.
+Every complete snippet in llms.txt parses and resolves cleanly with the
+new parser (field-line fragments aside, as before).
 
 FILES
 -----
   CHANGELOG.md
-  playground\help\diagnostics-panel.md
-  playground\help\entity-cards.md
-  playground\help\inspector-pane.md
-  playground\help\visual-cues.md
-  playground\src\components\inspector\EntityInspector.vue
+  mcp\src\reference.ts
+  public\llms.txt
 
 APPLY (cmd.exe)
 ---------------
@@ -33,23 +25,19 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\playground\help\diagnostics-panel.md"                 "%REPO%\playground\help\diagnostics-panel.md"
-copy /Y "%DELTA%\playground\help\entity-cards.md"                      "%REPO%\playground\help\entity-cards.md"
-copy /Y "%DELTA%\playground\help\inspector-pane.md"                    "%REPO%\playground\help\inspector-pane.md"
-copy /Y "%DELTA%\playground\help\visual-cues.md"                       "%REPO%\playground\help\visual-cues.md"
-copy /Y "%DELTA%\playground\src\components\inspector\EntityInspector.vue" "%REPO%\playground\src\components\inspector\EntityInspector.vue"
+copy /Y "%DELTA%\mcp\src\reference.ts"                                 "%REPO%\mcp\src\reference.ts"
+copy /Y "%DELTA%\public\llms.txt"                                      "%REPO%\public\llms.txt"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: unchanged counts; playground type-check clean; docs build complete.
-npm run docs:dev
-  /playground/index.html?example=15-constraints, select pitstops: the
-  Constraints section lists pk_pitstops, uk_pitstops_lap and two checks.
-  Read /playground/help/diagnostics-panel. Stop with Ctrl+C.
+cd mcp
+npm run check:reference
+cd ..
 git add -A
-git commit -m "v0.6 Delta 4: playground inspector Constraints section and help pages"
+git commit -m "v0.6 Delta 5: llms.txt and MCP reference for constraints"
+git push
+  The push deploys the site and playground with Deltas 2 to 5.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0; vue-tsc clean
-  built help page       lists the new codes
+  npm run check         exit 0; mcp type-check clean; reference in sync
