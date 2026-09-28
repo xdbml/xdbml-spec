@@ -301,6 +301,7 @@ export const SETTING_KEYS = [
   // Block keywords (entity-body or top-level)
   'indexes',
   'checks',           // v0.2 §10: entity-level checks block
+  'constraints',      // v0.6 §10: keys and checks block
   // Container settings
   'replication',
   'location',

@@ -1,114 +1,107 @@
-xDBML -- v0.6 Delta 1: specification text (constraints, referenced keys)
-Base: origin/main 6cf136e (release 0.5.1).
-
-This delta adds spec/v0.6.md and makes it the current draft on the site. The
-parser does not read v0.6 yet: the playground refuses `xdbml: 0.6`, so the
-new "View in playground" buttons only work after the parser delta. Commit
-locally and do NOT push, as with the v0.5 spec.
+xDBML -- v0.6 Delta 2 of 6: parser and grammar
+Base: origin/main 4411ede (v0.6 Delta 1: specification text).
 
 WHAT CHANGED
 ------------
-spec\v0.6.md (NEW, copied from v0.5.md, then edited)
-  10     Rewritten in place as "Constraints -- keys and checks"; no chapter
-         is renumbered, so the §11.4 anchor stays.
-         10.1  constraints { } block: key lines (pk | unique) and quoted
-               check lines; in Entity, TablePartial and Edge bodies; one
-               block per body; `constraints` is a keyword only before `{`.
-         10.2  key settings pk, unique, name, note; key order; nested paths
-               through objects only (no array, tuple or map); supporting
-               index and enforcement left to each target.
-         10.3  inline vs block (Studio convention); multi-field [pk] kept
-               for DBML with SHOULD NOT / MUST NOT; multi-field [unique] =
-               separate keys; DBML `indexes` pk entry = the primary key.
-         10.4  one primary key, one place; partial vs entity follows §17.1;
-               pk fields not null in the AST; `null` on a pk field = error.
-         10.5  checks in single quotes, backticks as alias; writer rule.
-         10.6-10.8  former 10.3-10.5, examples in single quotes.
-         10.9  checks { } block kept and equivalent.
-         10.10 validation summary + the version rule (see DECISIONS).
-  11.2   Ref name = foreign key constraint name in SQL targets.
-  11.4   referenced fields form a key (§11.17).
-  11.11  cross-reference to §11.17.
-  11.17  NEW "Referenced keys": the rule, operator sides, exemptions.
-  5.1    Db2, 'Db2 for z/OS', Teradata rows; "Relational targets" list.
-  1.1, 3.5, 4 / 4.1, 8.8, 9 (example now uses constraints), 28 tree,
-  28.6 NEW "Constraints", 29.2, 31 (items 13-14 new), Appendices A, B, D,
-  front matter, table of contents, "What's new in v0.6".
-spec\index.md, README.md, .vitepress\config.ts
-  v0.6 current, v0.5 superseded (same pattern as the v0.5 spec commit).
-CHANGELOG.md
-  NEW "## v0.6 -- 2026" section (unreleased); v0.5.1 status becomes
-  "superseded by v0.6".
+parser\src\constraints.ts (NEW)
+  bodyConstraints / entityConstraints / primaryKey: every key and check of
+  an entity, whichever form declared it (spec 28.6); partial vs entity pk
+  per 10.4. markPrimaryKeyNotNull: implied `not null` on pk fields of 0.6
+  documents (Setting.implied). checkConstraints: the 10.10 conditions and
+  11.17 ref-target-not-key; conditions on older constructs are warnings in
+  documents declaring an earlier version or none. isRelationalTarget: 5.1.
+parser\src\parser.ts
+  SUPPORTED_XDBML_VERSION 0.6; `constraints {` block (keyword only before
+  `{`); key lines; quoted checks in constraints and checks; calls
+  markPrimaryKeyNotNull when the document is built.
+parser\src\ast.ts        ConstraintsBlock, KeyConstraintEntry,
+                         CheckEntry.delimiter, Setting.implied
+parser\src\name-resolver.ts  pass 5 = checkConstraints; 8 new codes
+parser\src\index.ts      exports the new functions and types
+parser\src\keywords.ts   `constraints` block keyword (highlighting)
+parser\test\run-tests.ts 13 new tests; version test now 0.6 / 0.7
+grammar\xDBML.g4         constraintsBlock, keyConstraint, quoted
+                         checkEntry, edgeBody, CONSTRAINTS token
+grammar\test-cases.md    10 v0.6 cases (checked against the parser);
+                         the unsupported-version case moves to 0.7
+tools\textmate\xdbml.tmLanguage.json, tools\vscode-extension\syntaxes\...
+                         regenerated (constraints keyword)
+mcp\test\run-tests.ts    "newer version" test uses 99.0, not 0.6
+spec\v0.6.md             3 View-in-playground buttons in 12 regenerated:
+                         with a 0.6 parser the stub entities now appear
+examples\05-healthcare-fhir.xdbml
+                         index on a field that does not exist
+                         (family_name_lookup), found by the new check;
+                         now an expression index
+CHANGELOG.md             v0.6 Added > Tooling (parser, grammar, editor
+                         grammars), Fixed > Examples (05)
 
-DECISIONS WRITTEN INTO THE TEXT -- please confirm (details in chat)
-  1. Version rule (10.10, 11.17): the new conditions are errors in documents
-     declaring xdbml: 0.6+, and warnings in documents declaring an earlier
-     version or none. Keeps the MINOR-version stability promise and leaves
-     §1.2 principle 1 ("every valid DBML document is valid xDBML") intact.
-  2. constraints { } allowed in Entity, TablePartial and Edge bodies.
-  3. Entity and injected partial both declaring a pk: the entity wins
-     (§17.1 conflict resolution), rather than an error.
-  4. DBML `indexes` pk entry: its `name` is the constraint name.
-  5. Normalized AST: every key and check becomes a Constraint node,
-     whatever form declared it (28.6); the raw AST keeps the form.
-  6. Relational targets: Oracle, PostgreSQL, SQL Server, MySQL, MariaDB,
-     SQLite, Db2, Db2 for z/OS, Teradata, Snowflake, Databricks, BigQuery,
-     Redshift, Synapse Analytics, TimescaleDB. ClickHouse excluded.
-     Unlisted names count as non-relational.
-
-FOR THE PARSER DELTA (not in this one)
-  examples/08-university-registrar.xdbml (course_offerings, enrollments)
-  and examples/10-modules-consumer.xdbml (fact_sales) use [pk] on several
-  fields; they move to constraints { } when they can declare xdbml: 0.6.
-  Grammar, parser, playground, llms.txt/MCP, help pages follow.
+IMPLEMENTATION CHOICES (see chat)
+  - implied not null only in documents declaring 0.6+ (v0.5 AST unchanged)
+  - index fields: only the first path segment is checked (deeper segments
+    may iterate arrays implicitly, spec 9.3)
+  - a key naming a field injected from a partial does not mark that field
+  - inline refs are checked on top-level fields
 
 FILES
 -----
-  .vitepress\config.ts
   CHANGELOG.md
-  README.md
-  spec\index.md
+  examples\05-healthcare-fhir.xdbml
+  grammar\test-cases.md
+  grammar\xDBML.g4
+  mcp\test\run-tests.ts
+  parser\src\ast.ts
+  parser\src\constraints.ts
+  parser\src\index.ts
+  parser\src\keywords.ts
+  parser\src\name-resolver.ts
+  parser\src\parser.ts
+  parser\test\run-tests.ts
   spec\v0.6.md
+  tools\textmate\xdbml.tmLanguage.json
+  tools\vscode-extension\syntaxes\xdbml.tmLanguage.json
 
 APPLY (cmd.exe)
 ---------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\.vitepress\config.ts"                                 "%REPO%\.vitepress\config.ts"
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\README.md"                                            "%REPO%\README.md"
-copy /Y "%DELTA%\spec\index.md"                                        "%REPO%\spec\index.md"
+copy /Y "%DELTA%\examples\05-healthcare-fhir.xdbml"                    "%REPO%\examples\05-healthcare-fhir.xdbml"
+copy /Y "%DELTA%\grammar\test-cases.md"                                "%REPO%\grammar\test-cases.md"
+copy /Y "%DELTA%\grammar\xDBML.g4"                                     "%REPO%\grammar\xDBML.g4"
+copy /Y "%DELTA%\mcp\test\run-tests.ts"                                "%REPO%\mcp\test\run-tests.ts"
+copy /Y "%DELTA%\parser\src\ast.ts"                                    "%REPO%\parser\src\ast.ts"
+copy /Y "%DELTA%\parser\src\constraints.ts"                            "%REPO%\parser\src\constraints.ts"
+copy /Y "%DELTA%\parser\src\index.ts"                                  "%REPO%\parser\src\index.ts"
+copy /Y "%DELTA%\parser\src\keywords.ts"                               "%REPO%\parser\src\keywords.ts"
+copy /Y "%DELTA%\parser\src\name-resolver.ts"                          "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\src\parser.ts"                                 "%REPO%\parser\src\parser.ts"
+copy /Y "%DELTA%\parser\test\run-tests.ts"                             "%REPO%\parser\test\run-tests.ts"
 copy /Y "%DELTA%\spec\v0.6.md"                                         "%REPO%\spec\v0.6.md"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.json"                 "%REPO%\tools\textmate\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json" "%REPO%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: every suite unchanged (parser 227 passed); "prepare-spec: wrote
-  spec/current.md from spec/v0.6.md (v0.6)"; "161 button(s) open the
-  snippet below them"; docs build complete.
-npm run docs:dev
-  Review, at the local URL VitePress prints:
-    /spec/current#_10-constraints-keys-and-checks   (all of chapter 10)
-    /spec/current#_11-17-referenced-keys
-    /spec/current#_5-1-target-name-vocabulary       (relational targets)
-    /spec/current#_28-6-constraints
-    /spec/current#appendix-d-compatibility-with-dbml-3-13-6
-  Stop the dev server with Ctrl+C.
+  Expect: parser 240 passed, 0 failed; renderer 198; mcp 12; playground 51;
+  "161 button(s) open the snippet below them"; docs build complete.
+cd parser
+npx tsc --noEmit
+npm run build
+cd ..
 git add -A
-git commit -m "spec v0.6 draft: constraints (keys and checks) and referenced keys"
+git commit -m "v0.6 Delta 2: parser and grammar for constraints and referenced keys"
 
-Do NOT push: the playground cannot open v0.6 snippets until the parser delta.
+Push now if you want to try it live (the playground then reads v0.6 and the
+spec's v0.6 buttons open), or after Delta 5.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0: all suites green, playground type-check,
-                        161 spec buttons match, docs build complete,
-                        /spec/current serves v0.6
-  section references    every § reference in v0.6.md resolves to a heading
-  anchors               _10-constraints-keys-and-checks, _10-10-validation-
-                        summary, _11-4-composite-foreign-keys, _11-17-
-                        referenced-keys, _28-6-constraints present in the
-                        built page
-  em-dashes             none in any changed file
-  snippets              the new §10 and §11.17 snippets use v0.6 syntax the
-                        current parser does not read, by design
+  npm run check         exit 0 with only this delta applied on 4411ede
+  parser                tsc clean, build clean; 240 passed
+  renderer type-check   clean (still compiles against published 0.5.1)
+  all 14 examples       resolve with 0 diagnostics (05 had 1 warning
+                        before its fix)
+  grammar cases         every VALID case clean, every INVALID case
+                        reports the named code

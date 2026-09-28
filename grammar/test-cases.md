@@ -1400,9 +1400,166 @@ SupertypeGroup business_role [supertype: Party, exclusivity: overlapping, discri
 ### INVALID -- a newer version than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.6
+xdbml: 0.7
 
 Entity A { id int [pk] }
+```
+
+---
+
+## §10 Constraints -- keys and checks (v0.6)
+
+### VALID -- named composite primary key, composite unique key, quoted checks
+
+```
+xdbml: 0.6
+
+Table pitstops {
+  raceid   int
+  driverid int
+  stop     int
+  lap      int
+
+  constraints {
+    (raceid, driverid, stop) [pk, name: 'pk_pitstops']
+    (raceid, driverid, lap)  [unique, name: 'uk_pitstops_lap']
+    'stop >= 1'              [name: 'chk_pitstops_stop']
+    `lap IN (1, 2)`
+  }
+}
+```
+
+### VALID -- a unique key on a nested field
+
+```
+xdbml: 0.6
+
+Collection profiles {
+  _id      objectId [pk]
+  identity object {
+    driverref string
+  }
+
+  constraints {
+    identity.driverref [unique, name: 'uk_profiles_driverref']
+  }
+}
+```
+
+### VALID -- a field named `constraints`
+
+```
+xdbml: 0.6
+
+Table rules {
+  id          int [pk]
+  constraints varchar
+}
+```
+
+### VALID -- composite foreign key referencing a unique key
+
+```
+xdbml: 0.6
+
+Table results {
+  resultid int [pk]
+  raceid   int
+  driverid int
+  constraints {
+    (raceid, driverid) [unique]
+  }
+}
+
+Table pitstops {
+  raceid   int
+  driverid int
+}
+
+Ref: pitstops.(raceid, driverid) > results.(driverid, raceid)
+```
+
+### INVALID -- key line with neither `pk` nor `unique` (invalid-key-flags)
+
+```
+xdbml: 0.6
+
+Table t {
+  id int
+  constraints {
+    id [name: 'k']
+  }
+}
+```
+
+### INVALID -- key path crossing an array (key-path-crosses-collection)
+
+```
+xdbml: 0.6
+
+Table t {
+  id   int [pk]
+  tags array [object {
+    code varchar
+  }]
+  constraints {
+    tags.code [unique]
+  }
+}
+```
+
+### INVALID -- second primary key (duplicate-primary-key)
+
+```
+xdbml: 0.6
+
+Table t {
+  id   int [pk]
+  code int
+  constraints {
+    code [pk]
+  }
+}
+```
+
+### INVALID -- `null` on a primary key field (null-in-primary-key)
+
+```
+xdbml: 0.6
+
+Table t {
+  id int [pk, null]
+}
+```
+
+### INVALID -- relationship to a field that is not a key (ref-target-not-key)
+
+```
+xdbml: 0.6
+
+Table customers {
+  id    int [pk]
+  email varchar
+}
+
+Table orders {
+  customer_email varchar
+}
+
+Ref: orders.customer_email > customers.email
+```
+
+### INVALID -- constraints block in a v0.5 document (construct-requires-version)
+
+```
+xdbml: 0.5
+
+Table t {
+  id int
+  constraints {
+    id [pk]
+  }
+}
 ```
 
 ---

@@ -31,6 +31,7 @@ import {
   TARGET_NATIVE_TYPES,
 } from '../src/keywords.ts';
 import * as keywordArrays from '../src/keywords.ts';
+import { entityConstraints, primaryKey } from '../src/constraints.ts';
 import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -3664,12 +3665,12 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
       };
     })(),
     {
-      name: 'Version: xdbml 0.5 is accepted; a newer version is refused with unsupported-version',
-      source: `xdbml: 0.5
+      name: 'Version: xdbml 0.6 is accepted; a newer version is refused with unsupported-version',
+      source: `xdbml: 0.6
 Entity A { }`,
       assert: (doc) => {
-        if (doc.version?.version !== '0.5') return 'version 0.5 not parsed';
-        for (const v of ['0.6', '1.0', '0.10']) {
+        if (doc.version?.version !== '0.6') return 'version 0.6 not parsed';
+        for (const v of ['0.7', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -3678,6 +3679,329 @@ Entity A { }`,
           }
         }
         return null;
+      },
+    },
+    /* ---- v0.6 constraints (spec §10) and referenced keys (§11.17) ---- */
+    {
+      name: 'v0.6 §10.1: constraints block parses key lines and quoted, triple-quoted and backtick checks',
+      source: `xdbml: 0.6
+Table pitstops {
+  raceid   int
+  driverid int
+  stop     int
+  lap      int
+  profile  object {
+    email varchar
+  }
+  constraints {
+    (raceid, driverid, stop) [pk, name: 'pk_pitstops']
+    (raceid, driverid, lap)  [unique, name: 'uk_lap', note: 'one stop per lap']
+    profile.email [unique]
+    'stop >= 1' [name: 'chk_stop']
+    \`lap IN (1, 2)\`
+    '''stop < 100'''
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const block = e.body.find((b) => b.kind === 'ConstraintsBlock');
+        if (!block || block.kind !== 'ConstraintsBlock') return 'no ConstraintsBlock';
+        const got = block.entries.map((x) => x.kind === 'KeyConstraintEntry'
+          ? `key:${x.fields.map((f) => f.map((seg) => (seg as { name: string }).name).join('.')).join(',')}:${x.parenthesized}:${x.settings.map((st) => st.name).join('+')}`
+          : `check:${x.expression}:${x.delimiter}`);
+        const want = ['key:raceid,driverid,stop:true:pk+name', 'key:raceid,driverid,lap:true:unique+name+note', 'key:profile.email:false:unique',
+          'check:stop >= 1:quote', 'check:lap IN (1, 2):backtick', 'check:stop < 100:quote'];
+        if (JSON.stringify(got) !== JSON.stringify(want)) return `got ${JSON.stringify(got)}`;
+        const d = resolveNames(doc).diagnostics;
+        return d.length === 0 ? null : `unexpected: ${d.map((x) => x.code + ': ' + x.message).join('; ')}`;
+      },
+    },
+    {
+      name: 'v0.6 §10.1: a field named constraints still parses',
+      source: `xdbml: 0.6
+Table rules {
+  id          int [pk]
+  constraints varchar
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const names = e.body.filter((b) => b.kind === 'FieldDeclaration').map((f) => (f as { name: string }).name);
+        return JSON.stringify(names) === JSON.stringify(['id', 'constraints']) ? null : `fields: ${names}`;
+      },
+    },
+    {
+      name: 'v0.6 §28.6: entityConstraints gathers every form into keys and checks',
+      source: `xdbml: 0.6
+Table t {
+  a int [pk]
+  b int [pk]
+  c varchar [unique, check: 'c <> \\'\\'']
+  d varchar [unique, check: \`d > 0\`]
+  constraints {
+    (c, d) [unique, name: 'uk_cd']
+    'a < b' [name: 'chk_ab']
+  }
+  checks {
+    \`b > 0\`
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const got = entityConstraints(e, doc).map((c) => c.kind === 'key'
+          ? `${c.keyKind}(${c.fields.join(',')})${c.name ? '=' + c.name : ''}@${c.source}`
+          : `check[${c.expression}]${c.field ? '@' + c.field : ''}@${c.source}`);
+        const want = ['primary(a,b)@inline', 'unique(c)@inline', "check[c <> '']@c@field-check", 'unique(d)@inline', 'check[d > 0]@d@field-check',
+          'unique(c,d)=uk_cd@constraints', 'check[a < b]@constraints', 'check[b > 0]@checks'];
+        return JSON.stringify(got) === JSON.stringify(want) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6 §10.4: primary key fields get an implied not null in 0.6 documents only',
+      source: `xdbml: 0.6
+Table t {
+  a int
+  b int [not null]
+  c int
+  constraints {
+    (a, b) [pk]
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const flags = e.body.filter((b) => b.kind === 'FieldDeclaration').map((f) => {
+          const st = (f as { settings: { name: string; implied?: boolean }[] }).settings;
+          return st.map((x) => x.name + (x.implied ? '*' : '')).join('+');
+        });
+        if (JSON.stringify(flags) !== JSON.stringify(['not null*', 'not null', ''])) return `0.6: ${JSON.stringify(flags)}`;
+        const old = parse('xdbml: 0.5\nTable t {\n  a int [pk]\n}');
+        const f = (old.statements[0] as { body: { settings: unknown[] }[] }).body[0];
+        return f.settings.length === 1 ? null : '0.5 document got an implied setting';
+      },
+    },
+    {
+      name: 'v0.6 §10.10: key-line, key-path, duplicate and null conditions',
+      source: `xdbml: 0.6
+Type Address {
+  city varchar
+}
+Table t {
+  id      int [pk, null]
+  code    int
+  tags    array [varchar]
+  home    Address
+  meta    object {
+    lines array [object {
+      n int
+    }]
+  }
+  constraints {
+    (id, code) [pk]
+    code [pk, unique]
+    code
+    nosuch [unique]
+    tags.x [unique]
+    home.city [unique]
+    meta.lines.n [unique]
+  }
+  constraints {
+    code [unique]
+  }
+  indexes {
+    missing_col
+    code
+  }
+}`,
+      assert: (doc) => {
+        const codes = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`).sort();
+        const want = ['duplicate-constraints-block:error', 'duplicate-primary-key:error', 'invalid-key-flags:error', 'invalid-key-flags:error',
+          'key-path-crosses-collection:error', 'key-path-crosses-collection:error', 'null-in-primary-key:error', 'unresolved-index-field:error',
+          'unresolved-key-field:error'].sort();
+        return JSON.stringify(codes) === JSON.stringify(want) ? null : `got ${JSON.stringify(codes)}`;
+      },
+    },
+    {
+      name: 'v0.6 §10.10: in a v0.5 or DBML document the older-construct conditions are warnings',
+      source: `xdbml: 0.5
+Table t {
+  id   int [pk, null]
+  code int
+  indexes {
+    code [pk]
+    missing_col
+  }
+}`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`).sort();
+        const want = ['duplicate-primary-key:warning', 'null-in-primary-key:warning', 'unresolved-index-field:warning'];
+        if (JSON.stringify(got) !== JSON.stringify(want)) return `0.5: ${JSON.stringify(got)}`;
+        const dbml = resolveNames(parse('Table t {\n  id int [pk]\n  indexes {\n    nope\n  }\n}')).diagnostics.map((d) => `${d.code}:${d.severity}`);
+        return JSON.stringify(dbml) === JSON.stringify(['unresolved-index-field:warning']) ? null : `DBML: ${JSON.stringify(dbml)}`;
+      },
+    },
+    {
+      name: 'v0.6 §10.10: the constraints block and quoted checks require xdbml 0.6',
+      source: `xdbml: 0.5
+Table t {
+  id int
+  constraints {
+    id [pk]
+  }
+  checks {
+    'id > 0'
+  }
+}`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => d.code);
+        return JSON.stringify(got) === JSON.stringify(['construct-requires-version', 'construct-requires-version']) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6 §10.9: a key line in checks { } is a parse error',
+      source: `xdbml: 0.6
+Table t {
+  id int
+  checks {
+    id [pk]
+  }
+}`,
+      expectError: true,
+      assert: () => null,
+    },
+    {
+      name: 'v0.6 §10.4: an entity key wins over an injected partial key; the partial key applies otherwise',
+      source: `xdbml: 0.6
+TablePartial audited {
+  id int [pk]
+  created_at timestamp
+}
+Table a {
+  ~audited
+  code varchar
+  constraints {
+    code [pk]
+  }
+}
+Table b {
+  ~audited
+  name varchar
+}`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        if (d.length) return `unexpected: ${d.map((x) => x.code).join(', ')}`;
+        const [, a, b] = doc.statements as unknown as { body: never[] }[];
+        const ka = primaryKey(a, doc)?.fields.join(',');
+        const kb = primaryKey(b, doc)?.fields.join(',');
+        return ka === 'code' && kb === 'id' ? null : `a=${ka} b=${kb}`;
+      },
+    },
+    {
+      name: 'v0.6 §11.17: a Ref to a non-key field of an entity with keys is an error; unique makes it valid',
+      source: `xdbml: 0.6
+Table customers {
+  id    int [pk]
+  email varchar
+  code  varchar [unique]
+}
+Table orders {
+  id int [pk]
+  customer_email varchar
+  customer_code  varchar [ref: > customers.code]
+  customer_id    int [ref: > customers.email]
+}
+Ref fk_orders_customer: orders.customer_email > customers.email
+Ref: customers.id < orders.id
+Ref: orders.id - customers.email
+Ref: orders.id <> customers.email`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`);
+        const want = ['ref-target-not-key:error', 'ref-target-not-key:error'];
+        return JSON.stringify(got) === JSON.stringify(want) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6 §11.17: composite keys match as sets; DBML unique indexes count',
+      source: `xdbml: 0.6
+Table merchants {
+  id           int
+  country_code char(2)
+  alt_a        int
+  alt_b        int
+  constraints {
+    (id, country_code) [pk]
+  }
+  indexes {
+    (alt_a, alt_b) [unique]
+  }
+}
+Table periods {
+  merchant_id  int
+  country_code char(2)
+  a int
+  b int
+}
+Ref: periods.(merchant_id, country_code) > merchants.(country_code, id)
+Ref: periods.(a, b) > merchants.(alt_b, alt_a)
+Ref: periods.(a, merchant_id) > merchants.(alt_a, id)`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => d.code);
+        return JSON.stringify(got) === JSON.stringify(['ref-target-not-key']) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6 §11.17: exemptions -- no key, foreign master, entity-level, non-relational target',
+      source: `xdbml: 0.6
+Project p {
+  targets: [Oracle, MongoDB]
+}
+Container rel [type: schema, target: Oracle] {
+  Table parent {
+    id   int [pk]
+    name varchar
+  }
+  Table nokey {
+    name varchar
+  }
+  Table child {
+    parent_name varchar
+    other varchar
+  }
+}
+Container docs [type: database, target: MongoDB] {
+  Collection users {
+    _id  objectId [pk]
+    email string
+  }
+  Collection posts {
+    author_email string
+  }
+}
+Ref: rel.child.parent_name > rel.nokey.name
+Ref: rel.child.other > rel.parent.name [foreign_master]
+Ref: rel.child > rel.parent
+Ref: docs.posts.author_email > docs.users.email
+Ref: rel.child.parent_name > rel.parent.name`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => d.code);
+        return JSON.stringify(got) === JSON.stringify(['ref-target-not-key']) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6 §11.17: warning in DBML documents',
+      source: `Table customers {
+  id    int [pk]
+  email varchar
+}
+Table orders {
+  customer_email varchar
+}
+Ref: orders.customer_email > customers.email`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`);
+        return JSON.stringify(got) === JSON.stringify(['ref-target-not-key:warning']) ? null : `got ${JSON.stringify(got)}`;
       },
     },
   ];

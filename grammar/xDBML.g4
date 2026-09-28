@@ -402,6 +402,7 @@ edgeSetting
 edgeBody
     : fieldDeclaration
     | indexBlock
+    | constraintsBlock             // v0.6 §10
     | tablePartialInjection        // ~partial_name
     | noteDefinition
     ;
@@ -707,8 +708,34 @@ checksBlock
     : CHECKS LBRACE checkEntry* RBRACE
     ;
 
+// v0.6 (§10.5): a check expression is written in single (or triple)
+// quotes, with backticks accepted as an alias. The quoted forms require a
+// document declaring `xdbml: 0.6` or later; the resolver enforces that.
 checkEntry
-    : EXPRESSION_LITERAL settingsBlock?
+    : (STRING_LITERAL | MULTILINE_STRING | EXPRESSION_LITERAL) settingsBlock?
+    ;
+
+// ---- §10 Constraints block (new for v0.6) ----------------------------------
+// Keys and checks in one entity-level block, a peer of indexBlock and
+// checksBlock in entity, TablePartial and edge bodies. A key line names one
+// field, or a parenthesized list in key order, and carries `pk` or `unique`
+// (plus optional `name`, `note`); the resolver checks the flags, that the
+// fields exist, and that a key path steps through object fields only. A
+// check line is a checkEntry. `constraints` is a keyword only when `{`
+// follows it, so a field may still be named `constraints`.
+
+constraintsBlock
+    : CONSTRAINTS LBRACE constraintEntry* RBRACE
+    ;
+
+constraintEntry
+    : keyConstraint
+    | checkEntry
+    ;
+
+keyConstraint
+    : fieldPath settingsBlock?
+    | LPAREN fieldPath (COMMA fieldPath)* RPAREN settingsBlock?
     ;
 
 // ---- §11 Ref definitions (overrides upstream refSpec) --------------------
@@ -912,6 +939,7 @@ COLON               : ':' ;
 COMMA               : ',' ;
 SEMICOLON           : ';' ;
 DOT                 : '.' ;
+CONSTRAINTS         : 'constraints' ;   // v0.6 §10; contextual: a keyword only before '{'
 TILDE               : '~' ;
 LANGLE              : '<' ;
 RANGLE              : '>' ;

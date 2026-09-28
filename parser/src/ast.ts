@@ -135,6 +135,7 @@ export type EntityBodyItem =
   | FieldDeclaration
   | IndexesBlock
   | ChecksBlock
+  | ConstraintsBlock
   | NoteBlock
   | PartialInjection
   | RecordsBlock;
@@ -516,9 +517,43 @@ export interface ChecksBlock {
 
 export interface CheckEntry {
   kind: 'CheckEntry';
-  /** Source text inside the backticks, no surrounding backticks. */
+  /** Source text inside the delimiters, without them. */
   expression: string;
+  /**
+   * How the source wrote the expression (spec §10.5, v0.6): in backticks,
+   * or in single or triple quotes. Both mean the same check; the raw AST
+   * keeps the form. Absent on entries built by older code paths, which
+   * only ever read backticks.
+   */
+  delimiter?: 'backtick' | 'quote';
   /** Optional settings -- typically `name:` and/or `note:`. */
+  settings: Setting[];
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Constraints (spec §10, new in v0.6)
+ *
+ * `constraints { }` holds key lines and check lines. A key line names one
+ * field, or a parenthesized list, and carries `pk` or `unique` (checked by
+ * the resolver, so a bad line still parses). A check line is a CheckEntry,
+ * the same node `checks { }` produces.
+ * ----------------------------------------------------------------------- */
+
+export interface ConstraintsBlock {
+  kind: 'ConstraintsBlock';
+  entries: ConstraintEntry[];
+  span: Span;
+}
+
+export type ConstraintEntry = KeyConstraintEntry | CheckEntry;
+
+export interface KeyConstraintEntry {
+  kind: 'KeyConstraintEntry';
+  /** One path per key field, in key order. */
+  fields: PathSegment[][];
+  /** True when the source wrote the fields in parentheses. */
+  parenthesized: boolean;
   settings: Setting[];
   span: Span;
 }
@@ -798,6 +833,12 @@ export interface Setting {
   nameSource: string;
   /** Value, if any. A pure flag like `pk` has `value: null`. */
   value: SettingValue | null;
+  /**
+   * True on a setting the parser added rather than read: `not null` on a
+   * primary key field of a v0.6 document (spec §10.4). Its span is the
+   * field's span.
+   */
+  implied?: true;
   span: Span;
 }
 

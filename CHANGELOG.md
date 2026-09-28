@@ -35,6 +35,14 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 
 - **Constraint nodes (§28.6)**: in the normalized AST, every key and check of an entity is a Constraint node, whichever form declared it, so the primary key sits in one place.
 
+#### Tooling
+
+- **Parser (`@xdbml/parse`)**: reads `xdbml: 0.6`, the `constraints { }` block (new AST nodes `ConstraintsBlock` and `KeyConstraintEntry`) and quoted check expressions (`CheckEntry.delimiter` records the form). `entityConstraints()`, `primaryKey()` and `bodyConstraints()` return every key and check of an entity, whichever form declared it (§28.6). In a 0.6 document each primary key field carries an implied `not null` (`Setting.implied`). `resolveNames()` reports the conditions of §10.10 -- `invalid-key-flags`, `unresolved-key-field`, `key-path-crosses-collection`, `duplicate-primary-key`, `null-in-primary-key`, `duplicate-constraints-block`, `unresolved-index-field` -- and `ref-target-not-key` for §11.17, the conditions on older constructs as warnings in documents declaring an earlier version or none. `isRelationalTarget()` exposes the list of §5.1.
+
+- **Grammar**: `constraintsBlock`, `keyConstraint` and a quoted `checkEntry` in `grammar/xDBML.g4`; `grammar/test-cases.md` gains ten v0.6 cases, each checked against the parser.
+
+- **Editor grammars**: `constraints` is highlighted as a block keyword in the playground editor, the site's code blocks and the VS Code extension's grammar copy.
+
 ### Changed
 
 #### Spec
@@ -45,6 +53,12 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 
 - **§3.5, §4.1, §11.4, §11.11, §29.2, §31, Appendices A, B and D**: aligned with §10 and §11.17. Conformance gains items 13 and 14.
 
+
+### Fixed
+
+#### Examples
+
+- **05-healthcare-fhir**: the `patients` indexes named `family_name_lookup`, which is not a field of the entity. The index check of §10.10 reports it; the entry is now an expression index on the first family name.
 ---
 
 ## v0.5.1 -- 2026

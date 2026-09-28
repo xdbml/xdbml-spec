@@ -38,6 +38,16 @@ export {
 export type { ModuleSource } from './module-resolver.ts';
 export { resolveNames, SymbolTable } from './name-resolver.ts';
 export {
+  bodyConstraints,
+  checkConstraints,
+  entityConstraints,
+  isRelationalTarget,
+  keyPathString,
+  markPrimaryKeyNotNull,
+  primaryKey,
+} from './constraints.ts';
+export type { CheckConstraint, Constraint, ConstraintSource, KeyConstraint } from './constraints.ts';
+export {
   FOREIGN_MASTER_FLAG,
   checkRelationships,
   hasForeignMasterFlag,

@@ -17,6 +17,9 @@ import type {
   CardinalityOperator,
   CheckEntry,
   ChecksBlock,
+  ConstraintEntry,
+  ConstraintsBlock,
+  KeyConstraintEntry,
   CloneBlock,
   ContainerBodyItem,
   ContainerDeclaration,
@@ -84,6 +87,7 @@ import type {
   XDbmlDocument,
 } from './ast.ts';
 import type { Token } from './lexer.ts';
+import { markPrimaryKeyNotNull } from './constraints.ts';
 import {
   TokenKind,
   tokenize,
@@ -111,7 +115,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.5';
+export const SUPPORTED_XDBML_VERSION = '0.6';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -293,13 +297,16 @@ export class Parser {
     while (!this.check(TokenKind.EOF)) {
       statements.push(this.parseTopLevelStatement());
     }
-    return {
+    const doc: XDbmlDocument = {
       kind: 'XDbmlDocument',
       version,
       experimental,
       statements,
       span: this.spanFrom(start),
     };
+    // v0.6 §10.4: primary key fields are not null in the AST.
+    markPrimaryKeyNotNull(doc);
+    return doc;
   }
 
   /* ----- version & experimental ----- */
@@ -592,6 +599,10 @@ export class Parser {
         body.push(this.parseIndexes());
       } else if (k === 'checks') {
         body.push(this.parseChecks());
+      } else if (k === 'constraints' && this.peek(1).kind === TokenKind.LBrace) {
+        // v0.6 §10.1: a keyword only when `{` follows, so a field may keep
+        // the name `constraints`.
+        body.push(this.parseConstraints());
       } else if (k === 'records') {
         body.push(this.parseRecordsBlock());
       } else if (t.kind === TokenKind.Tilde) {
@@ -2120,24 +2131,82 @@ export class Parser {
   private parseCheckEntry (): CheckEntry {
     const start = this.peek().start;
     const exprTok = this.peek();
-    if (exprTok.kind !== TokenKind.ExpressionLiteral) {
+    // v0.6 §10.5: single (or triple) quotes are the standard form and
+    // backticks an alias. The resolver rejects the quoted form in documents
+    // declaring an earlier version.
+    const quoted = exprTok.kind === TokenKind.StringLiteral || exprTok.kind === TokenKind.MultilineString;
+    if (exprTok.kind !== TokenKind.ExpressionLiteral && !quoted) {
       throw new ParseError(
-        `Expected backtick-wrapped check expression, got ${exprTok.kind} ${JSON.stringify(exprTok.text)}`,
+        `Expected a check expression in quotes or backticks, got ${exprTok.kind} ${JSON.stringify(exprTok.text)}`,
         exprTok.start,
       );
     }
     this.advance();
-    // The expression is opaque to xDBML per spec §10.3. The value field of
-    // an ExpressionLiteral token already has the surrounding backticks stripped.
+    // The expression is opaque to xDBML (spec §10.5). The token value
+    // already has the delimiters stripped.
     const expression = exprTok.value ?? '';
     const settings = this.maybeSettingsBlock();
     return {
       kind: 'CheckEntry',
       expression,
+      delimiter: quoted ? 'quote' : 'backtick',
       settings,
       span: this.spanFrom(start),
     };
   }
+
+  /* ----- constraints block (v0.6 §10) ----- */
+
+  private parseConstraints (): ConstraintsBlock {
+    const start = this.peek().start;
+    this.advance(); // constraints
+    this.expect(TokenKind.LBrace, "Expected '{' after constraints");
+    const entries: ConstraintEntry[] = [];
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      const t = this.peek();
+      if (
+        t.kind === TokenKind.StringLiteral ||
+        t.kind === TokenKind.MultilineString ||
+        t.kind === TokenKind.ExpressionLiteral
+      ) {
+        entries.push(this.parseCheckEntry());
+      } else {
+        entries.push(this.parseKeyConstraintEntry());
+      }
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing constraints");
+    return {
+      kind: 'ConstraintsBlock',
+      entries,
+      span: this.spanFrom(start),
+    };
+  }
+
+  private parseKeyConstraintEntry (): KeyConstraintEntry {
+    const start = this.peek().start;
+    const fields: PathSegment[][] = [];
+    let parenthesized = false;
+    if (this.check(TokenKind.LParen)) {
+      parenthesized = true;
+      this.advance(); // (
+      fields.push(this.parsePathSegments());
+      while (this.match(TokenKind.Comma)) {
+        fields.push(this.parsePathSegments());
+      }
+      this.expect(TokenKind.RParen, "Expected ')' closing the fields of a key");
+    } else {
+      fields.push(this.parsePathSegments());
+    }
+    const settings = this.maybeSettingsBlock();
+    return {
+      kind: 'KeyConstraintEntry',
+      fields,
+      parenthesized,
+      settings,
+      span: this.spanFrom(start),
+    };
+  }
+
 
   /* ----- Settings block ----- */
 

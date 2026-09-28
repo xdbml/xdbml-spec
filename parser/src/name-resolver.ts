@@ -57,6 +57,7 @@ import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
+import { checkConstraints } from './constraints.ts';
 
 /* -------------------------------------------------------------------------
  * Public types
@@ -109,6 +110,14 @@ export type DiagnosticCode =
   | 'duplicate-declaration'
   | 'unresolved-type'
   | 'possible-type-typo'
+  | 'unresolved-key-field'
+  | 'unresolved-index-field'
+  | 'key-path-crosses-collection'
+  | 'invalid-key-flags'
+  | 'duplicate-primary-key'
+  | 'null-in-primary-key'
+  | 'duplicate-constraints-block'
+  | 'ref-target-not-key'
   | 'unresolved-entity'
   | 'unresolved-field'
   | 'unresolved-partial'
@@ -365,6 +374,9 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 4: supertype group rules (spec 12.8).
   diagnostics.push(...checkSupertypeGroups(flat));
+
+  // Pass 5: constraints and referenced keys (spec §10.10, §11.17).
+  diagnostics.push(...checkConstraints(flat));
 
   return { diagnostics, symbols };
 }

@@ -134,7 +134,7 @@ Container clinical [type: schema] {
     indexes {
       medical_record_number [unique]
       birth_date
-      family_name_lookup [type: btree, name: 'idx_patient_family_name', note: 'Functional index for name search; created via SQL DDL']
+      (`lower(names -> 0 ->> 'family')`) [type: btree, name: 'idx_patient_family_name', note: 'Functional index on the first family name, for name search']
     }
   }
 

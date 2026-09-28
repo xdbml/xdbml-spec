@@ -149,7 +149,8 @@ SupertypeGroup workforce [supertype: Worker] {
 });
 
 test('a newer version than the parser supports is refused', () => {
-  const r = validateXdbml('xdbml: 0.6\n\nEntity a { id int [pk] }\n');
+  // A version far ahead of any parser, so the test survives each release.
+  const r = validateXdbml('xdbml: 99.0\n\nEntity a { id int [pk] }\n');
   assertEqual(r.valid, false, 'valid');
 });
 
