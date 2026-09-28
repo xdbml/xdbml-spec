@@ -1,45 +1,29 @@
-xDBML -- delta 4 of 4 before 0.5.1: Diagnostics panel help
-Base: deltas 1 to 3 applied on origin/main 81125b5. Apply them first;
+xDBML -- delta 5 of 6: llms.txt and MCP reference
+Base: deltas 1 to 4 applied on origin/main 81125b5. Apply them first;
 this delta's CHANGELOG.md includes them.
 
 WHAT CHANGED
 ------------
-Documentation and code comments only; no behavior change.
+The cheatsheet that the MCP server's xdbml_reference tool returns, and that
+xdbml.org/llms.txt serves, now tells an assistant what 0.5.1 accepts.
 
-playground\help\diagnostics-panel.md
-  Rewritten against DiagnosticsPanel.vue, parserStore.ts and App.vue:
-  - separate error (red ×) and warning (amber !) counts in the header;
-  - two stages: parsing stops at the first syntax error and the diagram
-    keeps the last good state; resolution reports errors and warnings
-    together while the diagram and inspector keep working (the old text
-    said the parser recovers to report several syntax errors, and that
-    warnings would come later);
-  - the four warnings that exist: possible-type-typo,
-    ambiguous-ref-endpoint, empty-supertype-group, merge-without-roll-up;
-  - row layout including the code chip (same code as validate_xdbml);
-  - body expanded by default, choice remembered.
-  Screenshot placeholder now asks for one error and one warning.
-playground\help\editor-pane.md
-  Scalar-type color line mentions target-native types (delta 2).
-playground\src\components\diagnostics\DiagnosticsPanel.vue
-playground\src\components\editor\xdbml_markers.ts
-playground\src\App.vue
-  Comments that still called warnings a future feature.
+public\llms.txt
+  The "Types:" paragraph gains three sentences: any other type name is
+  valid and passes through, so a physical model uses its target's own
+  types (number(10), varchar2(255), serial, bytea); a field names an Enum
+  declared in a schema with its qualifier (status core.job_status); a name
+  close to a declared Type or Enum draws possible-type-typo.
+mcp\src\reference.ts
+  Regenerated with `npm run generate:reference` (check:reference passes).
+  The live MCP server serves it only after the 0.5.1 redeploy (delta 6).
 CHANGELOG.md
-  v0.5 > Changed > Tooling, last bullet.
-
-Left alone (see chat): playground\help\pages\*.md, seven older copies of
-help pages without frontmatter, outside the help menu but still built by
-VitePress; pages\editor-pane.md keeps the old color line.
+  v0.5 > Changed > Tooling, last bullet (delta 6 moves it into v0.5.1).
 
 FILES
 -----
   CHANGELOG.md
-  playground\help\diagnostics-panel.md
-  playground\help\editor-pane.md
-  playground\src\App.vue
-  playground\src\components\diagnostics\DiagnosticsPanel.vue
-  playground\src\components\editor\xdbml_markers.ts
+  mcp\src\reference.ts
+  public\llms.txt
 
 APPLY (cmd.exe)
 ---------------
@@ -47,50 +31,26 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\playground\help\diagnostics-panel.md"                 "%REPO%\playground\help\diagnostics-panel.md"
-copy /Y "%DELTA%\playground\help\editor-pane.md"                       "%REPO%\playground\help\editor-pane.md"
-copy /Y "%DELTA%\playground\src\App.vue"                               "%REPO%\playground\src\App.vue"
-copy /Y "%DELTA%\playground\src\components\diagnostics\DiagnosticsPanel.vue" "%REPO%\playground\src\components\diagnostics\DiagnosticsPanel.vue"
-copy /Y "%DELTA%\playground\src\components\editor\xdbml_markers.ts"    "%REPO%\playground\src\components\editor\xdbml_markers.ts"
+copy /Y "%DELTA%\mcp\src\reference.ts"                                 "%REPO%\mcp\src\reference.ts"
+copy /Y "%DELTA%\public\llms.txt"                                      "%REPO%\public\llms.txt"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: same counts as after delta 3 (parser 227 passed, 0 failed);
-  docs build complete.
-npm run docs:dev
-  Open the local URL VitePress prints, followed by
-  /playground/help/diagnostics-panel, and read it through. Then open
-  /playground/index.html, paste
-
-    xdbml: 0.5
-    Type Address {
-      street varchar
-    }
-    Table t {
-      id number(11) [pk]
-      home Adress
-      ~no_such_partial
-    }
-
-  and compare the panel with the page: "1 error" in red, "1 warning" in
-  amber, two rows with codes unresolved-partial and possible-type-typo.
-  Stop the dev server with Ctrl+C.
+  Expect: parser 227 passed, 0 failed; mcp 12 passed; docs build complete.
+cd mcp
+npm run check:reference
+  Expect: "reference.ts is in sync with public/llms.txt."
+cd ..
 git add -A
-git commit -m "Playground help: Diagnostics panel describes errors and warnings as they run"
-git push
+git commit -m "llms.txt and MCP reference: any type name passes through; qualified Enums; possible-type-typo"
 
-The push redeploys the site and the playground with deltas 1 to 4. If the
-deploy stops with the artifact 403, start a new run:
-gh workflow run deploy.yml --ref main
-The npm packages, MCP server and API worker stay on 0.5.0 until the 0.5.1
-release.
+No push needed yet; delta 6 pushes.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         parser 227/0, renderer 198/0, viewport 14/0,
-                        interactive 42/0, mcp 12/0, from-mongodb 24/0,
-                        playground 51/0, vsix OK, 114 spec links OK,
-                        playground type-check clean, docs build complete
-  built pages           dist/playground/help/diagnostics-panel.html
-                        lists the four warning codes; editor-pane.html
-                        carries the new color line
+  npm run check         all suites as after delta 4; docs build complete
+  check:reference       in sync
+  mcp type-check/test   clean, 12/0 -- also run against a build of the
+                        patched parser in place of 0.5.0, as the release
+                        will: still clean, 12/0
+  built llms.txt        .vitepress/dist/llms.txt carries the new sentences

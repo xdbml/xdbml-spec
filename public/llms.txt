@@ -152,7 +152,7 @@ mrr decimal [synonyms: ['monthly revenue'], business_term: 'MRR', tags: ['kpi'],
 Entity customers [x_owner: 'data-team@acme.com', x_retention_days: 2555] { id int [pk] }
 ```
 
-Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`, `timestamp`, ...) and BSON/Avro-native (`objectId`, `int32`, `int64`, `Decimal128`, `string`, `Date`, `BinData`, ...) are all recognized and preserved through round-trips.
+Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`, `timestamp`, ...) and BSON/Avro-native (`objectId`, `int32`, `int64`, `Decimal128`, `string`, `Date`, `BinData`, ...) are all recognized and preserved through round-trips. Any other type name is valid and passes through as written, so a physical model uses its target's own types: `number(10)` and `varchar2(255)` for Oracle, `serial` and `bytea` for PostgreSQL. A field typed by an Enum declared in a schema names it with its qualifier: `status core.job_status`. A type name close to a declared `Type` or `Enum` (`Adress` next to `Type Address`) draws a `possible-type-typo` warning.
 
 ## Minimal complete example
 

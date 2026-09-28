@@ -111,6 +111,8 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Playground help, Diagnostics panel, after the 0.5.0 release**: the page described warnings as future work and said the parser recovers to report several syntax errors at once. It now describes the two stages as they run: parsing stops at the first syntax error and the diagram keeps the last good state, while resolution reports errors and warnings together and the diagram and inspector keep working. It lists the four warnings (`possible-type-typo`, `ambiguous-ref-endpoint`, `empty-supertype-group`, `merge-without-roll-up`), the row layout with its code, and the default expanded state. The Editor pane page mentions the target-native type colors, and comments in the playground source that still called warnings a future feature are updated.
 
+- **MCP server and llms.txt, after the 0.5.0 release**: the paragraph on types now says that any other type name is valid and passes through as written, so a physical model uses its target's own types (`number(10)`, `varchar2(255)`, `serial`, `bytea`); it shows how a field names an Enum declared in a schema (`status core.job_status`) and names the `possible-type-typo` warning. `mcp/src/reference.ts` is regenerated from it; the MCP server serves the new text once redeployed.
+
 ### Fixed
 
 #### Spec
