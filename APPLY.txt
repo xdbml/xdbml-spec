@@ -1,103 +1,102 @@
-xDBML -- resolver: target-native type names pass through
-Base: origin/main 81125b5 (positioning update: Apache Ossie and LinkML).
+xDBML -- delta 2 of 4 before 0.5.1: target-native type names colored
+Base: delta 1 (xdbml-native-type-names.zip) applied on origin/main 81125b5.
+Apply delta 1 first; this delta's CHANGELOG.md and run-tests.ts include it.
 
 WHAT CHANGED
 ------------
-The name resolver reported `unresolved-type` for every scalar type name
-missing from SCALAR_TYPES / BSON_TYPES in keywords.ts. Those lists exist for
-syntax coloring (their own comment says so), and spec §1.2 principle 4 makes
-scalar type names pass through as written. Oracle `number`, `clob`, `raw`,
-PostgreSQL `serial`, `bytea`, SQL Server `uniqueidentifier`, and fields typed
-by a declared DBML `Enum` all failed. F1Data_Tables.xdbml gave 64 errors;
-it now gives none. The §27.16 spec example with `number(10)` is clean too.
+Oracle `number`, PostgreSQL `serial`, SQL Server `uniqueidentifier` and
+similar names now color as types in the playground editor, the site's code
+blocks, and the VS Code extension grammar.
 
-parser\src\name-resolver.ts
-  - A scalar type name that is not a builtin and not a declared Type or
-    Enum is a target-native type: no diagnostic.
-  - New warning `possible-type-typo` when such a name is a near miss of a
-    declared Type or Enum, compared case-insensitively: a case difference
-    alone for names of 3 characters or fewer, 1 edit up to 7 characters,
-    2 edits from 8 (adjacent transposition = 1 edit). The message names
-    the declaration: "did you mean 'Address'?".
-  - A field typed by a declared Enum resolves (it used to raise
-    `unresolved-type`). An Enum declared in two containers resolves by its
-    bare name without a warning.
-  - dereferenceNamedType(): a target-native or Enum-typed field is an
-    opaque scalar, so a Ref path navigating into it reports
-    `invalid-nested-path`, like a path into `varchar`. Before, the walker
-    bailed silently and relied on the field-level error.
-  - `unresolved-type` stays in DiagnosticCode (NamedTypeReference nodes
-    still use it); the field-type pass no longer emits it for a scalar.
+parser\src\keywords.ts
+  - NEW `TARGET_NATIVE_TYPES`: 72 names (Oracle, PostgreSQL, SQL Server,
+    Snowflake, BigQuery, Cassandra, Protobuf, ClickHouse, plus geometry,
+    geography, interval). Highlighting only.
+  - Kept out of SCALAR_TYPES on purpose: SCALAR_TYPES/BSON_TYPES are the
+    built-in names that a Named Type cannot shadow (spec §15.2), and both
+    the name resolver and the module resolver read them. Putting
+    `geography` there would stop `Type Geography { ... }` from resolving.
+    The comment above SCALAR_TYPES now says so.
+  - Left out: generic words that often name fields (point, line, box,
+    path, circle, image, counter, duration, name), since coloring does not
+    depend on position. Kept, like the existing date/time/year: number,
+    raw, interval, bytes, vector.
+parser\src\monarch.ts
+  `nativeTypes` group, colored `type`.
+tools\textmate\xdbml.tmLanguage.template.json, scripts\build.mjs
+  `native-types` pattern (scope storage.type.xdbml) filled from
+  __TARGET_NATIVE_TYPES__, included next to bson-types in both places.
+tools\textmate\xdbml.tmLanguage.json
+  Regenerated with build.mjs (nothing to run on your side).
+tools\vscode-extension\syntaxes\xdbml.tmLanguage.json
+  Synced with scripts\prepare.mjs. The .vsix is NOT rebuilt and the
+  extension version is NOT bumped: a release decision.
+tools\textmate\scripts\test.mjs
+  Targeted check: number, CLOB, serial, uniqueidentifier are
+  storage.type.xdbml; point is not. Fails against the old grammar.
+tools\textmate\README.md
+  "Adding a keyword" says which list a target-native name goes in.
 parser\test\run-tests.ts
-  - P6 "unresolved named type produces unresolved-type diagnostic" is
-    replaced by a near-miss case (`Adress` vs `Type Address`) and a
-    pass-through case (`NoSuchType` with nothing close: clean).
-  - New: 18 fields typed with target-native names (Oracle, PostgreSQL,
-    SQL Server, Snowflake, BigQuery, a quoted multi-word type), including
-    union/array/map positions; DBML Enum-typed field; Enum in two containers; near-miss
-    rules (case only, transposition, array element, union member, nested
-    object field, Enum, length thresholds, far names stay silent); paths
-    into a native and an Enum-typed field.
+  4 keyword-consistency tests: all 72 parse as ScalarType and resolve
+  clean; no duplicate and no overlap with any other keyword array; Monarch
+  carries the list; `Type Geography` still resolves through a Ref path.
 CHANGELOG.md
-  v0.5 > Fixed > new "Tooling" subsection, marked as fixed after the 0.5.0
-  release, no new spec version.
-
-Not in this delta (see chat): npm publish of @xdbml/parse and the MCP/API
-redeploy; SCALAR_TYPES additions for highlighting; the playground help page
-"Diagnostics panel", whose "Errors vs warnings" section is already stale.
+  v0.5 > Added > Tooling, last bullet, marked after the 0.5.0 release.
 
 FILES
 -----
-  CHANGELOG.md, parser\src\name-resolver.ts, parser\test\run-tests.ts
-  (all EDIT)
+  CHANGELOG.md
+  parser\src\keywords.ts
+  parser\src\monarch.ts
+  parser\test\run-tests.ts
+  tools\textmate\README.md
+  tools\textmate\scripts\build.mjs
+  tools\textmate\scripts\test.mjs
+  tools\textmate\xdbml.tmLanguage.json
+  tools\textmate\xdbml.tmLanguage.template.json
+  tools\vscode-extension\syntaxes\xdbml.tmLanguage.json
 
 APPLY (cmd.exe)
 ---------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\CHANGELOG.md"                  "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\parser\src\name-resolver.ts"   "%REPO%\parser\src\name-resolver.ts"
-copy /Y "%DELTA%\parser\test\run-tests.ts"      "%REPO%\parser\test\run-tests.ts"
+copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\parser\src\keywords.ts"                               "%REPO%\parser\src\keywords.ts"
+copy /Y "%DELTA%\parser\src\monarch.ts"                                "%REPO%\parser\src\monarch.ts"
+copy /Y "%DELTA%\parser\test\run-tests.ts"                             "%REPO%\parser\test\run-tests.ts"
+copy /Y "%DELTA%\tools\textmate\README.md"                             "%REPO%\tools\textmate\README.md"
+copy /Y "%DELTA%\tools\textmate\scripts\build.mjs"                     "%REPO%\tools\textmate\scripts\build.mjs"
+copy /Y "%DELTA%\tools\textmate\scripts\test.mjs"                      "%REPO%\tools\textmate\scripts\test.mjs"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.json"                 "%REPO%\tools\textmate\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.template.json"        "%REPO%\tools\textmate\xdbml.tmLanguage.template.json"
+copy /Y "%DELTA%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json" "%REPO%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: parser 217 passed, 0 failed; every other suite unchanged; docs
+  Expect: parser 221 passed, 0 failed; every other suite unchanged; docs
   build complete.
+node tools\textmate\scripts\test.mjs
+  Expect: "Target-native type names" block with 5 checks, then
+  "All checks passed".
 npm run docs:dev
-  Open the local URL VitePress prints, followed by /playground/index.html.
-  Open F1Data_Tables.xdbml: the diagnostics panel shows "No issues".
-  Then replace the editor content with:
-
-    xdbml: 0.5
-    Type Address {
-      street varchar
-    }
-    Table t {
-      id number(11) [pk]
-      home Adress
-    }
-
-  Expect one amber warning on `Adress`: "did you mean 'Address'?".
-  Stop the dev server with Ctrl+C.
+  Open the local URL VitePress prints, followed by /playground/index.html,
+  and open F1Data_Tables.xdbml: `number(11)` has the same color as
+  `varchar2(255)`. Stop the dev server with Ctrl+C.
 git add -A
-git commit -m "Resolver: target-native type names pass through; possible-type-typo warning"
-git push
+git commit -m "Highlighting: TARGET_NATIVE_TYPES (Oracle number, PostgreSQL serial, ...), colored but not built-ins"
 
-The push redeploys the site, and the live playground picks the change up
-from parser source. If the deploy stops with the artifact 403, start a new
-run: gh workflow run deploy.yml --ref main
+Do not push yet if you prefer one push for deltas 1 to 4; otherwise:
+git push
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  parser type-check     tsc --noEmit clean; tsc -p tsconfig.build.json clean
+  parser type-check     tsc --noEmit clean; build clean
   renderer type-check   clean
-  npm run check         parser 217/0 (was 210/0), renderer 198/0,
-                        viewport 14/0, interactive 42/0, mcp 12/0,
-                        from-mongodb 24/0, playground 51/0, vsix and spec
-                        links OK, playground type-check clean, docs build
-                        complete
-  new tests vs old      all 8 new tests fail against the unpatched
-                        resolver and pass against the patched one
-  F1Data_Tables.xdbml   64 errors before, 0 after
-  examples/*.xdbml      no new diagnostics in any of the 14
+  npm run check         parser 221/0, renderer 198/0, viewport 14/0,
+                        interactive 42/0, mcp 12/0, from-mongodb 24/0,
+                        playground 51/0, vsix and spec links OK,
+                        playground type-check clean, docs build complete
+  TextMate smoke test   all checks passed; the new block fails 4 of 5
+                        against the previous grammar
+  grammar copies        tools\textmate and the extension copy identical

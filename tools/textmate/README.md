@@ -36,7 +36,10 @@ case-insensitive regex alternations.
 ## Adding a keyword
 
 1. Edit `parser/src/keywords.ts`, adding the keyword to the right
-   exported array (e.g. `SCALAR_TYPES`, `SETTING_KEYS`).
+   exported array (e.g. `SCALAR_TYPES`, `SETTING_KEYS`). A type name
+   of one target that only needs color goes in `TARGET_NATIVE_TYPES`:
+   names in `SCALAR_TYPES` are also built-ins, which a Named Type
+   cannot shadow, so adding one there changes how documents resolve.
 2. Run `node tools/textmate/scripts/build.mjs` to regenerate
    `xdbml.tmLanguage.json`.
 3. Run `npm test` in the parser package; the keyword-consistency

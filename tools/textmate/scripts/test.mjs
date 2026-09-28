@@ -156,6 +156,27 @@ async function main () {
     }
   }
 
+  // Target-native type names are colored like scalar types, and a
+  // generic word left out of TARGET_NATIVE_TYPES is not.
+  console.log(`\n${CYAN}Target-native type names${RESET}`);
+  const grammar = await registry.loadGrammar('source.xdbml');
+  const nativeLine = '  a number(11)  b CLOB  c serial  d uniqueidentifier  e point';
+  const nativeTokens = grammar.tokenizeLine(nativeLine, vsctm.INITIAL).tokens;
+  const scopesOf = (word) => {
+    const at = nativeLine.indexOf(word);
+    const tok = nativeTokens.find((t) => t.startIndex <= at && at < t.endIndex);
+    return tok ? tok.scopes : [];
+  };
+  for (const [word, expectType] of [['number', true], ['CLOB', true], ['serial', true], ['uniqueidentifier', true], ['point', false]]) {
+    const isType = scopesOf(word).includes('storage.type.xdbml');
+    if (isType === expectType) {
+      console.log(`  ${GREEN}✓${RESET} ${word} ${expectType ? 'is' : 'is not'} storage.type.xdbml`);
+    } else {
+      console.log(`  ${RED}✗${RESET} ${word}: expected ${expectType ? '' : 'no '}storage.type.xdbml, got ${scopesOf(word).join(' ')}`);
+      totalFailed++;
+    }
+  }
+
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   if (totalFailed === 0) {
     console.log(`  ${GREEN}All checks passed${RESET}`);

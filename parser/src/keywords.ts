@@ -106,9 +106,15 @@ export const POLYMORPHISM_KEYWORDS = [
 /* -------------------------------------------------------------------------
  * Scalar and BSON types
  *
- * The parser accepts any identifier as a scalar type (open vocabulary),
- * so these lists drive color, not validation. Themes color them under
- * `storage.type` (TextMate) or `type` (Monarch).
+ * The parser accepts any identifier as a scalar type (open vocabulary,
+ * spec §1.2 principle 4), so these lists never reject a type name.
+ * They serve two purposes: themes color them under `storage.type`
+ * (TextMate) or `type` (Monarch), and the name resolver treats them as
+ * built-in names, which a Named Type cannot shadow (spec §15.2).
+ * Adding a name here therefore changes resolution as well as color: a
+ * document declaring `Type <that name>` would stop resolving to its own
+ * Type. Target-native names that only need color go in
+ * TARGET_NATIVE_TYPES below.
  * ----------------------------------------------------------------------- */
 
 export const SCALAR_TYPES = [
@@ -148,6 +154,53 @@ export const BSON_TYPES = [
   'regex',
   'long',
   'double',
+] as const;
+
+/* -------------------------------------------------------------------------
+ * Target-native types (highlighting only)
+ *
+ * Common type names of specific targets, colored like SCALAR_TYPES so
+ * that a physical model reads the same in the editor as a generic one.
+ * Unlike SCALAR_TYPES, these are not built-in names: the resolver
+ * passes them through like any other target-native name, and a Named
+ * Type or Enum may be declared under one of them.
+ *
+ * Coloring is position-independent (Monarch and TextMate both match
+ * the bare word), so a field named after a listed type is colored as a
+ * type too. Generic words that often name fields -- `point`, `line`,
+ * `box`, `path`, `circle`, `image`, `counter`, `duration`, `name` --
+ * are left out for that reason. The list is a convenience, not a
+ * vocabulary: a name missing from it is still a valid type.
+ * ----------------------------------------------------------------------- */
+
+export const TARGET_NATIVE_TYPES = [
+  // Oracle
+  'number', 'binary_float', 'binary_double', 'clob', 'nclob', 'bfile',
+  'raw', 'rowid', 'urowid', 'xmltype', 'sdo_geometry',
+  // Oracle, PostgreSQL, BigQuery, Databricks
+  'interval',
+  // PostgreSQL
+  'serial', 'smallserial', 'bigserial', 'serial2', 'serial4', 'serial8',
+  'int2', 'int4', 'int8', 'float4', 'float8', 'bytea', 'citext',
+  'inet', 'cidr', 'macaddr', 'macaddr8', 'tsvector', 'tsquery', 'hstore',
+  'jsonpath', 'timetz', 'varbit',
+  'int4range', 'int8range', 'numrange', 'tsrange', 'tstzrange', 'daterange',
+  // SQL Server
+  'uniqueidentifier', 'datetimeoffset', 'smalldatetime', 'rowversion',
+  'hierarchyid', 'sql_variant',
+  // Snowflake (plus `number`, `interval`, `geography`, `geometry`)
+  'timestamp_ntz', 'timestamp_ltz', 'timestamp_tz', 'vector',
+  // BigQuery, Avro, Protobuf
+  'float64', 'bignumeric', 'bigdecimal', 'bytes',
+  // Spatial, across several targets
+  'geometry', 'geography',
+  // Cassandra
+  'ascii', 'varint', 'timeuuid',
+  // Protobuf
+  'uint32', 'uint64', 'sint32', 'sint64',
+  'fixed32', 'fixed64', 'sfixed32', 'sfixed64',
+  // ClickHouse
+  'uint8', 'uint16', 'int16', 'float32',
 ] as const;
 
 /* -------------------------------------------------------------------------

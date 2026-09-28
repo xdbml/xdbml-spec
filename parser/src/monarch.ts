@@ -27,6 +27,7 @@ import {
   POLYMORPHISM_KEYWORDS,
   SCALAR_TYPES,
   BSON_TYPES,
+  TARGET_NATIVE_TYPES,
   SETTING_FLAGS,
   SETTING_KEYS,
   GRANULARITY_VALUES,
@@ -59,6 +60,7 @@ export interface XDbmlMonarchLanguage {
   polymorphismKeywords: string[];
   scalarTypes: string[];
   bsonTypes: string[];
+  nativeTypes: string[];
   settingFlags: string[];
   settingKeys: string[];
   granularityValues: string[];
@@ -163,6 +165,10 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
   // BSON / document-store types
   bsonTypes: [...BSON_TYPES],
 
+  // Target-native types (Oracle `number`, PostgreSQL `serial`, ...):
+  // colored like scalar types, but not built-ins -- see keywords.ts.
+  nativeTypes: [...TARGET_NATIVE_TYPES],
+
   // Bare-flag settings: `pk`, `unique`, `not null`, etc.
   // `not null` and `primary key` are two words but tokenized one at a time
   // here -- the highlighter colors each as `keyword.setting`.
@@ -243,6 +249,7 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
           '@decls': 'keyword.declaration',
           '@scalarTypes': 'type',
           '@bsonTypes': 'type.bson',
+          '@nativeTypes': 'type',
           '@settingFlags': 'keyword.setting',
           '@settingKeys': 'keyword.setting',
           '@granularityValues': 'keyword.value',

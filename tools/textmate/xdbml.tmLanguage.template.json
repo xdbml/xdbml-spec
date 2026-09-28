@@ -19,6 +19,7 @@
     { "include": "#type-keywords" },
     { "include": "#scalar-types" },
     { "include": "#bson-types" },
+    { "include": "#native-types" },
     { "include": "#x-properties" },
     { "include": "#ref-cardinality-operators" },
     { "include": "#brackets" }
@@ -100,6 +101,12 @@
       "match": "\\b((?i:__BSON_TYPES__))\\b"
     },
 
+    "native-types": {
+      "comment": "Target-native type names (Oracle number, PostgreSQL serial, ...), colored like scalar types. Highlighting only: any identifier is a valid type name.",
+      "name": "storage.type.xdbml",
+      "match": "\\b((?i:__TARGET_NATIVE_TYPES__))\\b"
+    },
+
     "x-properties": {
       "comment": "Custom AI-readiness properties prefixed with `x_` or `x-`. Highlighted as extension points.",
       "name": "support.other.x-property.xdbml",
@@ -127,6 +134,7 @@
         { "include": "#setting-flags" },
         { "include": "#scalar-types" },
         { "include": "#bson-types" },
+        { "include": "#native-types" },
         { "include": "#cardinality-operators" },
         {
           "name": "punctuation.separator.xdbml",

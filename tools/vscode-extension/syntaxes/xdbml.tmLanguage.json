@@ -42,6 +42,9 @@
       "include": "#bson-types"
     },
     {
+      "include": "#native-types"
+    },
+    {
       "include": "#x-properties"
     },
     {
@@ -127,6 +130,11 @@
       "name": "storage.type.bson.xdbml",
       "match": "\\b((?i:decimal128|objectid|bindata|minkey|maxkey|symbol|double|regex|long))\\b"
     },
+    "native-types": {
+      "comment": "Target-native type names (Oracle number, PostgreSQL serial, ...), colored like scalar types. Highlighting only: any identifier is a valid type name.",
+      "name": "storage.type.xdbml",
+      "match": "\\b((?i:uniqueidentifier|datetimeoffset|binary_double|smalldatetime|timestamp_ntz|timestamp_ltz|binary_float|sdo_geometry|timestamp_tz|smallserial|hierarchyid|sql_variant|rowversion|bignumeric|bigdecimal|bigserial|int4range|int8range|tstzrange|daterange|geography|interval|macaddr8|tsvector|jsonpath|numrange|geometry|timeuuid|sfixed32|sfixed64|xmltype|serial2|serial4|serial8|macaddr|tsquery|tsrange|float64|fixed32|fixed64|float32|number|urowid|serial|float4|float8|citext|hstore|timetz|varbit|vector|varint|uint32|uint64|sint32|sint64|uint16|nclob|bfile|rowid|bytea|bytes|ascii|uint8|int16|clob|int2|int4|int8|inet|cidr|raw))\\b"
+    },
     "x-properties": {
       "comment": "Custom AI-readiness properties prefixed with `x_` or `x-`. Highlighted as extension points.",
       "name": "support.other.x-property.xdbml",
@@ -176,6 +184,9 @@
         },
         {
           "include": "#bson-types"
+        },
+        {
+          "include": "#native-types"
         },
         {
           "include": "#cardinality-operators"

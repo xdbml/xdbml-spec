@@ -23,10 +23,15 @@ import {
 } from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
+  BSON_TYPES,
   CONTAINER_KEYWORDS,
   ENTITY_KEYWORDS,
+  SCALAR_TYPES,
   SETTING_FLAGS,
+  TARGET_NATIVE_TYPES,
 } from '../src/keywords.ts';
+import * as keywordArrays from '../src/keywords.ts';
+import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // The repository's own examples, the same files the site publishes and the
@@ -3746,6 +3751,73 @@ function runKeywordConsistencyTests (): TestResult[] {
     } else {
       results.push(fail(s.name, err));
     }
+  }
+
+  // Target-native types: highlighting only. Each parses as a scalar
+  // field type and resolves with no diagnostic; none duplicates a
+  // built-in or any other keyword array; Monarch colors them as `type`.
+  {
+    const fields = TARGET_NATIVE_TYPES.map((t, i) => `  f${i} ${t}`).join('\n');
+    const err = tryParse(`xdbml: 0.5\nTable t {\n${fields}\n}\n`, (doc) => {
+      const d = doc.statements[0];
+      if (!d || d.kind !== 'EntityDeclaration') return `expected EntityDeclaration, got ${d?.kind ?? 'none'}`;
+      const types = d.body.filter((b) => b.kind === 'FieldDeclaration').map((b) => (b as { type: { kind: string; name?: string } }).type);
+      const wrong = types.filter((t, i) => t.kind !== 'ScalarType' || t.name !== TARGET_NATIVE_TYPES[i]);
+      if (wrong.length > 0) return `not parsed as ScalarType: ${wrong.map((t) => t.name ?? t.kind).join(', ')}`;
+      const diags = resolveNames(doc).diagnostics;
+      return diags.length === 0 ? null : `unexpected diagnostics: ${diags.map((x) => x.message).join('; ')}`;
+    });
+    results.push(err === null
+      ? ok(`Target-native types: all ${TARGET_NATIVE_TYPES.length} parse as scalar types and resolve cleanly`)
+      : fail('Target-native types: parse and resolve', err));
+  }
+  {
+    const overlaps: string[] = [];
+    const seen = new Set<string>();
+    for (const t of TARGET_NATIVE_TYPES) {
+      if (seen.has(t)) overlaps.push(`${t} listed twice`);
+      seen.add(t);
+      if (t !== t.toLowerCase()) overlaps.push(`${t} is not lower-case`);
+    }
+    for (const [arrayName, arr] of Object.entries(keywordArrays)) {
+      if (arrayName === 'TARGET_NATIVE_TYPES' || !Array.isArray(arr)) continue;
+      const lower = (arr as readonly string[]).map((x) => x.toLowerCase());
+      for (const t of TARGET_NATIVE_TYPES) {
+        if (lower.includes(t)) overlaps.push(`${t} also in ${arrayName}`);
+      }
+    }
+    results.push(overlaps.length === 0
+      ? ok('Target-native types: no duplicate and no overlap with SCALAR_TYPES, BSON_TYPES or other keyword arrays')
+      : fail('Target-native types: no duplicate or overlap', overlaps.join('; ')));
+  }
+  {
+    const lang = xdbmlMonarchTokensProvider;
+    const missing = TARGET_NATIVE_TYPES.filter((t) => !lang.nativeTypes.includes(t));
+    const builtinsIntact = SCALAR_TYPES.every((t) => lang.scalarTypes.includes(t)) && BSON_TYPES.every((t) => lang.bsonTypes.includes(t));
+    results.push(missing.length === 0 && builtinsIntact
+      ? ok('Target-native types: Monarch nativeTypes carries the full list')
+      : fail('Target-native types: Monarch nativeTypes', `missing: ${missing.join(', ')}; builtins intact: ${builtinsIntact}`));
+  }
+  {
+    // Not built-ins: a Named Type may take a target-native name and
+    // still resolve, including through a Ref path into its fields.
+    const err = tryParse(`xdbml: 0.5
+Type Geography {
+  country varchar
+}
+Entity sites {
+  id int [pk]
+  region Geography
+}
+Entity countries { code varchar [pk] }
+Ref: sites.region.country > countries.code
+`, (doc) => {
+      const diags = resolveNames(doc).diagnostics;
+      return diags.length === 0 ? null : `unexpected diagnostics: ${diags.map((x) => x.code + ': ' + x.message).join('; ')}`;
+    });
+    results.push(err === null
+      ? ok('Target-native types: a Named Type called Geography still resolves (no shadowing)')
+      : fail('Target-native types: Named Type called Geography', err));
   }
 
   return results;

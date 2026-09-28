@@ -73,6 +73,8 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Example 14, supertype groups**: the Appendix C.5 model, with three groups over two axes and three levels, a per-subtype strategy, and relationships to a subtype's own key and to a subtype as an entity-level endpoint. Its golden SVG is new; the thirteen existing goldens are byte-identical.
 
+- **Target-native type names colored, after the 0.5.0 release**: `TARGET_NATIVE_TYPES` in `parser/src/keywords.ts` lists 72 common type names of specific targets: Oracle `number`, `clob` and `raw`, PostgreSQL `serial`, `bytea` and `citext`, SQL Server `uniqueidentifier` and `datetimeoffset`, Snowflake `timestamp_ntz`, BigQuery `float64`, the integer types of Cassandra, Protobuf and ClickHouse, and `geometry`, `geography` and `interval`. The playground editor, and the TextMate grammar used by the site and the VS Code extension, color them like scalar types. They are not built-ins: the resolver passes them through like any other target-native name, and a Named Type may be declared under one of them, whereas a name in `SCALAR_TYPES` is a built-in that no Named Type can shadow (spec §15.2). Generic words that often name fields (`point`, `line`, `box`, `path`, `image`, `duration`) are left out, since coloring does not depend on position. The parser's keyword-consistency tests and the TextMate smoke test cover the list.
+
 ### Changed
 
 #### Spec
