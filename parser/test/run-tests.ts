@@ -1878,7 +1878,27 @@ Ref: posts.user_id > users.id`,
       },
     },
     {
-      name: 'P6: unresolved named type produces unresolved-type diagnostic',
+      name: 'P6: near miss of a declared Named Type produces a possible-type-typo warning',
+      source: `xdbml: 0.2
+Type Address {
+  street varchar
+}
+Entity users {
+  id int [pk]
+  home Adress
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 1) return `expected 1 diagnostic, got ${r.diagnostics.length}: ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const d = r.diagnostics[0];
+        if (d.code !== 'possible-type-typo') return `wrong code: ${d.code}`;
+        if (d.severity !== 'warning') return `expected a warning, got ${d.severity}`;
+        if (!d.message.includes("'Adress'") || !d.message.includes("'Address'")) return `message should name both spellings: ${d.message}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: an unknown type name with no near miss passes through as target-native (spec §1.2)',
       source: `xdbml: 0.2
 Entity users {
   id int [pk]
@@ -1886,11 +1906,114 @@ Entity users {
 }`,
       assert: (doc) => {
         const r = resolveNames(doc);
-        if (r.diagnostics.length !== 1) return `expected 1 diagnostic, got ${r.diagnostics.length}`;
-        const d = r.diagnostics[0];
-        if (d.code !== 'unresolved-type') return `wrong code: ${d.code}`;
-        if (!d.message.includes('NoSuchType')) return `message should mention NoSuchType`;
-        return null;
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+      },
+    },
+    {
+      name: 'P6: target-native type names produce no diagnostics',
+      source: `xdbml: 0.5
+Project p { targets: Oracle }
+Schema ops [type: schema] {
+  Table native {
+    a number(11) [pk]
+    b NUMBER(10,2)
+    c clob
+    d nclob
+    e raw(16)
+    f binary_double
+    g serial
+    h bigserial
+    i bytea
+    j citext
+    k uniqueidentifier
+    l datetimeoffset
+    m timestamp_ntz
+    n float64
+    o "timestamp with time zone"
+    p union [number, varchar2(10)]
+    q array [clob]
+    r map [varchar2, number]
+  }
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+      },
+    },
+    {
+      name: 'P6: a DBML field typed by a declared Enum produces no diagnostics',
+      source: `Enum job_status {
+  created
+  running
+}
+Table jobs {
+  id int [pk]
+  status job_status
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+      },
+    },
+    {
+      name: 'P6: an Enum declared in two containers resolves by bare name without a near-miss warning',
+      source: `xdbml: 0.2
+Container a [type: schema] {
+  Enum state { on
+    off }
+  Entity t { s state }
+}
+Container b [type: schema] {
+  Enum state { up
+    down }
+  Entity u { s state }
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        return r.diagnostics.length === 0 ? null : `expected clean, got ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+      },
+    },
+    {
+      name: 'P6: near-miss rules -- case only, transposition, nested positions, Enums, length thresholds',
+      source: `xdbml: 0.2
+Type Email varchar
+Type Address {
+  street varchar
+}
+Type Geo {
+  lat float
+}
+Enum job_status {
+  created
+}
+Entity t {
+  a email
+  b Adderss
+  c array [Adress]
+  d union [Emial, int]
+  e object {
+    f Adress
+  }
+  g job_stauts
+  h geo
+  i gep
+  j number
+  k address_line
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const got = r.diagnostics.map((d) => `${d.code}:${d.severity}:${(d.message.match(/did you mean '([^']+)'/) ?? [])[1]}`);
+        const want = [
+          'possible-type-typo:warning:Email',      // a -- case only
+          'possible-type-typo:warning:Address',    // b -- adjacent transposition
+          'possible-type-typo:warning:Address',    // c -- array element
+          'possible-type-typo:warning:Email',      // d -- union member
+          'possible-type-typo:warning:Address',    // f -- nested object field
+          'possible-type-typo:warning:job_status', // g -- Enum
+          'possible-type-typo:warning:Geo',        // h -- three characters, case only
+        ];
+        // i: three characters allow no edit beyond case; j and k are too far from any declaration.
+        return JSON.stringify(got) === JSON.stringify(want) ? null : `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`;
       },
     },
     {
@@ -2143,6 +2266,38 @@ Ref: users.email.something > foo.x`,
         const structDiags = r.diagnostics.filter((d) => d.code === 'invalid-nested-path');
         if (structDiags.length !== 1) return `expected 1 invalid-nested-path, got: ${r.diagnostics.map((d) => d.code).join(', ')}`;
         return null;
+      },
+    },
+    {
+      name: 'P6-nested: navigating past a target-native type is invalid',
+      source: `xdbml: 0.2
+Entity users {
+  id number(11) [pk]
+  code clob
+}
+Entity foo { x varchar [pk] }
+Ref: users.code.something > foo.x`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const codes = r.diagnostics.map((d) => d.code);
+        return JSON.stringify(codes) === JSON.stringify(['invalid-nested-path']) ? null : `expected exactly one invalid-nested-path, got: ${codes.join(', ')}`;
+      },
+    },
+    {
+      name: 'P6-nested: navigating past an Enum-typed field is invalid',
+      source: `Enum job_status {
+  created
+}
+Table jobs {
+  id int [pk]
+  status job_status
+}
+Table foo { x varchar [pk] }
+Ref: jobs.status.something > foo.x`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        const codes = r.diagnostics.map((d) => d.code);
+        return JSON.stringify(codes) === JSON.stringify(['invalid-nested-path']) ? null : `expected exactly one invalid-nested-path, got: ${codes.join(', ')}`;
       },
     },
     {

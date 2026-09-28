@@ -1,83 +1,103 @@
-xDBML -- positioning update: Apache Ossie (formerly OSI) and LinkML
-Base: origin/main 56de507 (release 0.5.0).
+xDBML -- resolver: target-native type names pass through
+Base: origin/main 81125b5 (positioning update: Apache Ossie and LinkML).
 
 WHAT CHANGED
 ------------
-Open Semantic Interchange is now Apache Ossie (incubating). Every current
-narrative uses the new name, with "formerly Open Semantic Interchange" at the
-first mention of a page, and links to ossie.apache.org or github.com/apache/
-ossie. LinkML is positioned as the closest peer at the schema layer.
+The name resolver reported `unresolved-type` for every scalar type name
+missing from SCALAR_TYPES / BSON_TYPES in keywords.ts. Those lists exist for
+syntax coloring (their own comment says so), and spec §1.2 principle 4 makes
+scalar type names pass through as written. Oracle `number`, `clob`, `raw`,
+PostgreSQL `serial`, `bytea`, SQL Server `uniqueidentifier`, and fields typed
+by a declared DBML `Enum` all failed. F1Data_Tables.xdbml gave 64 errors;
+it now gives none. The §27.16 spec example with `number(10)` is clean too.
 
-faq.md
-  - "What's the relationship between xDBML and ODCS, Apache Ossie, OWL?":
-    the Ossie bullet now names what an xDBML entity supplies to an Ossie
-    dataset (source table, keys, fields, join relationships, and the §24.1
-    synonyms for Ossie's ai_context); closing sentence says "datasets".
-  - NEW "How does xDBML compare with LinkML?", as reviewed, with your
-    wording: "...materialization settings have no equivalent in LinkML."
-spec\v0.5.md -- informative text only; no version change
-  - abstract, §1.1 (out of scope), §24 intro: Apache Ossie
-  - §30 layer diagram: "Ossie, dbt MetricFlow, Cube" (the full name would
-    overflow the box; column alignment verified)
-  - §30 table: Apache Ossie row with the dataset handoff; new LinkML row
-    "Schema (linked data) | Peer at the schema layer; partial translation
-    both ways"
-  - §30 closing: Ossie in the "does not attempt to be" list, plus one
-    sentence on LinkML linking to the new FAQ entry
-  - references: Apache Ossie link replaces the old OSI repository; LinkML
-    added
-README.md, index.md, xDBML_in_5_minutes.md
-  Ossie name (xDBML in 5 minutes drops "Snowflake's").
-ecosystem.md
-  desired bridges: "xDBML <-> Apache Ossie" (Ossie dataset definitions from
-  xDBML entities) and a new "xDBML <-> LinkML".
-GOVERNANCE.md, CONTRIBUTING.md
-  Ossie name.
+parser\src\name-resolver.ts
+  - A scalar type name that is not a builtin and not a declared Type or
+    Enum is a target-native type: no diagnostic.
+  - New warning `possible-type-typo` when such a name is a near miss of a
+    declared Type or Enum, compared case-insensitively: a case difference
+    alone for names of 3 characters or fewer, 1 edit up to 7 characters,
+    2 edits from 8 (adjacent transposition = 1 edit). The message names
+    the declaration: "did you mean 'Address'?".
+  - A field typed by a declared Enum resolves (it used to raise
+    `unresolved-type`). An Enum declared in two containers resolves by its
+    bare name without a warning.
+  - dereferenceNamedType(): a target-native or Enum-typed field is an
+    opaque scalar, so a Ref path navigating into it reports
+    `invalid-nested-path`, like a path into `varchar`. Before, the walker
+    bailed silently and relied on the field-level error.
+  - `unresolved-type` stays in DiagnosticCode (NamedTypeReference nodes
+    still use it); the field-type pass no longer emits it for a scalar.
+parser\test\run-tests.ts
+  - P6 "unresolved named type produces unresolved-type diagnostic" is
+    replaced by a near-miss case (`Adress` vs `Type Address`) and a
+    pass-through case (`NoSuchType` with nothing close: clean).
+  - New: 18 fields typed with target-native names (Oracle, PostgreSQL,
+    SQL Server, Snowflake, BigQuery, a quoted multi-word type), including
+    union/array/map positions; DBML Enum-typed field; Enum in two containers; near-miss
+    rules (case only, transposition, array element, union member, nested
+    object field, Enum, length thresholds, far names stay silent); paths
+    into a native and an Enum-typed field.
 CHANGELOG.md
-  one line under v0.5 > Changed > Spec, marked as an editorial update after
-  the 0.5.0 release, with no new version.
+  v0.5 > Fixed > new "Tooling" subsection, marked as fixed after the 0.5.0
+  release, no new spec version.
 
-Left alone: spec v0.1-v0.4 (historical), llms.txt and the MCP reference
-(neither mentions OSI or LinkML).
+Not in this delta (see chat): npm publish of @xdbml/parse and the MCP/API
+redeploy; SCALAR_TYPES additions for highlighting; the playground help page
+"Diagnostics panel", whose "Errors vs warnings" section is already stale.
 
 FILES
 -----
-  faq.md, spec\v0.5.md, README.md, index.md, xDBML_in_5_minutes.md,
-  ecosystem.md, GOVERNANCE.md, CONTRIBUTING.md, CHANGELOG.md   (all EDIT)
+  CHANGELOG.md, parser\src\name-resolver.ts, parser\test\run-tests.ts
+  (all EDIT)
 
 APPLY (cmd.exe)
 ---------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\faq.md"                  "%REPO%\faq.md"
-copy /Y "%DELTA%\spec\v0.5.md"            "%REPO%\spec\v0.5.md"
-copy /Y "%DELTA%\README.md"               "%REPO%\README.md"
-copy /Y "%DELTA%\index.md"                "%REPO%\index.md"
-copy /Y "%DELTA%\xDBML_in_5_minutes.md"   "%REPO%\xDBML_in_5_minutes.md"
-copy /Y "%DELTA%\ecosystem.md"            "%REPO%\ecosystem.md"
-copy /Y "%DELTA%\GOVERNANCE.md"           "%REPO%\GOVERNANCE.md"
-copy /Y "%DELTA%\CONTRIBUTING.md"         "%REPO%\CONTRIBUTING.md"
-copy /Y "%DELTA%\CHANGELOG.md"            "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\CHANGELOG.md"                  "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\parser\src\name-resolver.ts"   "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\test\run-tests.ts"      "%REPO%\parser\test\run-tests.ts"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
-npm run docs:build
+npm run check
+  Expect: parser 217 passed, 0 failed; every other suite unchanged; docs
+  build complete.
 npm run docs:dev
-  Check /faq (both entries), /spec/current#_30-relationship-to-other-standards,
-  and /ecosystem.
+  Open the local URL VitePress prints, followed by /playground/index.html.
+  Open F1Data_Tables.xdbml: the diagnostics panel shows "No issues".
+  Then replace the editor content with:
+
+    xdbml: 0.5
+    Type Address {
+      street varchar
+    }
+    Table t {
+      id number(11) [pk]
+      home Adress
+    }
+
+  Expect one amber warning on `Adress`: "did you mean 'Address'?".
+  Stop the dev server with Ctrl+C.
 git add -A
-git commit -m "Positioning: Apache Ossie (formerly OSI), LinkML"
+git commit -m "Resolver: target-native type names pass through; possible-type-typo warning"
 git push
 
-The push redeploys the site. If the deploy stops again with the artifact
-403, start a new run: gh workflow run deploy.yml --ref main
+The push redeploys the site, and the live playground picks the change up
+from parser source. If the deploy stops with the artifact 403, start a new
+run: gh workflow run deploy.yml --ref main
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  docs:build        build complete, VitePress dead-link check included
-  FAQ anchor        faq.html has id "how-does-xdbml-compare-with-linkml",
-                    which the spec's §30 link targets
-  spec links        113 playground buttons still open their snippets
-  leftovers         no "OSI" or "Open Semantic Interchange" outside the
-                    historical specs, except as "formerly" notes
-  §30 diagram       every box line is 72 characters
+  parser type-check     tsc --noEmit clean; tsc -p tsconfig.build.json clean
+  renderer type-check   clean
+  npm run check         parser 217/0 (was 210/0), renderer 198/0,
+                        viewport 14/0, interactive 42/0, mcp 12/0,
+                        from-mongodb 24/0, playground 51/0, vsix and spec
+                        links OK, playground type-check clean, docs build
+                        complete
+  new tests vs old      all 8 new tests fail against the unpatched
+                        resolver and pass against the patched one
+  F1Data_Tables.xdbml   64 errors before, 0 after
+  examples/*.xdbml      no new diagnostics in any of the 14

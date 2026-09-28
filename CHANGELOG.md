@@ -111,6 +111,10 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **§3.9**: the subsection on element and field separators was numbered 3.8 a second time; it is now 3.9.
 
+#### Tooling
+
+- **Target-native type names, fixed after the 0.5.0 release**: the name resolver reported `unresolved-type` for every scalar type name missing from the parser's highlighting lists, among them Oracle `number`, `clob` and `raw`, PostgreSQL `serial` and `bytea`, SQL Server `uniqueidentifier`, and the `number(10)` of the §27.16 field-level import example. A field typed by a declared `Enum`, which DBML allows, failed the same way. Scalar type names pass through as written (spec §1.2, principle 4), so a name that is neither a builtin nor a declared Type or Enum is now accepted as a target-native type with no diagnostic. The exception is a near miss of a declared Type or Enum -- a difference of case, or one or two edits depending on the length of the name -- reported as the new `possible-type-typo` warning, with the declared name as the suggestion. `unresolved-type` stays in `DiagnosticCode`, but the field-type pass no longer emits it for a scalar name. A path that navigates into a target-native or Enum-typed field reports `invalid-nested-path`, as a path into a builtin scalar already did.
+
 ## v0.4 -- 2026
 
 **Status**: Draft -- superseded by v0.5

@@ -108,6 +108,7 @@ export interface SymbolEntry {
 export type DiagnosticCode =
   | 'duplicate-declaration'
   | 'unresolved-type'
+  | 'possible-type-typo'
   | 'unresolved-entity'
   | 'unresolved-field'
   | 'unresolved-partial'
@@ -226,11 +227,18 @@ export class SymbolTable {
  * Built-in type recognition
  *
  * Field type expressions can name a builtin scalar (`int`, `varchar`),
- * a BSON type (`objectId`), or a user-defined Named Type (`Email`).
- * The parser doesn't distinguish at parse time -- they all land as
+ * a BSON type (`objectId`), a user-defined Named Type (`Email`) or Enum,
+ * or any other target-native type (`number`, `clob`, `serial`). The
+ * parser doesn't distinguish at parse time -- they all land as
  * ScalarType nodes (or NamedTypeReference in some contexts). The
- * resolver uses these sets to decide whether to look up a name in the
- * symbol table.
+ * resolver uses these sets only to skip the symbol-table lookup for
+ * names that can never be a Named Type reference.
+ *
+ * The sets are not a type vocabulary. Scalar type names pass through
+ * as written (spec §1.2, principle 4), so a name that is neither a
+ * builtin nor a declared Type or Enum is a target-native type, not an
+ * error. See `nearMissTypeName()` for the one diagnostic such a name
+ * can raise.
  *
  * Matching is case-insensitive: `Int`, `int`, `INT` all map to the same
  * builtin per spec §3.8.
@@ -243,6 +251,80 @@ const BUILTIN_TYPES = new Set<string>([
 
 function isBuiltinType (name: string): boolean {
   return BUILTIN_TYPES.has(name.toLowerCase());
+}
+
+/**
+ * The declared Types and Enums a bare type name can refer to. More than
+ * one entry means the name is declared in several containers (Enums can
+ * be container-scoped); the name still refers to a declaration, so it
+ * is neither a target-native type nor a near miss.
+ */
+function typeOrEnumDeclarations (name: string, symbols: SymbolTable): SymbolEntry[] {
+  const qualified = symbols.lookup(name);
+  if (qualified && (qualified.kind === 'type' || qualified.kind === 'enum')) return [qualified];
+  return symbols.lookupAllBare(name).filter((e) => e.kind === 'type' || e.kind === 'enum');
+}
+
+/**
+ * Near-miss detection for target-native type names.
+ *
+ * A type name that is neither a builtin nor a declared Type or Enum is
+ * accepted as a target-native type. The one case worth flagging is a
+ * name that differs only slightly from a declared Type or Enum -- most
+ * likely a misspelling (`Adress` for `Address`, `email` for `Email`).
+ * Returns the declared name to suggest, or undefined when nothing is
+ * close enough.
+ *
+ * Comparison is case-insensitive, so a difference of case alone counts
+ * as a near miss (identifiers are case-sensitive, spec §3.8). The edit
+ * distance allowed grows with the length of the name: none beyond case
+ * for three characters or fewer, one edit up to seven characters, two
+ * edits from eight. An adjacent transposition counts as one edit.
+ */
+function nearMissTypeName (name: string, symbols: SymbolTable): string | undefined {
+  const lower = name.toLowerCase();
+  const maxDistance = lower.length <= 3 ? 0 : lower.length <= 7 ? 1 : 2;
+  let best: { name: string; distance: number } | undefined;
+  for (const entry of symbols.entries()) {
+    if (entry.kind !== 'type' && entry.kind !== 'enum') continue;
+    const candidate = entry.name.toLowerCase();
+    if (Math.abs(candidate.length - lower.length) > maxDistance) continue;
+    const distance = editDistance(lower, candidate, maxDistance);
+    if (distance <= maxDistance && (!best || distance < best.distance)) {
+      best = { name: entry.name, distance };
+    }
+  }
+  return best?.name;
+}
+
+/**
+ * Optimal string alignment distance (Levenshtein plus adjacent
+ * transposition). Returns `limit + 1` as soon as every alignment of a
+ * row exceeds `limit`, since callers only compare against the limit.
+ */
+function editDistance (a: string, b: string, limit: number): number {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const d: number[][] = [];
+  for (let i = 0; i < rows; i++) {
+    d.push(new Array<number>(cols).fill(0));
+    d[i][0] = i;
+  }
+  for (let j = 0; j < cols; j++) d[0][j] = j;
+  for (let i = 1; i < rows; i++) {
+    let rowMin = Infinity;
+    for (let j = 1; j < cols; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let v = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        v = Math.min(v, d[i - 2][j - 2] + 1);
+      }
+      d[i][j] = v;
+      if (v < rowMin) rowMin = v;
+    }
+    if (rowMin > limit) return limit + 1;
+  }
+  return d[rows - 1][cols - 1];
 }
 
 /* -------------------------------------------------------------------------
@@ -556,16 +638,18 @@ function resolveTypeExpression (
 ): void {
   switch (expr.kind) {
     case 'ScalarType':
-      // A ScalarType is either a builtin or a reference to a Named Type
-      // (the parser doesn't distinguish at parse time). Look up only
-      // when the name isn't a builtin.
-      if (!isBuiltinType(expr.name)) {
-        const found = symbols.lookup(expr.name) ?? symbols.lookupBare(expr.name);
-        if (!found || found.kind !== 'type') {
+      // A ScalarType is a builtin, a reference to a declared Type or
+      // Enum, or a target-native type passed through as written (spec
+      // §1.2, principle 4) -- the parser doesn't distinguish at parse
+      // time. A target-native name is valid; the only diagnostic is a
+      // warning when it is a near miss of a declared Type or Enum.
+      if (!isBuiltinType(expr.name) && typeOrEnumDeclarations(expr.name, symbols).length === 0) {
+        const suggestion = nearMissTypeName(expr.name, symbols);
+        if (suggestion) {
           diagnostics.push({
-            severity: 'error',
-            code: 'unresolved-type',
-            message: `Type '${expr.name}' is not a built-in type or declared Named Type.`,
+            severity: 'warning',
+            code: 'possible-type-typo',
+            message: `Type '${expr.name}' is not declared; did you mean '${suggestion}'? Otherwise it is kept as a target-native type.`,
             span: expr.span,
           });
         }
@@ -1048,9 +1132,17 @@ function dereferenceNamedType (
   }
 
   const sym = symbols.lookup(name) ?? symbols.lookupBare(name);
+  if (type.kind === 'ScalarType' && (!sym || sym.kind !== 'type')) {
+    // An Enum or a target-native type: an opaque scalar, so a path that
+    // navigates into it gets the walker's shape diagnostic. A name
+    // declared as a Type or Enum in several containers stays unresolved.
+    if (typeOrEnumDeclarations(name, symbols).length > 1) return undefined;
+    return type;
+  }
   if (!sym || sym.kind !== 'type' || sym.declaration.kind !== 'TypeDeclaration') {
-    // Unresolved -- the field-type pass will diagnose this. Return
-    // undefined so the walker bails without emitting a duplicate error.
+    // Unresolved Named Type reference -- the field-type pass diagnoses
+    // this. Return undefined so the walker bails without emitting a
+    // duplicate error.
     return undefined;
   }
   const td = sym.declaration;
