@@ -1,0 +1,112 @@
+xdbml: 0.6
+
+Project f1_results {
+  targets: [Oracle, MongoDB]
+  Note: '''
+  Formula 1 race results, keyed the way the source DDL keys them.
+  Demonstrates the constraints block (spec §10): named primary keys,
+  composite primary and unique keys listed in key order, check
+  expressions in single quotes (with backticks where the expression
+  holds a quote), named foreign keys, and a composite foreign key that
+  references a unique key rather than the primary key (§11.17). A
+  MongoDB collection declares a unique key on a nested field.
+  '''
+}
+
+Container f1data [type: schema, target: Oracle] {
+  Note: 'Race results as a relational schema.'
+
+  Table circuits {
+    circuitid  number(11)    [pk, not null]
+    circuitref varchar2(255) [not null, note: 'Short reference, e.g. "monza"']
+    name       varchar2(255) [not null]
+    country    varchar2(255)
+    url        varchar2(255) [unique]
+
+    constraints {
+      circuitref [unique, name: 'uk_circuits_ref']
+    }
+  }
+
+  Table races {
+    raceid    number(11)    [not null]
+    year      number(4)     [not null]
+    round     number(3)     [not null]
+    circuitid number(11)    [not null]
+    name      varchar2(255) [not null]
+    race_date date          [not null]
+
+    constraints {
+      raceid        [pk, name: 'pk_races']
+      (year, round) [unique, name: 'uk_races_season_round', note: 'One race per round of a season']
+      'round >= 1'  [name: 'chk_races_round']
+    }
+  }
+
+  Table drivers {
+    driverid         number(11)    [pk, not null]
+    driverref        varchar2(255) [not null]
+    permanent_number number(3)
+    code             varchar2(3)   [note: 'Three-letter code; reused across eras, so not a key']
+    forename         varchar2(255) [not null]
+    surname          varchar2(255) [not null]
+
+    constraints {
+      driverref [unique, name: 'uk_drivers_ref']
+    }
+  }
+
+  Table results {
+    resultid number(11)   [pk, not null]
+    raceid   number(11)   [not null]
+    driverid number(11)   [not null]
+    grid     number(3)    [not null]
+    position number(3)    [note: 'Null when the driver did not finish']
+    status   varchar2(20) [not null]
+
+    constraints {
+      (raceid, driverid) [unique, name: 'uk_results_race_driver']
+      'grid >= 0'        [name: 'chk_results_grid']
+      `status IN ('Finished', 'Retired', 'Disqualified')` [name: 'chk_results_status']
+    }
+  }
+
+  Table pitstops {
+    raceid       number(11)    [not null]
+    driverid     number(11)    [not null]
+    stop         number(3)     [not null, note: 'Stop number within the race']
+    lap          number(3)     [not null]
+    duration     varchar2(255) [note: 'Duration of the stop, e.g. "21.783"']
+    milliseconds number(11)
+
+    constraints {
+      (raceid, driverid, stop) [pk, name: 'pk_pitstops']
+      (raceid, driverid, lap)  [unique, name: 'uk_pitstops_lap', note: 'A driver stops at most once per lap']
+      'stop >= 1'              [name: 'chk_pitstops_stop']
+      'milliseconds > 0'       [name: 'chk_pitstops_ms']
+    }
+  }
+}
+
+Container telemetry [type: database, target: MongoDB] {
+  Note: 'Driver profiles kept as documents.'
+
+  Collection driver_profiles {
+    _id      objectId [pk]
+    identity object {
+      driverref   string [not null]
+      fia_license string
+    }
+    helmet_colors array [string]
+
+    constraints {
+      identity.driverref [unique, name: 'uk_profiles_driverref']
+    }
+  }
+}
+
+Ref fk_races_circuit: f1data.races.circuitid > f1data.circuits.circuitid
+Ref fk_results_race: f1data.results.raceid > f1data.races.raceid
+Ref fk_results_driver: f1data.results.driverid > f1data.drivers.driverid
+Ref fk_pitstops_result: f1data.pitstops.(raceid, driverid) > f1data.results.(raceid, driverid)
+Ref: telemetry.driver_profiles.identity.driverref - f1data.drivers.driverref

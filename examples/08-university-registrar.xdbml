@@ -1,4 +1,4 @@
-xdbml: 0.3
+xdbml: 0.6
 
 Project university_registrar {
   targets: PostgreSQL
@@ -95,15 +95,15 @@ Container registrar [type: schema] {
   }
 
   Table course_offerings {
-    course_code     varchar [pk,
+    course_code     varchar [not null,
                              minLength: 4,
                              maxLength: 12,
                              note: 'First component of the composite key.']
-    term_code       varchar [pk,
+    term_code       varchar [not null,
                              minLength: 5,
                              maxLength: 10,
                              note: 'Second component of the composite key.']
-    section_number  int     [pk,
+    section_number  int     [not null,
                              note: '''
                              Third component of the composite key.
                              A course can run multiple sections per
@@ -116,6 +116,11 @@ Container registrar [type: schema] {
     room            varchar [maxLength: 40]
     schedule        varchar [maxLength: 80,
                              note: 'Human-readable, e.g., "MWF 10:00-10:50".']
+
+    constraints {
+      (course_code, term_code, section_number) [pk, name: 'pk_course_offerings']
+      'capacity > 0'                           [name: 'chk_course_offerings_capacity']
+    }
 
     indexes {
       course_code
@@ -132,13 +137,13 @@ Container registrar [type: schema] {
   }
 
   Table enrollments {
-    course_code     varchar [pk,
+    course_code     varchar [not null,
                              note: 'Inherits from the course_offerings composite key.']
-    term_code       varchar [pk,
+    term_code       varchar [not null,
                              note: 'Inherits from the course_offerings composite key.']
-    section_number  int     [pk,
+    section_number  int     [not null,
                              note: 'Inherits from the course_offerings composite key.']
-    student_id      int     [pk,
+    student_id      int     [not null,
                              note: 'The fourth column distinguishes enrollments within an offering.']
     status          varchar [not null,
                              default: 'enrolled',
@@ -147,6 +152,10 @@ Container registrar [type: schema] {
                              default: `CURRENT_DATE`]
     final_grade     varchar [maxLength: 3,
                              note: 'NULL until the term ends and grades are submitted.']
+
+    constraints {
+      (course_code, term_code, section_number, student_id) [pk, name: 'pk_enrollments']
+    }
 
     indexes {
       student_id

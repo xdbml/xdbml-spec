@@ -181,4 +181,13 @@ export const examples = [
     description: 'A logical model of parties with three supertype groups (spec \u00a712). Party is specialized along two independent axes: `legal_nature` (Person or Organization, total and disjoint) and `business_role` (Customer and Supplier, partial and overlapping), so one supertype anchors two groups. Person is specialized a second time by `person_role`, which makes a three-level hierarchy. Each subtype declares only its own attributes; the attributes of its supertypes apply to it without being declared again (\u00a712.5). The groups record the intended materialization for a later derivation (\u00a712.7): a flat roll-up with a `nature` discriminator, preserved hierarchy for the overlapping axis, and a per-subtype roll-down for Contractor. Organization declares a key of its own, which a truck owner points at; Employee declares none, so an assignment points at Employee as an entity-level endpoint (\u00a711.16).',
     generators:  [],
   },
+  {
+    file:        '15-constraints.xdbml',
+    slug:        '15-constraints',
+    title:       'Constraints: keys and checks (v0.6)',
+    domain:      'Motorsport results',
+    paradigm:    'Oracle schema plus a MongoDB collection',
+    description: 'Formula 1 race results declared with the constraints block (spec \u00a710). Each table states its keys the way the source DDL does: named primary keys, composite primary and unique keys listed in key order (`(raceid, driverid, stop)` on pitstops, `(year, round)` on races), and check expressions in single quotes, with backticks where the expression holds a quote. Simple unnamed keys stay inline as `[pk]` and `[unique]` (\u00a710.3). Foreign keys carry their constraint names on the `Ref` (\u00a711.2), and the composite foreign key from pitstops references the unique key `(raceid, driverid)` of results rather than its primary key, which the referenced-key rule accepts (\u00a711.17). A MongoDB collection declares a unique key on a nested field, `identity.driverref`.',
+    generators:  [],
+  },
 ];

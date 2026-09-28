@@ -1262,6 +1262,34 @@ function buildEntityLayout (
     }
   }
 
+  // v0.6 constraints block (spec §10): a `pk` line tints every field of
+  // the key, like a `pk` index entry. A `unique` line on one field sets
+  // the field's U badge, as inline `[unique]` does; a composite unique key
+  // badges nothing, for the reason given above for composite indexes.
+  // Typed structurally, so the renderer also compiles against a parser
+  // release that predates the node.
+  type KeyLine = { kind: string; fields: { kind: string; name?: string }[][]; settings: { name: string }[] };
+  for (const item of entity.body as ReadonlyArray<{ kind: string; entries?: KeyLine[] }>) {
+    if (item.kind !== 'ConstraintsBlock' || !item.entries) continue;
+    for (const entry of item.entries) {
+      if (entry.kind !== 'KeyConstraintEntry') continue;
+      const isPk = entry.settings.some((s) => s.name === 'pk' || s.name === 'primary key');
+      const isUnique = entry.settings.some((s) => s.name === 'unique');
+      if (isPk === isUnique) continue;
+      if (isUnique && entry.fields.length !== 1) continue;
+      for (const path of entry.fields) {
+        const dotted = path
+          .filter((seg) => seg.kind === 'PathField')
+          .map((seg) => seg.name ?? '')
+          .join('.');
+        const target = fields.find((f) => f.path === dotted);
+        if (!target) continue;
+        if (isPk) target.flags.pk = true;
+        else target.flags.unique = true;
+      }
+    }
+  }
+
   const height = ENTITY_HEADER_HEIGHT + (fields.length * ROW_HEIGHT) + 4;
   return {
     id: entityId,

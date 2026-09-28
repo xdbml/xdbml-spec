@@ -43,6 +43,10 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 
 - **Editor grammars**: `constraints` is highlighted as a block keyword in the playground editor, the site's code blocks and the VS Code extension's grammar copy.
 
+- **Renderer (`@xdbml/render`)**: a `pk` line in `constraints` gives each field of the key the PK badge, like a `pk` entry in `indexes`, and a `unique` line on one field gives it the U badge. A composite unique key badges no field, as a composite unique index already did. Primary key fields of a 0.6 document show the not-null marker, since the parser marks them `not null`.
+
+- **Example 15, constraints**: Formula 1 results as an Oracle schema and a MongoDB collection, with named composite primary and unique keys, quoted checks, named foreign keys, a composite foreign key that references a unique key, and a unique key on a nested field.
+
 ### Changed
 
 #### Spec
@@ -57,6 +61,8 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 ### Fixed
 
 #### Examples
+
+- **08-university-registrar and 10-modules-consumer**: declare `xdbml: 0.6` and move their composite primary keys from `[pk]` on several fields to `constraints` (§10.3). Example 08 names its keys and adds a capacity check; example 10 moves its line-total check into `constraints` and writes its field-level checks in single quotes.
 
 - **05-healthcare-fhir**: the `patients` indexes named `family_name_lookup`, which is not a field of the entity. The index check of §10.10 reports it; the entry is now an expression index on the first family name.
 ---

@@ -100,7 +100,7 @@ The consumer half of a multi-file example pair. A sales data mart that imports c
 //
 // =============================================================================
 
-xdbml: 0.3
+xdbml: 0.6
 
 
 Project sales_data_product {
@@ -130,25 +130,26 @@ Container sales [type: schema, target: Snowflake] {
   // --------------------------------------------------------------------------
 
   Entity fact_sales [note: 'One row per sale line. Grain: customer_id × product_id × date_key × order_id × line_id.'] {
-    order_id           int              [pk]
-    line_id            int              [pk]
+    order_id           int              [not null]
+    line_id            int              [not null]
     customer_id        int              [not null, ref: > sales.dim_customer.id]
     product_id         int              [not null, ref: > sales.dim_product.id]
     date_key           int              [not null, ref: > sales.dim_date.date_key]
     engagement_at_sale engagement_score [note: 'SCD snapshot of dim_customer.engagement_score at sale time. Validation surface (0-100 range) reused from the source via field import.']
-    quantity           int              [not null, check: `quantity > 0`]
-    unit_price         decimal(10,2)    [not null, check: `unit_price >= 0`]
+    quantity           int              [not null, check: 'quantity > 0']
+    unit_price         decimal(10,2)    [not null, check: 'unit_price >= 0']
     currency           CurrencyCode     [not null, default: 'USD']
     line_total         decimal(12,2)    [not null]
-    discount           decimal(10,2)    [default: 0, check: `discount >= 0`]
+    discount           decimal(10,2)    [default: 0, check: 'discount >= 0']
 
     indexes {
       (customer_id, date_key) [name: 'idx_sales_customer_date']
       (product_id,  date_key) [name: 'idx_sales_product_date']
     }
 
-    checks {
-      `line_total = (quantity * unit_price) - discount`
+    constraints {
+      (order_id, line_id) [pk, name: 'pk_fact_sales']
+      'line_total = (quantity * unit_price) - discount'
         [name: 'chk_line_total_matches',
          note: 'Sanity check: line_total must equal computed value. Catches loader bugs.']
     }
@@ -161,8 +162,8 @@ Container sales [type: schema, target: Snowflake] {
     customer_id   int           [not null, ref: > sales.dim_customer.id]
     product_id    int           [not null, ref: > sales.dim_product.id]
     return_date_key int         [not null, ref: > sales.dim_date.date_key]
-    quantity      int           [not null, check: `quantity > 0`]
-    refund_amount decimal(10,2) [not null, check: `refund_amount >= 0`]
+    quantity      int           [not null, check: 'quantity > 0']
+    refund_amount decimal(10,2) [not null, check: 'refund_amount >= 0']
     reason_code   varchar       [note: 'Three-letter return reason code from the returns taxonomy.']
   }
 
