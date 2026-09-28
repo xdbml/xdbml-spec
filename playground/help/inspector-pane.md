@@ -46,6 +46,7 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 
 **Entity inspector** shows:
 - Identification: keyword (Table / Entity / Collection / etc.), name, parent container (if any), field stats (total / primary keys / required / nested)
+- Constraints, when the entity has any: its primary key, its unique keys and its checks, each with its constraint name when it has one. Keys and checks appear here however the schema declares them: in a `constraints { }` block, inline as `[pk]` or `[unique]`, as a DBML `pk` entry in `indexes`, in a `checks { }` block, or as a field's `check:` setting. A key declared outside the `constraints` block is labeled with its form, such as "inline" or "indexes (DBML form)"
 - Supertype groups, when the entity takes part in one: as a supertype, each group it anchors with that group's subtypes; as a subtype, its group and its supertype; an entity that is both shows both
 - Settings: any settings on the entity declaration
 - Note: the entity's `Note: '...'` body if present

@@ -33,8 +33,8 @@ A quick reference table covering every visual signal in the diagram. Bookmark th
 
 | Badge | Color | What it means | Source |
 |---|---|---|---|
-| **P** | Yellow circle | Primary key | `[pk]` or `[primary key]` |
-| **U** | Purple circle | Unique constraint (not shown on a primary key) | `[unique]` |
+| **P** | Yellow circle | Primary key | `[pk]` or `[primary key]`, or a `pk` line in `constraints { }` |
+| **U** | Purple circle | Unique key on this field alone (not shown on a primary key) | `[unique]`, or a one-field `unique` line in `constraints { }` |
 | **!** | Red circle | Not nullable | `[not null]` or `[required]` |
 | **fk** | Cyan pill | Child side of a foreign key | computed from the `Ref`s |
 | **dk** | Dark cyan pill | Parent side of a foreign key | computed from the `Ref`s |
@@ -43,7 +43,7 @@ A quick reference table covering every visual signal in the diagram. Bookmark th
 
 The four relationship markers are never written by hand: the diagram derives them from the relationships. A field that parents both kinds shows dk and dm side by side.
 
-Composite primary keys show the PK badge on every member field, not just the first one.
+Composite primary keys show the PK badge on every member field, not just the first one. A composite unique key shows no U badge, since no single field is unique on its own; the entity's inspector lists it under Constraints. In a document declaring `xdbml: 0.6`, primary key fields also show the required marker, because a primary key field is never null.
 
 ## Field row text
 

@@ -30,14 +30,21 @@ The playground checks your schema in two stages.
 
 **Parsing** reads the text. A syntax error stops it at the first problem, so the panel lists that one error, and the diagram keeps showing the last schema that parsed. [When parsing fails](./when-parsing-fails) covers recovery.
 
-**Resolution** runs on a schema that parsed and checks what its names refer to: that a relationship points at an entity and a field that exist, that an injected partial is declared, that a supertype group follows the rules of the specification. It can report several problems at once. Since the schema parsed, the diagram and the inspector keep up with your edits while these diagnostics are listed.
+**Resolution** runs on a schema that parsed and checks what its names refer to: that a relationship points at an entity and a field that exist, that an injected partial is declared, that a key or index names fields the entity declares, that a foreign key references a key, that a supertype group follows the rules of the specification. It can report several problems at once. Since the schema parsed, the diagram and the inspector keep up with your edits while these diagnostics are listed.
 
-Resolution reports two severities. An **error** marks something the schema cannot mean as written, such as a relationship to an entity that doesn't exist, or two declarations with the same name. A **warning** marks something valid that is probably not what you intended. Four warnings exist today:
+Resolution reports two severities. An **error** marks something the schema cannot mean as written, such as a relationship to an entity that doesn't exist, or two declarations with the same name. A **warning** marks something valid that is probably not what you intended. These warnings exist today:
 
 - **`possible-type-typo`**: a type name that is not declared, but is close to a declared Type or Enum, such as `Adress` in a schema that declares `Type Address`. The message suggests the declared name. Any type name is valid in xDBML, so target-native types such as `number`, `clob` or `serial` raise nothing on their own; the warning appears only for a near miss.
 - **`ambiguous-ref-endpoint`**: a relationship endpoint that reads both as an entity and as a field of another entity. The field reading is used; rename one of them or qualify the path.
 - **`empty-supertype-group`**: a supertype group that lists no subtype yet.
 - **`merge-without-roll-up`**: a `merge` setting on a supertype group where neither the group nor any subtype uses `strategy: roll_up`, the only strategy it applies to.
+
+A few conditions change severity with the version the document declares. In an `xdbml: 0.6` document they are errors; in a document declaring an earlier version, or none (plain DBML), they are warnings, so a file that was valid under its version stays valid:
+
+- **`ref-target-not-key`**: a foreign key references fields that are neither the primary key nor a unique key of an entity that declares keys. A relational database refuses such a foreign key. Declare the fields unique, or reference the key. Relationships to an entity without keys, to or from a document or graph target, many-to-many relationships, foreign master relationships and entity-level relationships are exempt.
+- **`duplicate-primary-key`**: an entity declares its primary key in two places, for example `[pk]` on a field and a `pk` entry in `indexes`.
+- **`null-in-primary-key`**: `null` written on a field of the primary key.
+- **`unresolved-index-field`**: an index names a field the entity does not declare.
 
 ## Rows in the body
 

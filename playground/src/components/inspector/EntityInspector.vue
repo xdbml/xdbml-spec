@@ -41,6 +41,27 @@
       </div>
     </InspectorSection>
 
+    <!-- Keys and checks (spec §10), gathered from every form that declares
+         them: the constraints block, inline [pk] / [unique], a DBML pk
+         index entry, checks { }, and field-level check:. -->
+    <InspectorSection v-if="constraints.length > 0" title="Constraints">
+      <div v-for="(c, i) in constraints" :key="i" class="text-xs mb-1.5">
+        <template v-if="c.kind === 'key'">
+          <span :class="c.keyKind === 'primary' ? 'text-yellow-700 dark:text-yellow-300' : 'text-gray-700 dark:text-slate-300'" class="font-medium">
+            {{ c.keyKind === 'primary' ? 'Primary key' : 'Unique' }}
+          </span>
+          <span class="font-mono text-gray-900 dark:text-slate-100"> ({{ c.fields.join(', ') }})</span>
+        </template>
+        <template v-else>
+          <span class="font-medium text-gray-700 dark:text-slate-300">Check</span>
+          <span class="font-mono text-gray-900 dark:text-slate-100 break-all"> {{ c.expression }}</span>
+          <span v-if="c.field" class="text-gray-500 dark:text-slate-400"> on {{ c.field }}</span>
+        </template>
+        <span v-if="c.name" class="font-mono text-gray-500 dark:text-slate-400"> · {{ c.name }}</span>
+        <span v-if="sourceLabel(c.source)" class="text-gray-400 dark:text-slate-500"> · {{ sourceLabel(c.source) }}</span>
+      </div>
+    </InspectorSection>
+
     <InspectorSection title="Settings">
       <SettingsTable :settings="standardSettings" />
     </InspectorSection>
@@ -87,6 +108,8 @@ import { highlightSql }   from './sqlHighlight';
 import { supertypeGroupsOf } from './ast-lookup';
 import type { Selection } from './selection';
 import { useParserStore } from '@/stores/parserStore';
+import { entityConstraints } from '@xdbml/parse';
+import type { Constraint, ConstraintSource } from '@xdbml/parse';
 
 const props = defineProps<{
   entity: EntityDeclaration | ViewDeclaration | EdgeDeclaration;
@@ -105,6 +128,24 @@ const parser = useParserStore();
 const entityId = computed(() => (props.container ? `${props.container.name}.${props.entity.name}` : props.entity.name));
 
 const groups = computed(() => supertypeGroupsOf(parser.flatAst, entityId.value));
+
+// Every key and check of the entity (spec §28.6). Views declare none.
+const constraints = computed<Constraint[]>(() => {
+  const doc = parser.flatAst;
+  if (!doc || props.entity.kind === 'ViewDeclaration') return [];
+  return entityConstraints(props.entity, doc);
+});
+
+// The declaration form, shown only where it is not the constraints block.
+function sourceLabel (source: ConstraintSource): string {
+  switch (source) {
+    case 'inline': return 'inline';
+    case 'indexes': return 'indexes (DBML form)';
+    case 'checks': return 'checks block';
+    case 'field-check': return '';
+    default: return '';
+  }
+}
 
 function selectEntity (id: string): void {
   emit('select', { kind: 'entity', entityId: id });
@@ -177,13 +218,15 @@ const sourceQueryBody = computed(() => {
 const highlightedSourceQuery = computed(() => highlightSql(sourceQueryBody.value));
 
 const fieldStats = computed(() => {
-  let total = 0, pk = 0, notNull = 0, nested = 0;
+  let total = 0, notNull = 0, nested = 0;
+  // Primary key fields from whichever form declares the key (spec §10.3).
+  const key = constraints.value.find((c) => c.kind === 'key' && c.keyKind === 'primary');
+  const pk = key && key.kind === 'key' ? key.fields.length : 0;
   for (const item of props.entity.body) {
     if (item.kind !== 'FieldDeclaration') continue;
     total += 1;
     const f = item as FieldDeclaration;
     for (const s of f.settings) {
-      if (s.name === 'pk' || s.name === 'primary key') pk += 1;
       if (s.name === 'not null') notNull += 1;
     }
     if (

@@ -47,6 +47,8 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 
 - **Example 15, constraints**: Formula 1 results as an Oracle schema and a MongoDB collection, with named composite primary and unique keys, quoted checks, named foreign keys, a composite foreign key that references a unique key, and a unique key on a nested field.
 
+- **Playground**: the entity inspector gains a Constraints section listing the primary key, unique keys and checks with their names, whichever form declares them, and counts primary key fields from any form. The help pages on the inspector, entity cards, visual cues and the diagnostics panel describe the constraints block, the badges it sets, and the conditions whose severity follows the declared version.
+
 ### Changed
 
 #### Spec
