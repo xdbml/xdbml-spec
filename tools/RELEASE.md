@@ -126,6 +126,20 @@ To see the notes without doing anything else:
 The site is not in this sequence. It aliases the parser and renderer source
 through its Vite config, so pushing to `main` ships it whatever is on npm.
 
+## Point releases
+
+A point release such as 0.5.1 runs the same three scripts with the full
+version, from the repo root:
+
+    tools\release-preflight.cmd 0.5.1
+    tools\release.cmd 0.5.1
+    tools\github-release.cmd 0.5.1
+
+The notes come from a `## v0.5.1` section of `CHANGELOG.md`, so that section
+has to exist before the tag is created. Their specification link points at
+`spec/v0.5`: a point release updates the specification of its minor version
+and has no page of its own. Documents keep declaring `xdbml: 0.5`.
+
 ## Things that will happen, and are fine
 
 **`npm install` reports vulnerabilities.** Expect a dev-only chain:

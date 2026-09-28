@@ -30,8 +30,10 @@ if (!version) {
 const changelog = fs.readFileSync(path.join(repoRoot, 'CHANGELOG.md'), 'utf8');
 
 // Sections look like `## v0.4 -- 2026`. Match the heading for this version,
-// then run to the next `## ` heading at the same level.
-const heading = new RegExp(`^## v${version.replace(/\./g, '\\.')}\\b.*$`, 'm');
+// then run to the next `## ` heading at the same level. The version must be
+// followed by whitespace or the end of the line: `\b` alone would let `0.5`
+// match the heading of the point release `## v0.5.1`.
+const heading = new RegExp(`^## v${version.replace(/\./g, '\\.')}(?=\\s|$).*$`, 'm');
 const m = heading.exec(changelog);
 if (!m) {
   console.error(`No "## v${version}" section in CHANGELOG.md.`);
@@ -46,18 +48,26 @@ const body = (next ? changelog.slice(bodyStart, bodyStart + next.index) : change
 
 // Strip the Status/Released lines: they describe the CHANGELOG entry, not the
 // release, and GitHub shows its own status.
+// A trailing `---` separates this section from the next one in the
+// CHANGELOG; the notes add their own rule before the links.
 const cleaned = body
   .split('\n')
   .filter((line) => !/^\*\*(Status|Released)\*\*:/.test(line.trim()))
   .join('\n')
+  .trim()
+  .replace(/\n+---$/, '')
   .trim();
+
+// A point release (0.5.1) has no specification page of its own: it
+// updates the one for its minor version (spec/v0.5.md).
+const specVersion = version.split('.').slice(0, 2).join('.');
 
 const notes = [
   cleaned,
   '',
   '---',
   '',
-  `Specification: https://xdbml.org/spec/v${version}`,
+  `Specification: https://xdbml.org/spec/v${specVersion}`,
   `Current draft: https://xdbml.org/spec/current`,
   `Full changelog: https://github.com/xdbml/xdbml-spec/blob/v${version}/CHANGELOG.md`,
   '',

@@ -1,29 +1,35 @@
-xDBML -- delta 5 of 6: llms.txt and MCP reference
-Base: deltas 1 to 4 applied on origin/main 81125b5. Apply them first;
-this delta's CHANGELOG.md includes them.
+xDBML -- delta 6 of 6: prepare and release 0.5.1
+Base: deltas 1 to 5 applied on origin/main 81125b5. Apply them first.
 
 WHAT CHANGED
 ------------
-The cheatsheet that the MCP server's xdbml_reference tool returns, and that
-xdbml.org/llms.txt serves, now tells an assistant what 0.5.1 accepts.
-
-public\llms.txt
-  The "Types:" paragraph gains three sentences: any other type name is
-  valid and passes through, so a physical model uses its target's own
-  types (number(10), varchar2(255), serial, bytea); a field names an Enum
-  declared in a schema with its qualifier (status core.job_status); a name
-  close to a declared Type or Enum draws possible-type-typo.
-mcp\src\reference.ts
-  Regenerated with `npm run generate:reference` (check:reference passes).
-  The live MCP server serves it only after the 0.5.1 redeploy (delta 6).
 CHANGELOG.md
-  v0.5 > Changed > Tooling, last bullet (delta 6 moves it into v0.5.1).
+  NEW "## v0.5.1 -- 2026" section above v0.5, released 2026-09-28 (change
+  the date only if you release on another day). Every entry that deltas 1
+  to 5 and the Ossie/LinkML update placed under v0.5 "after the 0.5.0
+  release" moves there, without that marker: Added (native type colors),
+  Changed > Spec (§16 clarification, adjacent standards), Changed >
+  Tooling (Diagnostics help, llms.txt/MCP), Fixed > Parser (target-native
+  type names, container-qualified Enums), plus Packages and Not changed
+  (compatibility), as in v0.3.1. The v0.5 status becomes "superseded by
+  v0.5.1", as v0.3 did for v0.3.1.
+scripts\release-notes.mjs -- two fixes needed for a point release
+  - The heading regex used `\b` after the version, so `0.5` also matched
+    `## v0.5.1`, the first section in the file. It now requires whitespace
+    or end of line. Checked: 0.5.1, 0.5, 0.4, 0.3.1, 0.3 each pick their
+    own section.
+  - The specification link used the full version (spec/v0.5.1, a 404). It
+    now uses major.minor.
+  - A trailing `---` in a section is dropped, so the notes no longer show
+    two rules before the links (v0.3.1 had the same doubled rule).
+tools\RELEASE.md
+  "Point releases" section: same three scripts with the full version.
 
 FILES
 -----
   CHANGELOG.md
-  mcp\src\reference.ts
-  public\llms.txt
+  scripts\release-notes.mjs
+  tools\RELEASE.md
 
 APPLY (cmd.exe)
 ---------------
@@ -31,26 +37,49 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\mcp\src\reference.ts"                                 "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\public\llms.txt"                                      "%REPO%\public\llms.txt"
+copy /Y "%DELTA%\scripts\release-notes.mjs"                            "%REPO%\scripts\release-notes.mjs"
+copy /Y "%DELTA%\tools\RELEASE.md"                                     "%REPO%\tools\RELEASE.md"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: parser 227 passed, 0 failed; mcp 12 passed; docs build complete.
-cd mcp
-npm run check:reference
-  Expect: "reference.ts is in sync with public/llms.txt."
-cd ..
+  Expect: parser 227 passed, 0 failed; docs build complete.
+node scripts\release-notes.mjs 0.5.1
+  Read the notes: they start "A backward-compatible point release of the
+  v0.5 draft" and end with the spec/v0.5 link.
 git add -A
-git commit -m "llms.txt and MCP reference: any type name passes through; qualified Enums; possible-type-typo"
+git commit -m "Prepare 0.5.1: CHANGELOG v0.5.1 section, release notes for point releases"
+git push
+  The push redeploys the site and playground with deltas 1 to 6. If the
+  deploy stops with the artifact 403: gh workflow run deploy.yml --ref main
 
-No push needed yet; delta 6 pushes.
+RELEASE (from the repo root; each script stops at the first failure)
+-------
+tools\release-preflight.cmd 0.5.1
+  Must end with no problem reported. It needs a clean tree, which the
+  commit above gives it.
+tools\release.cmd 0.5.1
+  Publishes @xdbml/parse and @xdbml/render 0.5.1, repoints mcp and api,
+  deploys both Workers, prints the dist-tags.
+git add -A
+git commit -m "release 0.5.1"
+git push
+tools\github-release.cmd 0.5.1
+  Tags v0.5.1 with the notes from the v0.5.1 section.
+
+AFTER DEPLOYING
+---------------
+  - MCP xdbml_reference: the "Types:" paragraph mentions possible-type-typo.
+  - MCP validate_xdbml on F1Data_Tables.xdbml: valid, 0 diagnostics.
+  - npm view @xdbml/render dependencies --prefer-online: see the note on
+    the dependency pin in chat.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         all suites as after delta 4; docs build complete
-  check:reference       in sync
-  mcp type-check/test   clean, 12/0 -- also run against a build of the
-                        patched parser in place of 0.5.0, as the release
-                        will: still clean, 12/0
-  built llms.txt        .vitepress/dist/llms.txt carries the new sentences
+  npm run check         parser 227/0, renderer 198/0, viewport 14/0,
+                        interactive 42/0, mcp 12/0, from-mongodb 24/0,
+                        playground 51/0, vsix OK, 114 spec links OK,
+                        playground type-check clean, docs build complete
+  release notes         generated for 0.5.1, 0.5, 0.4, 0.3.1, 0.3: each
+                        picks its own section, one rule before the links
+  site CHANGELOG page   has the v0.5.1 heading (anchor v0-5-1-2026)
+  Not run here: the release scripts themselves (npm publish, wrangler).

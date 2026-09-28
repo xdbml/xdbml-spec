@@ -4,9 +4,54 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
+## v0.5.1 -- 2026
+
+**Status**: Draft -- current (point release of v0.5)
+**Released**: 2026-09-28
+
+A backward-compatible point release of the v0.5 draft. The parser accepts any type name, as §1.2 always stated, reads container-qualified Enums in their DBML form, and warns about a type name that looks like a misspelled Type or Enum; editors color the common types of each target. §16 gains a clarification and an example. Every v0.5 document remains valid, and documents continue to declare `xdbml: 0.5`.
+
+### Added
+
+#### Tooling
+
+- **Target-native type names colored**: `TARGET_NATIVE_TYPES` in `parser/src/keywords.ts` lists 72 common type names of specific targets: Oracle `number`, `clob` and `raw`, PostgreSQL `serial`, `bytea` and `citext`, SQL Server `uniqueidentifier` and `datetimeoffset`, Snowflake `timestamp_ntz`, BigQuery `float64`, the integer types of Cassandra, Protobuf and ClickHouse, and `geometry`, `geography` and `interval`. The playground editor and the site's code blocks color them like scalar types, and so will the next build of the VS Code extension, whose grammar copy is updated. They are not built-ins: the resolver passes them through like any other target-native name, and a Named Type may be declared under one of them, whereas a name in `SCALAR_TYPES` is a built-in that no Named Type can shadow (spec §15.2). Generic words that often name fields (`point`, `line`, `box`, `path`, `image`, `duration`) are left out, since coloring does not depend on position. The parser's keyword-consistency tests and the TextMate smoke test cover the list.
+
+### Changed
+
+#### Spec
+
+- **§16 Enum, clarification**: the section already allowed container-qualified Enums; it now shows both ways to declare one, inside a Container block or under a qualified name, states that the two forms are equivalent, so declaring one Enum both ways is a duplicate, and shows a field naming each by its qualified name. The example has a View in playground button (114 buttons across v0.1 to v0.5).
+
+- **Adjacent standards, editorial update** (no change to the language): Open Semantic Interchange is now Apache Ossie (incubating), with its new name and repository link in the abstract, §1.1, §24, §30 and the references; §30 gains a LinkML row and a sentence on how the two languages differ, and LinkML joins the references. The site pages (FAQ, README, home page, xDBML in 5 minutes, ecosystem, governance, contributing) follow, and the FAQ gains "How does xDBML compare with LinkML?".
+
+#### Tooling
+
+- **Playground help, Diagnostics panel**: the page described warnings as future work and said the parser recovers to report several syntax errors at once. It now describes the two stages as they run: parsing stops at the first syntax error and the diagram keeps the last good state, while resolution reports errors and warnings together and the diagram and inspector keep working. It lists the four warnings (`possible-type-typo`, `ambiguous-ref-endpoint`, `empty-supertype-group`, `merge-without-roll-up`), the row layout with its code, and the default expanded state. The Editor pane page mentions the target-native type colors, and comments in the playground source that still called warnings a future feature are updated.
+
+- **MCP server and llms.txt**: the paragraph on types now says that any other type name is valid and passes through as written, so a physical model uses its target's own types (`number(10)`, `varchar2(255)`, `serial`, `bytea`); it shows how a field names an Enum declared in a schema (`status core.job_status`) and names the `possible-type-typo` warning. `mcp/src/reference.ts` is regenerated from it; the MCP server serves the new text once redeployed.
+
+### Fixed
+
+#### Parser (`@xdbml/parse`)
+
+- **Target-native type names**: the name resolver reported `unresolved-type` for every scalar type name missing from the parser's highlighting lists, among them Oracle `number`, `clob` and `raw`, PostgreSQL `serial` and `bytea`, SQL Server `uniqueidentifier`, and the `number(10)` of the §27.16 field-level import example. A field typed by a declared `Enum`, which DBML allows, failed the same way. Scalar type names pass through as written (spec §1.2, principle 4), so a name that is neither a builtin nor a declared Type or Enum is now accepted as a target-native type with no diagnostic. The exception is a near miss of a declared Type or Enum -- a difference of case, or one or two edits depending on the length of the name -- reported as the new `possible-type-typo` warning, with the declared name as the suggestion. `unresolved-type` stays in `DiagnosticCode`, but the field-type pass no longer emits it for a scalar name. A path that navigates into a target-native or Enum-typed field reports `invalid-nested-path`, as a path into a builtin scalar already did.
+
+- **Container-qualified Enums**: the parser rejected `enum core.job_status { ... }`, the DBML form of an Enum declared in a schema, and a field type naming it, `status core.job_status`, although §16 allows container-qualified Enums. Both now parse, with quoted segments allowed (`"billing"."invoice status"`). The resolver files an Enum declared under a qualified name in that container, as if it were declared in the Container block, so the two forms share one qualified name and declaring both is a `duplicate-declaration`. A qualified type name that names no Enum, such as `public.geometry`, passes through as a target-native type, and a near miss of a qualified Enum suggests the qualified name. `use { enum core.job_status }` imports such an Enum under its bare name, as it does a container-scoped one. The grammar gains a `typeName` rule under `scalarType`, and `grammar/test-cases.md` gains a valid and an invalid case.
+
+### Packages
+
+- `@xdbml/parse` 0.5.1 and `@xdbml/render` 0.5.1. The renderer has no change of its own; it moves to the new parser so the two stay in step. The MCP server and the rendering API are redeployed on them.
+
+### Not changed (compatibility)
+
+- Backward-compatible throughout. A document that raised `unresolved-type` for a scalar type name now resolves cleanly, unless the name is a near miss of a declared Type or Enum, which raises a warning rather than an error. `unresolved-type` remains in `DiagnosticCode`.
+
+---
+
 ## v0.5 -- 2026
 
-**Status**: Draft -- current
+**Status**: Draft -- superseded by v0.5.1
 **Released**: 2026-09-21
 
 Adds supertype groups: generalization of entities into a supertype and subtypes, with inherited attributes and the intended materialization. Every v0.4 document remains valid; documents using the new construct declare `xdbml: 0.5`.
@@ -73,15 +118,9 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Example 14, supertype groups**: the Appendix C.5 model, with three groups over two axes and three levels, a per-subtype strategy, and relationships to a subtype's own key and to a subtype as an entity-level endpoint. Its golden SVG is new; the thirteen existing goldens are byte-identical.
 
-- **Target-native type names colored, after the 0.5.0 release**: `TARGET_NATIVE_TYPES` in `parser/src/keywords.ts` lists 72 common type names of specific targets: Oracle `number`, `clob` and `raw`, PostgreSQL `serial`, `bytea` and `citext`, SQL Server `uniqueidentifier` and `datetimeoffset`, Snowflake `timestamp_ntz`, BigQuery `float64`, the integer types of Cassandra, Protobuf and ClickHouse, and `geometry`, `geography` and `interval`. The playground editor, and the TextMate grammar used by the site and the VS Code extension, color them like scalar types. They are not built-ins: the resolver passes them through like any other target-native name, and a Named Type may be declared under one of them, whereas a name in `SCALAR_TYPES` is a built-in that no Named Type can shadow (spec §15.2). Generic words that often name fields (`point`, `line`, `box`, `path`, `image`, `duration`) are left out, since coloring does not depend on position. The parser's keyword-consistency tests and the TextMate smoke test cover the list.
-
 ### Changed
 
 #### Spec
-
-- **§16 Enum, clarification after the 0.5.0 release** (no new version): the section already allowed container-qualified Enums; it now shows both ways to declare one, inside a Container block or under a qualified name, states that the two forms are equivalent, so declaring one Enum both ways is a duplicate, and shows a field naming each by its qualified name. The example has a View in playground button (114 buttons across v0.1 to v0.5).
-
-- **Adjacent standards, editorial update after the 0.5.0 release** (no change to the language, no new version): Open Semantic Interchange is now Apache Ossie (incubating), with its new name and repository link in the abstract, §1.1, §24, §30 and the references; §30 gains a LinkML row and a sentence on how the two languages differ, and LinkML joins the references. The site pages (FAQ, README, home page, xDBML in 5 minutes, ecosystem, governance, contributing) follow, and the FAQ gains "How does xDBML compare with LinkML?".
 
 - **Chapter numbering**: the new §12 moves every chapter from Edge onward up by one (Edge §13, View §14, ... Conformance §31). All cross-references inside v0.5 follow. Earlier versions keep their own numbering.
 
@@ -109,21 +148,11 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 - **Site shows v0.5 as the current draft**: the specification index, the three specification menus in `.vitepress/config.ts`, and the README list v0.5 as current and v0.4 as superseded. `/spec/current` follows from `scripts/prepare-spec.mjs` with no change. The FAQ reference to the module system names §27.
 
-- **Playground help, Diagnostics panel, after the 0.5.0 release**: the page described warnings as future work and said the parser recovers to report several syntax errors at once. It now describes the two stages as they run: parsing stops at the first syntax error and the diagram keeps the last good state, while resolution reports errors and warnings together and the diagram and inspector keep working. It lists the four warnings (`possible-type-typo`, `ambiguous-ref-endpoint`, `empty-supertype-group`, `merge-without-roll-up`), the row layout with its code, and the default expanded state. The Editor pane page mentions the target-native type colors, and comments in the playground source that still called warnings a future feature are updated.
-
-- **MCP server and llms.txt, after the 0.5.0 release**: the paragraph on types now says that any other type name is valid and passes through as written, so a physical model uses its target's own types (`number(10)`, `varchar2(255)`, `serial`, `bytea`); it shows how a field names an Enum declared in a schema (`status core.job_status`) and names the `possible-type-typo` warning. `mcp/src/reference.ts` is regenerated from it; the MCP server serves the new text once redeployed.
-
 ### Fixed
 
 #### Spec
 
 - **§3.9**: the subsection on element and field separators was numbered 3.8 a second time; it is now 3.9.
-
-#### Tooling
-
-- **Target-native type names, fixed after the 0.5.0 release**: the name resolver reported `unresolved-type` for every scalar type name missing from the parser's highlighting lists, among them Oracle `number`, `clob` and `raw`, PostgreSQL `serial` and `bytea`, SQL Server `uniqueidentifier`, and the `number(10)` of the §27.16 field-level import example. A field typed by a declared `Enum`, which DBML allows, failed the same way. Scalar type names pass through as written (spec §1.2, principle 4), so a name that is neither a builtin nor a declared Type or Enum is now accepted as a target-native type with no diagnostic. The exception is a near miss of a declared Type or Enum -- a difference of case, or one or two edits depending on the length of the name -- reported as the new `possible-type-typo` warning, with the declared name as the suggestion. `unresolved-type` stays in `DiagnosticCode`, but the field-type pass no longer emits it for a scalar name. A path that navigates into a target-native or Enum-typed field reports `invalid-nested-path`, as a path into a builtin scalar already did.
-
-- **Container-qualified Enums, fixed after the 0.5.0 release**: the parser rejected `enum core.job_status { ... }`, the DBML form of an Enum declared in a schema, and a field type naming it, `status core.job_status`, although §16 allows container-qualified Enums. Both now parse, with quoted segments allowed (`"billing"."invoice status"`). The resolver files an Enum declared under a qualified name in that container, as if it were declared in the Container block, so the two forms share one qualified name and declaring both is a `duplicate-declaration`. A qualified type name that names no Enum, such as `public.geometry`, passes through as a target-native type, and a near miss of a qualified Enum suggests the qualified name. `use { enum core.job_status }` imports such an Enum under its bare name, as it does a container-scoped one. The grammar gains a `typeName` rule under `scalarType`, and `grammar/test-cases.md` gains a valid and an invalid case.
 
 ## v0.4 -- 2026
 
