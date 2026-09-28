@@ -1,60 +1,63 @@
-xDBML -- delta 2 of 4 before 0.5.1: target-native type names colored
-Base: delta 1 (xdbml-native-type-names.zip) applied on origin/main 81125b5.
-Apply delta 1 first; this delta's CHANGELOG.md and run-tests.ts include it.
+xDBML -- delta 3 of 4 before 0.5.1: container-qualified Enums
+Base: deltas 1 and 2 applied on origin/main 81125b5. Apply them first;
+this delta's CHANGELOG.md and run-tests.ts include them.
 
 WHAT CHANGED
 ------------
-Oracle `number`, PostgreSQL `serial`, SQL Server `uniqueidentifier` and
-similar names now color as types in the playground editor, the site's code
-blocks, and the VS Code extension grammar.
+Spec §16 already allowed container-qualified Enums, but the parser
+rejected the DBML form `enum core.job_status { ... }` ("Expected '{' after
+enum name") and a field typed `core.job_status` ("Expected field name").
 
-parser\src\keywords.ts
-  - NEW `TARGET_NATIVE_TYPES`: 72 names (Oracle, PostgreSQL, SQL Server,
-    Snowflake, BigQuery, Cassandra, Protobuf, ClickHouse, plus geometry,
-    geography, interval). Highlighting only.
-  - Kept out of SCALAR_TYPES on purpose: SCALAR_TYPES/BSON_TYPES are the
-    built-in names that a Named Type cannot shadow (spec §15.2), and both
-    the name resolver and the module resolver read them. Putting
-    `geography` there would stop `Type Geography { ... }` from resolving.
-    The comment above SCALAR_TYPES now says so.
-  - Left out: generic words that often name fields (point, line, box,
-    path, circle, image, counter, duration, name), since coloring does not
-    depend on position. Kept, like the existing date/time/year: number,
-    raw, interval, bytes, vector.
-parser\src\monarch.ts
-  `nativeTypes` group, colored `type`.
-tools\textmate\xdbml.tmLanguage.template.json, scripts\build.mjs
-  `native-types` pattern (scope storage.type.xdbml) filled from
-  __TARGET_NATIVE_TYPES__, included next to bson-types in both places.
-tools\textmate\xdbml.tmLanguage.json
-  Regenerated with build.mjs (nothing to run on your side).
-tools\vscode-extension\syntaxes\xdbml.tmLanguage.json
-  Synced with scripts\prepare.mjs. The .vsix is NOT rebuilt and the
-  extension version is NOT bumped: a release decision.
-tools\textmate\scripts\test.mjs
-  Targeted check: number, CLOB, serial, uniqueidentifier are
-  storage.type.xdbml; point is not. Fails against the old grammar.
-tools\textmate\README.md
-  "Adding a keyword" says which list a target-native name goes in.
+parser\src\parser.ts
+  - parseEnum(): the name may be dotted; each segment may be quoted
+    (`enum "billing"."invoice status"`).
+  - parseScalarOrNamedType(): a type name may be dotted, with parameters
+    after it (`core.money_t(10,2)`). One ScalarType node, name as written.
+parser\src\ast.ts
+  Doc comments on EnumDeclaration.name and ScalarType.name.
+parser\src\name-resolver.ts
+  - `enum core.job_status` is filed as enum `job_status` in container
+    `core`, the same entry `Container core { Enum job_status }` produces:
+    same qualified name, same bare name, and declaring both is
+    duplicate-declaration. (Tables are NOT changed: `Table core.users`
+    is still filed under the name `core.users`, see chat.)
+  - Near miss: a qualified type name compares against qualified names,
+    so `core.job_stauts` suggests 'core.job_status'.
+  - An unmatched qualified name (`public.geometry`) passes through.
+parser\src\module-resolver.ts
+  `use { enum core.job_status }` matches the top-level qualified form and
+  imports it under its bare name, as it does for a container-scoped Enum
+  (the source container does not survive into the importing file, §27.16).
 parser\test\run-tests.ts
-  4 keyword-consistency tests: all 72 parse as ScalarType and resolve
-  clean; no duplicate and no overlap with any other keyword array; Monarch
-  carries the list; `Type Geography` still resolves through a Ref path.
+  6 tests: both declaration spellings, qualified type names with
+  parameters and quoted segments, filing and resolution, duplicate across
+  the two forms, qualified near miss, cross-file import. All 6 fail against
+  the previous sources.
+grammar\xDBML.g4
+  `scalarType : typeName (...)?` with new `typeName` / `typeNameSegment`
+  rules (IDENTIFIER or quotedIdentifier, DOT-separated).
+grammar\test-cases.md
+  §17.7: one VALID and one INVALID case, both checked against the parser.
+spec\v0.5.md -- clarification, no version change (flagged in chat)
+  §16: one paragraph and an example: the two ways to declare a
+  container-qualified Enum are equivalent, declaring both is a duplicate,
+  a field names it by its qualified name. New View in playground button,
+  generated with spec-playground-links --write (114 buttons).
 CHANGELOG.md
-  v0.5 > Added > Tooling, last bullet, marked after the 0.5.0 release.
+  v0.5 > Changed > Spec: §16 clarification. v0.5 > Fixed > Tooling:
+  container-qualified Enums.
 
 FILES
 -----
   CHANGELOG.md
-  parser\src\keywords.ts
-  parser\src\monarch.ts
+  grammar\test-cases.md
+  grammar\xDBML.g4
+  parser\src\ast.ts
+  parser\src\module-resolver.ts
+  parser\src\name-resolver.ts
+  parser\src\parser.ts
   parser\test\run-tests.ts
-  tools\textmate\README.md
-  tools\textmate\scripts\build.mjs
-  tools\textmate\scripts\test.mjs
-  tools\textmate\xdbml.tmLanguage.json
-  tools\textmate\xdbml.tmLanguage.template.json
-  tools\vscode-extension\syntaxes\xdbml.tmLanguage.json
+  spec\v0.5.md
 
 APPLY (cmd.exe)
 ---------------
@@ -62,29 +65,26 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\parser\src\keywords.ts"                               "%REPO%\parser\src\keywords.ts"
-copy /Y "%DELTA%\parser\src\monarch.ts"                                "%REPO%\parser\src\monarch.ts"
+copy /Y "%DELTA%\grammar\test-cases.md"                                "%REPO%\grammar\test-cases.md"
+copy /Y "%DELTA%\grammar\xDBML.g4"                                     "%REPO%\grammar\xDBML.g4"
+copy /Y "%DELTA%\parser\src\ast.ts"                                    "%REPO%\parser\src\ast.ts"
+copy /Y "%DELTA%\parser\src\module-resolver.ts"                        "%REPO%\parser\src\module-resolver.ts"
+copy /Y "%DELTA%\parser\src\name-resolver.ts"                          "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\src\parser.ts"                                 "%REPO%\parser\src\parser.ts"
 copy /Y "%DELTA%\parser\test\run-tests.ts"                             "%REPO%\parser\test\run-tests.ts"
-copy /Y "%DELTA%\tools\textmate\README.md"                             "%REPO%\tools\textmate\README.md"
-copy /Y "%DELTA%\tools\textmate\scripts\build.mjs"                     "%REPO%\tools\textmate\scripts\build.mjs"
-copy /Y "%DELTA%\tools\textmate\scripts\test.mjs"                      "%REPO%\tools\textmate\scripts\test.mjs"
-copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.json"                 "%REPO%\tools\textmate\xdbml.tmLanguage.json"
-copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.template.json"        "%REPO%\tools\textmate\xdbml.tmLanguage.template.json"
-copy /Y "%DELTA%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json" "%REPO%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\spec\v0.5.md"                                         "%REPO%\spec\v0.5.md"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: parser 221 passed, 0 failed; every other suite unchanged; docs
-  build complete.
-node tools\textmate\scripts\test.mjs
-  Expect: "Target-native type names" block with 5 checks, then
-  "All checks passed".
+  Expect: parser 227 passed, 0 failed; "114 button(s) open the snippet
+  below them"; every other suite unchanged; docs build complete.
 npm run docs:dev
-  Open the local URL VitePress prints, followed by /playground/index.html,
-  and open F1Data_Tables.xdbml: `number(11)` has the same color as
-  `varchar2(255)`. Stop the dev server with Ctrl+C.
+  Open the local URL VitePress prints, followed by /spec/current, go to
+  §16 Enum, and click the new View in playground button: no issues, and
+  the two tables show `core.job_status` and `billing.invoice_status` as
+  field types. Stop the dev server with Ctrl+C.
 git add -A
-git commit -m "Highlighting: TARGET_NATIVE_TYPES (Oracle number, PostgreSQL serial, ...), colored but not built-ins"
+git commit -m "Container-qualified Enums: enum core.job_status and field type core.job_status (spec §16)"
 
 Do not push yet if you prefer one push for deltas 1 to 4; otherwise:
 git push
@@ -93,10 +93,13 @@ VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
   parser type-check     tsc --noEmit clean; build clean
   renderer type-check   clean
-  npm run check         parser 221/0, renderer 198/0, viewport 14/0,
+  npm run check         parser 227/0, renderer 198/0, viewport 14/0,
                         interactive 42/0, mcp 12/0, from-mongodb 24/0,
-                        playground 51/0, vsix and spec links OK,
+                        playground 51/0, vsix OK, 114 spec links OK,
                         playground type-check clean, docs build complete
-  TextMate smoke test   all checks passed; the new block fails 4 of 5
-                        against the previous grammar
-  grammar copies        tools\textmate and the extension copy identical
+  renderer              the §16 snippet renders; both qualified type
+                        labels appear in the SVG
+  grammar cases         VALID case: no diagnostics; INVALID case: one
+                        duplicate-declaration
+  examples/*.xdbml      no new diagnostics in any of the 14;
+                        F1Data_Tables.xdbml still clean

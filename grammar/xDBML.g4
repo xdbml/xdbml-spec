@@ -509,7 +509,20 @@ typeExpression
     ;
 
 scalarType
-    : IDENTIFIER ( LPAREN typeParameterList RPAREN )?   // e.g. varchar, decimal(19,4), objectId
+    : typeName ( LPAREN typeParameterList RPAREN )?   // e.g. varchar, decimal(19,4), objectId, core.job_status
+    ;
+
+// A type name may be qualified, as in DBML: `core.job_status` names an Enum
+// declared in container `core` (spec §16). Any other name, qualified or not,
+// passes through as a target-native type (spec §1.2). A segment may be
+// quoted: "billing"."invoice status".
+typeName
+    : typeNameSegment (DOT typeNameSegment)*
+    ;
+
+typeNameSegment
+    : IDENTIFIER
+    | quotedIdentifier
     ;
 
 typeParameterList

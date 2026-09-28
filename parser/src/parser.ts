@@ -1454,7 +1454,14 @@ export class Parser {
       );
     }
     this.advance();
-    const name = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
+    let name = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
+    // A qualified type name, `core.job_status`, names an Enum declared in
+    // a container (spec §16), or a target-native type such as
+    // `public.geometry` that passes through as written.
+    while (this.check(TokenKind.Dot)) {
+      this.advance();
+      name += `.${this.parseIdentLikeName('type name after dot')}`;
+    }
     let params: string[] | undefined;
     if (this.check(TokenKind.LParen)) {
       this.advance();
@@ -1635,7 +1642,13 @@ export class Parser {
   private parseEnum (): EnumDeclaration {
     const start = this.peek().start;
     const kwTok = this.advance(); // enum
-    const name = this.parseIdentLikeName('enum name');
+    // DBML form `enum core.job_status { ... }`: the qualifier names the
+    // container, as for a schema-qualified Table (spec §7.3, §16).
+    let name = this.parseIdentLikeName('enum name');
+    while (this.check(TokenKind.Dot)) {
+      this.advance();
+      name += `.${this.parseIdentLikeName('enum name after dot')}`;
+    }
     this.expect(TokenKind.LBrace, "Expected '{' after enum name");
     const values: EnumValue[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {

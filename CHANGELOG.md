@@ -79,6 +79,8 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 
 #### Spec
 
+- **§16 Enum, clarification after the 0.5.0 release** (no new version): the section already allowed container-qualified Enums; it now shows both ways to declare one, inside a Container block or under a qualified name, states that the two forms are equivalent, so declaring one Enum both ways is a duplicate, and shows a field naming each by its qualified name. The example has a View in playground button (114 buttons across v0.1 to v0.5).
+
 - **Adjacent standards, editorial update after the 0.5.0 release** (no change to the language, no new version): Open Semantic Interchange is now Apache Ossie (incubating), with its new name and repository link in the abstract, §1.1, §24, §30 and the references; §30 gains a LinkML row and a sentence on how the two languages differ, and LinkML joins the references. The site pages (FAQ, README, home page, xDBML in 5 minutes, ecosystem, governance, contributing) follow, and the FAQ gains "How does xDBML compare with LinkML?".
 
 - **Chapter numbering**: the new §12 moves every chapter from Edge onward up by one (Edge §13, View §14, ... Conformance §31). All cross-references inside v0.5 follow. Earlier versions keep their own numbering.
@@ -116,6 +118,8 @@ Adds supertype groups: generalization of entities into a supertype and subtypes,
 #### Tooling
 
 - **Target-native type names, fixed after the 0.5.0 release**: the name resolver reported `unresolved-type` for every scalar type name missing from the parser's highlighting lists, among them Oracle `number`, `clob` and `raw`, PostgreSQL `serial` and `bytea`, SQL Server `uniqueidentifier`, and the `number(10)` of the §27.16 field-level import example. A field typed by a declared `Enum`, which DBML allows, failed the same way. Scalar type names pass through as written (spec §1.2, principle 4), so a name that is neither a builtin nor a declared Type or Enum is now accepted as a target-native type with no diagnostic. The exception is a near miss of a declared Type or Enum -- a difference of case, or one or two edits depending on the length of the name -- reported as the new `possible-type-typo` warning, with the declared name as the suggestion. `unresolved-type` stays in `DiagnosticCode`, but the field-type pass no longer emits it for a scalar name. A path that navigates into a target-native or Enum-typed field reports `invalid-nested-path`, as a path into a builtin scalar already did.
+
+- **Container-qualified Enums, fixed after the 0.5.0 release**: the parser rejected `enum core.job_status { ... }`, the DBML form of an Enum declared in a schema, and a field type naming it, `status core.job_status`, although §16 allows container-qualified Enums. Both now parse, with quoted segments allowed (`"billing"."invoice status"`). The resolver files an Enum declared under a qualified name in that container, as if it were declared in the Container block, so the two forms share one qualified name and declaring both is a `duplicate-declaration`. A qualified type name that names no Enum, such as `public.geometry`, passes through as a target-native type, and a near miss of a qualified Enum suggests the qualified name. `use { enum core.job_status }` imports such an Enum under its bare name, as it does a container-scoped one. The grammar gains a `typeName` rule under `scalarType`, and `grammar/test-cases.md` gains a valid and an invalid case.
 
 ## v0.4 -- 2026
 

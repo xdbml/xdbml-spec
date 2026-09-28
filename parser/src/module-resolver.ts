@@ -517,8 +517,20 @@ function findImportTarget (
     }
     return undefined;
   }
-  // Enum: top-level OR container-scoped.
+  // Enum: top-level OR container-scoped. A top-level Enum declared with
+  // a qualified name (`enum core.job_status`, the DBML form) matches its
+  // full dotted path and imports under its bare name, like the
+  // container-scoped form: the source container does not survive into
+  // the importing file (spec §27.16).
   if (item.elementType === 'enum') {
+    if (segments.length > 1) {
+      const qualifiedTopLevel = doc.statements.find(
+        (s) => s.kind === 'EnumDeclaration' && s.name === path,
+      );
+      if (qualifiedTopLevel && qualifiedTopLevel.kind === 'EnumDeclaration') {
+        return { ...qualifiedTopLevel, name: segments[segments.length - 1] };
+      }
+    }
     if (segments.length === 1) {
       return doc.statements.find(
         (s) => s.kind === 'EnumDeclaration' && s.name === segments[0],

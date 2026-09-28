@@ -178,7 +178,11 @@ export type TypeExpression =
 
 export interface ScalarType {
   kind: 'ScalarType';
-  /** The base name: `int`, `varchar`, `decimal`, `objectId`, `Decimal128`, etc. */
+  /**
+   * The base name: `int`, `varchar`, `decimal`, `objectId`, `Decimal128`,
+   * etc. May be qualified, `core.job_status`, when it names an Enum
+   * declared in a container (spec §16).
+   */
   name: string;
   /** `(p, s)` parameters, e.g. for `decimal(19, 4)`. Numbers preserved as strings to keep round-trip fidelity. */
   params?: string[];
@@ -365,6 +369,11 @@ export interface EnumDeclaration {
   kind: 'EnumDeclaration';
   /** Source casing of `enum` or `Enum`; both are valid. */
   keywordCasing: string;
+  /**
+   * May be `container.enum` form when declared schema-qualified at the
+   * top level (`enum core.job_status`); the resolver files it under that
+   * container, like an Enum declared inside the Container block.
+   */
   name: string;
   values: EnumValue[];
   span: Span;

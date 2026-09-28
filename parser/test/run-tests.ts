@@ -2043,6 +2043,128 @@ Entity assorted {
       },
     },
     {
+      name: 'DBML: schema-qualified Enum declarations parse with their qualified names (spec §16)',
+      source: `enum core.job_status {
+  created
+  running [note: 'in progress']
+}
+enum "billing"."invoice status" {
+  draft
+}`,
+      assert: (doc) => {
+        const names = doc.statements.map((s) => (s.kind === 'EnumDeclaration' ? `${s.name}:${s.values.length}` : s.kind));
+        const want = ['core.job_status:2', 'billing.invoice status:1'];
+        return JSON.stringify(names) === JSON.stringify(want) ? null : `expected ${JSON.stringify(want)}, got ${JSON.stringify(names)}`;
+      },
+    },
+    {
+      name: 'DBML: a qualified type name parses as one ScalarType, parameters included',
+      source: `Table core.jobs {
+  status core.job_status [not null]
+  label "billing"."invoice status"
+  amount core.money_t(10,2)
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return `expected EntityDeclaration, got ${e.kind}`;
+        const got = e.body.map((b) => {
+          if (b.kind !== 'FieldDeclaration' || b.type.kind !== 'ScalarType') return b.kind;
+          return `${b.type.name}${b.type.params ? `(${b.type.params.join(',')})` : ''}:${b.settings.length}`;
+        });
+        const want = ['core.job_status:1', 'billing.invoice status:0', 'core.money_t(10,2):0'];
+        return JSON.stringify(got) === JSON.stringify(want) ? null : `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'P6: a qualified Enum is filed under its container, like the Container form, and resolves',
+      source: `enum core.job_status {
+  created
+  done
+}
+Container ops [type: schema] {
+  Enum level { low
+    high }
+}
+Table core.jobs {
+  a core.job_status
+  b job_status
+  c ops.level
+  d level
+  e public.geometry
+}`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected clean, got ${r.diagnostics.map((d) => d.code + ': ' + d.message).join('\n')}`;
+        const sym = r.symbols.lookup('core.job_status');
+        if (!sym || sym.kind !== 'enum') return 'core.job_status should be an enum symbol';
+        if (sym.name !== 'job_status' || sym.containerName !== 'core') return `expected job_status in core, got ${sym.name} in ${sym.containerName}`;
+        return null;
+      },
+    },
+    {
+      name: 'P6: the same Enum declared in a Container block and with a qualified name is a duplicate',
+      source: `Container core [type: schema] {
+  Enum job_status { created
+    done }
+}
+enum core.job_status {
+  queued
+}`,
+      assert: (doc) => {
+        const codes = resolveNames(doc).diagnostics.map((d) => d.code);
+        return JSON.stringify(codes) === JSON.stringify(['duplicate-declaration']) ? null : `expected one duplicate-declaration, got ${codes.join(', ')}`;
+      },
+    },
+    {
+      name: 'P6: a near miss of a qualified Enum suggests the qualified name',
+      source: `enum core.job_status {
+  created
+}
+Table core.jobs {
+  status core.job_stauts
+}`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        if (d.length !== 1 || d[0].code !== 'possible-type-typo') return `expected one possible-type-typo, got ${d.map((x) => x.code).join(', ')}`;
+        return d[0].message.includes("did you mean 'core.job_status'") ? null : `wrong suggestion: ${d[0].message}`;
+      },
+    },
+    (() => {
+      const files: Record<string, string> = {
+        '/test/enums.xdbml': `xdbml: 0.5
+enum core.job_status {
+  created
+  done
+}
+Container ops [type: schema] {
+  Enum level { low
+    high }
+}`,
+      };
+      return {
+        name: 'P5: use { enum core.job_status } imports a qualified top-level Enum under its bare name, like a container-scoped one',
+        source: `xdbml: 0.5
+use { enum core.job_status, enum ops.level } from './enums'
+Table jobs {
+  s job_status
+  l level
+}`,
+        options: {
+          filePath: '/test/main.xdbml',
+          readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
+        },
+        assert: (doc) => {
+          const dir = doc.statements[0];
+          if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected ModuleImportDirective with clone';
+          const got = dir.clone.statements.map((s) => `${s.kind}:${(s as { name?: string }).name}`);
+          const want = ['EnumDeclaration:job_status', 'EnumDeclaration:level'];
+          if (JSON.stringify(got) !== JSON.stringify(want)) return `expected ${JSON.stringify(want)}, got ${JSON.stringify(got)}`;
+          const diags = resolveNames(doc).diagnostics;
+          return diags.length === 0 ? null : `unexpected diagnostics: ${diags.map((d) => d.code).join(', ')}`;
+        },
+      };
+    })(),
+    {
       name: 'P6: unresolved FK entity produces unresolved-entity diagnostic',
       source: `xdbml: 0.2
 Entity users {

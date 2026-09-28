@@ -393,6 +393,37 @@ Container sales [type: schema] {
 Ref: sales.orders.customer_id > core.customers.id
 ```
 
+### VALID -- container-qualified Enum, declared and referenced by qualified name (DBML form)
+
+```
+enum core.job_status {
+  created
+  running
+  done
+}
+
+Table core.jobs {
+  id     int [pk]
+  status core.job_status [not null]
+}
+```
+
+### INVALID -- the same Enum declared in a Container block and with a qualified name (duplicate-declaration)
+
+```
+xdbml: 0.5
+
+Container core [type: schema] {
+  Enum job_status {
+    created
+  }
+}
+
+enum core.job_status {
+  queued
+}
+```
+
 ---
 
 ## §17.8 Named types

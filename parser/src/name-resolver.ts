@@ -284,14 +284,18 @@ function typeOrEnumDeclarations (name: string, symbols: SymbolTable): SymbolEntr
 function nearMissTypeName (name: string, symbols: SymbolTable): string | undefined {
   const lower = name.toLowerCase();
   const maxDistance = lower.length <= 3 ? 0 : lower.length <= 7 ? 1 : 2;
+  // A qualified name (`core.job_stauts`) compares against qualified
+  // declarations, a bare name against bare ones.
+  const qualified = name.includes('.');
   let best: { name: string; distance: number } | undefined;
   for (const entry of symbols.entries()) {
     if (entry.kind !== 'type' && entry.kind !== 'enum') continue;
-    const candidate = entry.name.toLowerCase();
+    const declared = qualified ? entry.qualifiedName : entry.name;
+    const candidate = declared.toLowerCase();
     if (Math.abs(candidate.length - lower.length) > maxDistance) continue;
     const distance = editDistance(lower, candidate, maxDistance);
     if (distance <= maxDistance && (!best || distance < best.distance)) {
-      best = { name: entry.name, distance };
+      best = { name: declared, distance };
     }
   }
   return best?.name;
@@ -393,9 +397,19 @@ function addTopLevelDeclaration (
     case 'TypeDeclaration':
       addEntry(stmt.name, undefined, 'type', stmt, stmt.span, entries, diagnostics, seen);
       return;
-    case 'EnumDeclaration':
-      addEntry(stmt.name, undefined, 'enum', stmt, stmt.span, entries, diagnostics, seen);
+    case 'EnumDeclaration': {
+      // `enum core.job_status { ... }` (the DBML form) files the Enum
+      // under container `core`, exactly as `Container core { Enum
+      // job_status { ... } }` does: same qualified name, same bare name,
+      // and declaring both is a duplicate (spec §16).
+      const dot = stmt.name.lastIndexOf('.');
+      if (dot > 0) {
+        addEntry(stmt.name.slice(dot + 1), stmt.name.slice(0, dot), 'enum', stmt, stmt.span, entries, diagnostics, seen);
+      } else {
+        addEntry(stmt.name, undefined, 'enum', stmt, stmt.span, entries, diagnostics, seen);
+      }
       return;
+    }
     case 'EdgeDeclaration':
       addEntry(stmt.name, undefined, 'edge', stmt, stmt.span, entries, diagnostics, seen);
       return;
