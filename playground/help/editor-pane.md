@@ -26,7 +26,7 @@ Different parts of xDBML are colored to make scanning easier:
 
 - **Declaration keywords** (Project, Container, Table, Entity, Ref, etc.) in deep blue, bold.
 - **Type expression keywords** (object, array, oneOf, etc.) in magenta.
-- **Scalar types** (int, varchar, etc.) in green.
+- **Scalar types** (int, varchar, etc.) in green, along with common types of specific targets such as Oracle `number`, PostgreSQL `serial` or SQL Server `uniqueidentifier`. A type name without color is still valid: xDBML accepts any type name.
 - **BSON types** (objectId, etc.) in italic green to flag them as MongoDB-specific.
 - **Setting keys** (pattern, default, etc.) in teal.
 - **`x_*` custom properties** in italic amber to flag them as extension points.

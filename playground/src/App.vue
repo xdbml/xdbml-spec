@@ -62,9 +62,9 @@
     </main>
 
     <!-- Diagnostics panel: a thin bottom strip listing parse errors
-         (and, when the semantic-analysis pass lands, warnings too).
-         Click an entry to jump the editor cursor to that source
-         position. Collapsed state persists across sessions. -->
+         and the resolver's errors and warnings. Click an entry to jump
+         the editor cursor to that source position. Collapsed state
+         persists across sessions. -->
     <DiagnosticsPanel
       v-model:body-visible="diagnosticsExpanded"
       @goto="onDiagnosticsGoto"

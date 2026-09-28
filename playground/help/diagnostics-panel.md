@@ -1,65 +1,71 @@
 ---
 title: Diagnostics panel
-description: The bottom strip that lists parse errors and warnings, with click-to-jump.
+description: The bottom strip that lists errors and warnings, with click-to-jump.
 ---
 
 # Diagnostics panel
 
-The diagnostics panel is a thin horizontal strip across the bottom of the playground. It tells you at a glance whether your schema parses cleanly, and when it doesn't, lists every error with click-to-jump-to-source.
+The diagnostics panel is a thin horizontal strip across the bottom of the playground. It tells you at a glance whether your schema has problems, and lists each one with click-to-jump-to-source.
 
 ::: screenshot
 **[Screenshot needed]**
 Filename suggestion: `diagnostics-panel-errors.png`
-Caption: The diagnostics panel expanded, showing a list of two parse errors with line and column.
-Should show: the bottom of the playground UI with the diagnostics panel expanded. The header shows "2 errors" in red. Two error rows are visible, each with a red × icon, an error message, and "Line N, column M" formatted in a smaller grey font.
+Caption: The diagnostics panel expanded, showing one error and one warning with line and column.
+Should show: the bottom of the playground UI with the diagnostics panel expanded. The header shows "1 error" in red and "1 warning" in amber. Two rows are visible: one with a red × icon, one with an amber ! icon, each with a message, "Line N, column M" in a smaller grey font, and a code chip such as `possible-type-typo`.
 :::
 
-## Two states
+## What the header shows
 
-**No issues**: header shows "No issues" in grey. Body is empty and collapsed. The strip stays visible (about 32 pixels tall) so the UI doesn't shift when an error first appears.
+The header stays visible, about 32 pixels tall, so the layout doesn't shift when a problem appears. It shows one of:
 
-**Errors present**: header shows the count (e.g. "1 error", "3 errors") in red with a small × icon. A caret (▸ or ▾) indicates collapsed or expanded state. The body, when expanded, lists each error.
+- **No issues**, in grey, when the schema parses and resolves cleanly.
+- **An error count**, in red with a small × icon: "1 error", "3 errors".
+- **A warning count**, in amber with a small ! icon: "1 warning", "2 warnings".
 
-The body is open by default the first time errors appear. You can collapse it manually, and your collapse choice persists across reloads. Even when collapsed, the header bar shows the current count, so you always know whether errors exist.
+Errors and warnings are counted separately, so a schema with both shows the two counts side by side. When there is something to list, a caret (▸ or ▾) shows whether the body is collapsed or expanded, and the right end of the header reads "Click to expand" or "Click to collapse".
+
+## Errors and warnings
+
+The playground checks your schema in two stages.
+
+**Parsing** reads the text. A syntax error stops it at the first problem, so the panel lists that one error, and the diagram keeps showing the last schema that parsed. [When parsing fails](./when-parsing-fails) covers recovery.
+
+**Resolution** runs on a schema that parsed and checks what its names refer to: that a relationship points at an entity and a field that exist, that an injected partial is declared, that a supertype group follows the rules of the specification. It can report several problems at once. Since the schema parsed, the diagram and the inspector keep up with your edits while these diagnostics are listed.
+
+Resolution reports two severities. An **error** marks something the schema cannot mean as written, such as a relationship to an entity that doesn't exist, or two declarations with the same name. A **warning** marks something valid that is probably not what you intended. Four warnings exist today:
+
+- **`possible-type-typo`**: a type name that is not declared, but is close to a declared Type or Enum, such as `Adress` in a schema that declares `Type Address`. The message suggests the declared name. Any type name is valid in xDBML, so target-native types such as `number`, `clob` or `serial` raise nothing on their own; the warning appears only for a near miss.
+- **`ambiguous-ref-endpoint`**: a relationship endpoint that reads both as an entity and as a field of another entity. The field reading is used; rename one of them or qualify the path.
+- **`empty-supertype-group`**: a supertype group that lists no subtype yet.
+- **`merge-without-roll-up`**: a `merge` setting on a supertype group where neither the group nor any subtype uses `strategy: roll_up`, the only strategy it applies to.
+
+## Rows in the body
+
+Each row shows:
+
+- A red × for an error, or an amber ! for a warning.
+- The message, for example "Relationship endpoint references unknown entity 'custmers'."
+- The source position in grey: "Line 12, column 5".
+- For a resolution diagnostic, a short code such as `unresolved-entity` or `possible-type-typo`, the same code the MCP `validate_xdbml` tool reports. Syntax errors carry no code.
+
+Rows are sorted by line, then column, matching the order you'd read them in the source. The body scrolls once the list is taller than about 200 pixels, so a long list doesn't push the diagram off-screen.
 
 ## Click to jump
 
-Each error row in the expanded body has:
-
-- A red × icon
-- The error message text (e.g. "Unexpected token '['")
-- The source position in grey font: "Line 12, column 5"
-
-Clicking anywhere on the row jumps your editor cursor to that line and column, scrolls the editor to bring it into view, and gives the editor focus. Useful when you have many errors or when the error is on a line that's scrolled off-screen.
-
-The errors are sorted by line then column, matching the order you'd read them in the source.
+Clicking anywhere on a row moves your editor cursor to that line and column, scrolls the editor to bring it into view, and gives the editor focus. Useful when you have many diagnostics, or when one is on a line that's scrolled off-screen.
 
 ## How it relates to editor squiggles
 
-The same errors are also shown as red squiggles in the editor pane, with the error message in a hover tooltip. The two surfaces are complementary:
+The same diagnostics appear in the editor pane as squiggles, red for errors and amber for warnings, with the message and code in a hover tooltip. The two surfaces are complementary:
 
-- **Squiggles** are visible while you're already looking at the editor, in-place at the offending token.
-- **The diagnostics panel** is visible regardless of which pane has your attention, lists multiple errors compactly, and gives you a count.
+- **Squiggles** are visible while you're already looking at the editor, in place at the offending token.
+- **The diagnostics panel** is visible regardless of which pane has your attention, lists every diagnostic compactly, and gives you the counts.
 
-Use whichever feels natural for the situation. The squiggle is good for quick fixes; the panel is better when an error is on a line you can't see, or when you want to count outstanding issues.
+## Collapsing the body
 
-## Errors vs warnings
+The body is expanded by default. Click the header to collapse or expand it; the caret rotates to match, and the playground remembers your choice across reloads. When there is nothing to list, the header doesn't respond to clicks.
 
-The panel is shaped to handle both errors and warnings, with separate counts and different badge colors (red for errors, amber for warnings). Today the parser emits only errors. Warnings will arrive with the future semantic-analysis pass, which can flag things like "this Ref points at a non-existent field" or "this field's type is undefined." When that lands, the panel will pick warnings up automatically; no UI change needed.
-
-## When the schema is partially broken
-
-The parser reports errors line-by-line where it can recover, and bails out where it can't. As a result:
-
-- **Multiple errors at the same time** are possible. You don't have to fix and re-parse one error at a time.
-- **Some errors hide others.** A syntax error early in the file can prevent the parser from getting to a later semantic mistake. Fix the early ones first; new errors may appear once the parser can reach further.
-- **The diagram keeps showing the last good state** while errors are present. So you can fix one error, see the diagram update, fix the next, and so on.
-
-## Collapsing manually
-
-Click the header bar to collapse or expand the body. The caret rotates 90° to indicate state. When there are zero errors, clicking does nothing because there's no body to expand.
-
-When you collapse with errors present, the count badge stays visible in the header so you don't forget about them. Your collapse state persists across reloads.
+When you collapse with diagnostics present, the counts stay visible in the header so you don't forget about them.
 
 ## What's next
 

@@ -110,8 +110,8 @@
 
 <script setup lang="ts">
 /**
- * Diagnostics panel: a bottom strip that lists all parse / lex errors
- * (and, in future, semantic warnings) with click-to-jump-to-source.
+ * Diagnostics panel: a bottom strip that lists lex / parse errors and
+ * the resolver's errors and warnings, with click-to-jump-to-source.
  *
  * Behavior:
  *   - Header bar is always visible -- shows the count and serves as
@@ -125,10 +125,9 @@
  *   - Clicking a diagnostic emits `goto` with line/column. App.vue
  *     forwards to the editor's exposed revealPosition method.
  *
- * The parser today emits only errors (severity is implicit). The
- * shape is ready for explicit severity once the semantic-analysis
- * pass lands -- it'll attach `severity: 'warning'` and the panel
- * will pick it up via the count split and badge color.
+ * Lex / parse failures arrive as errors. Resolver diagnostics carry
+ * their own severity, and the panel counts errors and warnings
+ * separately, with a red or amber badge and row icon for each.
  */
 import { computed } from 'vue';
 

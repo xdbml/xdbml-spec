@@ -1,6 +1,6 @@
 /**
- * Bridge parser errors to Monaco's marker API so they show as red
- * squiggles in the editor.
+ * Bridge parser diagnostics to Monaco's marker API so they show as
+ * squiggles in the editor: red for errors, amber for warnings.
  *
  * Note: xDBML parser positions are 1-indexed for both line and column
  * (matching Monaco's convention), so no offset arithmetic is needed --
@@ -19,8 +19,9 @@ export function setMonacoMarkers (
   const markers: monaco.editor.IMarkerData[] = errors.map((e) => ({
     // Error vs Warning -- driven by the diagnostic's own severity rather
     // than hardcoded. Lex/parse failures arrive as 'error' (the AST is
-    // unusable); resolver diagnostics are 'error' today but the panel
-    // and marker layer are shape-ready for warnings.
+    // unusable); resolver diagnostics carry 'error' or 'warning'
+    // (possible-type-typo, ambiguous-ref-endpoint, and the supertype
+    // group warnings).
     severity: e.severity === 'warning'
       ? monaco.MarkerSeverity.Warning
       : monaco.MarkerSeverity.Error,
