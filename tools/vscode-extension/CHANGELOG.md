@@ -4,6 +4,39 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0]
+
+Brings highlighting up to xDBML v0.6. The grammar is regenerated from the
+parser's keyword lists (`parser/src/keywords.ts`), so the editor colors the
+same words as the playground and the xdbml.org code blocks.
+
+From this release on, the extension's version follows the xDBML version its
+grammar covers: 0.6.x highlights v0.6, and the patch number counts releases
+of the extension alone. Versions 0.4.0 and 0.5.0 are skipped; 0.3.0 was the
+previous release.
+
+### Added
+- **Block keywords**: `constraints` (v0.6, spec §10: an entity's primary
+  key, unique keys and checks), `indexes`, `checks` and `records` are colored
+  when they open a block inside an entity body. Earlier versions left them
+  uncolored there; a field that carries one of these names is not colored.
+- **v0.5 supertype groups**: the `SupertypeGroup` declaration keyword and the
+  setting keys `supertype`, `completeness`, `exclusivity`, `strategy` and
+  `merge` (spec §12).
+- **v0.4 relationships**: the `foreign_master` flag and the setting keys
+  `constraint_type`, `source_role`, `target_role`, `source_verb` and
+  `target_verb` (spec §11.10 to §11.16).
+- **Target-native type names**: 72 common types of specific targets -- Oracle
+  `number`, `clob`, `raw`; PostgreSQL `serial`, `bytea`, `citext`; SQL Server
+  `uniqueidentifier`, `datetimeoffset`; Snowflake `timestamp_ntz`; BigQuery
+  `float64`; Cassandra, Protobuf and ClickHouse integer types; `geometry`,
+  `geography`, `interval` -- are colored like scalar types. Any other type
+  name is still valid; it is simply not colored.
+
+### Changed
+- `PUBLISH.txt`, the maintainers' notes, no longer ships inside the package.
+- The README links to the current specification instead of v0.1.
+
 ## [0.3.0]
 
 Adds a one-click bridge from the editor to the playground.
@@ -84,6 +117,7 @@ Initial release.
 - Language icon (visible in the status bar and language picker).
 - File association for `.xdbml`.
 
+[0.6.0]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.6.0
 [0.3.0]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.3.0
 [0.2.0]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.2.0
 [0.1.1]: https://github.com/xdbml/xdbml-spec/releases/tag/extension-v0.1.1

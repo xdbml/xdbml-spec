@@ -33,6 +33,9 @@
       "include": "#declarations"
     },
     {
+      "include": "#block-keywords"
+    },
+    {
       "include": "#type-keywords"
     },
     {
@@ -129,6 +132,11 @@
     "bson-types": {
       "name": "storage.type.bson.xdbml",
       "match": "\\b((?i:decimal128|objectid|bindata|minkey|maxkey|symbol|double|regex|long))\\b"
+    },
+    "block-keywords": {
+      "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names.",
+      "name": "keyword.other.block.xdbml",
+      "match": "\\b((?i:constraints|indexes|records|checks))\\b(?=\\s*\\{)"
     },
     "native-types": {
       "comment": "Target-native type names (Oracle number, PostgreSQL serial, ...), colored like scalar types. Highlighting only: any identifier is a valid type name.",

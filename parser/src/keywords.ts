@@ -173,6 +173,17 @@ export const BSON_TYPES = [
  * vocabulary: a name missing from it is still a valid type.
  * ----------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------
+ * Entity-body block keywords (TextMate only)
+ *
+ * The words that open a block inside an entity body. They also appear in
+ * SETTING_KEYS above, which colors them in Monaco; the TextMate grammar
+ * colors setting keys only inside `[ ]`, so it matches these separately,
+ * and only when `{` follows, since a field may carry one of these names.
+ * ----------------------------------------------------------------------- */
+
+export const BLOCK_KEYWORDS = ['indexes', 'checks', 'constraints', 'records'] as const;
+
 export const TARGET_NATIVE_TYPES = [
   // Oracle
   'number', 'binary_float', 'binary_double', 'clob', 'nclob', 'bfile',

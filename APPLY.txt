@@ -1,39 +1,69 @@
-xDBML -- v0.6 Delta 7: composite unique key badges, inspector spacing
-Base: Deltas 2 to 6 committed (d685908 "Prepare 0.6.0: release date").
+xDBML -- VS Code extension 0.6.0
+Base: origin/main 42d06ee (release 0.6.0).
+
+The Marketplace has 0.3.0, whose grammar predates v0.4. This delta builds
+0.6.0 and fixes one grammar gap found while checking it. It replaces the
+0.4.0 delta: apply this one instead. If you already committed the 0.4.0
+one locally, the APPLY steps below remove its .vsix.
+
+VERSIONING
+  From 0.6.0 the extension's major.minor follows the xDBML version its
+  grammar covers; the patch number counts releases of the extension alone.
+  0.4.0 and 0.5.0 are skipped (the Marketplace only needs each version to
+  be higher than the last). Written into the extension CHANGELOG and
+  PUBLISH.txt.
 
 WHAT CHANGED
 ------------
-renderer\src\layout\layout.ts, renderer\src\svg\serialize.ts
-  Each field of a composite unique key declared in constraints { } now
-  carries a numbered purple pill: U1 for the entity's first composite
-  unique key, U2 for the second, in declaration order. It shows on primary
-  key fields too, next to P (pitstops: raceid P fk U1, driverid P fk U1,
-  lap U1). A one-field unique key keeps the plain U circle. A composite
-  `unique` entry in `indexes` declares an index, not a key: no badge, as
-  before. New FieldFlags.uniqueKeys (number[]); the role-marker helper's
-  parameter type is narrowed to the four role flags.
-renderer\test\goldens\15-constraints.svg
-  Only change: U1 pills on races (year, round), results (raceid,
-  driverid) and pitstops (raceid, driverid, lap), and the badges after
-  them shift right. Rasterized and checked by eye: no overlap.
-playground\src\components\inspector\EntityInspector.vue
-  Space between "Check" and the expression, and between "Primary key" /
-  "Unique" and the field list (a margin, since Vue drops the leading space
-  of a text node).
-playground\help\visual-cues.md, entity-cards.md
-  The U1/U2 badges; composite `unique` index entries stay unbadged.
-CHANGELOG.md
-  v0.6 renderer bullet describes the numbered badges.
+tools\vscode-extension\xdbml-0.6.0.vsix (NEW, built with @vscode/vsce 4.0.0)
+  11 files, 23 KB. Its grammar is byte-identical to
+  tools\textmate\xdbml.tmLanguage.json; dist\extension.js (Open in
+  Playground) rebuilt by vscode:prepublish, identical to the repo copy.
+tools\vscode-extension\package.json, package-lock.json   version 0.6.0
+tools\vscode-extension\CHANGELOG.md   0.6.0 entry, with the versioning rule
+tools\vscode-extension\README.md      "up to xDBML v0.6", target-native
+                                      types; spec link -> /spec/current
+                                      (was /spec/v0.1)
+tools\vscode-extension\.vscodeignore  PUBLISH.txt no longer ships in the
+                                      package (0.3.0 shipped it)
+tools\vscode-extension\PUBLISH.txt    version-neutral wording; VERSIONING section
+tools\vscode-extension\syntaxes\xdbml.tmLanguage.json   synced
+
+GRAMMAR FIX (site code blocks and the extension)
+  The TextMate grammar colored `indexes`, `checks` and, since v0.6,
+  `constraints` only as setting keys inside [ ], so the words that open
+  those blocks in an entity body were never colored (the playground's
+  Monaco editor did color them). New BLOCK_KEYWORDS list in
+  parser\src\keywords.ts (indexes, checks, constraints, records) and a
+  `block-keywords` pattern (scope keyword.other.block.xdbml) that matches
+  them only before `{`, so a field named `constraints` stays uncolored.
+  parser\src\keywords.ts, tools\textmate\xdbml.tmLanguage.template.json,
+  scripts\build.mjs, xdbml.tmLanguage.json (regenerated), scripts\test.mjs
+  (5 new checks). CHANGELOG.md: the v0.6 "Editor grammars" bullet was
+  inaccurate on this point and now says what changed after 0.6.0.
+
+WHAT THE 0.6.0 GRAMMAR ADDS OVER 0.3.0 (diffed against the old package)
+  SupertypeGroup; setting keys supertype, completeness, exclusivity,
+  strategy, merge, constraint_type, source_role, target_role, source_verb,
+  target_verb; flag foreign_master; 72 target-native type names; block
+  keywords indexes, checks, constraints, records.
 
 FILES
 -----
   CHANGELOG.md
-  playground\help\entity-cards.md
-  playground\help\visual-cues.md
-  playground\src\components\inspector\EntityInspector.vue
-  renderer\src\layout\layout.ts
-  renderer\src\svg\serialize.ts
-  renderer\test\goldens\15-constraints.svg
+  parser\src\keywords.ts
+  tools\textmate\scripts\build.mjs
+  tools\textmate\scripts\test.mjs
+  tools\textmate\xdbml.tmLanguage.json
+  tools\textmate\xdbml.tmLanguage.template.json
+  tools\vscode-extension\.vscodeignore
+  tools\vscode-extension\CHANGELOG.md
+  tools\vscode-extension\PUBLISH.txt
+  tools\vscode-extension\README.md
+  tools\vscode-extension\package-lock.json
+  tools\vscode-extension\package.json
+  tools\vscode-extension\syntaxes\xdbml.tmLanguage.json
+  tools\vscode-extension\xdbml-0.6.0.vsix
 
 APPLY (cmd.exe)
 ---------------
@@ -41,30 +71,55 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\playground\help\entity-cards.md"                      "%REPO%\playground\help\entity-cards.md"
-copy /Y "%DELTA%\playground\help\visual-cues.md"                       "%REPO%\playground\help\visual-cues.md"
-copy /Y "%DELTA%\playground\src\components\inspector\EntityInspector.vue" "%REPO%\playground\src\components\inspector\EntityInspector.vue"
-copy /Y "%DELTA%\renderer\src\layout\layout.ts"                        "%REPO%\renderer\src\layout\layout.ts"
-copy /Y "%DELTA%\renderer\src\svg\serialize.ts"                        "%REPO%\renderer\src\svg\serialize.ts"
-copy /Y "%DELTA%\renderer\test\goldens\15-constraints.svg"             "%REPO%\renderer\test\goldens\15-constraints.svg"
+copy /Y "%DELTA%\parser\src\keywords.ts"                               "%REPO%\parser\src\keywords.ts"
+copy /Y "%DELTA%\tools\textmate\scripts\build.mjs"                     "%REPO%\tools\textmate\scripts\build.mjs"
+copy /Y "%DELTA%\tools\textmate\scripts\test.mjs"                      "%REPO%\tools\textmate\scripts\test.mjs"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.json"                 "%REPO%\tools\textmate\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.template.json"        "%REPO%\tools\textmate\xdbml.tmLanguage.template.json"
+copy /Y "%DELTA%\tools\vscode-extension\.vscodeignore"                 "%REPO%\tools\vscode-extension\.vscodeignore"
+copy /Y "%DELTA%\tools\vscode-extension\CHANGELOG.md"                  "%REPO%\tools\vscode-extension\CHANGELOG.md"
+copy /Y "%DELTA%\tools\vscode-extension\PUBLISH.txt"                   "%REPO%\tools\vscode-extension\PUBLISH.txt"
+copy /Y "%DELTA%\tools\vscode-extension\README.md"                     "%REPO%\tools\vscode-extension\README.md"
+copy /Y "%DELTA%\tools\vscode-extension\package-lock.json"             "%REPO%\tools\vscode-extension\package-lock.json"
+copy /Y "%DELTA%\tools\vscode-extension\package.json"                  "%REPO%\tools\vscode-extension\package.json"
+copy /Y "%DELTA%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json" "%REPO%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\vscode-extension\xdbml-0.6.0.vsix"              "%REPO%\tools\vscode-extension\xdbml-0.6.0.vsix"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
+if exist tools\vscode-extension\xdbml-0.4.0.vsix del tools\vscode-extension\xdbml-0.4.0.vsix
 npm run check
-  Expect: parser 241, renderer 209, playground 52 passed; docs build
-  complete.
-npm run docs:dev
-  Paste your pitstops snippet into /playground/index.html: raceid,
-  driverid and lap show U1; the inspector reads "Check  stop >= 1".
-  Stop with Ctrl+C.
+  Expect: every suite unchanged; "xdbml-0.6.0.vsix is in sync with the
+  extension version"; docs build complete.
+node tools\textmate\scripts\test.mjs
+  Expect: "Block keywords" (5 checks) and "Target-native type names"
+  (5 checks), then "All checks passed".
+
+Try it locally before publishing (optional):
+code --install-extension tools\vscode-extension\xdbml-0.6.0.vsix --force
+  Open examples\15-constraints.xdbml: `constraints` and `number` are
+  colored; the title-bar button still opens the playground.
+
 git add -A
-git commit -m "v0.6 Delta 7: numbered badges for composite unique keys; inspector spacing"
+git commit -m "VS Code extension 0.6.0: highlighting up to v0.6; TextMate block keywords"
 git push
 
-Then run the RELEASE section of Delta 6's APPLY.txt
-(release-preflight 0.6.0, release 0.6.0, commit, push, github-release 0.6).
+PUBLISH (credentials needed, so from your machine)
+cd tools\vscode-extension
+npx @vscode/vsce publish --packagePath xdbml-0.6.0.vsix
+  Publishes this exact file, with no rebuild. Without command-line
+  credentials, upload the .vsix at
+  https://marketplace.visualstudio.com/manage/publishers/xdbml instead.
+cd ..\..
+gh release create extension-v0.6.0 tools\vscode-extension\xdbml-0.6.0.vsix --title "VS Code extension 0.6.0" --notes "Highlighting up to xDBML v0.6. See tools/vscode-extension/CHANGELOG.md."
+  Optional: the extension CHANGELOG links to this tag, as it does for
+  earlier versions.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0
-  renderer type-check   clean; vue-tsc clean
-  golden 15             only the U1 pills added (7 badges, 3 keys)
+  npm run check         exit 0 (check-vsix in sync)
+  TextMate smoke test   all checks passed, including the 10 targeted ones
+  packaged grammar      tokenized sample lines: constraints/indexes/checks
+                        -> keyword.other.block.xdbml; SupertypeGroup ->
+                        keyword.declaration; supertype, completeness,
+                        constraint_type -> setting keys; number ->
+                        storage.type; foreign_master -> flag

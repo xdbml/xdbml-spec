@@ -118,6 +118,7 @@ function main () {
     __SCALAR_TYPES__:              'SCALAR_TYPES',
     __BSON_TYPES__:                'BSON_TYPES',
     __TARGET_NATIVE_TYPES__:       'TARGET_NATIVE_TYPES',
+    __BLOCK_KEYWORDS__:            'BLOCK_KEYWORDS',
     __SETTING_FLAGS__:             'SETTING_FLAGS',
     __SETTING_KEYS__:              'SETTING_KEYS',
     __GRANULARITY_VALUES__:        'GRANULARITY_VALUES',

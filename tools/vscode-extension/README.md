@@ -8,7 +8,7 @@ It builds on [DBML](https://dbml.dbdiagram.io) and extends it with first-class s
 
 ## What this extension does
 
-- **Syntax highlighting** for `.xdbml` files, with distinct colors for declaration keywords, type expressions, scalar and BSON types, setting flags, setting keys, custom `x_*` properties, strings, comments, and cardinality operators.
+- **Syntax highlighting** for `.xdbml` files, up to xDBML v0.6, with distinct colors for declaration keywords, type expressions, scalar and BSON types, common target-native types (Oracle `number`, PostgreSQL `serial`, SQL Server `uniqueidentifier`, ...), setting flags, setting keys, custom `x_*` properties, strings, comments, and cardinality operators.
 - **Open in Playground**: send the current file, or the current selection, to the [xDBML playground](https://xdbml.org/playground/) with one click. The schema opens already loaded, so there is no copy and paste. Available from the button in the editor title bar, the editor right-click menu, and the command palette (`xDBML: Open in Playground`).
 - **Editor affordances**: comment toggling, bracket matching, auto-closing pairs (including single quotes, double quotes, backticks for expression literals), block-comment indentation, fold regions via `// #region` / `// #endregion` markers.
 - **Language icon** in the VS Code status bar for `.xdbml` files.
@@ -32,7 +32,7 @@ A future release may add an LSP-backed language server with the features above. 
 
 - [xDBML home](https://xdbml.org)
 - [5-minute introduction](https://xdbml.org/learn/)
-- [Language specification](https://xdbml.org/spec/v0.1)
+- [Language specification](https://xdbml.org/spec/current)
 - [Example schemas](https://xdbml.org/examples/)
 - [Playground](https://xdbml.org/playground/)
 - [GitHub repository](https://github.com/xdbml/xdbml-spec)

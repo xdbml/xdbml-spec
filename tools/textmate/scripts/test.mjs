@@ -156,9 +156,6 @@ async function main () {
     }
   }
 
-  // Target-native type names are colored like scalar types, and a
-  // generic word left out of TARGET_NATIVE_TYPES is not.
-  console.log(`\n${CYAN}Target-native type names${RESET}`);
   const grammar = await registry.loadGrammar('source.xdbml');
   const nativeLine = '  a number(11)  b CLOB  c serial  d uniqueidentifier  e point';
   const nativeTokens = grammar.tokenizeLine(nativeLine, vsctm.INITIAL).tokens;
@@ -167,6 +164,26 @@ async function main () {
     const tok = nativeTokens.find((t) => t.startIndex <= at && at < t.endIndex);
     return tok ? tok.scopes : [];
   };
+  // Block keywords are colored before '{' only (a field may take the name).
+  console.log(`\n${CYAN}Block keywords${RESET}`);
+  for (const [line, word, expected] of [
+    ['  constraints {', 'constraints', true], ['  indexes {', 'indexes', true], ['  checks {', 'checks', true],
+    ['  records {', 'records', true], ['  constraints varchar', 'constraints', false],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const isBlock = (tok?.scopes ?? []).includes('keyword.other.block.xdbml');
+    if (isBlock === expected) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${expected ? 'is' : 'is not'} a block keyword`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': expected ${expected ? '' : 'no '}keyword.other.block.xdbml`);
+      totalFailed++;
+    }
+  }
+  // Target-native type names are colored like scalar types, and a
+  // generic word left out of TARGET_NATIVE_TYPES is not.
+  console.log(`\n${CYAN}Target-native type names${RESET}`);
   for (const [word, expectType] of [['number', true], ['CLOB', true], ['serial', true], ['uniqueidentifier', true], ['point', false]]) {
     const isType = scopesOf(word).includes('storage.type.xdbml');
     if (isType === expectType) {

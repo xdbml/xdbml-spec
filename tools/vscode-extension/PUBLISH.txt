@@ -2,7 +2,7 @@ xDBML -- VS Code "Open in Playground" button
 =============================================
 
 VS CODE EXTENSION (tools/vscode-extension/)
-  package.json          version 0.3.0; adds main, activationEvents,
+  package.json          version 0.3.0 added main, activationEvents,
                         the openInPlayground command + menus (title bar,
                         right-click, palette), build scripts, devDeps.
   src/extension.js      NEW. The command: sends the file (or selection) to
@@ -23,9 +23,16 @@ PUBLISH A NEW VERSION
   #  lz-string is bundled in, so the .vsix stays self-contained.)
 
   # first create a .vsix file §whihch can be manually uploaded if nto  command line credentials
-  npx @vscode/vsce package    # writes xdbml-0.3.0.vsix to the folder (optional, to inspect/keep)
+  npx @vscode/vsce package    # writes xdbml-<version>.vsix to the folder (optional, to inspect/keep)
   npx @vscode/vsce publish    # builds + uploads to the Marketplace (no file left behind)
 
   # or to manually publish, go to https://marketplace.visualstudio.com/manage/publishers/xdbml
 
 Marketplace URL once published: https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml
+
+VERSIONING (from 0.6.0)
+  The extension's major.minor matches the xDBML version its grammar covers
+  (0.6.x highlights v0.6). Bump the patch number for a release of the
+  extension alone; move to the next minor when the grammar covers a new
+  xDBML version. The Marketplace only requires each version to be higher
+  than the last, so skipping numbers is fine.

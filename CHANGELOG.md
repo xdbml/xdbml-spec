@@ -41,7 +41,7 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 
 - **Grammar**: `constraintsBlock`, `keyConstraint` and a quoted `checkEntry` in `grammar/xDBML.g4`; `grammar/test-cases.md` gains ten v0.6 cases, each checked against the parser.
 
-- **Editor grammars**: `constraints` is highlighted as a block keyword in the playground editor, the site's code blocks and the VS Code extension's grammar copy.
+- **Editor grammars**: `constraints` is highlighted as a block keyword in the playground editor, the site's code blocks and the VS Code extension's grammar copy. After the 0.6.0 release, the TextMate grammar also colors `indexes`, `checks`, `constraints` and `records` where they open a block in an entity body, which it had never done (the playground editor already did), and the VS Code extension 0.6.0 packages it: highlighting up to v0.6, target-native type names included. From 0.6.0 the extension's version follows the xDBML version its grammar covers.
 
 - **Renderer (`@xdbml/render`)**: a `pk` line in `constraints` gives each field of the key the PK badge, like a `pk` entry in `indexes`, and a `unique` line on one field gives it the U badge. The fields of a composite unique key carry a numbered badge, U1 for the entity's first composite unique key, U2 for the second, including fields that are also in the primary key; a composite `unique` entry in `indexes` declares an index and stays unbadged. Primary key fields of a 0.6 document show the not-null marker, since the parser marks them `not null`.
 

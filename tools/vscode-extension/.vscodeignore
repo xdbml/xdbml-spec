@@ -10,6 +10,9 @@ src/**
 esbuild.config.*
 .vscodeignore
 
+# Maintainer notes, not user documentation
+PUBLISH.txt
+
 # Source markers
 .gitignore
 .editorconfig

@@ -16,6 +16,7 @@
     { "include": "#numbers" },
     { "include": "#constants" },
     { "include": "#declarations" },
+    { "include": "#block-keywords" },
     { "include": "#type-keywords" },
     { "include": "#scalar-types" },
     { "include": "#bson-types" },
@@ -99,6 +100,12 @@
     "bson-types": {
       "name": "storage.type.bson.xdbml",
       "match": "\\b((?i:__BSON_TYPES__))\\b"
+    },
+
+    "block-keywords": {
+      "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names.",
+      "name": "keyword.other.block.xdbml",
+      "match": "\\b((?i:__BLOCK_KEYWORDS__))\\b(?=\\s*\\{)"
     },
 
     "native-types": {
