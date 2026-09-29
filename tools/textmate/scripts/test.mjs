@@ -181,6 +181,26 @@ async function main () {
       totalFailed++;
     }
   }
+  // Spec 3.10 (v0.6.1): `Note` is a declaration keyword before ':' or '{',
+  // or before a name and '{'; a field named `note` is not, and the type
+  // after it is not taken for a declared name.
+  console.log(`\n${CYAN}Note as a keyword and as a field name${RESET}`);
+  for (const [line, expected] of [
+    ["  Note: 'One row per order'", true], ["  Note { 'text' }", true], ['Note schema_notes {', true],
+    ["NOTE: 'x'", true], ['  note varchar', false], ['  Note varchar [not null]', false], ['  notes varchar', false],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.search(/\S/);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const isDecl = (tok?.scopes ?? []).includes('keyword.declaration.xdbml');
+    const typeAsName = !expected && toks.some((t) => t.scopes.includes('entity.name.type.xdbml'));
+    if (isDecl === expected && !typeAsName) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${expected ? 'a declaration keyword' : 'a field name'}`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': expected ${expected ? 'keyword.declaration.xdbml' : 'no declaration scope'}`);
+      totalFailed++;
+    }
+  }
   // Target-native type names are colored like scalar types, and a
   // generic word left out of TARGET_NATIVE_TYPES is not.
   console.log(`\n${CYAN}Target-native type names${RESET}`);

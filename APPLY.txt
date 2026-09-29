@@ -1,37 +1,43 @@
-xDBML -- 0.6.1, delta 4 of 5: llms.txt, MCP reference and tests
-Base: delta 3 (0.6.1, delta 3 of 5: renderer test and playground).
+xDBML -- 0.6.1, delta 5 of 5: VS Code extension 0.6.1 and release notes
+Base: delta 4 (0.6.1, delta 4 of 5: llms.txt, MCP reference and tests).
 
 WHAT CHANGED
 ------------
-public\llms.txt
-  "How to author" gains three rules: one field or enum value per line with
-  no separator (a parser ignores them; in indexes a comma is an error,
-  write (a, b)); any keyword may name a field; settings go in the brackets
-  after the name, never in the body. The View example states the
-  placement before the code: settings in the brackets, then source_query
-  once, the fields and an optional Note: in the body.
-mcp\src\reference.ts            regenerated from llms.txt (check:reference
-                                in sync).
-mcp\test\run-tests.ts           5 tests (12 -> 17): commas validate; a
-                                column named note validates; materialized
-                                in a View body is a parse-error naming the
-                                brackets; a bracketed source_query is a
-                                warning; the reference carries the rules.
-xDBML_in_5_minutes.md           one sentence on View setting placement
-                                under the View example.
-CHANGELOG.md                    v0.6.1 Tooling: MCP server and llms.txt.
+tools\textmate\xdbml.tmLanguage.template.json
+  The declarations pattern skips `note` where it names a field: Note is a
+  keyword only before ':' or '{', or before a name and '{' on the same
+  line. Before, `note varchar` was colored as a Note declaration with
+  `varchar` colored as the declared name.
+tools\textmate\xdbml.tmLanguage.json   regenerated (build.mjs). The site's
+                                       xdbml code blocks use this file.
+tools\textmate\scripts\test.mjs        7 checks for Note as keyword and as
+                                       field name; 2 of them fail on the
+                                       0.6.0 grammar, all pass now.
+tools\vscode-extension\syntaxes\xdbml.tmLanguage.json   copy (prepare.mjs).
+tools\vscode-extension\package.json, package-lock.json  0.6.1 (npm version).
+tools\vscode-extension\CHANGELOG.md    [0.6.1] entry.
+tools\vscode-extension\xdbml-0.6.1.vsix (NEW) built with @vscode/vsce 4.0.0;
+                                       same 11 files as 0.6.0, grammar
+                                       identical to tools\textmate.
+CHANGELOG.md
+  v0.6.1: Released 2026-09-29; Fixed > Editor grammars; Packages section
+  (@xdbml/parse 0.6.1, @xdbml/render 0.6.1, MCP server and API redeployed,
+  VS Code extension 0.6.1).
 
-API
-  No change: the rendering API has no parser-facing code. The release
-  script repoints it to @xdbml/render 0.6.1 and redeploys it.
+If you release on another day than 2026-09-29, tell me and I will send a
+one-line CHANGELOG correction rather than you editing it.
 
 FILES
 -----
   CHANGELOG.md   (EDIT)
-  mcp\src\reference.ts   (EDIT)
-  mcp\test\run-tests.ts   (EDIT)
-  public\llms.txt   (EDIT)
-  xDBML_in_5_minutes.md   (EDIT)
+  tools\textmate\scripts\test.mjs   (EDIT)
+  tools\textmate\xdbml.tmLanguage.json   (EDIT)
+  tools\textmate\xdbml.tmLanguage.template.json   (EDIT)
+  tools\vscode-extension\CHANGELOG.md   (EDIT)
+  tools\vscode-extension\package-lock.json   (EDIT)
+  tools\vscode-extension\package.json   (EDIT)
+  tools\vscode-extension\syntaxes\xdbml.tmLanguage.json   (EDIT)
+  tools\vscode-extension\xdbml-0.6.1.vsix   (NEW)
 
 APPLY (cmd.exe)
 ---------------
@@ -39,30 +45,64 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                   "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\mcp\src\reference.ts"           "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\mcp\test\run-tests.ts"          "%REPO%\mcp\test\run-tests.ts"
-copy /Y "%DELTA%\public\llms.txt"                "%REPO%\public\llms.txt"
-copy /Y "%DELTA%\xDBML_in_5_minutes.md"          "%REPO%\xDBML_in_5_minutes.md"
+copy /Y "%DELTA%\tools\textmate\scripts\test.mjs" "%REPO%\tools\textmate\scripts\test.mjs"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.json" "%REPO%\tools\textmate\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.template.json" "%REPO%\tools\textmate\xdbml.tmLanguage.template.json"
+copy /Y "%DELTA%\tools\vscode-extension\CHANGELOG.md" "%REPO%\tools\vscode-extension\CHANGELOG.md"
+copy /Y "%DELTA%\tools\vscode-extension\package-lock.json" "%REPO%\tools\vscode-extension\package-lock.json"
+copy /Y "%DELTA%\tools\vscode-extension\package.json" "%REPO%\tools\vscode-extension\package.json"
+copy /Y "%DELTA%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json" "%REPO%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\vscode-extension\xdbml-0.6.1.vsix" "%REPO%\tools\vscode-extension\xdbml-0.6.1.vsix"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: MCP "17 passed, 0 failed" (12 before); every other suite as
-  after delta 3; docs build complete.
-cd mcp
-npm run check:reference
-  Expect: "reference.ts is in sync with public/llms.txt."
-cd ..
+  Expect: every suite as after delta 4; "check-vsix: xdbml-0.6.1.vsix is in
+  sync with the extension version."; 164 spec buttons; docs build complete.
+node tools\textmate\scripts\test.mjs
+  Expect: "All checks passed", including 7 lines under "Note as a keyword
+  and as a field name".
 git add -A
-git commit -m "0.6.1, delta 4 of 5: llms.txt, MCP reference and tests"
+git commit -m "0.6.1, delta 5 of 5: VS Code extension 0.6.1 and release notes"
 git push
 
-The site serves the new llms.txt once it redeploys. The MCP server keeps
-serving the 0.6.0 reference and parser until the release redeploys it.
+RELEASE 0.6.1 (npm packages, MCP server, rendering API, GitHub release)
+-----------------------------------------------------------------------
+From the repo root, with the tree clean after the push above:
+
+tools\release-preflight.cmd 0.6.1
+  Changes nothing. Stop here if it reports any failure.
+tools\release.cmd 0.6.1
+  Publishes @xdbml/parse and @xdbml/render 0.6.1, redeploys the MCP
+  server and the rendering API, and prints the live dist-tags.
+git add -A
+git commit -m "release 0.6.1"
+git push
+tools\github-release.cmd 0.6.1
+  Tags v0.6.1 with the "## v0.6.1" section of CHANGELOG.md as notes.
+
+VS CODE EXTENSION 0.6.1 (Marketplace)
+-------------------------------------
+Either upload the committed file at
+https://marketplace.visualstudio.com/manage/publishers/xdbml
+  (xdbml > ... > Update, choose tools\vscode-extension\xdbml-0.6.1.vsix)
+or, with a Marketplace token:
+cd tools\vscode-extension
+npx @vscode/vsce publish --packagePath xdbml-0.6.1.vsix
+cd ..\..
+
+AFTER THE RELEASE, CHECK
+  - MCP: validate_xdbml on the Enum with commas returns valid.
+  - https://xdbml.org/llms.txt shows the "Write one field, one enum value"
+    rule.
+  - In VS Code 0.6.1, `note varchar` inside a Table is not bold.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0: parser 259, renderer 218, MCP 17, other
-                        suites unchanged, 164 spec buttons, docs build
-  check:reference       in sync
-  mcp tsc --noEmit      clean
+  npm run check         exit 0: parser 259, renderer 218, MCP 17,
+                        from-mongodb 24, playground 52; check-vsix in sync
+                        for 0.6.1; 164 spec buttons; docs build complete
+  textmate test         all checks passed (2 note checks fail on 0.6.0)
+  vsix                  version 0.6.1, grammar identical to tools\textmate,
+                        same file list as 0.6.0
+  release-notes.mjs     0.6.1 and 0.6 extract their own sections
   em-dashes             none added

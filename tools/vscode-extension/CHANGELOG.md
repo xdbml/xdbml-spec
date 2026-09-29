@@ -4,6 +4,18 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1]
+
+Follows xDBML 0.6.1, where no keyword is reserved as a field name.
+
+### Fixed
+- **A field named `note`**: a line such as `note varchar` was colored as a
+  `Note` declaration, with its type colored as the declared name. `Note` is
+  now colored as a keyword only where it starts a note: before `:` or `{`,
+  or before a name and `{` on the same line. A field named `note` takes the
+  color of any other field name, as `indexes`, `checks`, `constraints` and
+  `records` already did.
+
 ## [0.6.0]
 
 Brings highlighting up to xDBML v0.6. The grammar is regenerated from the

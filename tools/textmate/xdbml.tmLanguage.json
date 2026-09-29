@@ -97,10 +97,10 @@
       ]
     },
     "declarations": {
-      "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name).",
+      "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name). `Note` is skipped where it names a field (spec 3.10): it counts as a keyword only before ':' or '{', or before a name and '{' on the same line.",
       "patterns": [
         {
-          "match": "\\b((?i:supertypegroup|tablepartial|diagramview|collection|tablegroup|container|namespace|database|keyspace|project|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
+          "match": "\\b(?!(?i:note)\\b(?!\\s*[:{])(?!\\s+(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")\\s*\\{))((?i:supertypegroup|tablepartial|diagramview|collection|tablegroup|container|namespace|database|keyspace|project|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
           "captures": {
             "1": {
               "name": "keyword.declaration.xdbml"

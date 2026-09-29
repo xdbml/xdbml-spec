@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.6.1 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-09-29
 
 A backward-compatible point release of the v0.6 draft. List bodies accept a comma or a semicolon between items, as TableGroup and SupertypeGroup bodies already did, so Enum values and Entity fields written with commas, as AI assistants often write them, now parse. A field may take the name of any keyword: `note`, `indexes`, `checks` and `records`, which DBML accepts as field names, no longer fail. Chapter 14 states where each part of a View goes: the source query in the body, every other setting in the brackets. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`, though the parser now also reads `xdbml: 0.6.1`.
 
@@ -54,6 +54,12 @@ A backward-compatible point release of the v0.6 draft. List bodies accept a comm
 - **Parser**: a field named `note`, `indexes`, `checks` or `records`, which DBML 3.13.6 accepts, failed to parse (for example with "Expected ':' or '{' after Note"), so a valid DBML file with such a column did not open in the playground and failed MCP validation. A View field named `source_query` failed the same way.
 
 - **Parser**: `xdbml: 0.6.1` failed with "Unexpected token Dot", though §4 and the grammar allow `MAJOR.MINOR[.PATCH]`. The parser reads the patch number and supports documents up to 0.6.1: `xdbml: 0.6` stays valid, and `xdbml: 0.6.2` is refused as newer than supported.
+
+- **Editor grammars**: the TextMate grammar colored `note varchar` as a `Note` declaration, with the type colored as the declared name. `Note` is now a keyword only before `:` or `{`, or before a name and `{` on the same line, in the site's code blocks and in the VS Code extension 0.6.1, which packages the grammar. The playground editor gets the same fix through the parser (see Added).
+
+### Packages
+
+- `@xdbml/parse` 0.6.1 and `@xdbml/render` 0.6.1. The renderer has no change of its own; it moves to the new parser so the two stay in step. The MCP server and the rendering API are redeployed on them. The VS Code extension 0.6.1 is published to the Marketplace separately.
 
 ### Not changed (compatibility)
 
