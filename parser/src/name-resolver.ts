@@ -116,6 +116,7 @@ export type DiagnosticCode =
   | 'key-path-crosses-collection'
   | 'invalid-key-flags'
   | 'duplicate-primary-key'
+  | 'duplicate-unique-key'
   | 'null-in-primary-key'
   | 'duplicate-constraints-block'
   | 'ref-target-not-key'

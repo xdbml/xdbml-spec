@@ -20,6 +20,17 @@ link that opens it in the [playground](/playground/index.html), and
 and column, without rendering. A natural loop is to have the assistant draft a
 schema, validate it, fix what it flags, then render.
 
+## Without the MCP server
+
+An assistant needs no connector to write xDBML. Give it
+[llms.txt](https://xdbml.org/llms.txt), the compact reference written for AI
+assistants, with the rules that matter most and the mistakes assistants make
+most often. Paste its content into the chat, add it to a project's instructions
+or knowledge files, or give its address to an assistant that can read web
+pages. The MCP server's `xdbml_reference` tool returns the same text. To check
+what the assistant wrote, paste it into the [playground](/playground/index.html):
+the diagnostics panel lists each error and warning with its line.
+
 ## Claude
 
 Open Settings, then Connectors, choose Add custom connector, and paste the URL

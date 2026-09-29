@@ -44,7 +44,7 @@ Entity customers {
 
 Common field settings: `pk`, `unique`, `not null`, `default: <v>`, `note: '...'`, `pattern: '...'`, `minimum: N`, `maximum: N`, `maxLength: N`, `tags: [...]`, `synonyms: [...]`, `business_term: '...'`, `granularity: <unit>`.
 
-Keys and checks: put a key on one field without a name inline (`[pk]`, `[unique]`). Put every named key, every key on several fields, and every check in the entity's `constraints` block, fields listed in key order. Never mark several fields `[pk]` for a composite key; several `[unique]` fields are separate keys, not one. Checks go in single quotes, or backticks when the expression holds a quote. Primary key fields are never null; still write `not null` on them.
+Keys and checks: put a key on one field without a name inline (`[pk]`, `[unique]`). Put every named key, every key on several fields, and every check in the entity's `constraints` block, fields listed in key order. Declare each key once: a key written inline is not repeated in `constraints`. Never mark several fields `[pk]` for a composite key; several `[unique]` fields are separate keys, not one. Checks go in single quotes, or backticks when the expression holds a quote. Primary key fields are never null; still write `not null` on them.
 
 ```
 Table pitstops {
@@ -177,6 +177,98 @@ Entity customers [x_owner: 'data-team@acme.com', x_retention_days: 2555] { id in
 ```
 
 Types: relational (`int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`, `timestamp`, ...) and BSON/Avro-native (`objectId`, `int32`, `int64`, `Decimal128`, `string`, `Date`, `BinData`, ...) are all recognized and preserved through round-trips. Any other type name is valid and passes through as written, so a physical model uses its target's own types: `number(10)` and `varchar2(255)` for Oracle, `serial` and `bytea` for PostgreSQL. A field typed by an Enum declared in a schema names it with its qualifier: `status core.job_status`. A type name close to a declared `Type` or `Enum` (`Adress` next to `Type Address`) draws a `possible-type-typo` warning.
+
+## Common mistakes
+
+Each block shows a form AI assistants often write, then the form to write instead.
+
+A setting in the body. Settings go in the brackets after the name; the body holds `source_query:`, the fields and `Note:`.
+
+```
+// Wrong: syntax error
+View monthly_revenue {
+  materialized: true
+  source_query: 'SELECT month, SUM(total) AS revenue FROM orders GROUP BY month'
+  month date [pk]
+}
+
+// Right
+View monthly_revenue [materialized: true] {
+  source_query: 'SELECT month, SUM(total) AS revenue FROM orders GROUP BY month'
+  month date [pk]
+}
+```
+
+A key declared twice. Keep `[pk]` or `[unique]` on a single unnamed field, and use `constraints` only for a named key or a key on several fields.
+
+```
+// Wrong: the primary key is declared twice, an error
+Table customers {
+  customer_id int [pk]
+  constraints {
+    (customer_id) [pk]
+  }
+}
+
+// Right
+Table customers {
+  customer_id int [pk]
+}
+```
+
+A composite key written as several `[pk]` fields. Write one key line in `constraints`.
+
+```
+// Wrong: accepted for DBML compatibility, never written
+Table enrollments {
+  student_id int [pk]
+  course_id  int [pk]
+}
+
+// Right
+Table enrollments {
+  student_id int [not null]
+  course_id  int [not null]
+  constraints {
+    (student_id, course_id) [pk]
+  }
+}
+```
+
+Separators between items. Write one field or enum value per line, with nothing after it. Quote an enum value only when it holds characters outside an identifier, and then in double quotes.
+
+```
+// Wrong: accepted and ignored, never written
+Enum service_status {
+  'scheduled' [note: 'Appointment booked'],
+  'on_hold' [note: 'Awaiting parts'],
+}
+
+// Right
+Enum service_status {
+  scheduled [note: 'Appointment booked']
+  on_hold   [note: 'Awaiting parts']
+  "on hold (legacy)"
+}
+```
+
+A comma between index entries. It is an error: list one index per line, and write a composite index in parentheses.
+
+```
+// Wrong: syntax error
+indexes {
+  email, name
+}
+
+// Right: two indexes, then one composite index
+indexes {
+  email
+  name
+  (email, name)
+}
+```
+
+To check a schema without tools, paste it into the playground at https://xdbml.org/playground/: its diagnostics panel lists each error and warning with its line.
 
 ## Minimal complete example
 

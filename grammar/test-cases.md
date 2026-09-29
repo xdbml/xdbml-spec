@@ -1743,6 +1743,37 @@ The first `source_query:` is the view's source query.
 
 ---
 
+## §10.3 A key declared twice (v0.6.1)
+
+### INVALID -- a primary key written inline and restated in constraints (duplicate-primary-key)
+
+```
+xdbml: 0.6
+
+Table customers {
+  customer_id int [pk]
+  constraints {
+    (customer_id) [pk]
+  }
+}
+```
+
+### VALID with a warning -- a unique key written inline and restated in constraints (duplicate-unique-key)
+
+```
+xdbml: 0.6
+
+Table customers {
+  customer_id int [pk]
+  tax_id      varchar(50) [unique]
+  constraints {
+    tax_id [unique, name: 'uk_customers_tax_id']
+  }
+}
+```
+
+---
+
 ## Test runner
 
 A reference TypeScript test harness (planned at `grammar/test-runner.ts`) parses each example, captures the resulting AST, and compares it against expected ASTs in `grammar/expected/*.json`. Implementations in other languages can run the same corpus with language-appropriate harnesses.

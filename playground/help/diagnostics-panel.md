@@ -40,6 +40,7 @@ Resolution reports two severities. An **error** marks something the schema canno
 - **`merge-without-roll-up`**: a `merge` setting on a supertype group where neither the group nor any subtype uses `strategy: roll_up`, the only strategy it applies to.
 - **`source-query-in-settings`**: a View writes `source_query` in the brackets after its name. The source query belongs in the body, as `source_query: '...'`; in the brackets it stays an ordinary setting, so the inspector does not show it as the view's query.
 - **`duplicate-source-query`**: a View declares a second `source_query:` in its body. The first one is the view's source query.
+- **`duplicate-unique-key`**: an entity declares the same unique key twice, for example `[unique]` on a field and the same field as a `unique` line in `constraints`. Declare it in one place: inline for a single field without a name, in `constraints` otherwise.
 
 A few conditions change severity with the version the document declares. In an `xdbml: 0.6` document they are errors; in a document declaring an earlier version, or none (plain DBML), they are warnings, so a file that was valid under its version stays valid:
 

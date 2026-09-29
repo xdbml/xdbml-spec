@@ -507,15 +507,37 @@ export function checkConstraints (doc: XDbmlDocument): Diagnostic[] {
     }
 
     // One primary key, declared in one place (§10.4). Inline [pk] fields
-    // count as one declaration.
+    // count as one declaration. When the second declaration restates the
+    // same fields, say so: the fix is to delete one, not to look for
+    // another key.
     const own = bodyConstraints(decl.body, v06);
     const pks = own.filter((c): c is KeyConstraint => c.kind === 'key' && c.keyKind === 'primary');
     for (const extra of pks.slice(1)) {
+      const first = pks[0];
       diagnostics.push({
         severity: olderSeverity,
         code: 'duplicate-primary-key',
-        message: `'${decl.name}' declares a second primary key; an entity has one, declared in one place.`,
+        message: sameKeyFields(first.fields, extra.fields)
+          ? `'${decl.name}' declares its primary key (${first.fields.join(', ')}) twice: ` +
+            `${twoForms(first, extra)}. Declare it in one place (spec §10.4).`
+          : `'${decl.name}' declares a second primary key; an entity has one, declared in one place.`,
         span: extra.span,
+      });
+    }
+
+    // Each unique key is declared once (§10.3, v0.6.1): a warning in every
+    // version, since earlier documents accept the repetition.
+    const uniques = own.filter((c): c is KeyConstraint => c.kind === 'key' && c.keyKind === 'unique');
+    for (const [i, u] of uniques.entries()) {
+      const first = uniques.slice(0, i).find((prev) => sameKeyFields(prev.fields, u.fields));
+      if (!first) continue;
+      diagnostics.push({
+        severity: 'warning',
+        code: 'duplicate-unique-key',
+        message:
+          `'${decl.name}' declares the unique key (${first.fields.join(', ')}) twice: ` +
+          `${twoForms(first, u)}. Declare it in one place (spec §10.3).`,
+        span: u.span,
       });
     }
 
@@ -538,6 +560,31 @@ export function checkConstraints (doc: XDbmlDocument): Diagnostic[] {
 
   diagnostics.push(...checkReferencedKeys(doc, olderSeverity));
   return diagnostics;
+}
+
+/** Two keys on the same fields, in any order, are the same key. */
+function sameKeyFields (a: ReadonlyArray<string>, b: ReadonlyArray<string>): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  return sa.every((f, i) => f === sb[i]);
+}
+
+/** How a key was written, for a message that names both declarations. */
+function keyForm (k: KeyConstraint): string {
+  const flag = k.keyKind === 'primary' ? 'pk' : 'unique';
+  if (k.source === 'inline') return `[${flag}] on ${k.fields.join(', ')}`;
+  if (k.source === 'indexes') return `a ${flag} entry in indexes`;
+  return `a ${flag} line in constraints`;
+}
+
+/** Both declarations of a repeated key: "[pk] on id and a pk line in constraints". */
+function twoForms (a: KeyConstraint, b: KeyConstraint): string {
+  const fa = keyForm(a);
+  const fb = keyForm(b);
+  if (fa !== fb) return `${fa} and ${fb}`;
+  const flag = a.keyKind === 'primary' ? 'pk' : 'unique';
+  return a.source === 'indexes' ? `two ${flag} entries in indexes` : `two ${flag} lines in constraints`;
 }
 
 /* ---- §11.17 referenced keys ---- */

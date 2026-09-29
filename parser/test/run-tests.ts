@@ -4240,6 +4240,81 @@ View v [materialized: true, source_query: 'SELECT id FROM t'] { id int }`,
       },
     },
     // ---- v0.6.1: version declaration with a patch number (§4) ----
+    // ---- v0.6.1: a key declared twice (§10.3, §10.4) ----
+    {
+      name: 'v0.6.1 §10.4: a primary key restated in constraints names both declarations',
+      source: `xdbml: 0.6
+Table customers {
+  customer_id int [pk, increment]
+  constraints {
+    (customer_id) [pk]
+  }
+}`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        const want = "'customers' declares its primary key (customer_id) twice: [pk] on customer_id and a pk line in constraints. Declare it in one place (spec §10.4).";
+        return d.length === 1 && d[0].code === 'duplicate-primary-key' && d[0].severity === 'error' && d[0].message === want
+          ? null : `got ${JSON.stringify(d.map((x) => [x.code, x.severity, x.message]))}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §10.4: a primary key on other fields is still a second primary key',
+      source: `xdbml: 0.6
+Table t {
+  a int [pk]
+  b int
+  constraints { b [pk] }
+}`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        return d.length === 1 && d[0].message.includes('declares a second primary key') ? null : `got ${JSON.stringify(d.map((x) => x.message))}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §10.3: a unique key restated in constraints is a warning',
+      source: `xdbml: 0.6
+Table t {
+  id    int [pk]
+  email varchar [unique]
+  constraints { email [unique, name: 'uk_email'] }
+}`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`);
+        return JSON.stringify(got) === JSON.stringify(['duplicate-unique-key:warning']) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §10.3: the same fields in another order are the same unique key',
+      source: `xdbml: 0.6
+Table t {
+  id int [pk]
+  a  int
+  b  int
+  constraints {
+    (a, b) [unique]
+    (b, a) [unique]
+  }
+}`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        return d.length === 1 && d[0].code === 'duplicate-unique-key' && d[0].message.includes('two unique lines in constraints')
+          ? null : `got ${JSON.stringify(d.map((x) => x.message))}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §10.3: distinct unique keys and a DBML unique index draw no warning',
+      source: `Table t {
+  id    int [pk]
+  a     int [unique]
+  b     int [unique]
+  email varchar [unique]
+  indexes { email [unique] }
+}`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        return d.length === 0 ? null : `got ${JSON.stringify(d.map((x) => x.code))}`;
+      },
+    },
     {
       name: 'v0.6.1 §4: xdbml: 0.6.1 parses and keeps its patch number',
       source: `xdbml: 0.6.1
