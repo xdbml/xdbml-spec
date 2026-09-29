@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.6 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-09-28
 
 Adds constraints: one entity-level block for the primary key, unique keys and check expressions, each with an optional constraint name, with composite keys listed in key order and nested keys for document stores. A referential relationship must reference a key of the entity it points at. Every v0.5 document remains valid; documents using the new constructs declare `xdbml: 0.6`.
 
@@ -43,7 +43,7 @@ Adds constraints: one entity-level block for the primary key, unique keys and ch
 
 - **Editor grammars**: `constraints` is highlighted as a block keyword in the playground editor, the site's code blocks and the VS Code extension's grammar copy.
 
-- **Renderer (`@xdbml/render`)**: a `pk` line in `constraints` gives each field of the key the PK badge, like a `pk` entry in `indexes`, and a `unique` line on one field gives it the U badge. A composite unique key badges no field, as a composite unique index already did. Primary key fields of a 0.6 document show the not-null marker, since the parser marks them `not null`.
+- **Renderer (`@xdbml/render`)**: a `pk` line in `constraints` gives each field of the key the PK badge, like a `pk` entry in `indexes`, and a `unique` line on one field gives it the U badge. The fields of a composite unique key carry a numbered badge, U1 for the entity's first composite unique key, U2 for the second, including fields that are also in the primary key; a composite `unique` entry in `indexes` declares an index and stays unbadged. Primary key fields of a 0.6 document show the not-null marker, since the parser marks them `not null`.
 
 - **Example 15, constraints**: Formula 1 results as an Oracle schema and a MongoDB collection, with named composite primary and unique keys, quoted checks, named foreign keys, a composite foreign key that references a unique key, and a unique key on a nested field.
 

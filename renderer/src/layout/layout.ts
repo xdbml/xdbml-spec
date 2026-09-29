@@ -247,6 +247,12 @@ export interface FieldFlags {
   /** Parent attribute of a foreign master relationship (spec 11.12). */
   dm: boolean;
   unique: boolean;
+  /**
+   * Composite unique keys the field belongs to, numbered 1, 2, ... in the
+   * order the entity's constraints block declares them (spec §10.2). Shown
+   * as U1, U2 badges so the members of one key read together.
+   */
+  uniqueKeys: number[];
   notNull: boolean;
   hasDefault: boolean;
   increment: boolean;
@@ -653,7 +659,7 @@ export function buildDiagram (
   // Composite relationships (form `entity.(a, b, c)`) flag every
   // constituent field, not just the visual anchor: all three participate
   // in the constraint and should display the badge.
-  const markRole = (locator: FieldLocator | undefined, flag: keyof FieldFlags): void => {
+  const markRole = (locator: FieldLocator | undefined, flag: 'fk' | 'fm' | 'dk' | 'dm'): void => {
     if (!locator || !locator.fieldName) return;
     const entity = entityLayouts.find((e) => e.id === locator.entityId);
     if (!entity) return;
@@ -1264,11 +1270,14 @@ function buildEntityLayout (
 
   // v0.6 constraints block (spec §10): a `pk` line tints every field of
   // the key, like a `pk` index entry. A `unique` line on one field sets
-  // the field's U badge, as inline `[unique]` does; a composite unique key
-  // badges nothing, for the reason given above for composite indexes.
+  // the field's U badge, as inline `[unique]` does. A composite unique key
+  // numbers its members instead (U1, U2, ...), so the fields of one key
+  // read together and never pass for single-field keys. A composite unique
+  // entry in `indexes` stays unbadged: it declares an index, not a key.
   // Typed structurally, so the renderer also compiles against a parser
   // release that predates the node.
   type KeyLine = { kind: string; fields: { kind: string; name?: string }[][]; settings: { name: string }[] };
+  let compositeUniqueCount = 0;
   for (const item of entity.body as ReadonlyArray<{ kind: string; entries?: KeyLine[] }>) {
     if (item.kind !== 'ConstraintsBlock' || !item.entries) continue;
     for (const entry of item.entries) {
@@ -1276,7 +1285,7 @@ function buildEntityLayout (
       const isPk = entry.settings.some((s) => s.name === 'pk' || s.name === 'primary key');
       const isUnique = entry.settings.some((s) => s.name === 'unique');
       if (isPk === isUnique) continue;
-      if (isUnique && entry.fields.length !== 1) continue;
+      const compositeUnique = isUnique && entry.fields.length > 1 ? ++compositeUniqueCount : 0;
       for (const path of entry.fields) {
         const dotted = path
           .filter((seg) => seg.kind === 'PathField')
@@ -1285,6 +1294,7 @@ function buildEntityLayout (
         const target = fields.find((f) => f.path === dotted);
         if (!target) continue;
         if (isPk) target.flags.pk = true;
+        else if (compositeUnique > 0) target.flags.uniqueKeys.push(compositeUnique);
         else target.flags.unique = true;
       }
     }
@@ -1372,6 +1382,7 @@ function emptyFlags (): FieldFlags {
     dk: false,
     dm: false,
     unique: false,
+    uniqueKeys: [],
     notNull: false,
     hasDefault: false,
     increment: false,
@@ -1389,6 +1400,7 @@ function computeFieldFlags (field: FieldDeclaration): FieldFlags {
     dk: false,
     dm: false,
     unique: false,
+    uniqueKeys: [],
     notNull: false,
     hasDefault: false,
     increment: false,

@@ -50,11 +50,11 @@
           <span :class="c.keyKind === 'primary' ? 'text-yellow-700 dark:text-yellow-300' : 'text-gray-700 dark:text-slate-300'" class="font-medium">
             {{ c.keyKind === 'primary' ? 'Primary key' : 'Unique' }}
           </span>
-          <span class="font-mono text-gray-900 dark:text-slate-100"> ({{ c.fields.join(', ') }})</span>
+          <span class="font-mono text-gray-900 dark:text-slate-100 ml-1.5">({{ c.fields.join(', ') }})</span>
         </template>
         <template v-else>
           <span class="font-medium text-gray-700 dark:text-slate-300">Check</span>
-          <span class="font-mono text-gray-900 dark:text-slate-100 break-all"> {{ c.expression }}</span>
+          <span class="font-mono text-gray-900 dark:text-slate-100 break-all ml-1.5">{{ c.expression }}</span>
           <span v-if="c.field" class="text-gray-500 dark:text-slate-400"> on {{ c.field }}</span>
         </template>
         <span v-if="c.name" class="font-mono text-gray-500 dark:text-slate-400"> · {{ c.name }}</span>

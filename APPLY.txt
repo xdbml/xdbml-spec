@@ -1,23 +1,39 @@
-xDBML -- v0.6 Delta 5 of 6: llms.txt and MCP reference
-Base: Deltas 2 to 4 applied.
+xDBML -- v0.6 Delta 7: composite unique key badges, inspector spacing
+Base: Deltas 2 to 6 committed (d685908 "Prepare 0.6.0: release date").
 
 WHAT CHANGED
 ------------
-public\llms.txt
-  xdbml: 0.6 throughout; a "Keys and checks" paragraph with a pitstops
-  example (inline only for one unnamed field; never several [pk] fields;
-  checks in single quotes); Ref names as FK constraint names; the rule that
-  a foreign key references a key, with its exemptions.
-mcp\src\reference.ts  regenerated (check:reference passes)
-CHANGELOG.md          Added > Tooling: MCP server and llms.txt.
-Every complete snippet in llms.txt parses and resolves cleanly with the
-new parser (field-line fragments aside, as before).
+renderer\src\layout\layout.ts, renderer\src\svg\serialize.ts
+  Each field of a composite unique key declared in constraints { } now
+  carries a numbered purple pill: U1 for the entity's first composite
+  unique key, U2 for the second, in declaration order. It shows on primary
+  key fields too, next to P (pitstops: raceid P fk U1, driverid P fk U1,
+  lap U1). A one-field unique key keeps the plain U circle. A composite
+  `unique` entry in `indexes` declares an index, not a key: no badge, as
+  before. New FieldFlags.uniqueKeys (number[]); the role-marker helper's
+  parameter type is narrowed to the four role flags.
+renderer\test\goldens\15-constraints.svg
+  Only change: U1 pills on races (year, round), results (raceid,
+  driverid) and pitstops (raceid, driverid, lap), and the badges after
+  them shift right. Rasterized and checked by eye: no overlap.
+playground\src\components\inspector\EntityInspector.vue
+  Space between "Check" and the expression, and between "Primary key" /
+  "Unique" and the field list (a margin, since Vue drops the leading space
+  of a text node).
+playground\help\visual-cues.md, entity-cards.md
+  The U1/U2 badges; composite `unique` index entries stay unbadged.
+CHANGELOG.md
+  v0.6 renderer bullet describes the numbered badges.
 
 FILES
 -----
   CHANGELOG.md
-  mcp\src\reference.ts
-  public\llms.txt
+  playground\help\entity-cards.md
+  playground\help\visual-cues.md
+  playground\src\components\inspector\EntityInspector.vue
+  renderer\src\layout\layout.ts
+  renderer\src\svg\serialize.ts
+  renderer\test\goldens\15-constraints.svg
 
 APPLY (cmd.exe)
 ---------------
@@ -25,19 +41,30 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                                         "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\mcp\src\reference.ts"                                 "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\public\llms.txt"                                      "%REPO%\public\llms.txt"
+copy /Y "%DELTA%\playground\help\entity-cards.md"                      "%REPO%\playground\help\entity-cards.md"
+copy /Y "%DELTA%\playground\help\visual-cues.md"                       "%REPO%\playground\help\visual-cues.md"
+copy /Y "%DELTA%\playground\src\components\inspector\EntityInspector.vue" "%REPO%\playground\src\components\inspector\EntityInspector.vue"
+copy /Y "%DELTA%\renderer\src\layout\layout.ts"                        "%REPO%\renderer\src\layout\layout.ts"
+copy /Y "%DELTA%\renderer\src\svg\serialize.ts"                        "%REPO%\renderer\src\svg\serialize.ts"
+copy /Y "%DELTA%\renderer\test\goldens\15-constraints.svg"             "%REPO%\renderer\test\goldens\15-constraints.svg"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-cd mcp
-npm run check:reference
-cd ..
+  Expect: parser 241, renderer 209, playground 52 passed; docs build
+  complete.
+npm run docs:dev
+  Paste your pitstops snippet into /playground/index.html: raceid,
+  driverid and lap show U1; the inspector reads "Check  stop >= 1".
+  Stop with Ctrl+C.
 git add -A
-git commit -m "v0.6 Delta 5: llms.txt and MCP reference for constraints"
+git commit -m "v0.6 Delta 7: numbered badges for composite unique keys; inspector spacing"
 git push
-  The push deploys the site and playground with Deltas 2 to 5.
+
+Then run the RELEASE section of Delta 6's APPLY.txt
+(release-preflight 0.6.0, release 0.6.0, commit, push, github-release 0.6).
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0; mcp type-check clean; reference in sync
+  npm run check         exit 0
+  renderer type-check   clean; vue-tsc clean
+  golden 15             only the U1 pills added (7 badges, 3 keys)

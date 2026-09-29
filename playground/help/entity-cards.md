@@ -44,7 +44,8 @@ The card auto-sizes to fit its contents. There's a minimum width so small entiti
 Three flag badges come from the field's own settings:
 
 - **P** (yellow circle): the field is part of the primary key, marked `[pk]` or listed on a `pk` line of the `constraints { }` block. Composite keys show the badge on every member field.
-- **U** (purple circle): the field is a unique key on its own, marked `[unique]` or listed alone on a `unique` line of `constraints { }`. A primary key doesn't repeat it, and a composite unique key badges no field.
+- **U** (purple circle): the field is a unique key on its own, marked `[unique]` or listed alone on a `unique` line of `constraints { }`. A primary key doesn't repeat it.
+- **U1**, **U2** (purple pills): the field belongs to a composite unique key, one number per key in the order `constraints { }` declares them. `pitstops` with `(raceid, driverid, lap) [unique]` shows U1 on those three fields, next to P on the two that are also in the primary key.
 - **!** (red circle): the field is marked `[not null]` or `[required]` (the parser normalizes the two to the same canonical form).
 
 Four relationship markers, drawn as small pills, come from the relationships that use the field. You never write them yourself:

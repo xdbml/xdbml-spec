@@ -565,6 +565,10 @@ function fieldBadges (field: FieldLayout, theme: Theme): Badge[] {
   if (field.flags.dk) out.push({ label: 'dk', color: theme.badges.dk, wide: true });
   if (field.flags.dm) out.push({ label: 'dm', color: theme.badges.dm, wide: true });
   if (field.flags.unique && !field.flags.pk) out.push({ label: 'U', color: theme.badges.unique });
+  // Members of a composite unique key (spec §10.2), numbered per key. Shown
+  // on primary key fields too: membership in another key is information
+  // the P badge does not carry.
+  for (const n of field.flags.uniqueKeys ?? []) out.push({ label: `U${n}`, color: theme.badges.unique, wide: true });
   if (field.flags.notNull) out.push({ label: '!', color: theme.badges.notNull });
   return out;
 }
