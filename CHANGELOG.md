@@ -4,9 +4,46 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.6 -- 2026
+## v0.6.1 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A backward-compatible point release of the v0.6 draft. List bodies accept a comma or a semicolon between items, as TableGroup and SupertypeGroup bodies already did, so Enum values and Entity fields written with commas, as AI assistants often write them, now parse. A field may take the name of any keyword: `note`, `indexes`, `checks` and `records`, which DBML accepts as field names, no longer fail. Chapter 14 states where each part of a View goes: the source query in the body, every other setting in the brackets. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.
+
+### Added
+
+#### Spec
+
+- **Separators in list bodies (§3.9)**: in the body of an Entity, a TablePartial, an Edge, a View, an object-shaped Type, an `object` / `struct` / `record`, a `json { }` schema, a `oneOf` / `anyOf` / `allOf`, an Enum, `constraints`, `checks`, a DiagramView and its categories, and a Project, a comma or a semicolon may appear between items, before the first and after the last, with no meaning of its own. A parser accepts them in every document, including one without a version declaration (Appendix D, item 9). Tools that write xDBML write none. DBML accepts none in these bodies. `indexes` stays out: there, `email, name` may be meant as the composite index `(email, name)`, so a comma between entries remains an error.
+
+- **Keywords and field names (§3.10)**: no keyword is reserved as the name of a field or of an enum value. `Note`, `indexes`, `constraints`, `checks`, `records` and `source_query` start an element only when `:` or `{`, as the element requires, follows them. Before v0.6.1 the parser rejected a field named `note`, `indexes`, `checks` or `records`, which DBML accepts, and a View field named `source_query`.
+
+- **View validation summary (§14.7)**: a setting other than `note` written in the body is an error; `source_query` written in the brackets, and a second source query, are warnings.
+
+- **View source query in the AST (§28.7)**: in the normalized AST, a View carries at most one source query, whichever form declared it.
+
+### Changed
+
+#### Spec
+
+- **§3.9** is reorganized around list bodies. The tuple, `map`, `union` and array rows keep their rules; the `records` row, whose rows end with their line, is new, and §3.1 notes that exception.
+
+- **Chapter 14, View**: §14.1 lists the body elements (source query, fields, note) and states that the settings of §14.5 go in the brackets. §14.2 shows `materialized` in the brackets, before the body, and shows the same setting in the body as a syntax error. §14.3 places the source query in the body; with more than one, the first counts. A `source_query` in the brackets, which the grammar of v0.6.0 accepted, is not the view's source query and draws a warning. §14.2 and §14.5 held two partial settings tables; §14.5 now holds the only one, without `source_query`.
+
+- **§16 Enum**: values are separated as in every list body, and a quoted value may use double or single quotes, as the parser already accepted; tools that write xDBML use double quotes.
+
+- **§28, §31, Appendices A and D**: aligned with §3.9, §3.10 and chapter 14. Conformance gains items 17 and 18; Appendix D gains item 9, and its later items are renumbered.
+
+### Not changed (compatibility)
+
+- Backward-compatible throughout. A document that writes `source_query` in the brackets, or declares two source queries, now draws a warning. A 0.6.0 parser rejects a document that uses commas or semicolons between list items, or a field named `note`, `indexes`, `checks` or `records`.
+
+---
+
+## v0.6 -- 2026
+
+**Status**: Draft -- superseded by v0.6.1
 **Released**: 2026-09-28
 
 Adds constraints: one entity-level block for the primary key, unique keys and check expressions, each with an optional constraint name, with composite keys listed in key order and nested keys for document stores. A referential relationship must reference a key of the entity it points at. Every v0.5 document remains valid; documents using the new constructs declare `xdbml: 0.6`.
