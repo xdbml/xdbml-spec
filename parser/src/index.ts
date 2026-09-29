@@ -37,6 +37,7 @@ export {
 } from './module-resolver.ts';
 export type { ModuleSource } from './module-resolver.ts';
 export { resolveNames, SymbolTable } from './name-resolver.ts';
+export { checkViews, viewSourceQuery } from './views.ts';
 export {
   bodyConstraints,
   checkConstraints,

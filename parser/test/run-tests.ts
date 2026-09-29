@@ -20,6 +20,7 @@ import {
   isForeignMaster, pathToString, refChildEndpoint, refParentEndpoint, relationshipType,
   constraintType, isUndirected,
   resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
+  viewSourceQuery,
 } from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
@@ -4004,6 +4005,254 @@ Ref: orders.customer_email > customers.email`,
         return JSON.stringify(got) === JSON.stringify(['ref-target-not-key:warning']) ? null : `got ${JSON.stringify(got)}`;
       },
     },
+    // ---- v0.6.1: separators in list bodies (§3.9) ----
+    {
+      name: 'v0.6.1 §3.9: Enum values separated by commas, with notes',
+      source: `Enum ServiceStatus {
+  'scheduled' [note: 'Appointment booked'],
+  'in_progress' [note: 'Currently being serviced'],
+  'completed' [note: 'Service finished'],
+  'on_hold' [note: 'Paused, awaiting parts or decision'],
+  'cancelled' [note: 'Cancelled by customer or shop']
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EnumDeclaration') return 'expected enum';
+        const names = e.values.map((v) => v.name);
+        const want = ['scheduled', 'in_progress', 'completed', 'on_hold', 'cancelled'];
+        if (JSON.stringify(names) !== JSON.stringify(want)) return `values: ${JSON.stringify(names)}`;
+        return e.values[3].settings[0]?.value?.kind === 'StringValue' ? null : 'note of on_hold lost';
+      },
+    },
+    {
+      name: 'v0.6.1 §3.9: separators before, between and after items, any number, commas or semicolons',
+      source: `Enum s { ,, a ;; b , c; }
+Entity e { id int [pk], name varchar; age int, }`,
+      assert: (doc) => {
+        const [en, e] = doc.statements;
+        if (en.kind !== 'EnumDeclaration' || e.kind !== 'EntityDeclaration') return 'expected enum and entity';
+        const v = en.values.map((x) => x.name).join(',');
+        const f = e.body.map((b) => (b as { name?: string }).name).join(',');
+        return v === 'a,b,c' && f === 'id,name,age' ? null : `enum ${v}; entity ${f}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §3.9: separators in View, Edge, TablePartial, Type, object, json, oneOf, constraints, checks, Project',
+      source: `xdbml: 0.6
+Project p { database_type: 'PostgreSQL', Note: 'demo', }
+TablePartial audit { created_at timestamp, updated_at timestamp }
+Type Money { amount decimal(12,2), currency varchar }
+Entity a { id int [pk] }
+Entity b {
+  id int, total Money, ~audit,
+  meta json { source varchar, tags varchar },
+  payment oneOf { card object { last4 varchar, brand varchar }, cash object { change decimal } } [discriminator: kind],
+  constraints { (id) [pk], 'id > 0' },
+  checks { 'id < 100000'; },
+}
+Edge e [source: a, target: b] { since date, weight int }
+View v { source_query: 'SELECT id FROM b', id int, }`,
+      assert: (doc) => {
+        const d = resolveNames(doc).diagnostics;
+        if (d.length > 0) return `unexpected: ${d.map((x) => x.code + ': ' + x.message).join('; ')}`;
+        const b = doc.statements.find((s) => s.kind === 'EntityDeclaration' && s.name === 'b') as EntityDeclaration;
+        const kinds = b.body.map((x) => x.kind === 'FieldDeclaration' ? x.name : x.kind).join(',');
+        return kinds === 'id,total,PartialInjection,meta,payment,ConstraintsBlock,ChecksBlock' ? null : kinds;
+      },
+    },
+    {
+      name: 'v0.6.1 §3.9: a comma between index entries is an error that names parentheses',
+      source: `Table t {
+  email varchar
+  name  varchar
+  indexes {
+    email, name
+  }
+}`,
+      expectError: true,
+      assert: () => 'expected a parse error',
+    },
+    {
+      name: 'v0.6.1 §3.9: the index error message points to a composite index',
+      source: `Table t { email varchar }`,
+      assert: () => {
+        try {
+          parse(`Table t {
+  email varchar
+  name  varchar
+  indexes { email, name }
+}`);
+          return 'expected a parse error';
+        } catch (e) {
+          return /\(email, name\)/.test((e as Error).message) ? null : (e as Error).message;
+        }
+      },
+    },
+    {
+      name: 'v0.6.1 §3.9: a separator inside an item is an error',
+      source: `Table t { id, int }`,
+      expectError: true,
+      assert: () => 'expected a parse error',
+    },
+    {
+      name: 'v0.6.1 §3.9: records rows still end with their line',
+      source: `Table t {
+  id int [pk], name varchar
+  records {
+    1, 'Ada',
+    2, 'Grace'
+  }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const r = e.body.find((b) => b.kind === 'RecordsBlock');
+        if (!r || r.kind !== 'RecordsBlock') return 'no records block';
+        return r.rows.length === 2 ? null : `rows: ${r.rows.length}`;
+      },
+    },
+    // ---- v0.6.1: keywords as field names (§3.10) ----
+    {
+      name: 'v0.6.1 §3.10: fields named note, Note, indexes, checks, records beside a table note and blocks',
+      source: `Table appointments {
+  id      int [pk]
+  note    varchar
+  Note    varchar
+  records int
+  indexes varchar
+  checks  varchar
+  Note: 'One row per booked appointment'
+  indexes { id }
+}`,
+      assert: (doc) => {
+        const e = doc.statements[0];
+        if (e.kind !== 'EntityDeclaration') return 'expected entity';
+        const kinds = e.body.map((x) => x.kind === 'FieldDeclaration' ? x.name : x.kind).join(',');
+        return kinds === 'id,note,Note,records,indexes,checks,NoteBlock,IndexesBlock' ? null : kinds;
+      },
+    },
+    {
+      name: 'v0.6.1 §3.10: a field named note in an Edge, a TablePartial, a Type, an object and a json schema',
+      source: `Entity a { id int [pk] }
+TablePartial p { note varchar }
+Type T { note varchar }
+Entity b { id int [pk]
+  o object { note varchar }
+  j json { note string }
+}
+Edge e [source: a, target: b] { note varchar }`,
+      assert: (doc) => {
+        const names: string[] = [];
+        const walk = (items: ReadonlyArray<{ kind: string }>): void => {
+          for (const it of items) {
+            if (it.kind !== 'FieldDeclaration') continue;
+            const f = it as unknown as { name: string; type: { kind: string; fields?: ReadonlyArray<{ kind: string }> } };
+            names.push(f.name);
+            if (f.type.fields) walk(f.type.fields);
+          }
+        };
+        for (const st of doc.statements) walk((st as unknown as { body?: ReadonlyArray<{ kind: string }> }).body ?? []);
+        return names.filter((n) => n === 'note').length === 5 ? null : `names: ${names.join(',')}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §3.10: a View field named source_query or note',
+      source: `View v {
+  source_query: 'SELECT 1 AS source_query, 2 AS note'
+  source_query varchar
+  note varchar
+}`,
+      assert: (doc) => {
+        const v = doc.statements[0];
+        if (v.kind !== 'ViewDeclaration') return 'expected view';
+        const kinds = v.body.map((x) => x.kind === 'FieldDeclaration' ? x.name : x.kind).join(',');
+        return kinds === 'SourceQueryItem,source_query,note' ? null : kinds;
+      },
+    },
+    // ---- v0.6.1: View source query and settings (§14) ----
+    {
+      name: 'v0.6.1 §14.2: materialized in the body is an error that names the brackets',
+      source: `Entity e { id int [pk] }`,
+      assert: () => {
+        try {
+          parse(`View monthly_revenue {
+  materialized: true
+  month date [pk]
+}`);
+          return 'expected a parse error';
+        } catch (e) {
+          const m = (e as Error).message;
+          return m.includes('View monthly_revenue [materialized: ...]') ? null : m;
+        }
+      },
+    },
+    {
+      name: 'v0.6.1: a setting in a Table body is an error that names the brackets',
+      source: `Entity e { id int [pk] }`,
+      assert: () => {
+        try {
+          parse(`Table users {
+  headercolor: '#3498DB'
+  id int [pk]
+}`);
+          return 'expected a parse error';
+        } catch (e) {
+          const m = (e as Error).message;
+          return m.includes('Table users [headercolor: ...]') ? null : m;
+        }
+      },
+    },
+    {
+      name: 'v0.6.1 §14.7: source_query in the brackets is a warning and not the source query',
+      source: `xdbml: 0.6
+View v [materialized: true, source_query: 'SELECT id FROM t'] { id int }`,
+      assert: (doc) => {
+        const v = doc.statements[0];
+        if (v.kind !== 'ViewDeclaration') return 'expected view';
+        if (viewSourceQuery(v) !== undefined) return 'bracketed query counted';
+        const got = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`);
+        return JSON.stringify(got) === JSON.stringify(['source-query-in-settings:warning']) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §14.7: a second source query is a warning; the first one counts',
+      source: `View v {
+  source_query: 'SELECT 1'
+  source_query: 'SELECT 2'
+  id int
+}`,
+      assert: (doc) => {
+        const v = doc.statements[0];
+        if (v.kind !== 'ViewDeclaration') return 'expected view';
+        if (viewSourceQuery(v)?.query !== 'SELECT 1') return `source query: ${viewSourceQuery(v)?.query}`;
+        const got = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`);
+        return JSON.stringify(got) === JSON.stringify(['duplicate-source-query:warning']) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    {
+      name: 'v0.6.1 §14.7: the View warnings reach Views inside a Container',
+      source: `Container dw [type: schema] {
+  View v [source_query: 'SELECT 1'] { id int }
+}`,
+      assert: (doc) => {
+        const got = resolveNames(doc).diagnostics.map((d) => d.code);
+        return JSON.stringify(got) === JSON.stringify(['source-query-in-settings']) ? null : `got ${JSON.stringify(got)}`;
+      },
+    },
+    // ---- v0.6.1: version declaration with a patch number (§4) ----
+    {
+      name: 'v0.6.1 §4: xdbml: 0.6.1 parses and keeps its patch number',
+      source: `xdbml: 0.6.1
+Entity e { id int [pk] }`,
+      assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
+    },
+    {
+      name: 'v0.6.1 §4: xdbml: 0.6.2 is newer than this parser supports',
+      source: `xdbml: 0.6.2
+Entity e { id int [pk] }`,
+      expectError: true,
+      assert: () => 'expected unsupported-version',
+    },
   ];
 
   const results: TestResult[] = [];
@@ -4264,6 +4513,26 @@ Ref: sites.region.country > countries.code
     results.push(err === null
       ? ok('Target-native types: a Named Type called Geography still resolves (no shadowing)')
       : fail('Target-native types: Named Type called Geography', err));
+  }
+
+  {
+    // Spec §3.10 (v0.6.1): Monarch colors `note` as an identifier where it
+    // names a field, and leaves the keyword rules to color it elsewhere.
+    const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('note(?!'));
+    const re = rule ? new RegExp(rule[0].source, 'i') : null;
+    const asField = ['note varchar', 'Note varchar [not null]', 'note    int'];
+    const asKeyword = ['Note: \'x\'', 'Note { \'x\' }', 'note:', 'Note schema_notes {', 'notes varchar'];
+    const bad = re === null
+      ? ['rule missing']
+      : [
+        ...asField.filter((t) => !re.test(t)).map((t) => `not an identifier: ${t}`),
+        ...asKeyword.filter((t) => re.test(t) && !t.startsWith('notes')).map((t) => `identifier: ${t}`),
+        ...(re.exec('notes varchar')?.index === 0 ? ['matches inside notes'] : []),
+      ];
+    results.push(bad.length === 0
+      ? ok('v0.6.1 §3.10: Monarch colors a field named note as an identifier, and Note: or Note { as a keyword')
+      : fail('v0.6.1 §3.10: Monarch note rule', bad.join('; ')));
   }
 
   return results;

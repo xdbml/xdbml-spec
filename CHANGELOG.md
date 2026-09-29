@@ -9,7 +9,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 **Status**: Draft -- current
 **Released**: unreleased
 
-A backward-compatible point release of the v0.6 draft. List bodies accept a comma or a semicolon between items, as TableGroup and SupertypeGroup bodies already did, so Enum values and Entity fields written with commas, as AI assistants often write them, now parse. A field may take the name of any keyword: `note`, `indexes`, `checks` and `records`, which DBML accepts as field names, no longer fail. Chapter 14 states where each part of a View goes: the source query in the body, every other setting in the brackets. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.
+A backward-compatible point release of the v0.6 draft. List bodies accept a comma or a semicolon between items, as TableGroup and SupertypeGroup bodies already did, so Enum values and Entity fields written with commas, as AI assistants often write them, now parse. A field may take the name of any keyword: `note`, `indexes`, `checks` and `records`, which DBML accepts as field names, no longer fail. Chapter 14 states where each part of a View goes: the source query in the body, every other setting in the brackets. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`, though the parser now also reads `xdbml: 0.6.1`.
 
 ### Added
 
@@ -21,7 +21,13 @@ A backward-compatible point release of the v0.6 draft. List bodies accept a comm
 
 - **View validation summary (§14.7)**: a setting other than `note` written in the body is an error; `source_query` written in the brackets, and a second source query, are warnings.
 
-- **View source query in the AST (§28.7)**: in the normalized AST, a View carries at most one source query, whichever form declared it.
+- **View source query in the AST (§28.7)**: in the normalized AST, a View carries at most one source query, the first `source_query:` element of its body.
+
+#### Tooling
+
+- **Parser (`@xdbml/parse`)**: reads the separators of §3.9 in every list body, and reports a comma between index entries with an error that points to the composite form `(email, name)`. `Note`, `indexes`, `checks`, `records` and `source_query` start their element only before `:` or `{` (§3.10), as `constraints` already did. A setting written in a body, such as `materialized: true` in a View, fails with an error that names the brackets, `View monthly_revenue [materialized: ...] { ... }`, instead of "Expected type name". `viewSourceQuery()` returns the source query of a View (§28.7), and `resolveNames()` reports `source-query-in-settings` and `duplicate-source-query` as warnings (§14.7). The playground editor colors a field named `note` like any other field name.
+
+- **Grammar**: `listSeparator` in every list body; replacement rules for `tableDefinition`, `tablePartialDefinition`, `enumDefinition` and `tableGroupDefinition`; `fieldName`, which accepts the six body keywords; and a View whose `source_query` is a body element only. `grammar/test-cases.md` gains thirteen v0.6.1 cases, each checked against the parser.
 
 ### Changed
 
@@ -34,6 +40,14 @@ A backward-compatible point release of the v0.6 draft. List bodies accept a comm
 - **§16 Enum**: values are separated as in every list body, and a quoted value may use double or single quotes, as the parser already accepted; tools that write xDBML use double quotes.
 
 - **§28, §31, Appendices A and D**: aligned with §3.9, §3.10 and chapter 14. Conformance gains items 17 and 18; Appendix D gains item 9, and its later items are renumbered.
+
+### Fixed
+
+#### Tooling
+
+- **Parser**: a field named `note`, `indexes`, `checks` or `records`, which DBML 3.13.6 accepts, failed to parse (for example with "Expected ':' or '{' after Note"), so a valid DBML file with such a column did not open in the playground and failed MCP validation. A View field named `source_query` failed the same way.
+
+- **Parser**: `xdbml: 0.6.1` failed with "Unexpected token Dot", though §4 and the grammar allow `MAJOR.MINOR[.PATCH]`. The parser reads the patch number and supports documents up to 0.6.1: `xdbml: 0.6` stays valid, and `xdbml: 0.6.2` is refused as newer than supported.
 
 ### Not changed (compatibility)
 

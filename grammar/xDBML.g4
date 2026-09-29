@@ -1,9 +1,9 @@
 /*
- * xDBML v0.2 -- ANTLR4 grammar additions
+ * xDBML v0.6.1 -- ANTLR4 grammar additions
  *
- * Status:    Draft v0.2 -- pre-stable
+ * Status:    Draft v0.6.1 -- pre-stable
  * License:   Apache License 2.0
- * Spec:      xDBML Specification v0.2 (xdbml.org/spec/v0.2)
+ * Spec:      xDBML Specification v0.6 (xdbml.org/spec/current)
  * Upstream:  github.com/holistics/dbml (Apache 2.0)
  *
  * This grammar layers xDBML extensions on top of the Holistics DBML
@@ -19,11 +19,23 @@
  *     the existing 'Type Name { fields }' object-shaped form.
  *   - New reserved tokens: USE, REUSE, FROM, AS.
  *
+ * v0.6.1 changes (spec §3.9, §3.10, §14):
+ *   - listSeparator: in a list body, commas and semicolons may stand
+ *     between items, before the first and after the last, any number of
+ *     times. `indexes` keeps whitespace-only separation.
+ *   - fieldName: the body keywords Note, indexes, checks, constraints,
+ *     records and source_query also name fields; each starts its element
+ *     only before ':' or '{'.
+ *   - View: source_query is a body element only; the settings stay in the
+ *     brackets.
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
  *   - refSpec          (adds explicit cardinality, .[*] in paths)
  *   - indexEntry       (adds nested-field path support)
+ *   - enumDefinition, tablePartialDefinition, tableGroupDefinition
+ *                      (v0.6.1: list separators, spec §3.9)
  *   - schemaPrefix     (kept; explicit Container blocks coexist)
  *
  * Naming conventions:
@@ -135,7 +147,7 @@ TYPE_KW             : 'Type' ;
 
 EDGE                : 'Edge' ;
 
-// ---- §17.12 View ----------------------------------------------------------
+// ---- §14 View ------------------------------------------------------------
 
 VIEW                : 'View' ;
 
@@ -250,7 +262,7 @@ topLevelStatement
     | tableDefinition              // upstream DBML, accepts xDBML keywords (§17.4.2)
     | typeDefinition               //§17.8
     | edgeDefinition               //§17.11
-    | viewDefinition               //§17.12
+    | viewDefinition               //§14
     | enumDefinition               // upstream DBML
     | refDefinition                // upstream DBML, extended for cardinality (§17.10)
     | tablePartialDefinition       // upstream DBML
@@ -259,6 +271,66 @@ topLevelStatement
     | diagramViewDefinition        // upstream DBML
     | noteDefinition               // upstream DBML
     | useDirective                 //§25  (new in v0.2)
+    ;
+
+// ---- §3.9 List bodies (v0.6.1) ---------------------------------------------
+//
+// In a list body, a comma or a semicolon may stand between two items, before
+// the first or after the last, alone or several in a row, with no meaning of
+// its own. Every rule below whose body holds a list reads (item |
+// listSeparator)*. A separator inside an item stays an error: `id, int` does
+// not declare a field. `indexes` keeps whitespace-only separation, since
+// `email, name` may be meant as the composite index `(email, name)`.
+//
+// List bodies: Entity (and its synonyms), TablePartial, Edge, View,
+// object-shaped Type, object / struct / record, json schema, oneOf / anyOf /
+// allOf, Enum, constraints, checks, TableGroup, SupertypeGroup, Project, and
+// DiagramView with its categories (upstream DBML). The top level and a
+// Container body hold declarations, separated by whitespace only. A records
+// row ends at the end of its line (§26).
+
+listSeparator
+    : COMMA
+    | SEMICOLON
+    ;
+
+tableDefinition
+    : tableKeyword entityReference (AS IDENTIFIER)? settingsBlock? LBRACE
+        (entityBodyItem | listSeparator)*
+      RBRACE
+    ;
+
+tablePartialDefinition
+    : 'TablePartial' IDENTIFIER settingsBlock? LBRACE
+        (entityBodyItem | listSeparator)*
+      RBRACE
+    ;
+
+entityBodyItem
+    : fieldDeclaration             // includes ~partial injections
+    | indexBlock
+    | checksBlock
+    | constraintsBlock             // v0.6 §10
+    | recordsBlock                 // §26 (upstream DBML)
+    | noteDefinition
+    ;
+
+enumDefinition
+    : ENUM entityReference LBRACE
+        (enumValue | listSeparator)*
+      RBRACE
+    ;
+
+// An enum value is a name, a double-quoted name as in DBML, or a
+// single-quoted name; "on hold" and 'on hold' are the same value (§16).
+enumValue
+    : (fieldName | QUOTED_STRING | STRING_LITERAL) settingsBlock?
+    ;
+
+tableGroupDefinition
+    : 'TableGroup' IDENTIFIER settingsBlock? LBRACE
+        (entityReference | listSeparator)*
+      RBRACE
     ;
 
 // ---- §17.7 Container ------------------------------------------------------
@@ -300,7 +372,7 @@ tableKeyword
 
 typeDefinition
     : TYPE_KW IDENTIFIER settingsBlock? LBRACE      // object-shaped (v0.1 form)
-        fieldDeclaration*
+        (fieldDeclaration | listSeparator)*
       RBRACE
     | TYPE_KW IDENTIFIER typeExpression settingsBlock?   // scalar (v0.2 form)
     ;
@@ -382,7 +454,7 @@ cloneContent
 
 edgeDefinition
     : EDGE IDENTIFIER edgeSettingsBlock LBRACE
-        edgeBody*
+        (edgeBody | listSeparator)*
       RBRACE
     ;
 
@@ -411,11 +483,20 @@ entityReference
     : IDENTIFIER (DOT IDENTIFIER)*   // bare name or container.entity
     ;
 
-// ---- §17.12 View -----------------------------------------------------------
+// ---- §14 View ----------------------------------------------------------------
+//
+// A View has a name, settings in brackets after the name, and a body. The
+// body holds the source query, the fields and a note; the settings of §14.5
+// go in the brackets only (§14.2). A `name: value` line in the body, such as
+// `materialized: true`, is a syntax error, since a field name is never
+// followed by ':'. A source_query written in the brackets, which the grammar
+// of v0.6.0 accepted, parses as a generalSetting: it is not the view's source
+// query, and the resolver reports a warning (§14.3, §14.7), as it does for a
+// second source_query element in the body.
 
 viewDefinition
     : VIEW IDENTIFIER viewSettingsBlock? LBRACE
-        viewBody*
+        (viewBody | listSeparator)*
       RBRACE
     ;
 
@@ -424,17 +505,16 @@ viewSettingsBlock
     ;
 
 viewSetting
-    : 'source_query'      COLON multilineString          //§17.12.1
-    | 'materialized'      COLON BOOLEAN_LITERAL          //§17.12.2
-    | 'refresh_schedule'  COLON STRING_LITERAL           //§17.12.2
-    | 'refresh_on'        COLON LBRACK identifierList RBRACK  //§17.12.2
-    | 'source_database'   COLON STRING_LITERAL           //§17.12.3
-    | 'storage_options'   COLON settingValue             //§17.12.5
-    | generalSetting
+    : 'materialized'      COLON BOOLEAN_LITERAL          //§14.2
+    | 'refresh_schedule'  COLON STRING_LITERAL           //§14.5
+    | 'refresh_on'        COLON LBRACK identifierList RBRACK  //§14.5
+    | 'source_database'   COLON STRING_LITERAL           //§14.3, §14.5
+    | 'storage_options'   COLON settingValue             //§14.5
+    | generalSetting                                     // note, synonyms, x_* etc.
     ;
 
 viewBody
-    : 'source_query' COLON multilineString    // also allowed inside body for readability
+    : SOURCE_QUERY COLON (STRING_LITERAL | multilineString)   //§14.3, at most once
     | fieldDeclaration
     | noteDefinition
     ;
@@ -443,8 +523,8 @@ viewBody
 //
 // One supertype and its immediate subtypes along one axis of
 // specialization. The name is required: a writer exporting a group that has
-// none emits undefinedGroup1, undefinedGroup2, ... Members are separated like
-// TableGroup members, by newline, comma or semicolon (spec §3.9).
+// none emits undefinedGroup1, undefinedGroup2, ... Members are separated as
+// in every list body (spec §3.9).
 //
 // The grammar accepts any identifier as a value. The rules of spec §12.8 are
 // checked after parsing: `supertype:` is required, values must be canonical
@@ -454,7 +534,7 @@ viewBody
 
 supertypeGroupDefinition
     : SUPERTYPE_GROUP IDENTIFIER supertypeGroupSettingsBlock? LBRACE
-        (supertypeGroupMember (COMMA | SEMICOLON)?)*
+        (supertypeGroupMember | listSeparator)*
       RBRACE
     ;
 
@@ -531,7 +611,7 @@ typeParameterList
     ;
 
 objectType
-    : objectKeyword LBRACE fieldDeclaration* RBRACE
+    : objectKeyword LBRACE (fieldDeclaration | listSeparator)* RBRACE
     ;
 
 objectKeyword
@@ -589,15 +669,15 @@ unionMember
     ;
 
 oneOfType
-    : ONE_OF LBRACE polymorphicAlternative+ RBRACE polymorphicSettings?
+    : ONE_OF LBRACE listSeparator* polymorphicAlternative (polymorphicAlternative | listSeparator)* RBRACE polymorphicSettings?
     ;
 
 anyOfType
-    : ANY_OF LBRACE polymorphicAlternative+ RBRACE polymorphicSettings?
+    : ANY_OF LBRACE listSeparator* polymorphicAlternative (polymorphicAlternative | listSeparator)* RBRACE polymorphicSettings?
     ;
 
 allOfType
-    : ALL_OF LBRACE polymorphicAlternative+ RBRACE polymorphicSettings?
+    : ALL_OF LBRACE listSeparator* polymorphicAlternative (polymorphicAlternative | listSeparator)* RBRACE polymorphicSettings?
     ;
 
 polymorphicAlternative
@@ -613,7 +693,7 @@ polymorphicSettings
 // ---- §17.5 JSON-with-schema -----------------------------------------------
 
 jsonType
-    : jsonKeyword ( LBRACE fieldDeclaration* RBRACE )?
+    : jsonKeyword ( LBRACE (fieldDeclaration | listSeparator)* RBRACE )?
     //          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     //          Optional schema block; absence = opaque JSON
     ;
@@ -634,9 +714,24 @@ namedTypeReference
 // ---- Field declarations (used in entities, edges, views, types, objects) --
 
 fieldDeclaration
-    : IDENTIFIER typeExpression settingsBlock?
+    : fieldName typeExpression settingsBlock?
     | quotedIdentifier typeExpression settingsBlock?    // for non-identifier names
     | tablePartialInjection
+    ;
+
+// ---- §3.10 Keywords and field names (v0.6.1) ------------------------------
+// No keyword is reserved as the name of a field or of an enum value. In a
+// body, six words start an element, each only when the token that element
+// needs follows it: Note before ':' or '{'; indexes, checks, constraints and
+// records before '{'; source_query before ':'. A field declaration never has
+// ':' or '{' right after its name, so two tokens of lookahead separate the
+// readings. fieldName lists these six; every other keyword also names a
+// field, and an implementation whose lexer reserves keyword tokens accepts
+// them here as well.
+
+fieldName
+    : IDENTIFIER
+    | NOTE | INDEXES | CHECKS | CONSTRAINTS | RECORDS | SOURCE_QUERY
     ;
 
 tablePartialInjection
@@ -683,6 +778,9 @@ pathTail
 
 // ---- Index block (overrides upstream to support nested paths) -------------
 
+// Not a list body (§3.9): entries are separated by whitespace only, so
+// `email, name` is an error rather than two indexes; a composite index is
+// written `(email, name)`.
 indexBlock
     : INDEXES LBRACE indexEntry* RBRACE
     ;
@@ -705,7 +803,7 @@ indexComponent
 // xDBML treats the expression as an opaque string and does not validate it.
 
 checksBlock
-    : CHECKS LBRACE checkEntry* RBRACE
+    : CHECKS LBRACE (checkEntry | listSeparator)* RBRACE
     ;
 
 // v0.6 (§10.5): a check expression is written in single (or triple)
@@ -725,7 +823,7 @@ checkEntry
 // follows it, so a field may still be named `constraints`.
 
 constraintsBlock
-    : CONSTRAINTS LBRACE constraintEntry* RBRACE
+    : CONSTRAINTS LBRACE (constraintEntry | listSeparator)* RBRACE
     ;
 
 constraintEntry
@@ -897,7 +995,7 @@ multilineString
 
 projectDefinition
     : PROJECT IDENTIFIER LBRACE
-        projectSetting*
+        (projectSetting | listSeparator)*
       RBRACE
     ;
 
@@ -940,6 +1038,8 @@ COMMA               : ',' ;
 SEMICOLON           : ';' ;
 DOT                 : '.' ;
 CONSTRAINTS         : 'constraints' ;   // v0.6 §10; contextual: a keyword only before '{'
+RECORDS             : 'records' ;       // §26; contextual: a keyword only before '{' (v0.6.1 §3.10)
+SOURCE_QUERY        : 'source_query' ;  // §14.3; contextual: a keyword only before ':' (v0.6.1 §3.10)
 TILDE               : '~' ;
 LANGLE              : '<' ;
 RANGLE              : '>' ;

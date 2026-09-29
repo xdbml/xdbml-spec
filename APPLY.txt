@@ -1,62 +1,67 @@
-xDBML -- 0.6.1, delta 1: spec text (revision 2)
-Base: origin/main 8a9c267 (VS Code extension 0.6.0).
-Replaces the first package of this name; apply this one only.
+xDBML -- 0.6.1, delta 2 of 5: grammar and parser
+Base: origin/main 6b8f492 (0.6.1, delta 1: spec text).
 
-This delta edits spec/v0.6.md in place, as 0.5.1 did for v0.5, and opens a
-v0.6.1 section in CHANGELOG.md. The parser does not implement it yet: the
-new buttons in 3.9 and 3.10 open snippets the current parser rejects.
-Commit locally and do NOT push until the parser delta.
+The parser now reads what the 0.6.1 spec text says. Once pushed, the live
+playground picks it up, since it builds the parser from source; the MCP
+server and npm keep 0.6.0 until the release.
 
 WHAT CHANGED
 ------------
-spec\v0.6.md
-  What's new  one sentence on v0.6.1.
-  3.1    whitespace: the records exception.
-  3.9    rewritten around list bodies. Entity, TablePartial, Edge, View,
-         object-shaped Type, object/struct/record, json schema,
-         oneOf/anyOf/allOf, Enum, constraints, checks, TableGroup,
-         SupertypeGroup, DiagramView and its categories, Project: items
-         separated by whitespace, one per line by convention; commas and
-         semicolons allowed any number of times between, before and after
-         items, with no meaning. "Other lists" table: tuple, records (new
-         row), indexes (new row: comma between entries stays an error),
-         map, union, array.
-  3.10   NEW "Keywords and field names": no keyword is reserved as a field
-         name or enum value. Note, indexes, constraints, checks, records
-         and source_query start an element only before ':' or '{'.
-  10.1   pointer to 3.10.
-  14.1   body elements table (source_query:, fields, Note:).
-  14.2   materialized shown in the brackets before the body, with a
-         button; the same setting in the body shown as a syntax error.
-         Partial settings table removed.
-  14.3   source query in the body; with several, the first counts. A
-         bracketed source_query is not the source query: warning.
-  14.5   the one settings table, without source_query.
-  14.7   NEW validation summary.
-  16     separators; double or single quotes; writers use double quotes.
-  28     tree: View gains SourceQuery (0..1). 28.7 NEW.
-  31     items 17 and 18.
-  App. A block keywords and quoted-identifier line.
-  App. D new item 9; items 9-13 become 10-14.
-CHANGELOG.md
-  NEW "## v0.6.1 -- 2026" section (unreleased); v0.6 status becomes
-  "superseded by v0.6.1".
+parser\src\parser.ts
+  Separators (3.9): commas and semicolons skipped between the items of every
+    list body: Entity/Table, Edge, TablePartial, View, object-shaped Type,
+    object, json, oneOf/anyOf/allOf, Enum, constraints, checks, Project
+    (TableGroup and SupertypeGroup already did). A comma between index
+    entries stays an error, now with a message pointing to (email, name).
+  Keywords (3.10): Note starts a note only before ':' or '{'; indexes,
+    checks, records only before '{' (constraints already did); source_query
+    only before ':'. Otherwise the word names a field, as in DBML.
+  Settings in a body: `materialized: true` in a View body fails with
+    "'materialized:' is a setting: write it in the brackets after the View
+    name, as in View monthly_revenue [materialized: ...] { ... }" instead
+    of "Expected type name, got Colon". Same for Entity, Table, Edge and
+    TablePartial bodies.
+  Version (4): `xdbml: 0.6.1` parses (it failed on the dot).
+    SUPPORTED_XDBML_VERSION is 0.6.1; 0.6 and 0.6.1 are accepted, 0.6.2 and
+    0.7 refused as newer than supported.
+parser\src\views.ts (NEW)
+  viewSourceQuery(view): the first source_query: element of the body
+    (28.7). checkViews(doc): warnings source-query-in-settings and
+    duplicate-source-query (14.7), Views in Containers included.
+parser\src\name-resolver.ts   the two codes; resolveNames() runs checkViews.
+parser\src\index.ts           exports viewSourceQuery and checkViews.
+parser\src\monarch.ts         playground editor: a field named `note` takes
+                              the identifier color instead of bold keyword.
+parser\test\run-tests.ts      18 new tests (241 -> 259).
+grammar\xDBML.g4
+  Header brought to v0.6.1. listSeparator in every list body; replacement
+  rules tableDefinition, tablePartialDefinition, enumDefinition,
+  tableGroupDefinition; fieldName with the six body keywords (tokens
+  RECORDS and SOURCE_QUERY added); View: source_query a body element only,
+  stale 17.12 references now 14.
+grammar\test-cases.md         13 cases for 3.9, 3.10, 4 and 14, each run
+                              against the parser here.
+CHANGELOG.md                  v0.6.1: Added > Tooling, Fixed > Tooling.
 
-DECISIONS APPLIED FROM REVIEW
-  Separators any number of times; accepted in undeclared documents;
-  indexes excluded; enum values written with double quotes; Note and the
-  block keywords usable as field names.
-
-FOR LATER DELTAS (not in this one)
-  Grammar and test cases; parser (separators, keyword lookahead, the
-  View warnings, a message naming the brackets when a View setting
-  appears in the body); playground inspector; llms.txt and MCP reference,
-  which also need the View placement rule spelled out; release 0.6.1.
+DECISIONS WRITTEN INTO THE CODE -- please confirm
+  1. `xdbml: 0.6.1` accepted; 0.6.2 refused (full version compared).
+  2. The setting-in-body error also covers Entity, Table, Edge and
+     TablePartial bodies. A field name is never followed by ':', so no
+     valid input is rejected.
+  3. The grammar is not compiled here: it imports the upstream DBML grammar,
+     as before. The test cases were checked against the parser instead.
 
 FILES
 -----
   CHANGELOG.md   (EDIT)
-  spec\v0.6.md   (EDIT)
+  grammar\test-cases.md   (EDIT)
+  grammar\xDBML.g4   (EDIT)
+  parser\src\index.ts   (EDIT)
+  parser\src\monarch.ts   (EDIT)
+  parser\src\name-resolver.ts   (EDIT)
+  parser\src\parser.ts   (EDIT)
+  parser\src\views.ts   (NEW)
+  parser\test\run-tests.ts   (EDIT)
 
 APPLY (cmd.exe)
 ---------------
@@ -64,39 +69,51 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                   "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\spec\v0.6.md"                   "%REPO%\spec\v0.6.md"
+copy /Y "%DELTA%\grammar\test-cases.md"          "%REPO%\grammar\test-cases.md"
+copy /Y "%DELTA%\grammar\xDBML.g4"               "%REPO%\grammar\xDBML.g4"
+copy /Y "%DELTA%\parser\src\index.ts"            "%REPO%\parser\src\index.ts"
+copy /Y "%DELTA%\parser\src\monarch.ts"          "%REPO%\parser\src\monarch.ts"
+copy /Y "%DELTA%\parser\src\name-resolver.ts"    "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\src\parser.ts"           "%REPO%\parser\src\parser.ts"
+copy /Y "%DELTA%\parser\src\views.ts"            "%REPO%\parser\src\views.ts"
+copy /Y "%DELTA%\parser\test\run-tests.ts"       "%REPO%\parser\test\run-tests.ts"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: every suite unchanged (parser 241 passed); "prepare-spec: wrote
-  spec/current.md from spec/v0.6.md (v0.6)"; "164 button(s) open the
-  snippet below them"; docs build complete.
-npm run docs:dev
-  Review, at the local URL VitePress prints:
-    /spec/current#_3-9-element-and-field-separators
-    /spec/current#_3-10-keywords-and-field-names
-    /spec/current#_14-view-derived-shapes-with-source-queries  (all of 14)
-    /spec/current#_16-enum
-    /spec/current#_28-7-view-source-query
-  Stop the dev server with Ctrl+C.
+  Expect: parser "259 passed, 0 failed"; every other suite unchanged;
+  "164 button(s) open the snippet below them"; docs build complete.
 git add -A
-git commit -m "spec v0.6.1 draft: separators in list bodies; keywords as field names; View settings placement"
+git commit -m "0.6.1, delta 2 of 5: grammar and parser"
+git push
 
-Do NOT push: the parser does not read the new separators or field names yet.
+Then, in the live playground once the site redeploys, paste:
+
+  Enum ServiceStatus {
+    'scheduled' [note: 'Appointment booked'],
+    'cancelled' [note: 'Cancelled by customer or shop']
+  }
+  Table orders {
+    id   int [pk]
+    note varchar
+  }
+  View monthly_revenue {
+    materialized: true
+    id int
+  }
+
+  Expect one syntax error, on `materialized:`, naming the brackets. Delete
+  the View: the schema parses, with no diagnostic, and `orders` shows a
+  `note` row. The spec's 3.9 and 3.10 "View in playground" buttons now
+  open without a syntax error.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0: parser 241 passed, every other suite
-                        unchanged, 164 spec buttons match, docs build
-                        complete, /spec/current serves v0.6
-  keyword sweep         179 parser keywords tried as a field name in
-                        Table, View, Edge, Type, TablePartial, object and
-                        json bodies and as an enum value (1,432 probes):
-                        only note, indexes, checks, records and
-                        source_query fail today, which 3.10 covers
-  DBML 3.13.6           parses the 3.10 example: fields id, note,
-                        records, and the table note
-  section references    every section reference resolves to a heading
-  anchors               3.9, 3.10, 14.2, 14.3, 14.7, 28.7 present in the
-                        built page
-  em-dashes             none in any changed file
+  npm run check         exit 0: parser 259 passed; renderer, MCP,
+                        from-mongodb, playground suites unchanged and
+                        green; 164 spec buttons match; docs build complete
+  tsc --noEmit          parser, renderer, mcp: clean
+  grammar test cases    13 of 13 behave as labeled against the parser
+  spec snippets         every snippet under a spec button parses as it did
+                        before, plus the 3.9 and 3.10 snippets, which
+                        failed under 0.6.0
+  em-dashes             none added

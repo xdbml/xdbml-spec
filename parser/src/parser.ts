@@ -115,7 +115,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6';
+export const SUPPORTED_XDBML_VERSION = '0.6.1';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -270,6 +270,55 @@ export class Parser {
     const t = this.peek();
     throw new ParseError(`${msg} (got ${t.kind} ${JSON.stringify(t.text)})`, t.start);
   }
+  /* ----- list bodies and body keywords (spec §3.9, §3.10, v0.6.1) ----- */
+
+  /**
+   * Skip the commas and semicolons of a list body. In a list body a comma
+   * or a semicolon may stand between items, before the first and after the
+   * last, any number of times, with no meaning of its own (spec §3.9).
+   */
+  private skipListSeparators (): void {
+    while (this.check(TokenKind.Comma) || this.check(TokenKind.Semicolon)) this.advance();
+  }
+
+  /**
+   * Whether the current token starts a note element: `Note` followed by
+   * `:` or `{`. Anywhere else `note` names a field (spec §3.10), as in
+   * DBML; a field declaration never has `:` or `{` right after its name.
+   */
+  private atNoteElement (): boolean {
+    if (!isKw(this.peek(), 'note')) return false;
+    const next = this.peek(1).kind;
+    return next === TokenKind.Colon || next === TokenKind.LBrace;
+  }
+
+  /**
+   * Whether the current token is the body keyword `word` opening its block,
+   * that is, followed by `{` (spec §3.10). Before a type, the same word
+   * names a field.
+   */
+  private atBlockKeyword (word: string): boolean {
+    return isKw(this.peek(), word) && this.peek(1).kind === TokenKind.LBrace;
+  }
+
+  /**
+   * A line such as `materialized: true` in a body is a setting written in
+   * the wrong place: a field declaration never has `:` after its name.
+   * Name the brackets in the error rather than reporting a missing type.
+   */
+  private rejectSettingInBody (construct: string, name: string): void {
+    const t = this.peek();
+    if (t.kind !== TokenKind.Identifier || this.peek(1).kind !== TokenKind.Colon) return;
+    const where = construct === 'View'
+      ? 'The body of a View holds source_query:, fields and Note: (spec §14.1, §14.2).'
+      : `The body of ${construct === 'Entity' ? 'an' : 'a'} ${construct} holds fields, blocks and Note:.`;
+    throw new ParseError(
+      `'${t.text}:' is a setting: write it in the brackets after the ${construct} name, ` +
+      `as in ${construct} ${name} [${t.text}: ...] { ... }. ${where}`,
+      t.start,
+    );
+  }
+
 
   private spanFrom (start: Position): Span {
     // span end = end-position of the previously consumed token if any
@@ -316,9 +365,17 @@ export class Parser {
     this.advance(); // xdbml
     this.expect(TokenKind.Colon, "Expected ':' after 'xdbml'");
     const numTok = this.expect(TokenKind.NumberLiteral, 'Expected version number');
-    if (compareVersions(numTok.text, SUPPORTED_XDBML_VERSION) > 0) {
+    // Spec §4: MAJOR.MINOR[.PATCH]. The lexer reads `0.6` as one number,
+    // so a patch number arrives as a dot and a second number. `xdbml: 0.6`
+    // compares as 0.6.0, so it stays valid under every 0.6.x parser.
+    let version = numTok.text;
+    if (this.check(TokenKind.Dot) && this.peek(1).kind === TokenKind.NumberLiteral) {
+      this.advance(); // .
+      version += `.${this.advance().text}`;
+    }
+    if (compareVersions(version, SUPPORTED_XDBML_VERSION) > 0) {
       throw new ParseError(
-        `This document declares 'xdbml: ${numTok.text}', which is newer than the ` +
+        `This document declares 'xdbml: ${version}', which is newer than the ` +
         `latest version this parser supports (${SUPPORTED_XDBML_VERSION}). ` +
         'Use a newer parser, or declare a supported version.',
         numTok.start,
@@ -327,7 +384,7 @@ export class Parser {
     }
     return {
       kind: 'VersionDeclaration',
-      version: numTok.text,
+      version,
       span: this.spanFrom(start),
     };
   }
@@ -388,7 +445,9 @@ export class Parser {
     const name = this.parseIdentLikeName('project name');
     this.expect(TokenKind.LBrace, "Expected '{' after Project name");
     const body: ProjectBodyItem[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       // Project body is either an inline Note block or a setting line.
       if (isKw(this.peek(), 'note')) {
         body.push(this.parseNoteBlockOrSetting());
@@ -552,7 +611,7 @@ export class Parser {
     }
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after entity name");
-    const body = this.parseEntityBody();
+    const body = this.parseEntityBody(canonEntityKw(kwTok.text), name);
     this.expect(TokenKind.RBrace, "Expected '}' closing entity");
     return {
       kind: 'EntityDeclaration',
@@ -588,26 +647,30 @@ export class Parser {
     return name;
   }
 
-  private parseEntityBody (): EntityBodyItem[] {
+  private parseEntityBody (construct: string, name: string): EntityBodyItem[] {
     const body: EntityBodyItem[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       const t = this.peek();
-      const k = kw(t);
-      if (k === 'note') {
+      // Spec §3.10: each body keyword starts its element only when the
+      // token the element needs follows it; otherwise it names a field,
+      // as in DBML. (v0.6 §10.1 did this for `constraints`; v0.6.1 does it
+      // for `Note`, `indexes`, `checks` and `records`.)
+      if (this.atNoteElement()) {
         body.push(this.parseNoteBlockOrSetting());
-      } else if (k === 'indexes') {
+      } else if (this.atBlockKeyword('indexes')) {
         body.push(this.parseIndexes());
-      } else if (k === 'checks') {
+      } else if (this.atBlockKeyword('checks')) {
         body.push(this.parseChecks());
-      } else if (k === 'constraints' && this.peek(1).kind === TokenKind.LBrace) {
-        // v0.6 §10.1: a keyword only when `{` follows, so a field may keep
-        // the name `constraints`.
+      } else if (this.atBlockKeyword('constraints')) {
         body.push(this.parseConstraints());
-      } else if (k === 'records') {
+      } else if (this.atBlockKeyword('records')) {
         body.push(this.parseRecordsBlock());
       } else if (t.kind === TokenKind.Tilde) {
         body.push(this.parsePartialInjection());
       } else {
+        this.rejectSettingInBody(construct, name);
         body.push(this.parseFieldDeclaration());
       }
     }
@@ -1135,10 +1198,11 @@ export class Parser {
     const kwTok = this.advance();
     this.expect(TokenKind.LBrace, "Expected '{' after object keyword");
     const fields: (FieldDeclaration | NoteBlock | PartialInjection)[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       const t = this.peek();
-      const k = kw(t);
-      if (k === 'note') {
+      if (this.atNoteElement()) {
         fields.push(this.parseNoteBlockOrSetting());
       } else if (t.kind === TokenKind.Tilde) {
         fields.push(this.parsePartialInjection());
@@ -1379,7 +1443,9 @@ export class Parser {
     this.advance(); // oneOf | anyOf | allOf
     this.expect(TokenKind.LBrace, `Expected '{' after ${flavor}`);
     const alternatives: PolymorphicAlternative[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       alternatives.push(this.parsePolymorphicAlternative());
     }
     this.expect(TokenKind.RBrace, `Expected '}' closing ${flavor}`);
@@ -1414,10 +1480,11 @@ export class Parser {
     if (this.check(TokenKind.LBrace)) {
       this.advance();
       fields = [];
-      while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      for (;;) {
+        this.skipListSeparators();
+        if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
         const t = this.peek();
-        const k = kw(t);
-        if (k === 'note') {
+        if (this.atNoteElement()) {
           fields.push(this.parseNoteBlockOrSetting());
         } else if (t.kind === TokenKind.Tilde) {
           fields.push(this.parsePartialInjection());
@@ -1562,10 +1629,11 @@ export class Parser {
   ): TypeDeclaration {
     this.expect(TokenKind.LBrace, "Expected '{' after Type name");
     const body: TypeDeclaration['body'] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       const t = this.peek();
-      const k = kw(t);
-      if (k === 'note') {
+      if (this.atNoteElement()) {
         body.push(this.parseNoteBlockOrSetting());
       } else if (t.kind === TokenKind.Tilde) {
         body.push(this.parsePartialInjection());
@@ -1591,7 +1659,7 @@ export class Parser {
     const name = this.parseIdentLikeName('edge name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after Edge settings");
-    const body = this.parseEntityBody();
+    const body = this.parseEntityBody('Edge', name);
     this.expect(TokenKind.RBrace, "Expected '}' closing Edge");
     return {
       kind: 'EdgeDeclaration',
@@ -1611,14 +1679,19 @@ export class Parser {
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after View name");
     const body: ViewBodyItem[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
-      const t = this.peek();
-      const k = kw(t);
-      if (k === 'note') {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
+      // Spec §3.10: `Note` and `source_query` start their elements only
+      // before `:` (or `{` for a note); otherwise they name a field.
+      if (this.atNoteElement()) {
         body.push(this.parseNoteBlockOrSetting());
-      } else if (k === 'source_query') {
+      } else if (isKw(this.peek(), 'source_query') && this.peek(1).kind === TokenKind.Colon) {
         body.push(this.parseSourceQueryItem());
       } else {
+        // Spec §14.2: `materialized: true` and the other settings go in
+        // the brackets, never in the body.
+        this.rejectSettingInBody('View', name);
         body.push(this.parseFieldDeclaration());
       }
     }
@@ -1662,7 +1735,9 @@ export class Parser {
     }
     this.expect(TokenKind.LBrace, "Expected '{' after enum name");
     const values: EnumValue[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       const vStart = this.peek().start;
       const vt = this.peek();
       let vname: string;
@@ -1933,7 +2008,7 @@ export class Parser {
     const name = this.parseIdentLikeName('TablePartial name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after TablePartial name");
-    const body = this.parseEntityBody();
+    const body = this.parseEntityBody('TablePartial', name);
     this.expect(TokenKind.RBrace, "Expected '}' closing TablePartial");
     return {
       kind: 'TablePartialDeclaration',
@@ -2055,6 +2130,17 @@ export class Parser {
     this.expect(TokenKind.LBrace, "Expected '{' after indexes");
     const entries: IndexEntry[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      // Spec §3.9: `indexes` is not a list body. `email, name` may be meant
+      // as the composite index `(email, name)`, so a separator between
+      // entries stays an error rather than declaring two indexes.
+      const t = this.peek();
+      if (t.kind === TokenKind.Comma || t.kind === TokenKind.Semicolon) {
+        throw new ParseError(
+          `Unexpected '${t.text}' in indexes: write one index per line, and a composite ` +
+          'index in parentheses, as in (email, name) (spec §3.9).',
+          t.start,
+        );
+      }
       entries.push(this.parseIndexEntry());
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing indexes");
@@ -2117,7 +2203,9 @@ export class Parser {
     this.advance(); // checks
     this.expect(TokenKind.LBrace, "Expected '{' after checks");
     const entries: CheckEntry[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       entries.push(this.parseCheckEntry());
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing checks");
@@ -2162,7 +2250,9 @@ export class Parser {
     this.advance(); // constraints
     this.expect(TokenKind.LBrace, "Expected '{' after constraints");
     const entries: ConstraintEntry[] = [];
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
       const t = this.peek();
       if (
         t.kind === TokenKind.StringLiteral ||

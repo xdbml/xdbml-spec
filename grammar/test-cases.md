@@ -1,6 +1,6 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases and v0.2 additions (module system, scalar Named Types).
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.6.1.
 ---
 
 
@@ -1561,6 +1561,185 @@ Table t {
   }
 }
 ```
+
+---
+
+## §3.9 List bodies (v0.6.1)
+
+### VALID -- Enum values separated by commas, as AI assistants often write them
+
+```
+Enum service_status {
+  'scheduled' [note: 'Appointment booked'],
+  'in_progress' [note: 'Currently being serviced'],
+  'on_hold' [note: 'Paused, awaiting parts or decision'],
+  'cancelled' [note: 'Cancelled by customer or shop']
+}
+```
+
+### VALID -- fields on one line, commas and semicolons, a trailing separator
+
+```
+xdbml: 0.6
+
+Entity service_visits { id int [pk], status service_status; visited_at timestamp, }
+
+Enum service_status { scheduled, in_progress, completed }
+```
+
+### VALID -- separators in constraints, object, oneOf and View bodies
+
+```
+xdbml: 0.6
+
+Entity payments {
+  id int,
+  amount decimal(12,2),
+  method oneOf {
+    card object { last4 varchar, brand varchar },
+    cash object { change_given decimal(12,2) },
+  } [discriminator: kind],
+  constraints { (id) [pk], 'amount > 0' },
+}
+
+View large_payments {
+  source_query: 'SELECT id, amount FROM payments WHERE amount > 1000',
+  id int,
+  amount decimal(12,2),
+}
+```
+
+### INVALID -- a comma between index entries
+
+```
+xdbml: 0.6
+
+Entity people {
+  id    int [pk]
+  email varchar
+  name  varchar
+  indexes {
+    email, name
+  }
+}
+```
+
+Expected error: a comma between index entries is not accepted; a composite index is written `(email, name)`.
+
+### INVALID -- a separator inside a field declaration
+
+```
+xdbml: 0.6
+
+Entity people { id, int }
+```
+
+---
+
+## §3.10 Keywords and field names (v0.6.1)
+
+### VALID -- fields named note, records, indexes and checks beside a table note and an index block
+
+```
+Table appointments {
+  id      int [pk]
+  note    varchar
+  records int
+  indexes varchar
+  checks  varchar
+  Note: 'One row per booked appointment'
+  indexes {
+    note
+  }
+}
+```
+
+### VALID -- a View field named source_query
+
+```
+xdbml: 0.6
+
+View query_log {
+  source_query: 'SELECT id, source_query FROM query_history'
+  id           int
+  source_query varchar
+}
+```
+
+---
+
+## §4 Version declaration with a patch number (v0.6.1)
+
+### VALID -- xdbml: 0.6.1
+
+```
+xdbml: 0.6.1
+
+Entity A { id int [pk] }
+```
+
+### INVALID -- a patch release newer than the parser supports (unsupported-version)
+
+```
+xdbml: 0.6.2
+
+Entity A { id int [pk] }
+```
+
+---
+
+## §14 View settings and source query (v0.6.1)
+
+### VALID -- settings in the brackets, the source query in the body
+
+```
+xdbml: 0.6
+
+View monthly_revenue [materialized: true, refresh_schedule: 'daily'] {
+  source_query: 'SELECT month, SUM(total) AS revenue FROM orders GROUP BY month'
+  month   date [pk]
+  revenue decimal(15,2)
+}
+```
+
+### INVALID -- a setting written in the body
+
+```
+xdbml: 0.6
+
+View monthly_revenue {
+  materialized: true
+  month date [pk]
+}
+```
+
+Expected error: `materialized` is a setting and goes in the brackets after the View name.
+
+### VALID with a warning -- source_query in the brackets (source-query-in-settings)
+
+```
+xdbml: 0.6
+
+View active_customers [source_query: 'SELECT id FROM customers'] {
+  id int [pk]
+}
+```
+
+The bracketed query is not the view's source query.
+
+### VALID with a warning -- a second source query (duplicate-source-query)
+
+```
+xdbml: 0.6
+
+View active_customers {
+  source_query: 'SELECT id FROM customers'
+  source_query: 'SELECT id FROM clients'
+  id int [pk]
+}
+```
+
+The first `source_query:` is the view's source query.
 
 ---
 

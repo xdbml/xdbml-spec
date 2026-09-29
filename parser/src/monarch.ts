@@ -237,6 +237,11 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       // x_ custom property identifiers
       [/\bx_[a-zA-Z0-9_]+/, 'identifier.custom-property'],
 
+      // Spec §3.10 (v0.6.1): `Note` starts a note only before ':' or '{',
+      // or at the top level before a name and '{'. Anywhere else it names a
+      // field, so it takes the identifier color like any other field name.
+      [/note(?![\w$])(?!\s*[:{])(?!\s+(?:[A-Za-z_][\w$]*|"[^"]*")\s*\{)/, 'identifier'],
+
       // Identifiers and keyword recognition.
       // The parser is the authority on keyword vs identifier disambiguation;
       // Monarch does coarse highlighting based on lowercase comparison.

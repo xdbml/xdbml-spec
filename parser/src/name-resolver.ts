@@ -58,6 +58,7 @@ import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
 import { checkConstraints } from './constraints.ts';
+import { checkViews } from './views.ts';
 
 /* -------------------------------------------------------------------------
  * Public types
@@ -146,7 +147,10 @@ export type DiagnosticCode =
   | 'supertype-attribute-redeclared'
   | 'discriminator-on-overlapping-group'
   | 'merge-without-roll-up'
-  | 'empty-supertype-group';
+  | 'empty-supertype-group'
+  // Views (spec §14.7, v0.6.1)
+  | 'source-query-in-settings'
+  | 'duplicate-source-query';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -377,6 +381,9 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 5: constraints and referenced keys (spec §10.10, §11.17).
   diagnostics.push(...checkConstraints(flat));
+
+  // Pass 6: view source queries (spec §14.7).
+  diagnostics.push(...checkViews(flat));
 
   return { diagnostics, symbols };
 }
