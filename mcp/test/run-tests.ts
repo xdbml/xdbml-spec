@@ -12,6 +12,7 @@
  */
 
 import { validateXdbml, validateXdbmlTool } from '../src/validate-tool.ts';
+import { XDBML_REFERENCE } from '../src/reference.ts';
 
 const isTTY = process.stdout.isTTY;
 const RED = isTTY ? '\x1b[31m' : '';
@@ -152,6 +153,67 @@ test('a newer version than the parser supports is refused', () => {
   // A version far ahead of any parser, so the test survives each release.
   const r = validateXdbml('xdbml: 99.0\n\nEntity a { id int [pk] }\n');
   assertEqual(r.valid, false, 'valid');
+});
+
+/* -------------------------------------------------------------------------
+ * v0.6.1: list separators, keywords as field names, View settings
+ * ---------------------------------------------------------------------- */
+
+test('v0.6.1: Enum values and fields written with commas validate', () => {
+  const r = validateXdbml(`xdbml: 0.6
+
+Enum service_status {
+  'scheduled' [note: 'Appointment booked'],
+  'cancelled' [note: 'Cancelled by customer or shop']
+}
+Entity visits { id int [pk], status service_status, visited_at timestamp }
+`);
+  assertEqual(r.valid, true, 'valid');
+  assertEqual(r.diagnostics.length, 0, 'diagnostics.length');
+});
+
+test('v0.6.1: a column named note validates, as in DBML', () => {
+  const r = validateXdbml(`Table orders {
+  id   int [pk]
+  note varchar
+  Note: 'One row per order'
+}
+`);
+  assertEqual(r.valid, true, 'valid');
+  assertEqual(r.entityCount, 1, 'entityCount');
+});
+
+test('v0.6.1: materialized in a View body is a parse error that names the brackets', () => {
+  const r = validateXdbml(`xdbml: 0.6
+
+View monthly_revenue {
+  materialized: true
+  month date [pk]
+}
+`);
+  assertEqual(r.valid, false, 'valid');
+  assertEqual(r.diagnostics[0].code, 'parse-error', 'code');
+  assertEqual(r.diagnostics[0].line, 4, 'line');
+  assert(r.diagnostics[0].message.includes('View monthly_revenue [materialized: ...]'), r.diagnostics[0].message);
+});
+
+test('v0.6.1: source_query in the brackets is a warning; the document stays valid', () => {
+  const r = validateXdbml(`xdbml: 0.6
+
+View active_customers [source_query: 'SELECT id FROM customers'] {
+  id int [pk]
+}
+`);
+  assertEqual(r.valid, true, 'valid');
+  assertEqual(r.diagnostics.length, 1, 'diagnostics.length');
+  assertEqual(r.diagnostics[0].severity, 'warning', 'severity');
+  assertEqual(r.diagnostics[0].code, 'source-query-in-settings', 'code');
+});
+
+test('v0.6.1: the reference teaches View placement and list separators', () => {
+  assert(XDBML_REFERENCE.includes('go in the brackets after the View name, before the body'), 'View placement');
+  assert(XDBML_REFERENCE.includes('with no comma or semicolon after it'), 'list separators');
+  assert(XDBML_REFERENCE.includes('A field may take the name of any keyword'), 'keywords as field names');
 });
 
 /* -------------------------------------------------------------------------

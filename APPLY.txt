@@ -1,37 +1,37 @@
-xDBML -- 0.6.1, delta 3 of 5: renderer test and playground
-Base: delta 2 (0.6.1, delta 2 of 5: grammar and parser). Apply delta 2 first.
+xDBML -- 0.6.1, delta 4 of 5: llms.txt, MCP reference and tests
+Base: delta 3 (0.6.1, delta 3 of 5: renderer test and playground).
 
 WHAT CHANGED
 ------------
-renderer\test\run-tests.ts
-  The renderer needs no code change: it reads only the FieldDeclaration
-  items of entities and Views. A new test checks that fields named `note`
-  and `records` draw rows, and that a View's source query draws none.
-  It moves to parser 0.6.1 at release, as in 0.5.1.
-playground\src\components\inspector\EntityInspector.vue
-  The Source query section reads viewSourceQuery(), the first
-  source_query: of the body. It used to join every SourceQueryItem.
-playground\help\diagnostics-panel.md
-  The warnings list gains source-query-in-settings and
-  duplicate-source-query.
-playground\help\inspector-pane.md     Source query line for Views.
-playground\help\editor-pane.md        `Note` colored as a keyword only
-                                      where it starts a note.
-playground\help\when-parsing-fails.md
-  "Stray comma" becomes "Commas between items" (accepted, except in
-  indexes); new "A setting in a body"; "Reserved keyword as identifier"
-  replaced by "Keywords as field names", since no quotes are needed now.
-CHANGELOG.md                          v0.6.1 Tooling: renderer, playground.
+public\llms.txt
+  "How to author" gains three rules: one field or enum value per line with
+  no separator (a parser ignores them; in indexes a comma is an error,
+  write (a, b)); any keyword may name a field; settings go in the brackets
+  after the name, never in the body. The View example states the
+  placement before the code: settings in the brackets, then source_query
+  once, the fields and an optional Note: in the body.
+mcp\src\reference.ts            regenerated from llms.txt (check:reference
+                                in sync).
+mcp\test\run-tests.ts           5 tests (12 -> 17): commas validate; a
+                                column named note validates; materialized
+                                in a View body is a parse-error naming the
+                                brackets; a bracketed source_query is a
+                                warning; the reference carries the rules.
+xDBML_in_5_minutes.md           one sentence on View setting placement
+                                under the View example.
+CHANGELOG.md                    v0.6.1 Tooling: MCP server and llms.txt.
+
+API
+  No change: the rendering API has no parser-facing code. The release
+  script repoints it to @xdbml/render 0.6.1 and redeploys it.
 
 FILES
 -----
   CHANGELOG.md   (EDIT)
-  playground\help\diagnostics-panel.md   (EDIT)
-  playground\help\editor-pane.md   (EDIT)
-  playground\help\inspector-pane.md   (EDIT)
-  playground\help\when-parsing-fails.md   (EDIT)
-  playground\src\components\inspector\EntityInspector.vue   (EDIT)
-  renderer\test\run-tests.ts   (EDIT)
+  mcp\src\reference.ts   (EDIT)
+  mcp\test\run-tests.ts   (EDIT)
+  public\llms.txt   (EDIT)
+  xDBML_in_5_minutes.md   (EDIT)
 
 APPLY (cmd.exe)
 ---------------
@@ -39,38 +39,30 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                   "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\playground\help\diagnostics-panel.md" "%REPO%\playground\help\diagnostics-panel.md"
-copy /Y "%DELTA%\playground\help\editor-pane.md" "%REPO%\playground\help\editor-pane.md"
-copy /Y "%DELTA%\playground\help\inspector-pane.md" "%REPO%\playground\help\inspector-pane.md"
-copy /Y "%DELTA%\playground\help\when-parsing-fails.md" "%REPO%\playground\help\when-parsing-fails.md"
-copy /Y "%DELTA%\playground\src\components\inspector\EntityInspector.vue" "%REPO%\playground\src\components\inspector\EntityInspector.vue"
-copy /Y "%DELTA%\renderer\test\run-tests.ts"     "%REPO%\renderer\test\run-tests.ts"
+copy /Y "%DELTA%\mcp\src\reference.ts"           "%REPO%\mcp\src\reference.ts"
+copy /Y "%DELTA%\mcp\test\run-tests.ts"          "%REPO%\mcp\test\run-tests.ts"
+copy /Y "%DELTA%\public\llms.txt"                "%REPO%\public\llms.txt"
+copy /Y "%DELTA%\xDBML_in_5_minutes.md"          "%REPO%\xDBML_in_5_minutes.md"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: parser 259 passed; renderer "218 passed, 0 failed" (209 before);
-  every other suite unchanged; 164 spec buttons; docs build complete.
+  Expect: MCP "17 passed, 0 failed" (12 before); every other suite as
+  after delta 3; docs build complete.
+cd mcp
+npm run check:reference
+  Expect: "reference.ts is in sync with public/llms.txt."
+cd ..
 git add -A
-git commit -m "0.6.1, delta 3 of 5: renderer test and playground"
+git commit -m "0.6.1, delta 4 of 5: llms.txt, MCP reference and tests"
 git push
 
-Then, in the live playground once the site redeploys, paste:
-
-  xdbml: 0.6
-  View active_customers [source_query: 'SELECT 0'] {
-    source_query: 'SELECT id FROM customers'
-    source_query: 'SELECT id FROM clients'
-    id int
-  }
-
-  Expect two amber warnings in the diagnostics panel,
-  source-query-in-settings and duplicate-source-query. Click the View:
-  the inspector's Source query section shows only
-  SELECT id FROM customers.
+The site serves the new llms.txt once it redeploys. The MCP server keeps
+serving the 0.6.0 reference and parser until the release redeploys it.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0: parser 259, renderer 218, other suites
-                        unchanged and green, playground type-check clean,
-                        164 spec buttons match, docs build complete
+  npm run check         exit 0: parser 259, renderer 218, MCP 17, other
+                        suites unchanged, 164 spec buttons, docs build
+  check:reference       in sync
+  mcp tsc --noEmit      clean
   em-dashes             none added

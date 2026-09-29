@@ -220,6 +220,8 @@ View top_customers [materialized: true, refresh_schedule: 'daily'] {
 }
 ```
 
+Settings such as `materialized` and `refresh_schedule` go in the brackets after the View name, before the body. The body holds the source query and the fields.
+
 ### Plus: AI-readiness and custom metadata at every level
 
 Four first-class settings make schemas legible to LLMs, semantic-layer tools, governance platforms, and data catalogs:

@@ -33,6 +33,8 @@ A backward-compatible point release of the v0.6 draft. List bodies accept a comm
 
 - **Playground**: the inspector shows a View's source query through `viewSourceQuery()`, the first `source_query:` of its body, where it joined every one before. The help pages on the diagnostics panel, the inspector, the editor and parse failures cover the two View warnings, a setting written in a body, list separators, and keywords as field names; the parse-failure page no longer says that a field named after a keyword needs quotes.
 
+- **MCP server and llms.txt**: both teach one field or enum value per line with no separator, the composite index form in `indexes`, keywords as field names, and the placement of View settings: in the brackets after the name, never in the body, with the source query as the one `source_query:` element of the body. `mcp/src/reference.ts` is regenerated; the server serves it once redeployed with 0.6.1. The MCP tests cover commas, a column named `note`, `materialized` in a View body and a bracketed `source_query`. The 5-minute introduction states the same View placement under its example.
+
 ### Changed
 
 #### Spec

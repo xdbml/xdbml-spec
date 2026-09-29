@@ -8,6 +8,9 @@
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Database`, `Schema`, `Bucket`, `Keyspace`, or `Namespace`.
 - Prefer xDBML extensions over flat DBML: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, supertype groups for generalization, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
 - A field line is `name  type  [settings]`. Settings are comma-separated inside `[ ]`.
+- Write one field, one enum value, one member per line, with no comma or semicolon after it. A parser accepts and ignores them between the items of a body, but tools write newlines. In `indexes` a comma between entries is an error: write a composite index as `(a, b)`.
+- A field may take the name of any keyword, without quotes: `note`, `type`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {` and `records {` start blocks.
+- Settings of an entity, a View or an Edge go in the brackets after its name, never in its body: `materialized: true` inside a View body is a syntax error. In a body, only `Note:` and, in a View, `source_query:` take the `name: value` form.
 
 ## Core constructs
 
@@ -155,10 +158,10 @@ Edge KNOWS [source: Person, target: Person, source_cardinality: '0..*', target_c
 }
 ```
 
-View:
+View: the settings (`materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`) go in the brackets after the View name, before the body. The body holds the source query, once, as `source_query: '...'`, then the fields and an optional `Note:`. A `source_query` in the brackets is not the view's source query and draws a warning.
 
 ```
-View top_customers [materialized: true] {
+View top_customers [materialized: true, refresh_schedule: 'daily'] {
   source_query: '''SELECT id, SUM(total) AS ltv FROM orders GROUP BY id'''
   id  int [pk]
   ltv decimal(15,2)
