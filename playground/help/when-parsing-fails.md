@@ -75,11 +75,13 @@ A few patterns to recognize quickly:
 
 **Confusing flag and keyed setting**: `[pk: true]` is wrong; primary key is a flag, not a key. The correct form is `[pk]`.
 
-**Stray comma**: trailing commas inside settings (`[pk, not null,]`) are not always accepted. Drop the trailing comma.
+**Commas between items**: a comma or a semicolon between fields, enum values and the other items of a body is accepted and ignored, as is a trailing comma in a settings list such as `[pk, not null,]`. The exception is `indexes`: write one index per line, and a composite index in parentheses, as in `(email, name)`.
+
+**A setting in a body**: `materialized: true` inside a View body, or `headercolor: '#3498DB'` inside a Table body. Settings go in the brackets after the name, as in `View monthly_revenue [materialized: true] { ... }`; the error message names the declaration and shows where the setting goes.
 
 **Mixed quote types**: xDBML accepts single quotes (`'foo'`) and backticks (`` `bar` ``) for strings; double quotes are not a primary string delimiter. Switch to single quotes if double quotes don't parse.
 
-**Reserved keyword as identifier without quoting**: if you really want to name a field `table`, quote it: `"table"` or `` `table` ``.
+**Keywords as field names**: a field may take the name of any keyword without quotes, `note`, `type` or `records` included. `Note` starts a note only before `:` or `{`, and `indexes`, `checks`, `constraints` and `records` start a block only before `{`.
 
 ## Recovering from a tangled file
 

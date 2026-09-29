@@ -29,6 +29,10 @@ A backward-compatible point release of the v0.6 draft. List bodies accept a comm
 
 - **Grammar**: `listSeparator` in every list body; replacement rules for `tableDefinition`, `tablePartialDefinition`, `enumDefinition` and `tableGroupDefinition`; `fieldName`, which accepts the six body keywords; and a View whose `source_query` is a body element only. `grammar/test-cases.md` gains thirteen v0.6.1 cases, each checked against the parser.
 
+- **Renderer (`@xdbml/render`)**: no change of its own; it moves to the new parser at release. A new test checks that fields named `note` and `records` draw rows, and that a View's source query draws none.
+
+- **Playground**: the inspector shows a View's source query through `viewSourceQuery()`, the first `source_query:` of its body, where it joined every one before. The help pages on the diagnostics panel, the inspector, the editor and parse failures cover the two View warnings, a setting written in a body, list separators, and keywords as field names; the parse-failure page no longer says that a field named after a keyword needs quotes.
+
 ### Changed
 
 #### Spec

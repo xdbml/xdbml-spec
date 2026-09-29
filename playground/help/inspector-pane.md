@@ -50,6 +50,7 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - Supertype groups, when the entity takes part in one: as a supertype, each group it anchors with that group's subtypes; as a subtype, its group and its supertype; an entity that is both shows both
 - Settings: any settings on the entity declaration
 - Note: the entity's `Note: '...'` body if present
+- Source query, for a View: the first `source_query:` of its body, highlighted as SQL
 
 **Field inspector** shows:
 - Identification: name, dotted path within the entity, parent entity, parent container

@@ -1,67 +1,37 @@
-xDBML -- 0.6.1, delta 2 of 5: grammar and parser
-Base: origin/main 6b8f492 (0.6.1, delta 1: spec text).
-
-The parser now reads what the 0.6.1 spec text says. Once pushed, the live
-playground picks it up, since it builds the parser from source; the MCP
-server and npm keep 0.6.0 until the release.
+xDBML -- 0.6.1, delta 3 of 5: renderer test and playground
+Base: delta 2 (0.6.1, delta 2 of 5: grammar and parser). Apply delta 2 first.
 
 WHAT CHANGED
 ------------
-parser\src\parser.ts
-  Separators (3.9): commas and semicolons skipped between the items of every
-    list body: Entity/Table, Edge, TablePartial, View, object-shaped Type,
-    object, json, oneOf/anyOf/allOf, Enum, constraints, checks, Project
-    (TableGroup and SupertypeGroup already did). A comma between index
-    entries stays an error, now with a message pointing to (email, name).
-  Keywords (3.10): Note starts a note only before ':' or '{'; indexes,
-    checks, records only before '{' (constraints already did); source_query
-    only before ':'. Otherwise the word names a field, as in DBML.
-  Settings in a body: `materialized: true` in a View body fails with
-    "'materialized:' is a setting: write it in the brackets after the View
-    name, as in View monthly_revenue [materialized: ...] { ... }" instead
-    of "Expected type name, got Colon". Same for Entity, Table, Edge and
-    TablePartial bodies.
-  Version (4): `xdbml: 0.6.1` parses (it failed on the dot).
-    SUPPORTED_XDBML_VERSION is 0.6.1; 0.6 and 0.6.1 are accepted, 0.6.2 and
-    0.7 refused as newer than supported.
-parser\src\views.ts (NEW)
-  viewSourceQuery(view): the first source_query: element of the body
-    (28.7). checkViews(doc): warnings source-query-in-settings and
-    duplicate-source-query (14.7), Views in Containers included.
-parser\src\name-resolver.ts   the two codes; resolveNames() runs checkViews.
-parser\src\index.ts           exports viewSourceQuery and checkViews.
-parser\src\monarch.ts         playground editor: a field named `note` takes
-                              the identifier color instead of bold keyword.
-parser\test\run-tests.ts      18 new tests (241 -> 259).
-grammar\xDBML.g4
-  Header brought to v0.6.1. listSeparator in every list body; replacement
-  rules tableDefinition, tablePartialDefinition, enumDefinition,
-  tableGroupDefinition; fieldName with the six body keywords (tokens
-  RECORDS and SOURCE_QUERY added); View: source_query a body element only,
-  stale 17.12 references now 14.
-grammar\test-cases.md         13 cases for 3.9, 3.10, 4 and 14, each run
-                              against the parser here.
-CHANGELOG.md                  v0.6.1: Added > Tooling, Fixed > Tooling.
-
-DECISIONS WRITTEN INTO THE CODE -- please confirm
-  1. `xdbml: 0.6.1` accepted; 0.6.2 refused (full version compared).
-  2. The setting-in-body error also covers Entity, Table, Edge and
-     TablePartial bodies. A field name is never followed by ':', so no
-     valid input is rejected.
-  3. The grammar is not compiled here: it imports the upstream DBML grammar,
-     as before. The test cases were checked against the parser instead.
+renderer\test\run-tests.ts
+  The renderer needs no code change: it reads only the FieldDeclaration
+  items of entities and Views. A new test checks that fields named `note`
+  and `records` draw rows, and that a View's source query draws none.
+  It moves to parser 0.6.1 at release, as in 0.5.1.
+playground\src\components\inspector\EntityInspector.vue
+  The Source query section reads viewSourceQuery(), the first
+  source_query: of the body. It used to join every SourceQueryItem.
+playground\help\diagnostics-panel.md
+  The warnings list gains source-query-in-settings and
+  duplicate-source-query.
+playground\help\inspector-pane.md     Source query line for Views.
+playground\help\editor-pane.md        `Note` colored as a keyword only
+                                      where it starts a note.
+playground\help\when-parsing-fails.md
+  "Stray comma" becomes "Commas between items" (accepted, except in
+  indexes); new "A setting in a body"; "Reserved keyword as identifier"
+  replaced by "Keywords as field names", since no quotes are needed now.
+CHANGELOG.md                          v0.6.1 Tooling: renderer, playground.
 
 FILES
 -----
   CHANGELOG.md   (EDIT)
-  grammar\test-cases.md   (EDIT)
-  grammar\xDBML.g4   (EDIT)
-  parser\src\index.ts   (EDIT)
-  parser\src\monarch.ts   (EDIT)
-  parser\src\name-resolver.ts   (EDIT)
-  parser\src\parser.ts   (EDIT)
-  parser\src\views.ts   (NEW)
-  parser\test\run-tests.ts   (EDIT)
+  playground\help\diagnostics-panel.md   (EDIT)
+  playground\help\editor-pane.md   (EDIT)
+  playground\help\inspector-pane.md   (EDIT)
+  playground\help\when-parsing-fails.md   (EDIT)
+  playground\src\components\inspector\EntityInspector.vue   (EDIT)
+  renderer\test\run-tests.ts   (EDIT)
 
 APPLY (cmd.exe)
 ---------------
@@ -69,51 +39,38 @@ set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
 copy /Y "%DELTA%\CHANGELOG.md"                   "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\grammar\test-cases.md"          "%REPO%\grammar\test-cases.md"
-copy /Y "%DELTA%\grammar\xDBML.g4"               "%REPO%\grammar\xDBML.g4"
-copy /Y "%DELTA%\parser\src\index.ts"            "%REPO%\parser\src\index.ts"
-copy /Y "%DELTA%\parser\src\monarch.ts"          "%REPO%\parser\src\monarch.ts"
-copy /Y "%DELTA%\parser\src\name-resolver.ts"    "%REPO%\parser\src\name-resolver.ts"
-copy /Y "%DELTA%\parser\src\parser.ts"           "%REPO%\parser\src\parser.ts"
-copy /Y "%DELTA%\parser\src\views.ts"            "%REPO%\parser\src\views.ts"
-copy /Y "%DELTA%\parser\test\run-tests.ts"       "%REPO%\parser\test\run-tests.ts"
+copy /Y "%DELTA%\playground\help\diagnostics-panel.md" "%REPO%\playground\help\diagnostics-panel.md"
+copy /Y "%DELTA%\playground\help\editor-pane.md" "%REPO%\playground\help\editor-pane.md"
+copy /Y "%DELTA%\playground\help\inspector-pane.md" "%REPO%\playground\help\inspector-pane.md"
+copy /Y "%DELTA%\playground\help\when-parsing-fails.md" "%REPO%\playground\help\when-parsing-fails.md"
+copy /Y "%DELTA%\playground\src\components\inspector\EntityInspector.vue" "%REPO%\playground\src\components\inspector\EntityInspector.vue"
+copy /Y "%DELTA%\renderer\test\run-tests.ts"     "%REPO%\renderer\test\run-tests.ts"
 
 cd /d C:\Repos\Hackolade\xdbml-spec
 npm run check
-  Expect: parser "259 passed, 0 failed"; every other suite unchanged;
-  "164 button(s) open the snippet below them"; docs build complete.
+  Expect: parser 259 passed; renderer "218 passed, 0 failed" (209 before);
+  every other suite unchanged; 164 spec buttons; docs build complete.
 git add -A
-git commit -m "0.6.1, delta 2 of 5: grammar and parser"
+git commit -m "0.6.1, delta 3 of 5: renderer test and playground"
 git push
 
 Then, in the live playground once the site redeploys, paste:
 
-  Enum ServiceStatus {
-    'scheduled' [note: 'Appointment booked'],
-    'cancelled' [note: 'Cancelled by customer or shop']
-  }
-  Table orders {
-    id   int [pk]
-    note varchar
-  }
-  View monthly_revenue {
-    materialized: true
+  xdbml: 0.6
+  View active_customers [source_query: 'SELECT 0'] {
+    source_query: 'SELECT id FROM customers'
+    source_query: 'SELECT id FROM clients'
     id int
   }
 
-  Expect one syntax error, on `materialized:`, naming the brackets. Delete
-  the View: the schema parses, with no diagnostic, and `orders` shows a
-  `note` row. The spec's 3.9 and 3.10 "View in playground" buttons now
-  open without a syntax error.
+  Expect two amber warnings in the diagnostics panel,
+  source-query-in-settings and duplicate-source-query. Click the View:
+  the inspector's Source query section shows only
+  SELECT id FROM customers.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check         exit 0: parser 259 passed; renderer, MCP,
-                        from-mongodb, playground suites unchanged and
-                        green; 164 spec buttons match; docs build complete
-  tsc --noEmit          parser, renderer, mcp: clean
-  grammar test cases    13 of 13 behave as labeled against the parser
-  spec snippets         every snippet under a spec button parses as it did
-                        before, plus the 3.9 and 3.10 snippets, which
-                        failed under 0.6.0
+  npm run check         exit 0: parser 259, renderer 218, other suites
+                        unchanged and green, playground type-check clean,
+                        164 spec buttons match, docs build complete
   em-dashes             none added

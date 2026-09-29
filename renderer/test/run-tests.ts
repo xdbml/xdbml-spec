@@ -244,6 +244,24 @@ check('08: has an entity with a composite PK', multiPkEntities.length > 0,
     named.includes('>legal</text>') && named.includes('>owns</text>'));
 }
 
+/* ---- v0.6.1: list separators and keywords as field names ---------- */
+
+{
+  // A field named `note` or `records` failed to parse before 0.6.1 (spec
+  // §3.10); commas between fields are list separators (spec §3.9). Each
+  // field draws a row, and a View's source query draws none.
+  const src = 'Table orders { id int [pk], note varchar, records int }\n' +
+    "View monthly_orders [materialized: true] {\n  source_query: 'SELECT id, note FROM orders'\n  id int\n  note varchar\n}\n";
+  const model = buildDiagram(flatten(parse(src)));
+  const rows = (id: string): string =>
+    (model.entities.find((e) => e.id === id)?.fields ?? []).map((f) => f.name).join(',');
+  check('v0.6.1: fields named note and records render as rows', rows('orders') === 'id,note,records',
+    `orders rows: ${rows('orders')}`);
+  check('v0.6.1: a View field named note renders as a row; the source query draws none',
+    rows('monthly_orders') === 'id,note', `view rows: ${rows('monthly_orders')}`);
+  assertWellFormed('v0.6.1 separators and note fields', renderToSVG(src));
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

@@ -108,7 +108,7 @@ import { highlightSql }   from './sqlHighlight';
 import { supertypeGroupsOf } from './ast-lookup';
 import type { Selection } from './selection';
 import { useParserStore } from '@/stores/parserStore';
-import { entityConstraints } from '@xdbml/parse';
+import { entityConstraints, viewSourceQuery } from '@xdbml/parse';
 import type { Constraint, ConstraintSource } from '@xdbml/parse';
 
 const props = defineProps<{
@@ -193,19 +193,15 @@ const noteBody = computed(() => {
 });
 
 /**
- * Concatenated source_query content for Views. Returns the empty
- * string for Entities and for Views without any SourceQueryItem in
- * their body. If a View happens to declare multiple source_query
- * blocks (the AST allows it), they're joined with a blank-line
- * separator so all of them remain visible.
+ * The source query of a View (spec §14.3, §28.7): the first
+ * `source_query:` element of its body, as `viewSourceQuery()` returns it.
+ * Empty for Entities, Edges and Views without one. A second source query
+ * and a `source_query` written in the brackets draw warnings in the
+ * diagnostics panel (spec §14.7); neither shows here.
  */
 const sourceQueryBody = computed(() => {
   if (props.entity.kind !== 'ViewDeclaration') return '';
-  const parts: string[] = [];
-  for (const item of props.entity.body) {
-    if (item.kind === 'SourceQueryItem') parts.push(item.query);
-  }
-  return parts.join('\n\n').trim();
+  return (viewSourceQuery(props.entity)?.query ?? '').trim();
 });
 
 /**
