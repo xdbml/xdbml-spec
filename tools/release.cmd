@@ -71,7 +71,18 @@ echo ===========================================================================
 cd /d "%ROOT%\renderer" || goto :fail
 call npm version %VER% --no-git-tag-version --allow-same-version || goto :fail
 call npm pkg set dependencies.@xdbml/parse=^^^^%VER% || goto :fail
-call npm install || goto :fail
+REM npm view reads the registry's full metadata, npm install its abbreviated
+REM metadata, which can lag behind for a few minutes after a publish and fail
+REM with ETARGET. Retry the install until it resolves %VER%.
+set /a TRIES=0
+:installrender
+set /a TRIES+=1
+call npm install --prefer-online && goto :installrenderdone
+if !TRIES! GEQ 18 goto :fail
+echo   npm install did not resolve %VER% yet; retrying in 10 seconds ...
+timeout /t 10 /nobreak >nul
+goto :installrender
+:installrenderdone
 call npm run test:all || goto :fail
 call npm publish || goto :fail
 
@@ -101,7 +112,18 @@ call npm pkg set dependencies.@xdbml/parse=^^^^%VER% || goto :fail
 call npm pkg set dependencies.@xdbml/render=^^^^%VER% || goto :fail
 call npm version %VER% --no-git-tag-version --allow-same-version || goto :fail
 REM SERVER_VERSION reads package.json, so there is no second place to bump.
-call npm install --include=dev || goto :fail
+REM npm view reads the registry's full metadata, npm install its abbreviated
+REM metadata, which can lag behind for a few minutes after a publish and fail
+REM with ETARGET. Retry the install until it resolves %VER%.
+set /a TRIES=0
+:installmcp
+set /a TRIES+=1
+call npm install --include=dev --prefer-online && goto :installmcpdone
+if !TRIES! GEQ 18 goto :fail
+echo   npm install did not resolve %VER% yet; retrying in 10 seconds ...
+timeout /t 10 /nobreak >nul
+goto :installmcp
+:installmcpdone
 call npm run check:reference || goto :fail
 call npm run type-check || goto :fail
 call npm test || goto :fail
@@ -113,7 +135,18 @@ echo [4/5] Rendering API: dependency bump, check, deploy
 echo ===========================================================================
 cd /d "%ROOT%\api" || goto :fail
 call npm pkg set dependencies.@xdbml/render=^^^^%VER% || goto :fail
-call npm install --include=dev || goto :fail
+REM npm view reads the registry's full metadata, npm install its abbreviated
+REM metadata, which can lag behind for a few minutes after a publish and fail
+REM with ETARGET. Retry the install until it resolves %VER%.
+set /a TRIES=0
+:installapi
+set /a TRIES+=1
+call npm install --include=dev --prefer-online && goto :installapidone
+if !TRIES! GEQ 18 goto :fail
+echo   npm install did not resolve %VER% yet; retrying in 10 seconds ...
+timeout /t 10 /nobreak >nul
+goto :installapi
+:installapidone
 call npm run type-check || goto :fail
 call npx wrangler deploy || goto :fail
 

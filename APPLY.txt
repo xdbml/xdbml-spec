@@ -1,31 +1,23 @@
-xDBML -- 0.6.2, delta 2 of 2: llms.txt rewritten from the spec, every example checked
-Base: delta 1. Nothing here touches parser code.
+xDBML -- 0.6.2 release: finish steps 3 to 5 by hand, and make release.cmd retry installs
+Base: the failed run of tools\release.cmd 0.6.2. Steps 1 and 2 published
+@xdbml/parse 0.6.2 and @xdbml/render 0.6.2; both are live on npm, in the
+full and in the abbreviated metadata. Step 3 had already set the mcp
+dependencies and version before npm install failed, so it resumes at the
+install. Do not rerun release.cmd: step 1 would fail with "cannot publish
+over the previously published versions".
 
 WHAT CHANGED
 ------------
-public\llms.txt
-  Rewritten (12.6 KB -> 35 KB). Placement table per construct, complete
-  field-setting list, quoting and separator rules (commas in [ ] across
-  lines, none in { }), the referenced side of each operator (right of >,
-  left of <, either side of -), Views, Edges, 17 Common mistakes, a
-  checklist, a complete example. Only spec defaults are suggested.
-mcp\src\reference.ts          regenerated (check:reference in sync).
-mcp\test\run-tests.ts
-  Every fenced block of llms.txt must be ```xdbml. A block without markers
-  validates with no diagnostic. "// Wrong (<code>): ..." must report that
-  code; "// Wrong (accepted silently): ..." must stay valid; "// Right"
-  must give no diagnostic. Lines before the first marker are a prelude.
-  66 -> 67 tests (the reference itself: 45 checked parts).
-playground\help\relationships-crows-foot.md
-  Ref: Customer > Order [target_verb: 'places'] read "Order places
-  Customer" in the inspector; now source_verb.
+tools\release.cmd
+  Steps 2, 3 and 4 run npm install with --prefer-online and retry it every
+  10 seconds, up to 18 times, before failing. npm view (the wait loops)
+  reads the full metadata of a package; npm install reads the abbreviated
+  metadata, which can lag behind for a few minutes after a publish and
+  fail with ETARGET, as it did here.
 
 FILES
 -----
-  public\llms.txt   (EDIT)
-  mcp\src\reference.ts   (EDIT)
-  mcp\test\run-tests.ts   (EDIT)
-  playground\help\relationships-crows-foot.md   (EDIT)
+  tools\release.cmd   (EDIT)
 
 APPLY (cmd.exe)
 ---------------
@@ -33,21 +25,34 @@ Unzip, open cmd.exe in the unzipped folder, then:
 
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
-copy /Y "%DELTA%\public\llms.txt" "%REPO%\public\llms.txt"
-copy /Y "%DELTA%\mcp\src\reference.ts" "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\mcp\test\run-tests.ts" "%REPO%\mcp\test\run-tests.ts"
-copy /Y "%DELTA%\playground\help\relationships-crows-foot.md" "%REPO%\playground\help\relationships-crows-foot.md"
+
+REM --- step 3: MCP server --------------------------------------------------
 cd /d %REPO%\mcp
-call npm run check:reference
-call npm test
+npm install --include=dev --prefer-online
+npm run check:reference
+npm run type-check
+npm test
+npx wrangler deploy
+
+REM --- step 4: rendering API -----------------------------------------------
+cd /d %REPO%\api
+npm pkg set dependencies.@xdbml/render=0.6.2
+npm install --include=dev --prefer-online
+npm run type-check
+npx wrangler deploy
+
+REM --- step 5: verify ------------------------------------------------------
 cd /d %REPO%
+npm view @xdbml/parse dist-tags --prefer-online
+npm view @xdbml/render dist-tags --prefer-online
+npm view @xdbml/render dependencies --prefer-online
+
+REM --- the script fix, then commit and tag ---------------------------------
+copy /Y "%DELTA%\tools\release.cmd" "%REPO%\tools\release.cmd"
 git add -A
-git commit -m "0.6.2, delta 2 of 2: llms.txt rewritten from the spec, every example checked"
+git commit -m "release 0.6.2; release.cmd retries npm install after a publish"
 git push
-
-The push publishes llms.txt on xdbml.org. Then release, which publishes the
-parser and renderer and redeploys the MCP server with the new reference:
-
-tools\release-preflight.cmd 0.6.2
-tools\release.cmd 0.6.2
 tools\github-release.cmd 0.6.2
+
+If npm install in step 3 still reports ETARGET, wait a minute and repeat
+the same line; npm cache verify clears a stale local copy if it persists.
