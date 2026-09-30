@@ -15,6 +15,11 @@ REM
 REM  Run tools\release-preflight.cmd first. It checks everything this script
 REM  needs before anything is published, which is the only point where
 REM  stopping is free.
+REM
+REM  After a failure, rerun the same command. A package already on npm at
+REM  this version is not installed, tested or published again, and every
+REM  other step can run twice. The last step commits, pushes, and runs
+REM  tools\github-release.cmd, which tags and publishes the GitHub release.
 REM ===========================================================================
 
 if "%~1"=="" (
@@ -39,10 +44,15 @@ if not exist "%ROOT%\parser\package.json" (
 
 REM ===========================================================================
 echo.
-echo [1/5] @xdbml/parse -^> %VER%
+echo [1/6] @xdbml/parse -^> %VER%
 echo ===========================================================================
 cd /d "%ROOT%\parser" || goto :fail
 call npm version %VER% --no-git-tag-version --allow-same-version || goto :fail
+call npm view @xdbml/parse@%VER% version --prefer-online >nul 2>&1
+if not errorlevel 1 (
+  echo   @xdbml/parse@%VER% is already on npm: skipping install, test and publish.
+  goto :parseready
+)
 call npm install || goto :fail
 call npm test || goto :fail
 call npm publish || goto :fail
@@ -56,7 +66,7 @@ call npm view @xdbml/parse@%VER% version --prefer-online >nul 2>&1
 if not errorlevel 1 goto :parseready
 if !TRIES! GEQ 30 (
   echo ERROR: @xdbml/parse@%VER% still not visible after 5 minutes.
-  echo        Check https://www.npmjs.com/package/@xdbml/parse then rerun from step 2.
+  echo        Check https://www.npmjs.com/package/@xdbml/parse then rerun the same command.
   goto :fail
 )
 timeout /t 10 /nobreak >nul
@@ -66,11 +76,16 @@ echo   @xdbml/parse@%VER% is live.
 
 REM ===========================================================================
 echo.
-echo [2/5] @xdbml/render -^> %VER%
+echo [2/6] @xdbml/render -^> %VER%
 echo ===========================================================================
 cd /d "%ROOT%\renderer" || goto :fail
 call npm version %VER% --no-git-tag-version --allow-same-version || goto :fail
 call npm pkg set dependencies.@xdbml/parse=^^^^%VER% || goto :fail
+call npm view @xdbml/render@%VER% version --prefer-online >nul 2>&1
+if not errorlevel 1 (
+  echo   @xdbml/render@%VER% is already on npm: skipping install, test and publish.
+  goto :renderready
+)
 REM npm view reads the registry's full metadata, npm install its abbreviated
 REM metadata, which can lag behind for a few minutes after a publish and fail
 REM with ETARGET. Retry the install until it resolves %VER%.
@@ -95,7 +110,7 @@ call npm view @xdbml/render@%VER% version --prefer-online >nul 2>&1
 if not errorlevel 1 goto :renderready
 if !TRIES! GEQ 30 (
   echo ERROR: @xdbml/render@%VER% still not visible after 5 minutes.
-  echo        Check https://www.npmjs.com/package/@xdbml/render then rerun from step 3.
+  echo        Check https://www.npmjs.com/package/@xdbml/render then rerun the same command.
   goto :fail
 )
 timeout /t 10 /nobreak >nul
@@ -105,7 +120,7 @@ echo   @xdbml/render@%VER% is live.
 
 REM ===========================================================================
 echo.
-echo [3/5] MCP server: dependency bump, checks, deploy
+echo [3/6] MCP server: dependency bump, checks, deploy
 echo ===========================================================================
 cd /d "%ROOT%\mcp" || goto :fail
 call npm pkg set dependencies.@xdbml/parse=^^^^%VER% || goto :fail
@@ -131,7 +146,7 @@ call npx wrangler deploy || goto :fail
 
 REM ===========================================================================
 echo.
-echo [4/5] Rendering API: dependency bump, check, deploy
+echo [4/6] Rendering API: dependency bump, check, deploy
 echo ===========================================================================
 cd /d "%ROOT%\api" || goto :fail
 call npm pkg set dependencies.@xdbml/render=^^^^%VER% || goto :fail
@@ -152,22 +167,31 @@ call npx wrangler deploy || goto :fail
 
 REM ===========================================================================
 echo.
-echo [5/5] Verify what is live
+echo [5/6] Verify what is live
 echo ===========================================================================
 cd /d "%ROOT%" || goto :fail
 call npm view @xdbml/parse dist-tags --prefer-online
 call npm view @xdbml/render dist-tags --prefer-online
 call npm view @xdbml/render dependencies --prefer-online
 
+REM ===========================================================================
+echo.
+echo [6/6] Commit, push, tag and GitHub release
+echo ===========================================================================
+cd /d "%ROOT%" || goto :fail
+call git add -A || goto :fail
+call git diff --cached --quiet
+if errorlevel 1 (
+  call git commit -m "release %VER%" || goto :fail
+) else (
+  echo   nothing to commit.
+)
+call git push || goto :fail
+call "%ROOT%\tools\github-release.cmd" %VER% || goto :fail
+
 echo.
 echo ============================================================
-echo  Done. Every version and lockfile changed on disk.
-echo  Commit them, then tag and publish the GitHub release:
-echo.
-echo    git add -A
-echo    git commit -m "release %VER%"
-echo    git push
-echo    tools\github-release.cmd %VER%
+echo  Done. %VER% is published, deployed, committed and released.
 echo ============================================================
 cd /d "%ROOT%"
 exit /b 0
@@ -177,10 +201,9 @@ echo.
 echo ============================================================
 echo  FAILED in %CD%
 echo  Nothing after this point ran. Fix the error above, then
-echo  rerun this script: completed steps are idempotent
-echo  (--allow-same-version) except an npm publish that already
-echo  succeeded, which will report "cannot publish over" -- in
-echo  that case start from the next step by hand.
+echo  rerun the same command: a package already on npm at this
+echo  version is not published again, and every other step can
+echo  run twice.
 echo ============================================================
 cd /d "%ROOT%"
 exit /b 1

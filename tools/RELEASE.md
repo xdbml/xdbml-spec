@@ -4,8 +4,8 @@ One script does the whole release. It edits no files by hand, stops at the
 first failure, and waits for the npm registry rather than assuming.
 
     tools\release-preflight.cmd 0.4.0     check everything first, changes nothing
-    tools\release.cmd 0.4.0               publish and deploy
-    tools\github-release.cmd 0.4          tag and publish the GitHub release
+    tools\release.cmd 0.4.0               publish, deploy, commit, tag, release
+    tools\github-release.cmd 0.4          redo the GitHub release alone
 
 Run both from the repo root. Preflight is the important habit: it is the only
 moment where stopping is free, because a published npm version can never be
@@ -31,6 +31,12 @@ republished.
 3. `mcp`      repoints both ranges, bumps, installs, checks, tests, deploys
 4. `api`      repoints its range, installs, checks, deploys
 5. prints the live dist-tags so you can see what landed
+6. commits the version bumps, pushes, and runs `github-release.cmd`, which
+   tags the commit and publishes the GitHub release from the CHANGELOG
+
+After a failure, fix the cause and rerun the same command. A package already
+on npm at that version is not installed, tested or published again, and every
+other step can run twice, so the script resumes where it stopped.
 
 Every version and range change goes through `npm version` and `npm pkg set`,
 which update `package.json` and `package-lock.json` together. Hand-editing

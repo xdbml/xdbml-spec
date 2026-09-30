@@ -1,58 +1,43 @@
-xDBML -- 0.6.2 release: finish steps 3 to 5 by hand, and make release.cmd retry installs
-Base: the failed run of tools\release.cmd 0.6.2. Steps 1 and 2 published
-@xdbml/parse 0.6.2 and @xdbml/render 0.6.2; both are live on npm, in the
-full and in the abbreviated metadata. Step 3 had already set the mcp
-dependencies and version before npm install failed, so it resumes at the
-install. Do not rerun release.cmd: step 1 would fail with "cannot publish
-over the previously published versions".
+xDBML -- finish the 0.6.2 release with one command
+Replaces xdbml-0.6.2-release-fix.zip; do not apply that one.
+
+RUN
+---
+Unzip, then in cmd.exe:
+
+    <unzipped folder>\apply.cmd
+
+(If the repository is not at C:\Repos\Hackolade\xdbml-spec, pass its path:
+ apply.cmd D:\path\to\xdbml-spec)
+
+apply.cmd copies the two files below into the repository and runs
+tools\release.cmd 0.6.2 from its root. Do not run release-preflight first:
+the failed run left version bumps in the tree, and preflight requires a
+clean one.
+
+What the run does for 0.6.2:
+  [1/6] parse 0.6.2 is on npm: skipped
+  [2/6] render 0.6.2 is on npm: skipped
+  [3/6] MCP server: install (retried until npm resolves 0.6.2), checks,
+        tests, deploy
+  [4/6] rendering API: install, type-check, deploy
+  [5/6] prints the live dist-tags
+  [6/6] git add, commit "release 0.6.2", push, tools\github-release.cmd 0.6.2
 
 WHAT CHANGED
 ------------
 tools\release.cmd
-  Steps 2, 3 and 4 run npm install with --prefer-online and retry it every
-  10 seconds, up to 18 times, before failing. npm view (the wait loops)
-  reads the full metadata of a package; npm install reads the abbreviated
-  metadata, which can lag behind for a few minutes after a publish and
-  fail with ETARGET, as it did here.
+  Resumable: a package already on npm at the version is not installed,
+  tested or published again, so after any failure the same command picks
+  up where it stopped. npm install in steps 2 to 4 runs with
+  --prefer-online and retries every 10 seconds for up to 3 minutes.
+  New step 6 commits, pushes and runs github-release.cmd (itself already
+  safe to rerun: an existing tag or release is kept or updated).
+tools\RELEASE.md
+  Step 6 and the resume behavior described.
 
 FILES
 -----
   tools\release.cmd   (EDIT)
-
-APPLY (cmd.exe)
----------------
-Unzip, open cmd.exe in the unzipped folder, then:
-
-set REPO=C:\Repos\Hackolade\xdbml-spec
-set DELTA=%CD%
-
-REM --- step 3: MCP server --------------------------------------------------
-cd /d %REPO%\mcp
-npm install --include=dev --prefer-online
-npm run check:reference
-npm run type-check
-npm test
-npx wrangler deploy
-
-REM --- step 4: rendering API -----------------------------------------------
-cd /d %REPO%\api
-npm pkg set dependencies.@xdbml/render=0.6.2
-npm install --include=dev --prefer-online
-npm run type-check
-npx wrangler deploy
-
-REM --- step 5: verify ------------------------------------------------------
-cd /d %REPO%
-npm view @xdbml/parse dist-tags --prefer-online
-npm view @xdbml/render dist-tags --prefer-online
-npm view @xdbml/render dependencies --prefer-online
-
-REM --- the script fix, then commit and tag ---------------------------------
-copy /Y "%DELTA%\tools\release.cmd" "%REPO%\tools\release.cmd"
-git add -A
-git commit -m "release 0.6.2; release.cmd retries npm install after a publish"
-git push
-tools\github-release.cmd 0.6.2
-
-If npm install in step 3 still reports ETARGET, wait a minute and repeat
-the same line; npm cache verify clears a stale local copy if it persists.
+  tools\RELEASE.md    (EDIT)
+  apply.cmd           (runs the above; not copied into the repository)
