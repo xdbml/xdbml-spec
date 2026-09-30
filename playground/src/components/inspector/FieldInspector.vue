@@ -182,7 +182,7 @@ function renderShortType (t: TypeExpression): string {
   switch (t.kind) {
     case 'ScalarType':
       return t.params && t.params.length > 0
-        ? `${t.name}(${t.params.join(', ')})`
+        ? `${t.name.replace(/(\[\])+$/, '')}(${t.params.join(', ')})${/(\[\])+$/.exec(t.name)?.[0] ?? ''}`
         : t.name;
     case 'NamedTypeReference':
       return t.name;

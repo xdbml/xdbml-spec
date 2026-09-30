@@ -32,6 +32,7 @@ import {
   TARGET_NATIVE_TYPES,
 } from '../src/keywords.ts';
 import * as keywordArrays from '../src/keywords.ts';
+import { parse as parse062, resolveNames as resolveNames062 } from '../src/index.ts';
 import { entityConstraints, primaryKey } from '../src/constraints.ts';
 import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
 
@@ -4322,8 +4323,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.2 is newer than this parser supports',
-      source: `xdbml: 0.6.2
+      name: 'v0.6.1 §4: xdbml: 0.6.3 is newer than this parser supports',
+      source: `xdbml: 0.6.3
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -4615,6 +4616,99 @@ Ref: sites.region.country > countries.code
 
 
 
+
+/* -------------------------------------------------------------------------
+ * v0.6.2: DBML forms the parser rejected or misread, and spec rules it did
+ * not enforce (§3.3, §5.2, §7.4, §8.1, §15.5)
+ * ----------------------------------------------------------------------- */
+
+function runV062Tests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string[] =>
+    resolveNames062(parse062(src)).diagnostics.map((d) => `${d.severity}:${d.code}`);
+
+  check('v0.6.2 §3.3: an unquoted hex color reads as a string, in a document with or without a version', () => {
+    for (const head of ['xdbml: 0.6\n', '']) {
+      const doc = parse062(`${head}Table t [headercolor: #3498DB] { id int [pk] }\nTableGroup g [color: #345] { t }`);
+      const t = doc.statements[0] as EntityDeclaration;
+      const v = t.settings[0].value as { kind: string; value: string };
+      if (v.kind !== 'StringValue' || v.value !== '#3498DB') return `got ${JSON.stringify(v)}`;
+      if (codes(`${head}Table t [headercolor: #3498DB] { id int [pk] }`).length) return 'diagnostics';
+    }
+    return undefined;
+  });
+  check('v0.6.2 §3.3: # with other than three or six hex digits stays a lex error', () => {
+    try { parse062('xdbml: 0.6\nTable t [headercolor: #34] { id int [pk] }'); } catch { return undefined; }
+    return 'no error';
+  });
+  check('v0.6.2 §7.4: a relationship names an entity by its alias, inline and in a Ref', () => {
+    const src = 'xdbml: 0.6\nTable very_long as V { id int [pk] }\nTable o {\n id int [pk]\n v_id int [ref: > V.id]\n v2 int\n}\nRef: o.v2 > V.id';
+    const doc = parse062(src);
+    if ((doc.statements[0] as EntityDeclaration).alias !== 'V') return 'alias lost';
+    const found = codes(src);
+    return found.length ? found.join(', ') : undefined;
+  });
+  check('v0.6.2 §7.4: the key rule applies through an alias', () => {
+    const found = codes('xdbml: 0.6\nTable very_long as V {\n id int [pk]\n x int\n}\nTable o {\n id int [pk]\n vx int\n}\nRef: o.vx > V.x');
+    return found.includes('error:ref-target-not-key') ? undefined : found.join(', ');
+  });
+  check('v0.6.2 §7.4: an alias that repeats an entity name leaves the entity in place', () => {
+    const doc = parse062('xdbml: 0.6\nTable a as b { id int [pk] }\nTable b { id int [pk] }\nTable o {\n id int [pk]\n b_id int\n}\nRef: o.b_id > b.id');
+    const ref = doc.statements[3] as unknown as { spec: { target: { path: { name: string }[] } } };
+    const first = ref.spec?.target?.path?.[0]?.name;
+    return first === 'b' ? undefined : `endpoint rewritten to ${first}`;
+  });
+  check('v0.6.2 §8.1: empty brackets right after a type name belong to it', () => {
+    const doc = parse062('xdbml: 0.6\nTable t {\n id int [pk]\n a text[]\n b varchar(20)[]\n c int[][]\n d int []\n e int [not null]\n}');
+    const got = (doc.statements[0] as EntityDeclaration).body
+      .map((f) => {
+        const t = (f as { type?: { name: string; params?: string[] } }).type;
+        return t ? `${t.name}${t.params ? `(${t.params.join(',')})` : ''}` : '';
+      })
+      .join(' ');
+    return got === 'int text[] varchar[](20) int[][] int int' ? undefined : got;
+  });
+  check('v0.6.2 §15.5: a Type and an Entity with one name collide; an error from v0.6, a warning before', () => {
+    const v06 = codes('xdbml: 0.6\nType customers { a int }\nTable customers { id int [pk] }');
+    const v05 = codes('xdbml: 0.5\nType customers { a int }\nTable customers { id int [pk] }');
+    const dbml = codes('enum status {\n a\n b\n}\nTable status { id int [pk] }');
+    if (!v06.includes('error:name-collision')) return `0.6: ${v06}`;
+    if (!v05.includes('warning:name-collision')) return `0.5: ${v05}`;
+    if (!dbml.includes('warning:name-collision')) return `DBML: ${dbml}`;
+    return undefined;
+  });
+  check('v0.6.2 §15.5: entities with one name in two containers do not collide', () => {
+    const found = codes('xdbml: 0.6\nSchema a { Table orders { id int [pk] } }\nSchema b { Table orders { id int [pk] } }');
+    return found.length ? found.join(', ') : undefined;
+  });
+  check('v0.6.2 §5.2: with several targets, a Container without one is an error', () => {
+    const found = codes('xdbml: 0.6\nProject p { targets: [PostgreSQL, MongoDB] }\nSchema core { Table t { id int [pk] } }');
+    return found.includes('error:container-target-missing') ? undefined : found.join(', ');
+  });
+  check('v0.6.2 §5.2: a Container target outside the Project targets is an error; aliases compare as their canonical name', () => {
+    const bad = codes('xdbml: 0.6\nProject p { targets: [PostgreSQL] }\nSchema core [target: Oracle] { Table t { id int [pk] } }');
+    const good = codes('xdbml: 0.6\nProject p { targets: [PostgreSQL, Mongo] }\nSchema core [target: postgres] { Table t { id int [pk] } }\nDatabase d [target: MongoDB] { Collection c { _id objectId [pk] } }');
+    if (!bad.includes('error:container-target-not-in-project')) return `bad: ${bad}`;
+    return good.length ? `good: ${good}` : undefined;
+  });
+  check('v0.6.2 §5.2: no Project targets, one inherited target, or an earlier version do not raise an error', () => {
+    const none = codes('xdbml: 0.6\nDatabase shop [target: MongoDB] { Collection c { _id objectId [pk] } }');
+    const single = codes('xdbml: 0.6\nProject p { targets: PostgreSQL }\nSchema core { Table t { id int [pk] } }');
+    const older = codes('xdbml: 0.5\nProject p { targets: [PostgreSQL, MongoDB] }\nSchema core { Table t { id int [pk] } }');
+    if (none.length || single.length) return `${none} / ${single}`;
+    return older.includes('warning:container-target-missing') ? undefined : `0.5: ${older}`;
+  });
+  return results;
+}
+
 function report (title: string, results: TestResult[]): { passed: number; failed: number } {
   console.log(`\n${CYAN}== ${title} ==${RESET}`);
   let passed = 0;
@@ -4642,11 +4736,13 @@ function main (): void {
   const inline = runInlineTests();
   const examples = runExampleTests();
   const keywords = runKeywordConsistencyTests();
+  const v062 = runV062Tests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
   const kr = report('Keyword-consistency tests (parser/src/keywords.ts vs parser)', keywords);
-  const totalPassed = ir.passed + er.passed + kr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed;
+  const vr = report('v0.6.2 fixes', v062);
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

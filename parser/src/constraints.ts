@@ -399,6 +399,75 @@ function effectiveTarget (p: Placed, project: string | undefined): string | unde
   return values[0] ?? project;
 }
 
+/** Aliases of §5.1, lower-cased, mapped to their canonical name. */
+const TARGET_ALIASES: Record<string, string> = {
+  postgres: 'postgresql', pg: 'postgresql',
+  mssql: 'sql server', 'microsoft sql server': 'sql server', 't-sql': 'sql server',
+  'ibm db2': 'db2', 'db2 luw': 'db2', 'db2 z/os': 'db2 for z/os',
+  'google bigquery': 'bigquery', 'amazon redshift': 'redshift', 'azure synapse': 'synapse analytics',
+  mongo: 'mongodb', 'aws documentdb': 'documentdb', cosmos: 'cosmos db', 'azure cosmos db': 'cosmos db',
+  'apache cassandra': 'cassandra', 'amazon neptune': 'neptune',
+  'apache avro': 'avro', 'apache parquet': 'parquet',
+  'protocol buffers': 'protobuf', proto: 'protobuf', swagger: 'openapi',
+};
+
+function canonicalTarget (name: string): string {
+  const key = name.trim().toLowerCase();
+  return TARGET_ALIASES[key] ?? key;
+}
+
+/** Every target the Project declares, or undefined when it declares none. */
+function projectTargets (doc: XDbmlDocument): string[] | undefined {
+  for (const s of doc.statements) {
+    if (s.kind !== 'ProjectDeclaration') continue;
+    for (const item of s.body) {
+      if (item.kind === 'Setting' && (item.name === 'targets' || item.name === 'database_type')) {
+        const values = settingValues(item.value).filter((x) => x !== '');
+        return values.length > 0 ? values : undefined;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Spec §5.2, rules 3 and 4: in a Project with several targets, every
+ * Container declares its own; and a Container's target is one of the
+ * Project's. Both apply to Containers written as such, only when the
+ * Project declares `targets:`. An implicit container (`Table core.users`)
+ * has no place for a target and is not checked. Before v0.6 the parser
+ * accepted both, so an earlier version draws warnings.
+ */
+export function checkTargets (doc: XDbmlDocument): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  const declared = projectTargets(doc);
+  if (!declared) return diagnostics;
+  const severity: Diagnostic['severity'] = versionAtLeast(doc, '0.6') ? 'error' : 'warning';
+  const canon = new Set(declared.map(canonicalTarget));
+  for (const s of doc.statements) {
+    if (s.kind !== 'ContainerDeclaration') continue;
+    const own = settingValues(s.settings.find((x) => x.name === 'target')?.value ?? null).filter((x) => x !== '');
+    if (own.length === 0 && declared.length > 1) {
+      diagnostics.push({
+        severity,
+        code: 'container-target-missing',
+        message: `Container '${s.name}' declares no target, and the Project declares several (${declared.join(', ')}). ` +
+          `Write the target after its name: ${s.keyword} ${s.name} [target: ${declared[0]}] { ... } (spec §5.2).`,
+        span: s.span,
+      });
+    } else if (own.length > 0 && !canon.has(canonicalTarget(own[0]))) {
+      diagnostics.push({
+        severity,
+        code: 'container-target-not-in-project',
+        message: `Container '${s.name}' targets ${own[0]}, which the Project's targets do not list (${declared.join(', ')}). ` +
+          `Add it to the Project's targets, or change the Container's target (spec §5.2).`,
+        span: s.span,
+      });
+    }
+  }
+  return diagnostics;
+}
+
 /* -------------------------------------------------------------------------
  * Checks (§10.10, §11.17)
  * ----------------------------------------------------------------------- */

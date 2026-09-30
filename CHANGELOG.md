@@ -4,9 +4,32 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.6.1 -- 2026
+## v0.6.2 -- 2026
 
 **Status**: Draft -- current
+**Released**: 2026-09-30
+
+A backward-compatible point release of the v0.6 draft. Three DBML forms that the parser rejected or misread now parse as DBML reads them, and two rules the specification already stated are now reported. The AI reference, llms.txt, is rewritten from the specification, and CI checks every example in it. Every v0.6 document without a name collision or a Container target problem remains valid, and documents continue to declare `xdbml: 0.6`, though the parser now also reads `xdbml: 0.6.2`.
+
+### Fixed
+
+#### Spec
+
+- **Unquoted colors (§3.3)**: `headercolor: #3498DB`, the DBML form, reads as the string `'#3498DB'`. Tools that write xDBML quote it.
+- **Aliases in relationships (§7.4)**: an alias names its entity in the endpoints of a `Ref` and of an inline `ref:`. An alias that repeats the name of an entity or a Container names nothing.
+- **Target array types (§8.1)**: `text[]` and `varchar(20)[]`, the DBML form of a PostgreSQL array type, keep their brackets in the type name.
+- **Container targets (§5.2)**: rules 3 and 4 apply to Containers declared as such, when the Project declares `targets:`, and compare target names by their canonical form.
+- **Name collisions (§15.5)**: two declarations of the shared namespace with one qualified name are an error, and a warning in a document declaring an earlier version than 0.6, or none.
+
+#### Tooling
+
+- **Parser (`@xdbml/parse`)**: reads `#3498DB` as a string where it raised a lex error, which rejected valid DBML. Resolves `Ref: V.id ...` and `[ref: > V.id]` through the alias of `Table very_long as V`, where it reported `unresolved-entity`; the key rule of §11.17 applies through the alias. Keeps `[]` in `text[]`, where it dropped the brackets and read the field as `text`. Reports `container-target-missing`, `container-target-not-in-project` and `name-collision`; before, a Type and an Entity with one name replaced each other in the symbol table. Reads `xdbml: 0.6.2`.
+- **Grammar**: `HEX_COLOR` as a setting value, and `( LBRACK RBRACK )*` after a scalar type. `grammar/test-cases.md` gains six v0.6.2 cases.
+- **Renderer (`@xdbml/render`) and playground**: a type such as `varchar(20)[]` displays as written rather than as `varchar[](20)`. The help page on relationships gives its conceptual example the verb that reads in the direction it names.
+- **MCP server and llms.txt**: llms.txt is rewritten from the specification, with a table of what goes in the brackets and in the body of each construct, every field setting, the quoting and separator rules, the referenced side of each relationship operator, and a checklist. It gains Common mistakes for a missing comma between settings, a reversed relationship, a foreign key to part of a composite key, a block in a View body, a `Ref` in a Container, relationship settings beside an inline `ref:`, quotes and function defaults, types and settings from other languages, cardinality in the entity settings of an Edge, and a path across an array. The MCP tests now validate every example in llms.txt: a Right example with no diagnostic, a Wrong example with the diagnostic its comment names. `mcp/src/reference.ts` is regenerated; the server serves it once redeployed.
+
+
+**Status**: Draft -- superseded by v0.6.2
 **Released**: 2026-09-29
 
 A backward-compatible point release of the v0.6 draft. List bodies accept a comma or a semicolon between items, as TableGroup and SupertypeGroup bodies already did, so Enum values and Entity fields written with commas, as AI assistants often write them, now parse. A field may take the name of any keyword: `note`, `indexes`, `checks` and `records`, which DBML accepts as field names, no longer fail. Chapter 14 states where each part of a View goes: the source query in the body, every other setting in the brackets. A key is declared once, and a unique key declared twice draws a warning. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`, though the parser now also reads `xdbml: 0.6.1`.

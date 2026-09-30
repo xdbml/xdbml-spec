@@ -41,6 +41,9 @@ Resolution reports two severities. An **error** marks something the schema canno
 - **`source-query-in-settings`**: a View writes `source_query` in the brackets after its name. The source query belongs in the body, as `source_query: '...'`; in the brackets it stays an ordinary setting, so the inspector does not show it as the view's query.
 - **`duplicate-source-query`**: a View declares a second `source_query:` in its body. The first one is the view's source query.
 - **`duplicate-unique-key`**: an entity declares the same unique key twice, for example `[unique]` on a field and the same field as a `unique` line in `constraints`. Declare it in one place: inline for a single field without a name, in `constraints` otherwise.
+- **`name-collision`**: two declarations share one qualified name, such as a Type and an Entity named `customers`. Entities, Views, Edges, Types, Enums and TablePartials share one namespace (spec §15.5): rename one of them. An error from v0.6, a warning in a document declaring an earlier version or none.
+- **`container-target-missing`**: the Project declares several targets and a Container declares none. Write it after the Container's name, as in `Schema core [target: PostgreSQL] { ... }` (spec §5.2).
+- **`container-target-not-in-project`**: a Container's target is not among the Project's targets. Add it to the Project's `targets:`, or change the Container's target (spec §5.2).
 
 A few conditions change severity with the version the document declares. In an `xdbml: 0.6` document they are errors; in a document declaring an earlier version, or none (plain DBML), they are warnings, so a file that was valid under its version stays valid:
 

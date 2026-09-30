@@ -188,6 +188,10 @@ VARIANT             : 'variant' ;
 USE                 : 'use' ;
 REUSE               : 'reuse' ;
 FROM                : 'from' ;
+// DBML writes a color without quotes, `headercolor: #3498DB` (spec §3.3).
+HEX_COLOR           : '#' HEX_COLOR_DIGIT HEX_COLOR_DIGIT HEX_COLOR_DIGIT (HEX_COLOR_DIGIT HEX_COLOR_DIGIT HEX_COLOR_DIGIT)? ;
+fragment HEX_COLOR_DIGIT : [0-9A-Fa-f] ;
+
 AS                  : 'as' ;
 
 // ---- §17.10 Cardinality operators -----------------------------------------
@@ -590,7 +594,10 @@ typeExpression
     ;
 
 scalarType
-    : typeName ( LPAREN typeParameterList RPAREN )?   // e.g. varchar, decimal(19,4), objectId, core.job_status
+    : typeName ( LPAREN typeParameterList RPAREN )? ( LBRACK RBRACK )*
+      // e.g. varchar, decimal(19,4), objectId, core.job_status, text[], varchar(20)[].
+      // The empty brackets belong to the type only when written with no space
+      // before them (spec §8.1); `int []` is an empty settings block.
     ;
 
 // A type name may be qualified, as in DBML: `core.job_status` names an Enum
@@ -967,6 +974,7 @@ settingValue
     | IDENTIFIER
     | qualifiedName
     | EXPRESSION_LITERAL                          // backtick-quoted
+    | HEX_COLOR                                   // #3498DB, read as '#3498DB' (spec §3.3)
     | LBRACK valueList RBRACK                     // list value
     | LBRACE keyValueList RBRACE                  // nested object value
     ;

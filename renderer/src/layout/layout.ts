@@ -1475,7 +1475,9 @@ function renderTypeLabel (type: TypeExpression): string {
 
 function renderScalarLabel (s: ScalarType): string {
   if (s.params && s.params.length > 0) {
-    return `${s.name}(${s.params.join(', ')})`;
+    // `varchar(20)[]` is named `varchar[]` with params ['20'] (spec §8.1).
+    const [, base, dims] = /^(.*?)((?:\[\])*)$/.exec(s.name) ?? [s.name, s.name, ''];
+    return `${base}(${s.params.join(', ')})${dims}`;
   }
   return s.name;
 }

@@ -115,7 +115,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6.1';
+export const SUPPORTED_XDBML_VERSION = '0.6.2';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -1552,6 +1552,19 @@ export class Parser {
       }
       this.expect(TokenKind.RParen, "Expected ')' closing type parameters");
     }
+    // DBML's array type of a target, `text[]` or `varchar(20)[]`, keeps its
+    // brackets in the type name (spec §8.1). Only empty brackets written
+    // right after the type, with no space, belong to it: `int [pk]` and
+    // `int []` remain settings blocks.
+    while (
+      this.check(TokenKind.LBracket) &&
+      this.peek(1).kind === TokenKind.RBracket &&
+      this.peek().start.offset === this.tokens[this.idx - 1].end.offset
+    ) {
+      this.advance();
+      this.advance();
+      name += '[]';
+    }
     return {
       kind: 'ScalarType',
       name,
@@ -2576,7 +2589,60 @@ export function parse (source: string, options: ParseOptions = {}): XDbmlDocumen
   // the outer level too). If no filePath is provided, the stack is empty.
   const initialStack = new Set<string>();
   if (options.filePath) initialStack.add(options.filePath);
-  return new Parser(tokens, options, initialStack, 0).parseDocument();
+  const doc = new Parser(tokens, options, initialStack, 0).parseDocument();
+  applyEntityAliases(doc);
+  return doc;
+}
+
+/**
+ * Spec §7.4: `Table very_long_name as V { ... }` lets a relationship name
+ * the entity by its alias, `Ref: V.id < posts.user_id`, as in DBML. This
+ * pass rewrites the first segment of every relationship endpoint that is
+ * an alias into the entity's name, so the resolver, the key checks and the
+ * renderer see the entity itself. The entity keeps its `alias`. An alias
+ * that repeats the name of an entity or a container, or that two entities
+ * declare, is left alone: the name it would shadow applies.
+ */
+function applyEntityAliases (doc: XDbmlDocument): void {
+  const aliases = new Map<string, string[] | null>();
+  const taken = new Set<string>();
+  const visit = (decl: TopLevelStatement, container?: string): void => {
+    if (decl.kind !== 'EntityDeclaration') return;
+    const segments = [...(container ? [container] : []), ...decl.name.split('.')];
+    taken.add(segments[segments.length - 1]);
+    if (!decl.alias) return;
+    aliases.set(decl.alias, aliases.has(decl.alias) ? null : segments);
+  };
+  for (const stmt of doc.statements) {
+    if (stmt.kind === 'ContainerDeclaration') {
+      taken.add(stmt.name);
+      for (const body of stmt.body) visit(body as TopLevelStatement, stmt.name);
+    } else {
+      visit(stmt);
+    }
+  }
+  for (const name of taken) aliases.delete(name);
+  if (![...aliases.values()].some((v) => v !== null)) return;
+
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    const obj = node as Record<string, unknown>;
+    if (obj.kind === 'RefEndpoint' && Array.isArray(obj.path)) {
+      const first = obj.path[0] as { kind?: string; name?: string } | undefined;
+      const segments = first?.kind === 'PathField' && first.name ? aliases.get(first.name) : undefined;
+      if (segments) {
+        obj.path = [...segments.map((name) => ({ ...first, name })), ...obj.path.slice(1)];
+      }
+    }
+    for (const [key, value] of Object.entries(obj)) {
+      if (key !== 'span' && value && typeof value === 'object') walk(value);
+    }
+  };
+  walk(doc.statements);
 }
 
 /**

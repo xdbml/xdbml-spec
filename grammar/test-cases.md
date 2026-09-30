@@ -1774,6 +1774,89 @@ Table customers {
 
 ---
 
+## v0.6.2 DBML forms and spec rules
+
+### VALID -- an unquoted color, as DBML writes it (§3.3)
+
+```
+xdbml: 0.6
+
+Table customers [headercolor: #3498DB] {
+  id int [pk]
+}
+```
+
+### VALID -- a relationship names an entity by its alias (§7.4)
+
+```
+xdbml: 0.6
+
+Table very_long_customer_table as C {
+  id int [pk]
+}
+
+Table orders {
+  id          int [pk]
+  customer_id int [ref: > C.id]
+}
+```
+
+### VALID -- target array types keep their brackets (§8.1)
+
+```
+xdbml: 0.6
+
+Table posts {
+  id   int [pk]
+  tags text[]
+  refs varchar(20)[]
+}
+```
+
+### INVALID -- a Container without a target in a Project with several (container-target-missing, §5.2)
+
+```
+xdbml: 0.6
+
+Project fleet {
+  targets: [PostgreSQL, MongoDB]
+}
+
+Schema core {
+  Table vehicles { id int [pk] }
+}
+```
+
+### INVALID -- a Container target the Project does not list (container-target-not-in-project, §5.2)
+
+```
+xdbml: 0.6
+
+Project fleet {
+  targets: [PostgreSQL]
+}
+
+Schema core [target: Oracle] {
+  Table vehicles { id int [pk] }
+}
+```
+
+### INVALID -- a Type and an Entity with one name (name-collision, §15.5)
+
+```
+xdbml: 0.6
+
+Type customers {
+  a int
+}
+
+Table customers {
+  id int [pk]
+}
+```
+
+---
+
 ## Test runner
 
 A reference TypeScript test harness (planned at `grammar/test-runner.ts`) parses each example, captures the resulting AST, and compares it against expected ASTs in `grammar/expected/*.json`. Implementations in other languages can run the same corpus with language-appropriate harnesses.

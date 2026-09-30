@@ -57,7 +57,8 @@ import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
-import { checkConstraints } from './constraints.ts';
+import { checkConstraints, checkTargets } from './constraints.ts';
+import { versionAtLeast } from './relationships.ts';
 import { checkViews } from './views.ts';
 
 /* -------------------------------------------------------------------------
@@ -109,6 +110,9 @@ export interface SymbolEntry {
  */
 export type DiagnosticCode =
   | 'duplicate-declaration'
+  | 'name-collision'
+  | 'container-target-missing'
+  | 'container-target-not-in-project'
   | 'unresolved-type'
   | 'possible-type-typo'
   | 'unresolved-key-field'
@@ -382,6 +386,7 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 5: constraints and referenced keys (spec §10.10, §11.17).
   diagnostics.push(...checkConstraints(flat));
+  diagnostics.push(...checkTargets(flat));
 
   // Pass 6: view source queries (spec §14.7).
   diagnostics.push(...checkViews(flat));
@@ -399,8 +404,16 @@ function collectDeclarations (
   diagnostics: Diagnostic[],
 ): void {
   const seen = new Set<string>(); // qualified-name keys to detect duplicates
+  const first = diagnostics.length;
   for (const stmt of doc.statements) {
     addTopLevelDeclaration(stmt, entries, diagnostics, seen);
+  }
+  // Before v0.6 the parser accepted a collision, so a document declaring an
+  // earlier version, or none (DBML), draws a warning and stays valid.
+  if (!versionAtLeast(doc, '0.6')) {
+    for (const d of diagnostics.slice(first)) {
+      if (d.code === 'name-collision') d.severity = 'warning';
+    }
   }
 }
 
@@ -477,6 +490,16 @@ function addTopLevelDeclaration (
   }
 }
 
+const SHARED_NAMESPACE = new Set<SymbolKind>(['entity', 'view', 'edge', 'type', 'enum', 'tablepartial']);
+
+const KIND_NAMES: Partial<Record<SymbolKind, string>> = {
+  entity: 'an Entity', view: 'a View', edge: 'an Edge', type: 'a Type', enum: 'an Enum', tablepartial: 'a TablePartial',
+};
+
+function article (kind: SymbolKind): string {
+  return KIND_NAMES[kind] ?? kind;
+}
+
 function addEntry (
   name: string,
   containerName: string | undefined,
@@ -489,6 +512,20 @@ function addEntry (
 ): void {
   const qualifiedName = containerName ? `${containerName}.${name}` : name;
   const key = `${kind}:${qualifiedName}`;
+  // Spec §15.5: Entities, Views, Edges, Types, Enums and TablePartials
+  // share one namespace. collectDeclarations() sets the severity.
+  if (SHARED_NAMESPACE.has(kind) && !seen.has(key)) {
+    const other = entries.find((e) => e.qualifiedName === qualifiedName && e.kind !== kind && SHARED_NAMESPACE.has(e.kind));
+    if (other) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'name-collision',
+        message: `'${qualifiedName}' names both ${article(other.kind)} and ${article(kind)}. ` +
+          `Entities, Views, Edges, Types, Enums and TablePartials share one namespace (spec §15.5): rename one of them.`,
+        span,
+      });
+    }
+  }
   if (seen.has(key)) {
     diagnostics.push({
       severity: 'error',

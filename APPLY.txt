@@ -1,106 +1,87 @@
-xDBML -- 0.6.1, delta 6: keys declared once, Common mistakes in llms.txt
-Base: delta 5 (0.6.1, delta 5 of 5: VS Code extension 0.6.1 and release
-notes). Apply deltas 2 to 5 first. Nothing here touches the MCP server
-code; mcp\src\reference.ts is the generated copy of llms.txt, and the
-release preflight refuses to run if it drifts.
+xDBML -- 0.6.2, delta 1 of 2: DBML forms, Container targets, name collisions
+Base: main at 3dfbe34 (release 0.6.1). Apply before delta 2.
 
 WHAT CHANGED
 ------------
+parser\src\lexer.ts
+  #3498DB (3 or 6 hex digits, unquoted, the DBML form) reads as the string
+  '#3498DB'. Was a lex error, which rejected valid DBML (3.3).
+parser\src\parser.ts
+  text[] and varchar(20)[] keep their brackets in the type name (8.1).
+  Was: the brackets read as an empty settings block and the field became
+  text. Only brackets written with no space count; int [] is unchanged.
+  Entity aliases (7.4): Table very_long as V, then Ref: V.id ... or
+  [ref: > V.id]. Was unresolved-entity. A pass after parsing rewrites the
+  endpoint to the entity name, so resolver, key rule and renderer all see
+  the entity. An alias that repeats an entity or Container name, or that
+  two entities declare, is left alone.
+  SUPPORTED_XDBML_VERSION 0.6.2.
+parser\src\name-resolver.ts
+  name-collision (NEW): a Type and an Entity (or any two of Entity, View,
+  Edge, Type, Enum, TablePartial) with one qualified name (15.5). Error
+  from v0.6, warning before and without a version (DBML stays valid).
+  Before, the two replaced each other in the symbol table.
 parser\src\constraints.ts
-  duplicate-primary-key: when the second declaration restates the same
-    fields, the message names both: "'customers' declares its primary key
-    (customer_id) twice: [pk] on customer_id and a pk line in constraints.
-    Declare it in one place (spec §10.4)." Different fields keep "declares
-    a second primary key".
-  duplicate-unique-key (NEW, warning in every version): a unique key
-    declared twice, inline and in constraints, or on two constraints lines
-    with the same fields in any order. A DBML unique entry in indexes is an
-    index, not a key (10.3), so it does not count.
-parser\src\name-resolver.ts   the new code.
-parser\test\run-tests.ts      5 tests (259 -> 264).
-spec\v0.6.md
-  10.3   new paragraph: each key is declared once; a key written inline is
-         not repeated in constraints; the unique key warning.
-  10.10  new row (Warning, 10.3) and one sentence: the warning applies
-         whatever version the document declares.
-  What's new  the v0.6.1 sentence mentions it.
-public\llms.txt
-  Keys paragraph: "Declare each key once: a key written inline is not
-    repeated in constraints."
-  NEW "Common mistakes" section, five wrong/right pairs: a setting in the
-    body, a key declared twice (your Haiku case), a composite key as
-    several [pk], separators between items (with enum quoting), a comma
-    between index entries. Each pair was run through the parser: every
-    "Wrong" gives the stated result, every "Right" parses with no
-    diagnostic. Ends with a pointer to the playground for checking.
-mcp\src\reference.ts          regenerated copy (check:reference in sync).
-ai-assistants.md              NEW section "Without the MCP server": paste
-                              llms.txt, add it to project instructions, or
-                              give the link; check in the playground.
-playground\help\diagnostics-panel.md  duplicate-unique-key in the list.
-grammar\test-cases.md         2 cases (15 in total for v0.6.1).
-CHANGELOG.md                  v0.6.1 entries for all of the above.
+  container-target-missing and container-target-not-in-project (NEW, 5.2
+  rules 3 and 4): only for Containers written as such, only when the
+  Project declares targets:, names compared through the 5.1 aliases
+  (postgres = PostgreSQL). Error from v0.6, warning before. A Database
+  with a target and no Project stays valid.
+parser\test\run-tests.ts     11 tests (264 -> 275); the "newer version"
+                              test now uses 0.6.3.
+renderer\src\layout\layout.ts and
+playground\src\components\inspector\FieldInspector.vue
+  varchar(20)[] displays as written, not varchar[](20).
+spec\v0.6.md                  3.3, 5.2, 7.4, 8.1, 15.5: one or two sentences each.
+grammar\xDBML.g4              HEX_COLOR as a setting value; (LBRACK RBRACK)*
+                              after scalarType.
+grammar\test-cases.md         6 v0.6.2 cases.
+playground\help\diagnostics-panel.md   the three new codes.
+CHANGELOG.md                  v0.6.2 section (covers delta 2 as well).
+
+Verified: parser 275, renderer 218+14+42, MCP 67, playground 52,
+from-mongodb 24, vue-tsc, check:vsix, check:spec-links, docs:build.
 
 FILES
 -----
   CHANGELOG.md   (EDIT)
-  ai-assistants.md   (EDIT)
   grammar\test-cases.md   (EDIT)
-  mcp\src\reference.ts   (EDIT)
+  grammar\xDBML.g4   (EDIT)
   parser\src\constraints.ts   (EDIT)
+  parser\src\lexer.ts   (EDIT)
   parser\src\name-resolver.ts   (EDIT)
+  parser\src\parser.ts   (EDIT)
   parser\test\run-tests.ts   (EDIT)
   playground\help\diagnostics-panel.md   (EDIT)
-  public\llms.txt   (EDIT)
+  playground\src\components\inspector\FieldInspector.vue   (EDIT)
+  renderer\src\layout\layout.ts   (EDIT)
   spec\v0.6.md   (EDIT)
 
 APPLY (cmd.exe)
 ---------------
+Unzip, open cmd.exe in the unzipped folder, then:
+
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
-
-copy /Y "%DELTA%\CHANGELOG.md"                   "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\ai-assistants.md"               "%REPO%\ai-assistants.md"
-copy /Y "%DELTA%\grammar\test-cases.md"          "%REPO%\grammar\test-cases.md"
-copy /Y "%DELTA%\mcp\src\reference.ts"           "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\parser\src\constraints.ts"      "%REPO%\parser\src\constraints.ts"
-copy /Y "%DELTA%\parser\src\name-resolver.ts"    "%REPO%\parser\src\name-resolver.ts"
-copy /Y "%DELTA%\parser\test\run-tests.ts"       "%REPO%\parser\test\run-tests.ts"
+copy /Y "%DELTA%\CHANGELOG.md" "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\grammar\test-cases.md" "%REPO%\grammar\test-cases.md"
+copy /Y "%DELTA%\grammar\xDBML.g4" "%REPO%\grammar\xDBML.g4"
+copy /Y "%DELTA%\parser\src\constraints.ts" "%REPO%\parser\src\constraints.ts"
+copy /Y "%DELTA%\parser\src\lexer.ts" "%REPO%\parser\src\lexer.ts"
+copy /Y "%DELTA%\parser\src\name-resolver.ts" "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\src\parser.ts" "%REPO%\parser\src\parser.ts"
+copy /Y "%DELTA%\parser\test\run-tests.ts" "%REPO%\parser\test\run-tests.ts"
 copy /Y "%DELTA%\playground\help\diagnostics-panel.md" "%REPO%\playground\help\diagnostics-panel.md"
-copy /Y "%DELTA%\public\llms.txt"                "%REPO%\public\llms.txt"
-copy /Y "%DELTA%\spec\v0.6.md"                   "%REPO%\spec\v0.6.md"
-
-cd /d C:\Repos\Hackolade\xdbml-spec
-npm run check
-  Expect: parser "264 passed, 0 failed"; renderer 218; MCP 17;
-  from-mongodb 24; playground 52; check-vsix in sync for 0.6.1;
-  164 spec buttons; docs build complete.
-cd mcp
-npm run check:reference
-  Expect: "reference.ts is in sync with public/llms.txt."
-cd ..
+copy /Y "%DELTA%\playground\src\components\inspector\FieldInspector.vue" "%REPO%\playground\src\components\inspector\FieldInspector.vue"
+copy /Y "%DELTA%\renderer\src\layout\layout.ts" "%REPO%\renderer\src\layout\layout.ts"
+copy /Y "%DELTA%\spec\v0.6.md" "%REPO%\spec\v0.6.md"
+cd /d %REPO%\parser
+call npm test
+cd /d %REPO%\renderer
+call npm run test:all
+cd /d %REPO%\playground
+call npm test
+cd /d %REPO%
 git add -A
-git commit -m "0.6.1, delta 6: keys declared once, Common mistakes in llms.txt"
+git commit -m "0.6.2, delta 1 of 2: DBML forms, Container targets, name collisions"
 git push
-
-Then release as in delta 5's APPLY.txt (preflight, release, commit
-"release 0.6.1", push, github-release). The CHANGELOG still says
-Released: 2026-09-29.
-
-Live check in the playground after the site redeploys: paste your Haiku
-table with `xdbml: 0.6` on top and the closing brace added. Expect one
-error, duplicate-primary-key, naming "[pk] on customer_id and a pk line
-in constraints". Delete the constraints block: no diagnostic.
-
-VERIFICATION RUN HERE (Linux, Node 22)
----------------------------------------
-  npm run check         exit 0: parser 264, renderer 218, MCP 17,
-                        from-mongodb 24, playground 52; check-vsix in sync;
-                        164 spec buttons; docs build complete
-  check:reference       in sync
-  textmate test         all checks passed
-  Common mistakes       5 pairs: each Wrong gives the stated error or
-                        diagnostic; each Right parses clean
-  grammar test cases    15 of 15 behave as labeled
-  examples              no example draws the new warning
-  em-dashes             none added

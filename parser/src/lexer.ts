@@ -530,6 +530,19 @@ export class Lexer {
       return this.lexIdentifier();
     }
 
+    if (c === '#') {
+      // DBML writes a color unquoted, `headercolor: #3498DB` (spec §3.3):
+      // `#` and three or six hex digits read as the string '#3498DB'.
+      let n = 1;
+      while (/[0-9A-Fa-f]/.test(this.peek(n))) n++;
+      const digits = n - 1;
+      if ((digits === 3 || digits === 6) && !/[A-Za-z0-9_]/.test(this.peek(n))) {
+        for (let i = 0; i < n; i++) this.advance();
+        const text = this.text.slice(start.offset, this.offset);
+        return { kind: TokenKind.StringLiteral, text, value: text, start, end: this.pos() };
+      }
+    }
+
     throw new LexError(`Unexpected character: ${JSON.stringify(c)}`, start);
   }
 
