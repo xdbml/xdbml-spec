@@ -143,7 +143,7 @@ In a conceptual or early logical model, a relationship may name entities rather 
 Entity Customer { }
 Entity Order { }
 
-Ref: Customer > Order [target_verb: 'places']
+Ref: Customer > Order [source_verb: 'places']
 ```
 
 The line then attaches to the edge of each card that faces the other card, not to a field row. It shows no cardinality glyph until a cardinality is written with `[source: ..., target: ...]`. A small filled triangle marks the direction it reads: `>` puts the triangle at the target, `<` at the source, `undirected: true` at both ends, and `-` nowhere, meaning linked with no direction stated.

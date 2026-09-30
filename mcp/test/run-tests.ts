@@ -216,6 +216,98 @@ test('v0.6.1: the reference teaches View placement and list separators', () => {
   assert(XDBML_REFERENCE.includes('A field may take the name of any keyword'), 'keywords as field names');
 });
 
+test('the reference teaches commas between settings, relationship direction and View bodies', () => {
+  assert(XDBML_REFERENCE.includes('A line break never replaces the comma.'), 'commas between settings');
+  assert(XDBML_REFERENCE.includes('the right side of `>`, the left side of `<`, and either side of `-`'), 'relationship direction');
+  assert(XDBML_REFERENCE.includes('no `constraints`, `indexes`, `checks` or `records` block'), 'View body');
+});
+
+/* -------------------------------------------------------------------------
+ * The reference: every example validates as its label says
+ *
+ * Each fenced block of public/llms.txt is an xdbml block. A block without
+ * markers is one document and validates with no diagnostic. A block with
+ * markers splits at each line starting `// Wrong` or `// Right`; the lines
+ * before the first marker are a prelude added to every part. A Right part
+ * validates with no diagnostic. A Wrong part names what a validator does
+ * with it: `// Wrong (<code>): ...` reports a diagnostic with that code, and
+ * `// Wrong (accepted silently): ...` stays valid: the parser accepts it, and
+ * it means something other than its author intended. A part without a
+ * version line is read as `xdbml: 0.6`.
+ * ---------------------------------------------------------------------- */
+
+interface ReferencePart {
+  line: number;
+  label: 'block' | 'wrong' | 'right';
+  expect?: string;
+  source: string;
+}
+
+function referenceParts (): ReferencePart[] {
+  const lines = XDBML_REFERENCE.split('\n');
+  const parts: ReferencePart[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].startsWith('```')) continue;
+    const fenceLine = i + 1;
+    if (lines[i].trim() !== '```xdbml') {
+      throw new Error(`llms.txt line ${fenceLine}: every fenced block is \`\`\`xdbml, so that it is checked`);
+    }
+    let j = i + 1;
+    while (j < lines.length && !lines[j].startsWith('```')) j++;
+    if (j === lines.length) throw new Error(`llms.txt line ${fenceLine}: unclosed block`);
+    const body = lines.slice(i + 1, j);
+    const markers = body
+      .map((text, k) => ({ text, k }))
+      .filter(({ text }) => /^\/\/ (Wrong|Right)\b/.test(text));
+    const withVersion = (src: string): string =>
+      /^\s*xdbml:/m.test(src) ? src : `xdbml: 0.6\n${src}`;
+    if (markers.length === 0) {
+      parts.push({ line: fenceLine, label: 'block', source: withVersion(body.join('\n')) });
+    } else {
+      const prelude = body.slice(0, markers[0].k).join('\n');
+      markers.forEach((m, n) => {
+        const end = n + 1 < markers.length ? markers[n + 1].k : body.length;
+        const part = body.slice(m.k, end).join('\n');
+        const source = withVersion(`${prelude}\n${part}`);
+        const line = fenceLine + 1 + m.k;
+        if (m.text.startsWith('// Right')) {
+          parts.push({ line, label: 'right', source });
+        } else {
+          const label = /^\/\/ Wrong \(([^)]+)\)/.exec(m.text);
+          if (!label) throw new Error(`llms.txt line ${line}: a Wrong marker reads "// Wrong (<code>): ..." or "// Wrong (accepted silently): ..."`);
+          parts.push({ line, label: 'wrong', expect: label[1], source });
+        }
+      });
+    }
+    i = j;
+  }
+  return parts;
+}
+
+let referenceExamples: ReferencePart[] = [];
+test('reference: every block is checked, and it holds Wrong and Right examples', () => {
+  referenceExamples = referenceParts();
+  assert(referenceExamples.length > 20, `expected more than 20 checked parts, got ${referenceExamples.length}`);
+  assert(referenceExamples.some(p => p.label === 'wrong'), 'at least one Wrong part');
+  assert(referenceExamples.some(p => p.label === 'right'), 'at least one Right part');
+});
+
+for (const part of referenceExamples) {
+  test(`reference line ${part.line}: ${part.label}${part.expect ? ` (${part.expect})` : ''}`, () => {
+    const r = validateXdbml(part.source);
+    const found = r.diagnostics.map(d => `${d.code} at ${d.line}: ${d.message}`).join('; ');
+    if (part.label !== 'wrong') {
+      assertEqual(r.diagnostics.length, 0, `diagnostics (${found})`);
+    } else if (part.expect === 'accepted silently') {
+      assertEqual(r.valid, true, `valid (${found})`);
+    } else if (/^[a-z]+(-[a-z]+)+$/.test(part.expect ?? '')) {
+      assert(r.diagnostics.some(d => d.code === part.expect), `expected ${part.expect}, got: ${found || 'no diagnostic'}`);
+    } else {
+      throw new Error(`unknown Wrong label "${part.expect}"`);
+    }
+  });
+}
+
 /* -------------------------------------------------------------------------
  * Summary wording
  * ---------------------------------------------------------------------- */

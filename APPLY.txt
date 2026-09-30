@@ -1,61 +1,31 @@
-xDBML -- 0.6.2, delta 1 of 2: DBML forms, Container targets, name collisions
-Base: main at 3dfbe34 (release 0.6.1). Apply before delta 2.
+xDBML -- 0.6.2, delta 2 of 2: llms.txt rewritten from the spec, every example checked
+Base: delta 1. Nothing here touches parser code.
 
 WHAT CHANGED
 ------------
-parser\src\lexer.ts
-  #3498DB (3 or 6 hex digits, unquoted, the DBML form) reads as the string
-  '#3498DB'. Was a lex error, which rejected valid DBML (3.3).
-parser\src\parser.ts
-  text[] and varchar(20)[] keep their brackets in the type name (8.1).
-  Was: the brackets read as an empty settings block and the field became
-  text. Only brackets written with no space count; int [] is unchanged.
-  Entity aliases (7.4): Table very_long as V, then Ref: V.id ... or
-  [ref: > V.id]. Was unresolved-entity. A pass after parsing rewrites the
-  endpoint to the entity name, so resolver, key rule and renderer all see
-  the entity. An alias that repeats an entity or Container name, or that
-  two entities declare, is left alone.
-  SUPPORTED_XDBML_VERSION 0.6.2.
-parser\src\name-resolver.ts
-  name-collision (NEW): a Type and an Entity (or any two of Entity, View,
-  Edge, Type, Enum, TablePartial) with one qualified name (15.5). Error
-  from v0.6, warning before and without a version (DBML stays valid).
-  Before, the two replaced each other in the symbol table.
-parser\src\constraints.ts
-  container-target-missing and container-target-not-in-project (NEW, 5.2
-  rules 3 and 4): only for Containers written as such, only when the
-  Project declares targets:, names compared through the 5.1 aliases
-  (postgres = PostgreSQL). Error from v0.6, warning before. A Database
-  with a target and no Project stays valid.
-parser\test\run-tests.ts     11 tests (264 -> 275); the "newer version"
-                              test now uses 0.6.3.
-renderer\src\layout\layout.ts and
-playground\src\components\inspector\FieldInspector.vue
-  varchar(20)[] displays as written, not varchar[](20).
-spec\v0.6.md                  3.3, 5.2, 7.4, 8.1, 15.5: one or two sentences each.
-grammar\xDBML.g4              HEX_COLOR as a setting value; (LBRACK RBRACK)*
-                              after scalarType.
-grammar\test-cases.md         6 v0.6.2 cases.
-playground\help\diagnostics-panel.md   the three new codes.
-CHANGELOG.md                  v0.6.2 section (covers delta 2 as well).
-
-Verified: parser 275, renderer 218+14+42, MCP 67, playground 52,
-from-mongodb 24, vue-tsc, check:vsix, check:spec-links, docs:build.
+public\llms.txt
+  Rewritten (12.6 KB -> 35 KB). Placement table per construct, complete
+  field-setting list, quoting and separator rules (commas in [ ] across
+  lines, none in { }), the referenced side of each operator (right of >,
+  left of <, either side of -), Views, Edges, 17 Common mistakes, a
+  checklist, a complete example. Only spec defaults are suggested.
+mcp\src\reference.ts          regenerated (check:reference in sync).
+mcp\test\run-tests.ts
+  Every fenced block of llms.txt must be ```xdbml. A block without markers
+  validates with no diagnostic. "// Wrong (<code>): ..." must report that
+  code; "// Wrong (accepted silently): ..." must stay valid; "// Right"
+  must give no diagnostic. Lines before the first marker are a prelude.
+  66 -> 67 tests (the reference itself: 45 checked parts).
+playground\help\relationships-crows-foot.md
+  Ref: Customer > Order [target_verb: 'places'] read "Order places
+  Customer" in the inspector; now source_verb.
 
 FILES
 -----
-  CHANGELOG.md   (EDIT)
-  grammar\test-cases.md   (EDIT)
-  grammar\xDBML.g4   (EDIT)
-  parser\src\constraints.ts   (EDIT)
-  parser\src\lexer.ts   (EDIT)
-  parser\src\name-resolver.ts   (EDIT)
-  parser\src\parser.ts   (EDIT)
-  parser\test\run-tests.ts   (EDIT)
-  playground\help\diagnostics-panel.md   (EDIT)
-  playground\src\components\inspector\FieldInspector.vue   (EDIT)
-  renderer\src\layout\layout.ts   (EDIT)
-  spec\v0.6.md   (EDIT)
+  public\llms.txt   (EDIT)
+  mcp\src\reference.ts   (EDIT)
+  mcp\test\run-tests.ts   (EDIT)
+  playground\help\relationships-crows-foot.md   (EDIT)
 
 APPLY (cmd.exe)
 ---------------
@@ -63,25 +33,21 @@ Unzip, open cmd.exe in the unzipped folder, then:
 
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
-copy /Y "%DELTA%\CHANGELOG.md" "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\grammar\test-cases.md" "%REPO%\grammar\test-cases.md"
-copy /Y "%DELTA%\grammar\xDBML.g4" "%REPO%\grammar\xDBML.g4"
-copy /Y "%DELTA%\parser\src\constraints.ts" "%REPO%\parser\src\constraints.ts"
-copy /Y "%DELTA%\parser\src\lexer.ts" "%REPO%\parser\src\lexer.ts"
-copy /Y "%DELTA%\parser\src\name-resolver.ts" "%REPO%\parser\src\name-resolver.ts"
-copy /Y "%DELTA%\parser\src\parser.ts" "%REPO%\parser\src\parser.ts"
-copy /Y "%DELTA%\parser\test\run-tests.ts" "%REPO%\parser\test\run-tests.ts"
-copy /Y "%DELTA%\playground\help\diagnostics-panel.md" "%REPO%\playground\help\diagnostics-panel.md"
-copy /Y "%DELTA%\playground\src\components\inspector\FieldInspector.vue" "%REPO%\playground\src\components\inspector\FieldInspector.vue"
-copy /Y "%DELTA%\renderer\src\layout\layout.ts" "%REPO%\renderer\src\layout\layout.ts"
-copy /Y "%DELTA%\spec\v0.6.md" "%REPO%\spec\v0.6.md"
-cd /d %REPO%\parser
-call npm test
-cd /d %REPO%\renderer
-call npm run test:all
-cd /d %REPO%\playground
+copy /Y "%DELTA%\public\llms.txt" "%REPO%\public\llms.txt"
+copy /Y "%DELTA%\mcp\src\reference.ts" "%REPO%\mcp\src\reference.ts"
+copy /Y "%DELTA%\mcp\test\run-tests.ts" "%REPO%\mcp\test\run-tests.ts"
+copy /Y "%DELTA%\playground\help\relationships-crows-foot.md" "%REPO%\playground\help\relationships-crows-foot.md"
+cd /d %REPO%\mcp
+call npm run check:reference
 call npm test
 cd /d %REPO%
 git add -A
-git commit -m "0.6.2, delta 1 of 2: DBML forms, Container targets, name collisions"
+git commit -m "0.6.2, delta 2 of 2: llms.txt rewritten from the spec, every example checked"
 git push
+
+The push publishes llms.txt on xdbml.org. Then release, which publishes the
+parser and renderer and redeploys the MCP server with the new reference:
+
+tools\release-preflight.cmd 0.6.2
+tools\release.cmd 0.6.2
+tools\github-release.cmd 0.6.2
