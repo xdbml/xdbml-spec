@@ -1,6 +1,6 @@
 /**
- * Test-only module hook: resolve `@xdbml/parse` to the parser's source in
- * this repository instead of the copy installed from npm.
+ * Test-only module hook: resolve `@xdbml/parse` and `@xdbml/render` to the
+ * sources in this repository instead of the copies installed from npm.
  *
  * The MCP tools import the parser by package name, so without the hook these
  * tests would exercise the npm copy rather than the parser this release

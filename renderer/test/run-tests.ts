@@ -17,6 +17,7 @@ import process from 'node:process';
 import { parse, flatten } from '@xdbml/parse';
 import {
   renderToSVG,
+  diagramViewNames,
   buildDiagram,
   applyUserPositions,
   autoArrange,
@@ -327,6 +328,8 @@ DiagramView parties {
   const svg = renderToSVG(src, { diagramView: 'ordering' });
   assertWellFormed('v0.6.3 diagram view render', svg);
   check('v0.6.3: renderToSVG draws the diagram view', svg.includes('customers') && !svg.includes('>person<'));
+  check('v0.6.3: diagramViewNames lists the declared diagram views in order',
+    diagramViewNames(src).join(',') === 'ordering,parties', diagramViewNames(src).join(','));
 }
 
 /* ---- Report -------------------------------------------------------- */

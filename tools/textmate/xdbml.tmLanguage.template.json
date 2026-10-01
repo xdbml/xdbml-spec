@@ -17,6 +17,7 @@
     { "include": "#constants" },
     { "include": "#declarations" },
     { "include": "#block-keywords" },
+    { "include": "#diagram-view-categories" },
     { "include": "#type-keywords" },
     { "include": "#scalar-types" },
     { "include": "#bson-types" },
@@ -106,6 +107,12 @@
       "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names.",
       "name": "keyword.other.block.xdbml",
       "match": "\\b((?i:__BLOCK_KEYWORDS__))\\b(?=\\s*\\{)"
+    },
+
+    "diagram-view-categories": {
+      "comment": "The categories of a DiagramView body (Tables, Views, Containers or Schemas, TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",
+      "name": "keyword.declaration.category.xdbml",
+      "match": "\\b((?i:__DIAGRAM_VIEW_CATEGORIES__))\\b(?=\\s*\\{)"
     },
 
     "native-types": {

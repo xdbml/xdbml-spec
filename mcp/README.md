@@ -11,13 +11,17 @@ render and validate xDBML natively as tool calls.
 ### `render_xdbml`
 
 ```
-render_xdbml(source, arrange?, background?, playground?, image?)
+render_xdbml(source, arrange?, background?, mode?, playground?, diagram_view?, image?)
 ```
 
 - `source` -- the xDBML (or DBML) document to render.
 - `arrange` -- `relational` (default), `star`, or `none`.
 - `background` -- optional CSS background color (default transparent).
+- `mode` -- `light` (default) or `dark`; dark also paints the dark canvas behind the diagram.
 - `playground` -- include the "Open in xDBML playground" link (default true).
+- `diagram_view` -- the name of a diagram view (`DiagramView`, spec §18) the
+  document declares, to render that subset instead of the full diagram. An
+  unknown name is an error that lists the declared ones.
 - `image` -- `png` (default) or `none`; whether to include a PNG of the diagram.
 
 It always returns a short summary (entity and relationship counts), the SVG as
@@ -53,7 +57,8 @@ validate_xdbml(source)
 Validates a schema **without rendering it**: it runs only the parser and the
 name resolver, so it is much cheaper than `render_xdbml`. It returns whether the
 document is valid plus any errors or warnings with their line/column locations,
-both as readable text and as a compact JSON tail an agent can parse. Syntax
+both as readable text and as a compact JSON tail an agent can parse. The
+summary and the JSON tail also name the diagram views the document declares. Syntax
 errors (a missing bracket) and semantic ones (a foreign key pointing at an
 entity that does not exist) are both reported. The point is a tight
 author -> validate -> fix -> render loop: a model can check a draft, fix what it

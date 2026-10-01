@@ -201,6 +201,23 @@ async function main () {
       totalFailed++;
     }
   }
+  // DiagramView categories (spec 18.1) are colored before '{' only.
+  console.log(`\n${CYAN}DiagramView categories${RESET}`);
+  for (const [line, word, expected] of [
+    ['  Tables {', 'Tables', true], ['  Schemas { core }', 'Schemas', true], ['  SupertypeGroups {', 'SupertypeGroups', true],
+    ['  Notes { * }', 'Notes', true], ['  tables varchar', 'tables', false], ['  notes int', 'notes', false],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const isCategory = (tok?.scopes ?? []).includes('keyword.declaration.category.xdbml');
+    if (isCategory === expected) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${expected ? 'is' : 'is not'} a category keyword`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': expected ${expected ? '' : 'no '}keyword.declaration.category.xdbml`);
+      totalFailed++;
+    }
+  }
   // Target-native type names are colored like scalar types, and a
   // generic word left out of TARGET_NATIVE_TYPES is not.
   console.log(`\n${CYAN}Target-native type names${RESET}`);

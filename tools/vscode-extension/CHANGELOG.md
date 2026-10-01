@@ -4,6 +4,18 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.3]
+
+Follows xDBML 0.6.3, which defines diagram views (spec §18). Versions 0.6.2
+of the language changed no highlighting, so the extension skips 0.6.2.
+
+### Added
+- **DiagramView categories**: `Tables`, `Views`, `Containers`, `Schemas`,
+  `TableGroups`, `SupertypeGroups` and `Notes` are colored as declaration
+  keywords when they open a list inside a `DiagramView`, that is before `{`.
+  An entity or a field that carries one of these names keeps its color, as
+  with the block keywords of 0.6.0.
+
 ## [0.6.1]
 
 Follows xDBML 0.6.1, where no keyword is reserved as a field name.

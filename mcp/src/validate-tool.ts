@@ -46,6 +46,8 @@ export interface ValidateOutcome {
    * recognizable at a glance.
    */
   containerCount: number;
+  /** Names of the diagram views (spec §18) the document declares, in order. */
+  diagramViews: string[];
   diagnostics: ValidateDiagnostic[];
 }
 
@@ -82,6 +84,7 @@ export function validateXdbml (source: string): ValidateOutcome {
           `line ${e.position.line}, column ${e.position.column}.`,
         entityCount: 0,
         containerCount: 0,
+        diagramViews: [],
         diagnostics: [{
           severity: 'error',
           code: isLex ? 'lex-error' : 'parse-error',
@@ -112,6 +115,10 @@ export function validateXdbml (source: string): ValidateOutcome {
   }, 0);
   const containerCount =
     flat.statements.filter((s) => s.kind === 'ContainerDeclaration').length;
+  const diagramViewNames: string[] = [];
+  for (const s of flat.statements) {
+    if (s.kind === 'DiagramViewDeclaration' && !diagramViewNames.includes(s.name)) diagramViewNames.push(s.name);
+  }
 
   const diagnostics: ValidateDiagnostic[] = resolveNames(doc).diagnostics.map((d) => ({
     severity: d.severity,
@@ -128,10 +135,14 @@ export function validateXdbml (source: string): ValidateOutcome {
   // "2 entities and 1 container" -- the container part is phrased as a
   // separate count (not "entities in containers") so it stays accurate when
   // entities are mixed between top level and container bodies.
-  const entityLabel = `${entityCount} ${entityCount === 1 ? 'entity' : 'entities'}` +
-    (containerCount > 0
-      ? ` and ${containerCount} ${containerCount === 1 ? 'container' : 'containers'}`
-      : '');
+  const counted = [`${entityCount} ${entityCount === 1 ? 'entity' : 'entities'}`];
+  if (containerCount > 0) counted.push(`${containerCount} ${containerCount === 1 ? 'container' : 'containers'}`);
+  if (diagramViewNames.length > 0) {
+    counted.push(`${diagramViewNames.length} ${diagramViewNames.length === 1 ? 'diagram view' : 'diagram views'}`);
+  }
+  const entityLabel = counted.length === 1
+    ? counted[0]
+    : `${counted.slice(0, -1).join(', ')} and ${counted[counted.length - 1]}`;
   let summary: string;
   if (valid && warningCount === 0) {
     summary = `Valid xDBML: ${entityLabel}, all references resolved.`;
@@ -146,7 +157,7 @@ export function validateXdbml (source: string): ValidateOutcome {
       `${warnPart} across ${entityLabel}.`;
   }
 
-  return { valid, summary, entityCount, containerCount, diagnostics };
+  return { valid, summary, entityCount, containerCount, diagramViews: diagramViewNames, diagnostics };
 }
 
 /**
@@ -171,6 +182,7 @@ export function validateXdbmlTool (args: ValidateArgs): ToolResult {
     valid: outcome.valid,
     entityCount: outcome.entityCount,
     containerCount: outcome.containerCount,
+    diagramViews: outcome.diagramViews,
     diagnostics: outcome.diagnostics,
   }), '```');
 

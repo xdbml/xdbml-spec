@@ -36,6 +36,9 @@
       "include": "#block-keywords"
     },
     {
+      "include": "#diagram-view-categories"
+    },
+    {
       "include": "#type-keywords"
     },
     {
@@ -137,6 +140,11 @@
       "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names.",
       "name": "keyword.other.block.xdbml",
       "match": "\\b((?i:constraints|indexes|records|checks))\\b(?=\\s*\\{)"
+    },
+    "diagram-view-categories": {
+      "comment": "The categories of a DiagramView body (Tables, Views, Containers or Schemas, TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",
+      "name": "keyword.declaration.category.xdbml",
+      "match": "\\b((?i:supertypegroups|tablegroups|containers|schemas|tables|views|notes))\\b(?=\\s*\\{)"
     },
     "native-types": {
       "comment": "Target-native type names (Oracle number, PostgreSQL serial, ...), colored like scalar types. Highlighting only: any identifier is a valid type name.",

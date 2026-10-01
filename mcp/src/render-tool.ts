@@ -5,7 +5,7 @@
  */
 
 import { renderToSVG, buildDiagram, defaultTheme, darkTheme } from '@xdbml/render';
-import { parse, flatten } from '@xdbml/parse';
+import { parse, flatten, diagramViews } from '@xdbml/parse';
 
 export const PLAYGROUND_URL = 'https://xdbml.org/playground/';
 
@@ -15,6 +15,8 @@ export interface RenderArgs {
   background?: string;
   playground?: boolean;
   mode?: 'light' | 'dark';
+  /** Name of a diagram view (spec §18) to render instead of the full diagram. */
+  diagram_view?: string;
 }
 
 export type ToolResult = {
@@ -28,6 +30,7 @@ export type ToolResult = {
 
 export function renderXdbmlTool (args: RenderArgs): ToolResult {
   const { source, arrange, background, playground = true, mode = 'light' } = args;
+  const diagramView = args.diagram_view?.trim() || undefined;
 
   // A standalone SVG is transparent by default and the viewer paints behind
   // it. On the dark theme the row text is light, so without a dark backdrop it
@@ -39,10 +42,28 @@ export function renderXdbmlTool (args: RenderArgs): ToolResult {
 
   let svg: string;
   try {
+    if (diagramView) {
+      // renderToSVG draws the full diagram for a name the document does not
+      // declare; a caller who asked for one diagram view gets an error instead.
+      const names = [...new Set(diagramViews(parse(source)).map((v) => v.name))];
+      if (!names.includes(diagramView)) {
+        return {
+          isError: true,
+          content: [{
+            type: 'text',
+            text: `This document declares no diagram view named '${diagramView}'. ` +
+              (names.length
+                ? `Its diagram views: ${names.map((n) => `'${n}'`).join(', ')}.`
+                : 'It declares no DiagramView; omit diagram_view to render the full diagram.'),
+          }],
+        };
+      }
+    }
     svg = renderToSVG(source, {
       arrange,
       theme,
       background: bg,
+      diagramView,
       playgroundLink: playground ? PLAYGROUND_URL : undefined,
     });
   } catch (e) {
@@ -55,7 +76,7 @@ export function renderXdbmlTool (args: RenderArgs): ToolResult {
 
   // Parsing already succeeded inside renderToSVG, so this is safe; used only
   // to report what was rendered.
-  const model = buildDiagram(flatten(parse(source)));
+  const model = buildDiagram(flatten(parse(source)), new Set(), { diagramView });
   const entities = model.entities.length;
   const refs = model.refs.length;
 
@@ -66,7 +87,8 @@ export function renderXdbmlTool (args: RenderArgs): ToolResult {
 
   const lines = [
     `Rendered ${entities} ${entities === 1 ? 'entity' : 'entities'} and ` +
-      `${refs} ${refs === 1 ? 'relationship' : 'relationships'} ` +
+      `${refs} ${refs === 1 ? 'relationship' : 'relationships'}` +
+      `${diagramView ? ` of diagram view '${diagramView}'` : ''} ` +
       `(arrange: ${arrange ?? 'relational'}).`,
   ];
   if (playgroundLink) {

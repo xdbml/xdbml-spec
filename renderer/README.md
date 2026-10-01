@@ -55,8 +55,9 @@ or a `DiagramModel`, and returns an SVG string. Options:
   the full diagram: its members, the Containers holding them, and the
   relationships and Edges whose two ends are members. Field markers and ids
   stay as in the full diagram. A name the document does not declare draws the
-  full diagram; check it first with `diagramViews()` from `@xdbml/parse`.
-  `buildDiagram(doc, collapsedPaths, { diagramView })` takes the same option.
+  full diagram; check it first with `diagramViewNames()`.
+  `buildDiagram(doc, collapsedPaths, { diagramView })` takes the same option,
+  and `diagramViewNames(input)` lists the names a document declares.
 - `theme`: a partial override merged over the default theme.
 - `background`: a solid background color (default transparent, matching the
   playground where the grid is a CSS backdrop).

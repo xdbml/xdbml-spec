@@ -17,11 +17,14 @@
  *                     "background": "..." }.
  *
  * Options (query parameters, or JSON fields on a POST)
- *   arrange     relational (default) | star | none
- *   background  any CSS color for a solid background (default: transparent)
+ *   arrange       relational (default) | star | none
+ *   background    any CSS color for a solid background (default: transparent)
+ *   diagram_view  the name of a diagram view (spec §18) to render instead of
+ *                 the full diagram; `diagramView` in a JSON body. An unknown
+ *                 name is a 400 that lists the declared diagram views.
  */
 
-import { renderToSVG, type ArrangeStrategy } from '@xdbml/render';
+import { renderToSVG, diagramViewNames, type ArrangeStrategy } from '@xdbml/render';
 
 const VERSION = '0.1.0-poc.2';
 
@@ -39,6 +42,7 @@ interface RenderParams {
   arrange?: ArrangeStrategy | 'none';
   background?: string;
   playground?: boolean;
+  diagramView?: string;
 }
 
 const CORS: Record<string, string> = {
@@ -80,6 +84,7 @@ export default {
           arrange: ['relational (default)', 'star', 'none'],
           background: 'any CSS color (default: transparent)',
           playground: 'on (default) | off -- include or omit the "Open in xDBML playground" link',
+          diagram_view: 'name of a diagram view (DiagramView) to render instead of the full diagram; diagramView in a JSON body',
         },
         limits: { maxSourceBytes: MAX_SOURCE_BYTES, selfContainedDocumentsOnly: true },
       });
@@ -137,9 +142,24 @@ function render (source: string, params: RenderParams): Response {
 
   let svg: string;
   try {
+    if (params.diagramView) {
+      // renderToSVG draws the full diagram for a name the document does not
+      // declare; a request for one diagram view gets an error instead.
+      const names = diagramViewNames(source);
+      if (!names.includes(params.diagramView)) {
+        return error(
+          `This document declares no diagram view named '${params.diagramView}'. ` +
+            (names.length
+              ? `Its diagram views: ${names.map((n) => `'${n}'`).join(', ')}.`
+              : 'It declares no DiagramView; omit diagram_view to render the full diagram.'),
+          400,
+        );
+      }
+    }
     svg = renderToSVG(source, {
       arrange: params.arrange,
       background: params.background,
+      diagramView: params.diagramView,
       playgroundLink: params.playground === false ? undefined : PLAYGROUND_URL,
     });
   } catch (e) {
@@ -169,6 +189,7 @@ function paramsFromQuery (params: URLSearchParams): RenderParams {
     arrange: normalizeArrange(params.get('arrange')),
     background: params.get('background') ?? params.get('bg') ?? undefined,
     playground: parseToggle(params.get('playground')),
+    diagramView: params.get('diagram_view')?.trim() || undefined,
   };
 }
 
@@ -180,7 +201,15 @@ function paramsFromObject (obj: Record<string, unknown>, params: URLSearchParams
   const playground = typeof obj.playground === 'boolean'
     ? obj.playground
     : parseToggle(params.get('playground'));
-  return { arrange: normalizeArrange(arrange), background: background ?? undefined, playground };
+  const diagramView = typeof obj.diagramView === 'string'
+    ? obj.diagramView
+    : (params.get('diagram_view') ?? undefined);
+  return {
+    arrange: normalizeArrange(arrange),
+    background: background ?? undefined,
+    playground,
+    diagramView: diagramView?.trim() || undefined,
+  };
 }
 
 /** Toggle parsing: absent or anything but a clear "off" means on. */
@@ -250,6 +279,8 @@ const TESTER_HTML = `<!doctype html>
         <option value="star">star</option>
         <option value="none">none</option>
       </select>
+      <label for="view">Diagram view</label>
+      <input id="view" placeholder="full diagram" size="14">
       <button id="render">Render</button>
     </div>
     <textarea id="src" spellcheck="false">xdbml: 0.3
@@ -277,9 +308,12 @@ Table orders {
   async function run () {
     const src = $('src').value;
     const arrange = $('arrange').value;
+    const view = $('view').value.trim();
     $('status').textContent = 'Rendering...';
     try {
-      const res = await fetch('/render?arrange=' + encodeURIComponent(arrange), {
+      const query = '?arrange=' + encodeURIComponent(arrange) +
+        (view ? '&diagram_view=' + encodeURIComponent(view) : '');
+      const res = await fetch('/render' + query, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: src,

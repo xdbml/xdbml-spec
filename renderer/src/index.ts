@@ -29,7 +29,7 @@
  * events) lives in a separate optional entry, `@xdbml/render/interactive`,
  * so Node and server consumers never pull in DOM code.
  */
-import { parse, flatten } from '@xdbml/parse';
+import { parse, flatten, diagramViews } from '@xdbml/parse';
 import type { XDbmlDocument } from '@xdbml/parse';
 // lz-string is CommonJS; a default import resolves to its exports object in
 // Node-ESM, esbuild, and Vite alike, whereas a named import breaks under
@@ -102,6 +102,19 @@ export function renderToSVG (input: RenderInput, options: RenderOptions = {}): s
   }
 
   return serializeDiagram(model, serializeOpts);
+}
+
+/**
+ * Names of the diagram views (spec §18) a document declares, in order,
+ * without duplicates. `renderToSVG` draws the full diagram for a
+ * `diagramView` the document does not declare; a caller that takes the name
+ * from a user, such as the rendering API, checks it here first and reports
+ * an unknown one. Source text is parsed, and a syntax error throws as in
+ * `renderToSVG`.
+ */
+export function diagramViewNames (input: string | XDbmlDocument): string[] {
+  const doc = typeof input === 'string' ? parse(input) : input;
+  return [...new Set(diagramViews(doc).map((v) => v.name))];
 }
 
 /**

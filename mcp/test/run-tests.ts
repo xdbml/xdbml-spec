@@ -12,6 +12,7 @@
  */
 
 import { validateXdbml, validateXdbmlTool } from '../src/validate-tool.ts';
+import { renderXdbmlTool } from '../src/render-tool.ts';
 import { XDBML_REFERENCE } from '../src/reference.ts';
 
 const isTTY = process.stdout.isTTY;
@@ -333,6 +334,70 @@ Database shop {
     'Valid xDBML: 2 entities and 1 container, all references resolved.',
     'summary',
   );
+});
+
+/* -------------------------------------------------------------------------
+ * v0.6.3: diagram views (spec §18)
+ * ---------------------------------------------------------------------- */
+
+const DIAGRAM_VIEW_DOC = `xdbml: 0.6
+Schema crm {
+  Table customers { id int [pk] }
+  Table leads     { id int [pk] }
+}
+Schema sales {
+  Table orders {
+    id          int [pk]
+    customer_id int [ref: > crm.customers.id]
+  }
+}
+DiagramView ordering {
+  Tables {
+    crm.customers
+    sales.orders
+  }
+}
+DiagramView prospects {
+  Tables { crm.leads }
+}
+`;
+
+test('v0.6.3: validation counts and names the diagram views', () => {
+  const r = validateXdbml(DIAGRAM_VIEW_DOC);
+  assertEqual(r.summary, 'Valid xDBML: 3 entities, 2 containers and 2 diagram views, all references resolved.', 'summary');
+  assertEqual(r.diagramViews.join(','), 'ordering,prospects', 'names');
+  const tail = /```json\n(.*)\n```/s.exec(validateXdbmlTool({ source: DIAGRAM_VIEW_DOC }).content[0].text);
+  assert(!!tail && JSON.parse(tail[1]).diagramViews.length === 2, 'JSON tail carries diagramViews');
+});
+
+test('v0.6.3: a diagram view name that matches nothing is reported', () => {
+  const r = validateXdbml(`${DIAGRAM_VIEW_DOC}DiagramView broken { Tables { crm.nobody } }\n`);
+  assert(r.diagnostics.some((d) => d.code === 'unresolved-diagram-view-name'), 'unresolved-diagram-view-name');
+});
+
+test('v0.6.3: render_xdbml renders a diagram view, and names it in the summary', () => {
+  const r = renderXdbmlTool({ source: DIAGRAM_VIEW_DOC, diagram_view: 'ordering', playground: false });
+  assert(!r.isError, 'not an error');
+  const text = r.content[0].type === 'text' ? r.content[0].text : '';
+  assert(text.startsWith("Rendered 2 entities and 1 relationship of diagram view 'ordering'"), text.split('\n')[0]);
+  const svg = r.content.find((c) => c.type === 'resource');
+  const body = svg && svg.type === 'resource' ? svg.resource.text : '';
+  assert(body.includes('>customers<') && !body.includes('>leads<'), 'SVG draws the members only');
+});
+
+test('v0.6.3: render_xdbml refuses an undeclared diagram view and lists the declared ones', () => {
+  const r = renderXdbmlTool({ source: DIAGRAM_VIEW_DOC, diagram_view: 'nope' });
+  const text = r.content[0].type === 'text' ? r.content[0].text : '';
+  assert(r.isError === true && text.includes("'ordering', 'prospects'"), text);
+  const none = renderXdbmlTool({ source: 'xdbml: 0.6\nTable a { id int [pk] }', diagram_view: 'x' });
+  const t2 = none.content[0].type === 'text' ? none.content[0].text : '';
+  assert(none.isError === true && t2.includes('declares no DiagramView'), t2);
+});
+
+test('v0.6.3: render_xdbml without diagram_view renders the full diagram', () => {
+  const r = renderXdbmlTool({ source: DIAGRAM_VIEW_DOC, playground: false });
+  const text = r.content[0].type === 'text' ? r.content[0].text : '';
+  assert(text.startsWith('Rendered 3 entities and 1 relationship (arrange: relational).'), text.split('\n')[0]);
 });
 
 /* -------------------------------------------------------------------------

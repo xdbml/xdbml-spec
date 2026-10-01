@@ -67,7 +67,9 @@ function createServer (): McpServer {
     'Render an xDBML schema (an entity/relationship data model) to a diagram. ' +
       'Returns a short summary, a PNG image of the diagram, a link to open the ' +
       'schema in the interactive xDBML playground, and the SVG as a resource. ' +
-      'Use this to visualize or sanity-check a data model. Author the schema in ' +
+      'Use this to visualize or sanity-check a data model. When the document ' +
+      'declares diagram views (DiagramView, subject areas of the model), pass ' +
+      'diagram_view to render one of them instead of the full diagram. Author the schema in ' +
       'xDBML, a strict superset of DBML; plain DBML is accepted but prefer xDBML ' +
       'constructs. If unsure of the syntax, call xdbml_reference first.',
     {
@@ -88,6 +90,10 @@ function createServer (): McpServer {
         .boolean()
         .optional()
         .describe('Include the "Open in xDBML playground" link. Default: true.'),
+      diagram_view: z
+        .string()
+        .optional()
+        .describe('Name of a diagram view (a DiagramView declared in the document) to render instead of the full diagram. An unknown name is an error that lists the declared ones.'),
       image: z
         .enum(['png', 'none'])
         .optional()
@@ -152,9 +158,10 @@ streamable-HTTP endpoint:
   POST /mcp
 
 Tools:
-  render_xdbml(source, arrange?, background?, mode?, playground?, image?)
+  render_xdbml(source, arrange?, background?, mode?, playground?, diagram_view?, image?)
     Renders an xDBML schema to SVG (plus a PNG by default) and returns a
-    playground link. xDBML is a strict superset of DBML.
+    playground link. diagram_view renders one of the document's diagram
+    views instead of the full diagram. xDBML is a strict superset of DBML.
   validate_xdbml(source)
     Validates an xDBML schema (syntax + reference resolution) and returns any
     errors or warnings with line/column locations. No rendering.

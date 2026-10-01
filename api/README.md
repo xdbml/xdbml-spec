@@ -24,6 +24,8 @@ Pass as query parameters, or as JSON fields on a `POST`:
 
 - `arrange` -- `relational` (default), `star`, or `none`.
 - `background` -- any CSS color for a solid background (default: transparent).
+- `diagram_view` -- the name of a diagram view the document declares, to render
+  that subset instead of the full diagram. `diagramView` in a JSON body.
 - `playground` -- `on` (default) or `off`. When on, the SVG includes a small
   "Open in xDBML playground" link in a footer band; the link carries the
   schema as an lz-string `#s=` share hash, so opening it loads the diagram into
@@ -76,6 +78,14 @@ that link as a compressed `#s=` share hash); `off` omits it.
 Any CSS color (`#ffffff`, `white`, `#0b1020`, ...) painted behind the diagram.
 Omitted leaves the background transparent. `bg` is accepted as an alias.
 
+### `diagram_view` (optional, default the full diagram)
+
+The name of a diagram view (`DiagramView`, spec §18) declared in the document:
+the response draws its members, the Containers holding them, and the
+relationships whose two ends are members. A name the document does not declare
+returns 400 with the names it does declare. In a JSON body the field is
+`diagramView`.
+
 ### Examples
 
 Small schema, defaults (relational, link on), in a browser:
@@ -88,6 +98,12 @@ Star layout, white background, no playground link:
 
 ```
 https://xdbml-render-api.xdbml.workers.dev/render?src=<encoded>&arrange=star&background=%23ffffff&playground=off
+```
+
+One diagram view of a document:
+
+```
+https://xdbml-render-api.xdbml.workers.dev/render?src=<encoded>&diagram_view=order_to_cash
 ```
 
 Build one in JavaScript:

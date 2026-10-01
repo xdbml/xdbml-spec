@@ -1,38 +1,161 @@
-xDBML -- 0.6.3, delta 3 fix: Diagram label in the diagram toolbar
-Fold into delta 3 before committing it. Replaces one file of delta 3.
+xDBML -- 0.6.3, delta 4: rendering API, MCP server, llms.txt, VS Code 0.6.3
+Base: 0.6.3 delta 3 (renderer, playground and example 16).
+
+Every tool that reads xDBML now handles diagram views. The rendering API
+and the MCP server build from the published packages, so their new
+parameters go live with the 0.6.3 release (tools\release.cmd 0.6.3), which
+publishes @xdbml/parse and @xdbml/render 0.6.3 before installing them in
+mcp\ and api\. Until then, their type-checks fail against the published
+0.6.2 packages, as expected; here they were checked against the sources.
 
 WHAT CHANGED
 ------------
-playground\src\components\diagram\DiagramCanvas.vue
-  The label before the diagram view menu reads "Diagram" in sentence case,
-  at the toolbar's text size (12 px), in a lighter gray than the buttons.
-  Before: 10 px, uppercase, letter-spaced.
-  Six pixels now separate the word from the menu's frame, which shows
-  when the menu is focused or open. Before: two.
+api\src\worker.ts, api\README.md
+  diagram_view (query) and diagramView (JSON body) render one diagram view.
+  An undeclared name returns 400 with the names the document declares; a
+  document with none says so. Tester page: a "Diagram view" field.
+  /health lists the option.
+renderer\src\index.ts, renderer\README.md, renderer\test\run-tests.ts
+  diagramViewNames(input): the names a document declares, in order. The
+  API uses it to refuse an unknown name without depending on the parser,
+  so release.cmd needs no change. One test.
+mcp\src\render-tool.ts, mcp\src\index.ts, mcp\README.md
+  render_xdbml(..., diagram_view?): renders one diagram view; an undeclared
+  name is an error listing the declared ones; the summary names the
+  diagram view. Tool description and landing text updated. The README
+  also lists the existing mode parameter.
+mcp\src\validate-tool.ts
+  The summary counts diagram views ("3 entities, 2 containers and 2
+  diagram views"), unchanged for a document without any; the outcome and
+  the JSON tail carry their names (diagramViews).
+mcp\test\parser-from-source*.mjs, mcp\test\run-tests.ts
+  The test hook also loads @xdbml/render from source. Five tests: the
+  validate summary and JSON tail, an unresolved name, render of a diagram
+  view, an undeclared name with and without diagram views, and the full
+  diagram without the parameter.
+public\llms.txt, mcp\src\reference.ts (regenerated)
+  "Diagram views" section after "Supertype groups", with a checked
+  example and the narrowing rule; a DiagramView row in "What goes where";
+  a Common mistake (an Edges category, parse-error) with its Right form;
+  DiagramView among the top-level declarations of checklist item 6.
+tools\textmate\xdbml.tmLanguage.template.json, scripts\build.mjs,
+scripts\test.mjs, xdbml.tmLanguage.json (rebuilt)
+  diagram-view-categories rule: the seven category keywords before '{',
+  scope keyword.declaration.category.xdbml. Six smoke checks. The site's
+  code blocks use this grammar too.
+tools\vscode-extension\package.json, package-lock.json, CHANGELOG.md,
+README.md, syntaxes\xdbml.tmLanguage.json (synced),
+xdbml-0.6.3.vsix (NEW)
+  Version 0.6.3, following the spec point release; 0.6.2 is skipped,
+  since that release changed no highlighting.
+CHANGELOG.md
+  v0.6.3 Tooling: rendering API, MCP server and llms.txt, VS Code and site
+  highlighting; diagramViewNames in the renderer entry.
+
+FILES
+-----
+  APPLY.txt                                                (EDIT)
+  CHANGELOG.md                                             (EDIT)
+  api\README.md                                            (EDIT)
+  api\src\worker.ts                                        (EDIT)
+  mcp\README.md                                            (EDIT)
+  mcp\src\index.ts                                         (EDIT)
+  mcp\src\reference.ts                                     (EDIT, generated)
+  mcp\src\render-tool.ts                                   (EDIT)
+  mcp\src\validate-tool.ts                                 (EDIT)
+  mcp\test\parser-from-source-hooks.mjs                    (EDIT)
+  mcp\test\parser-from-source.mjs                          (EDIT)
+  mcp\test\run-tests.ts                                    (EDIT)
+  public\llms.txt                                          (EDIT)
+  renderer\README.md                                       (EDIT)
+  renderer\src\index.ts                                    (EDIT)
+  renderer\test\run-tests.ts                               (EDIT)
+  tools\textmate\scripts\build.mjs                         (EDIT)
+  tools\textmate\scripts\test.mjs                          (EDIT)
+  tools\textmate\xdbml.tmLanguage.json                     (EDIT, generated)
+  tools\textmate\xdbml.tmLanguage.template.json            (EDIT)
+  tools\vscode-extension\CHANGELOG.md                      (EDIT)
+  tools\vscode-extension\README.md                         (EDIT)
+  tools\vscode-extension\package-lock.json                 (EDIT)
+  tools\vscode-extension\package.json                      (EDIT)
+  tools\vscode-extension\syntaxes\xdbml.tmLanguage.json    (EDIT, synced)
+  tools\vscode-extension\xdbml-0.6.3.vsix                  (NEW)
 
 APPLY (cmd.exe, opened in the unzipped folder)
 ----------------------------------------------
-Copy the one file over the delta 3 version. Do not copy this APPLY.txt:
-the commit keeps delta 3's.
-
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\playground\src\components\diagram\DiagramCanvas.vue" "%REPO%\playground\src\components\diagram\DiagramCanvas.vue"
+copy /Y "%DELTA%\APPLY.txt"                                               "%REPO%\APPLY.txt"
+copy /Y "%DELTA%\CHANGELOG.md"                                            "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\api\README.md"                                           "%REPO%\api\README.md"
+copy /Y "%DELTA%\api\src\worker.ts"                                       "%REPO%\api\src\worker.ts"
+copy /Y "%DELTA%\mcp\README.md"                                           "%REPO%\mcp\README.md"
+copy /Y "%DELTA%\mcp\src\index.ts"                                        "%REPO%\mcp\src\index.ts"
+copy /Y "%DELTA%\mcp\src\reference.ts"                                    "%REPO%\mcp\src\reference.ts"
+copy /Y "%DELTA%\mcp\src\render-tool.ts"                                  "%REPO%\mcp\src\render-tool.ts"
+copy /Y "%DELTA%\mcp\src\validate-tool.ts"                                "%REPO%\mcp\src\validate-tool.ts"
+copy /Y "%DELTA%\mcp\test\parser-from-source-hooks.mjs"                   "%REPO%\mcp\test\parser-from-source-hooks.mjs"
+copy /Y "%DELTA%\mcp\test\parser-from-source.mjs"                         "%REPO%\mcp\test\parser-from-source.mjs"
+copy /Y "%DELTA%\mcp\test\run-tests.ts"                                   "%REPO%\mcp\test\run-tests.ts"
+copy /Y "%DELTA%\public\llms.txt"                                         "%REPO%\public\llms.txt"
+copy /Y "%DELTA%\renderer\README.md"                                      "%REPO%\renderer\README.md"
+copy /Y "%DELTA%\renderer\src\index.ts"                                   "%REPO%\renderer\src\index.ts"
+copy /Y "%DELTA%\renderer\test\run-tests.ts"                              "%REPO%\renderer\test\run-tests.ts"
+copy /Y "%DELTA%\tools\textmate\scripts\build.mjs"                        "%REPO%\tools\textmate\scripts\build.mjs"
+copy /Y "%DELTA%\tools\textmate\scripts\test.mjs"                         "%REPO%\tools\textmate\scripts\test.mjs"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.json"                    "%REPO%\tools\textmate\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.template.json"           "%REPO%\tools\textmate\xdbml.tmLanguage.template.json"
+copy /Y "%DELTA%\tools\vscode-extension\CHANGELOG.md"                     "%REPO%\tools\vscode-extension\CHANGELOG.md"
+copy /Y "%DELTA%\tools\vscode-extension\README.md"                        "%REPO%\tools\vscode-extension\README.md"
+copy /Y "%DELTA%\tools\vscode-extension\package-lock.json"                "%REPO%\tools\vscode-extension\package-lock.json"
+copy /Y "%DELTA%\tools\vscode-extension\package.json"                     "%REPO%\tools\vscode-extension\package.json"
+copy /Y "%DELTA%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"   "%REPO%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"
+copy /Y "%DELTA%\tools\vscode-extension\xdbml-0.6.3.vsix"                 "%REPO%\tools\vscode-extension\xdbml-0.6.3.vsix"
 
 cd /d %REPO%
 npm run check
-  Expect: the delta 3 counts, unchanged.
-npm run docs:dev
-  /playground/index.html?example=16-diagram-views: the toolbar reads
-  "Diagram" followed by the menu, with a gap before its frame.
-  Stop the dev server with Ctrl+C.
+  Expect: parser 296 passed; renderer 247 (246 before), viewport 14,
+  interactive-mount 47; MCP 75 (67 before); from-mongodb 24; playground
+  55; "check-vsix: xdbml-0.6.3.vsix is in sync with the extension
+  version"; "165 button(s) open the snippet below them"; docs build
+  complete.
+node tools\textmate\scripts\test.mjs
+  Expect: "All checks passed", with six "DiagramView categories" lines.
+cd mcp
+npm run check:reference
+  Expect: "reference.ts is in sync with public/llms.txt."
+cd ..
+git add -A
+git commit -m "0.6.3, delta 4: rendering API, MCP server, llms.txt, VS Code 0.6.3"
 
-Then commit delta 3 as its APPLY.txt says. Delta 4 does not touch this
-file, so it applies on top unchanged.
+The commit may be pushed with deltas 2 and 3. The API and MCP parameters
+go live with the release; the VS Code extension goes to the Marketplace
+when you run, from tools\vscode-extension, npx @vscode/vsce publish (see
+PUBLISH.txt), or upload xdbml-0.6.3.vsix by hand.
 
-VERIFICATION RUN HERE
----------------------
-  vue-tsc clean; playground built; in headless Chromium, light and dark
-  themes, the label renders "Diagram" (text-transform none) and the gap
-  from the end of the word to the focused menu frame measures 6 px.
+Still to do for the release, in a separate step: set the "Released" date
+of the v0.6.3 section of CHANGELOG.md, then tools\release-preflight.cmd and
+tools\release.cmd 0.6.3.
+
+VERIFICATION RUN HERE (Linux, Node 22)
+---------------------------------------
+  npm run check       exit 0 with the counts above
+  type-checks         mcp and api clean against the parser and renderer
+                      sources (tsc with paths to parser\src and renderer\src)
+  API, called in      POST example 16 with diagram_view=order_to_cash: 200
+  process against     SVG with customers and without leads; JSON body
+  the sources         diagramView=parties: 200; diagram_view=nope: 400
+                      "declares no diagram view named 'nope'. Its diagram
+                      views: 'order_to_cash', 'parties', 'catalog_usage'.";
+                      no parameter: the full diagram (both entities)
+  MCP                 render_xdbml summary "Rendered 2 entities and 1
+                      relationship of diagram view 'ordering' (arrange:
+                      relational)."; every llms.txt block checked, including
+                      the new Wrong (parse-error) and Right parts
+  site highlighting   in the built spec, Tables, Containers and Notes in the
+                      18.1 snippet take the color of DiagramView
+  vsix                vsce package: 11 files, the same file list as 0.6.1;
+                      the grammar inside carries diagram-view-categories;
+                      package.json inside reads 0.6.3
+  em-dashes           none in any changed file
