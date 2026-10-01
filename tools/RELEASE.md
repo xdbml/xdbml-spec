@@ -27,6 +27,7 @@ republished.
 `release.cmd` then, halting on any failure:
 
 1. `parser`   bumps, installs, tests, publishes, waits for the registry
+   (up to 30 minutes, with a line each minute)
 2. `renderer` bumps, repoints its `@xdbml/parse` range, tests, publishes, waits
 3. `mcp`      repoints both ranges, bumps, installs, checks, tests, deploys
 4. `api`      repoints its range, installs, checks, deploys
@@ -37,6 +38,15 @@ republished.
 After a failure, fix the cause and rerun the same command. A package already
 on npm at that version is not installed, tested or published again, and every
 other step can run twice, so the script resumes where it stopped.
+
+npm can accept a publish ("+ @xdbml/parse@0.6.3", "Your package is being
+processed") and serve the version only much later. Publishing it a second time
+would fail, since npm never takes the same version twice. So each successful
+`npm publish` leaves a marker file, `%TEMP%\xdbml-release-<version>-parse.published`
+or `-render.published`, and a rerun that finds the marker goes straight back
+to waiting. The last step deletes the markers. If npm still serves nothing
+after 30 minutes, check the e-mail of the npm account, which is where npm
+reports a package it holds back, then rerun.
 
 Every version and range change goes through `npm version` and `npm pkg set`,
 which update `package.json` and `package-lock.json` together. Hand-editing

@@ -18,8 +18,12 @@ REM  stopping is free.
 REM
 REM  After a failure, rerun the same command. A package already on npm at
 REM  this version is not installed, tested or published again, and every
-REM  other step can run twice. The last step commits, pushes, and runs
-REM  tools\github-release.cmd, which tags and publishes the GitHub release.
+REM  other step can run twice. A package this script published that npm does
+REM  not serve yet is waited for, not published again: a successful
+REM  `npm publish` leaves a marker file in %TEMP%, and the marker sends a rerun
+REM  straight to the wait. The wait lasts up to 30 minutes. The last step
+REM  commits, pushes, and runs tools\github-release.cmd, which tags and
+REM  publishes the GitHub release, then deletes the markers.
 REM ===========================================================================
 
 if "%~1"=="" (
@@ -29,6 +33,9 @@ if "%~1"=="" (
 )
 set VER=%~1
 set ROOT=%CD%
+REM Markers of the packages this script published at this version, so a
+REM rerun waits for npm to serve them instead of publishing them again.
+set MARK=%TEMP%\xdbml-release-%VER%
 
 echo.
 echo ============================================================
@@ -53,21 +60,35 @@ if not errorlevel 1 (
   echo   @xdbml/parse@%VER% is already on npm: skipping install, test and publish.
   goto :parseready
 )
+if exist "%MARK%-parse.published" (
+  echo   @xdbml/parse@%VER% was published by an earlier run and npm does not serve
+  echo   it yet: waiting for it, without installing, testing or publishing again.
+  goto :waitparsestart
+)
 call npm install || goto :fail
 call npm test || goto :fail
 call npm publish || goto :fail
+type nul > "%MARK%-parse.published"
 
+:waitparsestart
 echo.
-echo   waiting for the registry to serve %VER% ...
+echo   waiting for the registry to serve @xdbml/parse@%VER% (up to 30 minutes) ...
 set /a TRIES=0
 :waitparse
 set /a TRIES+=1
 call npm view @xdbml/parse@%VER% version --prefer-online >nul 2>&1
 if not errorlevel 1 goto :parseready
-if !TRIES! GEQ 30 (
-  echo ERROR: @xdbml/parse@%VER% still not visible after 5 minutes.
-  echo        Check https://www.npmjs.com/package/@xdbml/parse then rerun the same command.
+if !TRIES! GEQ 180 (
+  echo ERROR: @xdbml/parse@%VER% still not visible after 30 minutes.
+  echo        npm accepted the upload but does not serve it. Check the e-mail of
+  echo        the npm account and https://www.npmjs.com/package/@xdbml/parse,
+  echo        then rerun the same command: it waits again, without publishing.
   goto :fail
+)
+set /a WAITMOD=TRIES %% 6
+if !WAITMOD! EQU 0 (
+  set /a WAITMIN=TRIES / 6
+  echo   still waiting after !WAITMIN! minute^(s^) ...
 )
 timeout /t 10 /nobreak >nul
 goto :waitparse
@@ -86,6 +107,11 @@ if not errorlevel 1 (
   echo   @xdbml/render@%VER% is already on npm: skipping install, test and publish.
   goto :renderready
 )
+if exist "%MARK%-render.published" (
+  echo   @xdbml/render@%VER% was published by an earlier run and npm does not serve
+  echo   it yet: waiting for it, without installing, testing or publishing again.
+  goto :waitrenderstart
+)
 REM npm view reads the registry's full metadata, npm install its abbreviated
 REM metadata, which can lag behind for a few minutes after a publish and fail
 REM with ETARGET. Retry the install until it resolves %VER%.
@@ -100,18 +126,27 @@ goto :installrender
 :installrenderdone
 call npm run test:all || goto :fail
 call npm publish || goto :fail
+type nul > "%MARK%-render.published"
 
+:waitrenderstart
 echo.
-echo   waiting for the registry to serve %VER% ...
+echo   waiting for the registry to serve @xdbml/render@%VER% (up to 30 minutes) ...
 set /a TRIES=0
 :waitrender
 set /a TRIES+=1
 call npm view @xdbml/render@%VER% version --prefer-online >nul 2>&1
 if not errorlevel 1 goto :renderready
-if !TRIES! GEQ 30 (
-  echo ERROR: @xdbml/render@%VER% still not visible after 5 minutes.
-  echo        Check https://www.npmjs.com/package/@xdbml/render then rerun the same command.
+if !TRIES! GEQ 180 (
+  echo ERROR: @xdbml/render@%VER% still not visible after 30 minutes.
+  echo        npm accepted the upload but does not serve it. Check the e-mail of
+  echo        the npm account and https://www.npmjs.com/package/@xdbml/render,
+  echo        then rerun the same command: it waits again, without publishing.
   goto :fail
+)
+set /a WAITMOD=TRIES %% 6
+if !WAITMOD! EQU 0 (
+  set /a WAITMIN=TRIES / 6
+  echo   still waiting after !WAITMIN! minute^(s^) ...
 )
 timeout /t 10 /nobreak >nul
 goto :waitrender
@@ -188,6 +223,7 @@ if errorlevel 1 (
 )
 call git push || goto :fail
 call "%ROOT%\tools\github-release.cmd" %VER% || goto :fail
+del "%MARK%-parse.published" "%MARK%-render.published" >nul 2>&1
 
 echo.
 echo ============================================================
@@ -202,8 +238,8 @@ echo ============================================================
 echo  FAILED in %CD%
 echo  Nothing after this point ran. Fix the error above, then
 echo  rerun the same command: a package already on npm at this
-echo  version is not published again, and every other step can
-echo  run twice.
+echo  version, or published by this script and not served yet,
+echo  is not published again, and every other step can run twice.
 echo ============================================================
 cd /d "%ROOT%"
 exit /b 1

@@ -1,65 +1,75 @@
-xDBML -- 0.6.3 release
-Base: 0.6.3 delta 5 (diagram view notes, and the diagram in the inspector).
+xDBML -- 0.6.3 release, fix: wait for a published package, never publish it twice
+Base: your local main after the interrupted run of tools\release.cmd 0.6.3
+(0.6.3 delta 5, "0.6.3: release date", and the 0.6.3 version bump that
+the run left in parser\package.json and parser\package-lock.json).
 
-Sets the release date of v0.6.3 in CHANGELOG.md to 2026-10-01, then runs
-the release scripts, which edit nothing by hand: they publish
-@xdbml/parse and @xdbml/render 0.6.3, deploy the MCP server and the
-rendering API on them, commit the version bumps, push main, tag v0.6.3 and
-publish the GitHub release from the "## v0.6.3" section of CHANGELOG.md.
-If you release on another day, say so and I'll send the date to match.
+WHAT HAPPENED
+  npm accepted the upload ("+ @xdbml/parse@0.6.3", "Your package is being
+  processed") but did not serve 0.6.3 within the script's 5 minutes. At
+  15:40 UTC the registry still had no trace of it: no 0.6.3 in the package
+  document, the tarball answering 404. A plain rerun would find nothing on
+  npm and publish again, which npm refuses for a version it already holds,
+  so the script would stop at the same place.
+
+WHAT CHANGED
+------------
+tools\release.cmd
+  A successful npm publish leaves a marker file,
+  %TEMP%\xdbml-release-<version>-parse.published (or -render.published).
+  A rerun that finds the marker skips install, test and publish and goes
+  straight to waiting. The wait lasts up to 30 minutes instead of 5, with
+  a line each minute, and its error message says that a rerun waits again.
+  The last step deletes the markers. Line endings stay CRLF.
+tools\RELEASE.md
+  The 30-minute wait and the markers, and where npm reports a package it
+  holds back (the account's e-mail).
 
 FILES
 -----
-  APPLY.txt      (EDIT)
-  CHANGELOG.md   (EDIT: "Released: unreleased" becomes "Released: 2026-10-01")
+  APPLY.txt            (EDIT)
+  tools\release.cmd    (EDIT)
+  tools\RELEASE.md     (EDIT)
 
 APPLY (cmd.exe, opened in the unzipped folder)
 ----------------------------------------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\APPLY.txt"      "%REPO%\APPLY.txt"
-copy /Y "%DELTA%\CHANGELOG.md"   "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\APPLY.txt"           "%REPO%\APPLY.txt"
+copy /Y "%DELTA%\tools\release.cmd"   "%REPO%\tools\release.cmd"
+copy /Y "%DELTA%\tools\RELEASE.md"    "%REPO%\tools\RELEASE.md"
 
 cd /d %REPO%
-npm run check
-  Expect: the delta 5 counts, unchanged.
-git add -A
-git commit -m "0.6.3: release date"
 
-1. PREFLIGHT (changes nothing; the tree must be clean, which the commit
-   above ensures)
-tools\release-preflight.cmd 0.6.3
-  Expect every check to pass: npm login and @xdbml scope, 0.6.3 not yet
-  published for either package, wrangler authenticated, dev tooling
-  present, NODE_ENV not production, reference.ts in sync with llms.txt,
-  every test suite green, clean tree. Stop here if anything fails.
+1. Record that this release already published @xdbml/parse 0.6.3 (the
+   interrupted run printed "+ @xdbml/parse@0.6.3"; it ran the old script,
+   which left no marker):
+type nul > "%TEMP%\xdbml-release-0.6.3-parse.published"
 
-2. RELEASE
+2. Commit the script change on its own. List the files: the interrupted
+   run left the 0.6.3 bump in parser\, which release.cmd commits itself.
+git add APPLY.txt tools\release.cmd tools\RELEASE.md
+git commit -m "release.cmd: wait for a published package instead of publishing it again"
+
+3. Rerun the release. Do not rerun the preflight: it expects a clean tree
+   and an unpublished 0.6.3, and neither holds any longer.
 tools\release.cmd 0.6.3
-  Publishes parse, then render (repointed to parse ^0.6.3), deploys mcp
-  and api on both, prints the live dist-tags, commits the bumps, pushes
-  main, tags v0.6.3 and publishes the GitHub release. After a failure,
-  fix the cause and rerun the same command: it resumes where it stopped.
+  Expect at [1/6]: "@xdbml/parse@0.6.3 is already on npm: skipping ..."
+  if npm serves it by then, or else "was published by an earlier run and
+  npm does not serve it yet: waiting for it ...", a "still waiting" line
+  each minute, then "@xdbml/parse@0.6.3 is live." The script then carries
+  on with render, mcp, api, the commit, the push, the tag and the GitHub
+  release, as before.
+  If it stops again after 30 minutes, check the e-mail of the npm account
+  and https://www.npmjs.com/package/@xdbml/parse before anything else, and
+  send me what you find.
 
-3. VS CODE EXTENSION 0.6.3
-cd tools\vscode-extension
-npx @vscode/vsce publish
-cd ..\..
-  Or upload tools\vscode-extension\xdbml-0.6.3.vsix by hand at
-  https://marketplace.visualstudio.com/manage/publishers/xdbml
+4. Then steps 3 and 4 of the release package: publish the VS Code
+   extension and run the live checks.
 
-4. LIVE CHECKS, once the site has redeployed from the push
-  https://xdbml.org/playground/index.html?example=16-diagram-views
-    the Diagram menu lists Main ERD and three diagram views; a click on
-    an empty area of the canvas shows the Project, then each diagram view
-    with its note
-  https://xdbml.org/spec/current#_18-diagram-view-subject-areas-and-sub-models
-  https://xdbml.org/llms.txt     (the "Diagram views" section)
-  https://xdbml-render-api.xdbml.workers.dev/health
-    options lists diagram_view
-  The MCP server, from a client: render_xdbml with diagram_view on example
-  16 answers "Rendered ... of diagram view 'order_to_cash'"; an unknown
-  name returns the list of declared diagram views.
-  npm view @xdbml/parse version  and  npm view @xdbml/render version
-    both 0.6.3
+VERIFICATION HERE
+  The batch file cannot run on Linux, so the change was reviewed line by
+  line: every new label is reached, the parentheses inside the waiting
+  block are escaped, every path built from %TEMP% is quoted (the folder
+  name may hold a space), %% in "set /a" gives the modulo, and the file
+  keeps CRLF line endings.
