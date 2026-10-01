@@ -184,6 +184,24 @@ export const BSON_TYPES = [
 
 export const BLOCK_KEYWORDS = ['indexes', 'checks', 'constraints', 'records'] as const;
 
+/* -------------------------------------------------------------------------
+ * DiagramView categories (spec §18.1, v0.6.3)
+ *
+ * The words that open a category inside a DiagramView body. `schemas` is
+ * the DBML name of `containers`. Both highlighters color them only when `{`
+ * follows, since an entity or a field may carry one of these names.
+ * ----------------------------------------------------------------------- */
+
+export const DIAGRAM_VIEW_CATEGORIES = [
+  'tables',
+  'views',
+  'containers',
+  'schemas',
+  'tablegroups',
+  'supertypegroups',
+  'notes',
+] as const;
+
 export const TARGET_NATIVE_TYPES = [
   // Oracle
   'number', 'binary_float', 'binary_double', 'clob', 'nclob', 'bfile',

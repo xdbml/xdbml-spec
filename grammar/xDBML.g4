@@ -29,6 +29,12 @@
  *   - View: source_query is a body element only; the settings stay in the
  *     brackets.
  *
+ * v0.6.3 changes (spec §18):
+ *   - diagramViewDefinition is defined here. DBML added DiagramView after
+ *     the 3.13.6 baseline, so there is no upstream rule to inherit. Its
+ *     categories are Tables, Views, Containers (DBML name Schemas),
+ *     TableGroups, SupertypeGroups and Notes; Edges is not one.
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -155,6 +161,10 @@ VIEW                : 'View' ;
 
 SUPERTYPE_GROUP     : 'SupertypeGroup' ;
 
+// ---- §18 DiagramView (defined in v0.6.3) -----------------------------------
+
+DIAGRAM_VIEW        : 'DiagramView' ;
+
 // ---- §17.2 Structural type keywords ---------------------------------------
 
 OBJECT              : 'object' ;
@@ -272,7 +282,7 @@ topLevelStatement
     | tablePartialDefinition       // upstream DBML
     | tableGroupDefinition         // upstream DBML
     | supertypeGroupDefinition     // spec §12 (new in v0.5)
-    | diagramViewDefinition        // upstream DBML
+    | diagramViewDefinition        // spec §18 (defined in v0.6.3)
     | noteDefinition               // upstream DBML
     | useDirective                 //§25  (new in v0.2)
     ;
@@ -289,7 +299,7 @@ topLevelStatement
 // List bodies: Entity (and its synonyms), TablePartial, Edge, View,
 // object-shaped Type, object / struct / record, json schema, oneOf / anyOf /
 // allOf, Enum, constraints, checks, TableGroup, SupertypeGroup, Project, and
-// DiagramView with its categories (upstream DBML). The top level and a
+// DiagramView with its categories (§18). The top level and a
 // Container body hold declarations, separated by whitespace only. A records
 // row ends at the end of its line (§26).
 
@@ -448,7 +458,7 @@ cloneContent
     | tablePartialDefinition
     | tableGroupDefinition
     | supertypeGroupDefinition      // spec §12 (new in v0.5)
-    | diagramViewDefinition
+    | diagramViewDefinition         // spec §18; file scope only (§27.5)
     | noteDefinition
     | fieldDeclaration              // for field-level imports
     | useDirective                  // nested reuses (barrel-file pattern)
@@ -567,6 +577,50 @@ subtypeSettingsBlock
 subtypeSetting
     : 'strategy' COLON IDENTIFIER                              //§12.7.4
     | generalSetting                      // x_* custom properties
+    ;
+
+// ---- §18 DiagramView (defined in v0.6.3) -----------------------------------
+// A named subset of the model's diagram. Each category lists names, or '*'
+// for every element of its kind, and '{ * }' as the whole body lists every
+// element of every category. A DiagramView is top-level only: it never
+// appears in a Container body (§18.1).
+//
+// An unknown category, Edges included, matches no alternative and fails the
+// parse. The other conditions of §18.6 are checked after parsing: a name
+// that resolves to nothing, to several elements, or to an element of another
+// kind; a category written twice; two diagram views with one name; and
+// Containers, Views or SupertypeGroups in a document without a version
+// declaration (§18.5).
+
+diagramViewDefinition
+    : DIAGRAM_VIEW (IDENTIFIER | quotedIdentifier) LBRACE
+        ( listSeparator* STAR listSeparator*
+        | (diagramViewCategory | listSeparator)*
+        )
+      RBRACE
+    ;
+
+diagramViewCategory
+    : diagramViewCategoryKeyword LBRACE (diagramViewItem | listSeparator)* RBRACE
+    ;
+
+diagramViewCategoryKeyword
+    : 'Tables'
+    | 'Views'
+    | 'Containers'
+    | 'Schemas'              // DBML name of Containers
+    | 'TableGroups'
+    | 'SupertypeGroups'
+    | 'Notes'
+    ;
+
+diagramViewItem
+    : STAR
+    | diagramViewName
+    ;
+
+diagramViewName
+    : (IDENTIFIER | quotedIdentifier) (DOT (IDENTIFIER | quotedIdentifier))*
     ;
 
 // ---- §17.2 Type expressions (the core recursive type rule) ----------------

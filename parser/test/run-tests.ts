@@ -21,6 +21,7 @@ import {
   constraintType, isUndirected,
   resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
   viewSourceQuery,
+  diagramViewMembers, diagramViews,
 } from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
@@ -4323,8 +4324,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.3 is newer than this parser supports',
-      source: `xdbml: 0.6.3
+      name: 'v0.6.1 §4: xdbml: 0.6.4 is newer than this parser supports',
+      source: `xdbml: 0.6.4
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -4709,6 +4710,250 @@ function runV062Tests (): TestResult[] {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.6.3: diagram views (spec §18)
+ * ----------------------------------------------------------------------- */
+
+function runV063Tests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string[] =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`);
+  const members = (src: string, name: string): string => {
+    const m = diagramViewMembers(parse(src), name);
+    if (!m) return 'none';
+    return [
+      `E=${m.entities.join(',')}`, `V=${m.views.join(',')}`, `C=${m.containers.join(',')}`,
+      `G=${m.tableGroups.join(',')}`, `S=${m.supertypeGroups.join(',')}`, `N=${m.notes.join(',')}`,
+    ].join(' ');
+  };
+  const parseError = (src: string): string => {
+    try { parse(src); } catch (e) { return e instanceof Error ? e.message : String(e); }
+    return '';
+  };
+
+  const MODEL = `xdbml: 0.6
+Schema sales {
+  Table orders      { id int [pk] }
+  Table order_lines { id int [pk] }
+  Table returns     { id int [pk] }
+  View revenue [materialized: true] {
+    source_query: 'SELECT 1 AS total'
+    total int
+  }
+}
+Schema billing {
+  Table invoices { id int [pk] }
+  Table payments { id int [pk] }
+}
+Schema crm {
+  Table customers { id int [pk] }
+  Table leads     { id int [pk] }
+}
+Note states { 'An order moves from placed to shipped.' }
+`;
+
+  check('v0.6.3 §18.1: a DiagramView parses, with Schemas read as Containers and keywords in any case', () => {
+    const doc = parse(`${MODEL}DiagramView v {\n  schemas { sales }\n  TABLES { sales.orders, crm.customers; }\n  Notes { * }\n}`);
+    const v = doc.statements.find((x) => x.kind === 'DiagramViewDeclaration');
+    if (!v || v.kind !== 'DiagramViewDeclaration') return 'no DiagramViewDeclaration';
+    const got = v.categories.map((c) => `${c.keyword}->${c.category}${c.wildcard ? '*' : ''}:${c.items.map((i) => i.name).join('+')}`).join(' ');
+    return got === 'schemas->Containers:sales TABLES->Tables:sales.orders+crm.customers Notes->Notes*:' ? undefined : got;
+  });
+  check('v0.6.3 §18.1: a quoted name and a body-level * parse; the body-level * lists every category', () => {
+    const doc = parse('Table a { id int [pk] }\nDiagramView "Sales team" { * }');
+    const v = diagramViews(doc)[0];
+    if (!v || v.name !== 'Sales team' || !v.wildcardBody) return JSON.stringify(v);
+    return members('Table a { id int [pk] }\nTable b { id int [pk] }\nDiagramView all { * }', 'all') === 'E=a,b V= C= G= S= N=' ? undefined : members('Table a { id int [pk] }\nTable b { id int [pk] }\nDiagramView all { * }', 'all');
+  });
+  check('v0.6.3 §18.1: Edges, an unknown category, a DiagramView in a Container and * beside a body-level * fail the parse', () => {
+    const edges = parseError('xdbml: 0.6\nTable a { id int [pk] }\nDiagramView v { Edges { * } }');
+    const unknown = parseError('xdbml: 0.6\nDiagramView v { Entities { a } }');
+    const inContainer = parseError('xdbml: 0.6\nSchema s { Table a { id int [pk] }\n DiagramView v { Tables { a } } }');
+    const star = parseError('xdbml: 0.6\nDiagramView v { * Tables { a } }');
+    const problems: string[] = [];
+    if (!edges.includes('Edges is not a DiagramView category')) problems.push(`edges: ${edges}`);
+    if (!unknown.includes('Unknown DiagramView category')) problems.push(`unknown: ${unknown}`);
+    if (!inContainer.includes('top-level declaration')) problems.push(`container: ${inContainer}`);
+    if (!star.includes("A '*' body")) problems.push(`star: ${star}`);
+    return problems.length ? problems.join('; ') : undefined;
+  });
+  check('v0.6.3 §18.2: a listed Container is narrowed by its entities under Tables, Container by Container', () => {
+    const got = members(`${MODEL}DiagramView v {\n Containers { sales billing }\n Tables { sales.orders sales.order_lines crm.customers }\n}`, 'v');
+    return got === 'E=sales.orders,sales.order_lines,billing.invoices,billing.payments,crm.customers V=sales.revenue C=sales,billing,crm G= S= N='
+      ? undefined : got;
+  });
+  check('v0.6.3 §18.2: Views narrows the database views of a listed Container separately from Tables', () => {
+    const got = members(`${MODEL}DiagramView v {\n Containers { sales }\n Views { sales.revenue }\n}`, 'v');
+    return got === 'E=sales.orders,sales.order_lines,sales.returns V=sales.revenue C=sales G= S= N=' ? undefined : got;
+  });
+  check('v0.6.3 §18.2: an omitted or empty category lists nothing; an empty body is an empty diagram view', () => {
+    const a = members(`${MODEL}DiagramView v { Tables { crm.leads } Notes { } }`, 'v');
+    const b = members(`${MODEL}DiagramView v { }`, 'v');
+    if (a !== 'E=crm.leads V= C=crm G= S= N=') return `a: ${a}`;
+    return b === 'E= V= C= G= S= N=' ? undefined : `b: ${b}`;
+  });
+  check('v0.6.3 §18.2: TableGroups and SupertypeGroups contribute all their members, whatever narrows their Container', () => {
+    const src = `xdbml: 0.6
+Schema crm {
+  Table party        { id int [pk] }
+  Table person       { birth_date date }
+  Table organization { vat varchar }
+  Table customers    { id int [pk] }
+  Table leads        { id int [pk] }
+}
+SupertypeGroup legal_nature [supertype: crm.party] {
+  crm.person
+  crm.organization
+}
+TableGroup prospects { crm.leads }
+DiagramView v {
+  Containers { crm }
+  Tables { crm.customers }
+  SupertypeGroups { legal_nature }
+  TableGroups { prospects }
+}`;
+    const got = members(src, 'v');
+    return got === 'E=crm.party,crm.person,crm.organization,crm.customers,crm.leads V= C=crm G=prospects S=legal_nature N='
+      ? undefined : got;
+  });
+  check('v0.6.3 §18.4: a TableGroup frame and a supertype group symbol follow the members, named or not', () => {
+    const src = `xdbml: 0.6
+Table party  { id int [pk] }
+Table person { birth date }
+Table firm   { vat varchar }
+SupertypeGroup kinds [supertype: party] { person firm }
+TableGroup people { party person }
+DiagramView v { Tables { party person } }
+DiagramView w { Tables { party } }`;
+    const v = members(src, 'v');
+    const w = members(src, 'w');
+    if (v !== 'E=party,person V= C= G=people S=kinds N=') return `v: ${v}`;
+    return w === 'E=party V= C= G=people S= N=' ? undefined : `w: ${w}`;
+  });
+  check('v0.6.3 §18.3: an unqualified name prefers the element outside any Container, then the one inside a Container', () => {
+    const top = members('Table users { id int [pk] }\nTable core.users { id int [pk] }\nDiagramView v { Tables { users } }', 'v');
+    const one = members('xdbml: 0.6\nSchema a { Table users { id int [pk] } }\nDiagramView v { Tables { users } }', 'v');
+    if (top !== 'E=users V= C= G= S= N=') return `top: ${top}`;
+    return one === 'E=a.users V= C=a G= S= N=' ? undefined : `one: ${one}`;
+  });
+  check('v0.6.3 §18.3: Table core.users is in the implicit Container core, listed by Containers or Schemas', () => {
+    const got = members('Table core.users { id int [pk] }\nTable core.roles { id int [pk] }\nTable other { id int [pk] }\nDiagramView v { Schemas { core } }', 'v');
+    return got === 'E=core.users,core.roles V= C=core G= S= N=' ? undefined : got;
+  });
+  check('v0.6.3 §18.3: an alias names its entity under Tables; an alias that repeats a name does not', () => {
+    const aliased = members('Table very_long_users as U { id int [pk] }\nDiagramView v { Tables { U } }', 'v');
+    if (aliased !== 'E=very_long_users V= C= G= S= N=') return `aliased: ${aliased}`;
+    const shadow = codes('xdbml: 0.6\nTable a as b { id int [pk] }\nTable b { id int [pk] }\nDiagramView v { Tables { b } }');
+    const shadowMembers = members('xdbml: 0.6\nTable a as b { id int [pk] }\nTable b { id int [pk] }\nDiagramView v { Tables { b } }', 'v');
+    return shadow.length === 0 && shadowMembers === 'E=b V= C= G= S= N=' ? undefined : `${shadow} ${shadowMembers}`;
+  });
+  check('v0.6.3 §18.6: unknown, ambiguous and wrong-category names are errors', () => {
+    const found = codes(`xdbml: 0.6
+Schema a { Table orders { id int [pk] } }
+Schema b { Table orders { id int [pk] } }
+View revenue [materialized: true] { source_query: 'SELECT 1 AS t'
+ t int }
+Edge e [source: a.orders, target: b.orders] { }
+DiagramView v {
+  Tables { order orders revenue e }
+  Notes { a }
+}`).join(' ');
+    const want = ['error:unresolved-diagram-view-name', 'error:ambiguous-diagram-view-name', 'error:diagram-view-wrong-category'];
+    const wrong = found.split(' ').filter((c) => c === 'error:diagram-view-wrong-category').length;
+    return want.every((w) => found.includes(w)) && wrong === 3 ? undefined : found;
+  });
+  check('v0.6.3 §18.6: messages name the right category and the qualified candidates', () => {
+    const d = resolveNames(parse(`xdbml: 0.6
+Schema a { Table orders { id int [pk] } }
+Schema b { Table orders { id int [pk] } }
+View revenue [materialized: true] { source_query: 'SELECT 1 AS t'
+ t int }
+DiagramView v { Tables { orders revenue } }`)).diagnostics.map((x) => x.message).join(' | ');
+    return d.includes("'a.orders' and 'b.orders'") && d.includes('list it under Views') ? undefined : d;
+  });
+  check('v0.6.3 §18.6: a category twice is an error, and a warning without a version declaration; two diagram views with one name are an error', () => {
+    const declared = codes('xdbml: 0.6\nSchema s { Table a { id int [pk] } }\nDiagramView v { Schemas { s } Containers { s } }');
+    const dbml = codes('Table a { id int [pk] }\nTable b { id int [pk] }\nDiagramView v { Tables { a } Tables { b } }');
+    const dbmlMembers = members('Table a { id int [pk] }\nTable b { id int [pk] }\nDiagramView v { Tables { a } Tables { b } }', 'v');
+    const dup = codes('xdbml: 0.6\nTable a { id int [pk] }\nDiagramView v { Tables { a } }\nDiagramView v { Tables { a } }');
+    if (declared.join() !== 'error:duplicate-diagram-view-category') return `declared: ${declared}`;
+    if (dbml.join() !== 'warning:duplicate-diagram-view-category') return `dbml: ${dbml}`;
+    if (dbmlMembers !== 'E=a,b V= C= G= S= N=') return `lists do not combine: ${dbmlMembers}`;
+    return dup.join() === 'error:duplicate-diagram-view' ? undefined : `dup: ${dup}`;
+  });
+  check('v0.6.3 §18.5: Containers, Views and SupertypeGroups need a version declaration; Schemas does not', () => {
+    const ext = codes('Table core.users { id int [pk] }\nDiagramView v { Containers { core } Views { * } SupertypeGroups { * } }');
+    const dbml = codes('Table core.users { id int [pk] }\nDiagramView v { Schemas { core } Tables { * } Notes { * } TableGroups { * } }');
+    const n = ext.filter((c) => c === 'error:construct-requires-version').length;
+    if (n !== 3) return `ext: ${ext}`;
+    return dbml.length === 0 ? undefined : `dbml: ${dbml}`;
+  });
+  check('v0.6.3 §27: reuse { diagramview X } imports the diagram view, not a database view named X', () => {
+    const files: Record<string, string> = {
+      '/w/a.xdbml': `xdbml: 0.6
+Table orders { id int [pk] }
+View reports [materialized: true] { source_query: 'SELECT 1 AS t'
+ t int }
+DiagramView reports { Tables { orders } }`,
+      '/w/main.xdbml': "xdbml: 0.6\nTable orders { id int [pk] }\nreuse { diagramview reports } from './a'",
+    };
+    const opts: ParseOptions = { filePath: '/w/main.xdbml', readFile: (p: string) => { if (!(p in files)) throw new Error(`no ${p}`); return files[p]; } } as ParseOptions;
+    const doc = parse(files['/w/main.xdbml'], opts);
+    const kinds = flatten(doc).statements.map((x) => x.kind).join(',');
+    if (kinds !== 'EntityDeclaration,DiagramViewDeclaration') return kinds;
+    const got = diagramViewMembers(doc, 'reports')?.entities.join();
+    return got === 'orders' ? undefined : `members: ${got}`;
+  });
+  check('v0.6.3 §27.5: a diagramview import in a Container body fails; a reuse * in a Container body moves a DiagramView to the top level', () => {
+    const files: Record<string, string> = {
+      '/w/a.xdbml': 'xdbml: 0.6\nTable orders { id int [pk] }\nDiagramView o { Tables { orders } }',
+      '/w/bad.xdbml': "xdbml: 0.6\nSchema s {\n reuse { diagramview o } from './a'\n}",
+      '/w/star.xdbml': "xdbml: 0.6\nSchema s {\n reuse * from './a'\n}",
+    };
+    const opts = (f: string): ParseOptions => ({ filePath: f, readFile: (p: string) => files[p] } as ParseOptions);
+    let badMsg = '';
+    try { parse(files['/w/bad.xdbml'], opts('/w/bad.xdbml')); } catch (e) { badMsg = (e as Error).message; }
+    if (!badMsg.includes('import it at file scope')) return `bad: ${badMsg}`;
+    const flat = flatten(parse(files['/w/star.xdbml'], opts('/w/star.xdbml')));
+    const kinds = flat.statements.map((x) => x.kind).join(',');
+    const inBody = flat.statements.some((x) => x.kind === 'ContainerDeclaration' && x.body.some((b) => (b as { kind: string }).kind === 'DiagramViewDeclaration'));
+    return kinds === 'ContainerDeclaration,DiagramViewDeclaration' && !inBody ? undefined : kinds;
+  });
+  check('v0.6.3 §4.1: the parser reads xdbml: 0.6.3 and refuses 0.6.4', () => {
+    parse('xdbml: 0.6.3\nTable a { id int [pk] }');
+    try { parse('xdbml: 0.6.4\nTable a { id int [pk] }'); } catch { return undefined; }
+    return '0.6.4 accepted';
+  });
+  check('v0.6.3: Monarch colors a category keyword before { only', () => {
+    const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('(?:tables'));
+    if (!rule) return 'rule missing';
+    const re = new RegExp(`^(?:${rule[0].source})`, 'i');
+    const yes = ['Tables {', 'schemas{', 'SupertypeGroups  {', 'Notes { *'];
+    const no = ['tables varchar', 'notes int', 'Tablesx {', 'views object'];
+    const bad = [...yes.filter((t) => !re.test(t)), ...no.filter((t) => re.test(t))];
+    return bad.length ? bad.join('; ') : undefined;
+  });
+  check('v0.6.3: every DIAGRAM_VIEW_CATEGORIES keyword opens a category', () => {
+    const bad: string[] = [];
+    for (const k of keywordArrays.DIAGRAM_VIEW_CATEGORIES) {
+      const doc = parse(`xdbml: 0.6\nDiagramView v { ${k} { * } }`);
+      const v = doc.statements[0];
+      if (v.kind !== 'DiagramViewDeclaration' || v.categories.length !== 1) bad.push(k);
+    }
+    return bad.length ? bad.join(', ') : undefined;
+  });
+  return results;
+}
+
 function report (title: string, results: TestResult[]): { passed: number; failed: number } {
   console.log(`\n${CYAN}== ${title} ==${RESET}`);
   let passed = 0;
@@ -4737,12 +4982,14 @@ function main (): void {
   const examples = runExampleTests();
   const keywords = runKeywordConsistencyTests();
   const v062 = runV062Tests();
+  const v063 = runV063Tests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
   const kr = report('Keyword-consistency tests (parser/src/keywords.ts vs parser)', keywords);
   const vr = report('v0.6.2 fixes', v062);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed;
+  const dr = report('v0.6.3 diagram views', v063);
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

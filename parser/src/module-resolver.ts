@@ -100,7 +100,17 @@ function flattenTopLevel (
     return;
   }
   if (stmt.kind === 'ContainerDeclaration') {
-    out.push(flattenContainer(stmt));
+    // A `reuse *` inside a Container body can clone a DiagramView into it.
+    // A DiagramView is top-level only (spec §18.1), so it moves out to the
+    // top level, after its Container.
+    const flat = flattenContainer(stmt);
+    const hoisted = flat.body.filter((b) => (b as { kind: string }).kind === 'DiagramViewDeclaration');
+    if (hoisted.length === 0) {
+      out.push(flat);
+      return;
+    }
+    out.push({ ...flat, body: flat.body.filter((b) => !hoisted.includes(b)) });
+    for (const view of hoisted) out.push(view as unknown as TopLevelStatement);
     return;
   }
   // All other top-level statement kinds pass through unchanged.
@@ -498,8 +508,15 @@ function findImportTarget (
     }
     return undefined;
   }
-  // View / DiagramView: top-level OR container-scoped.
-  if (item.elementType === 'view' || item.elementType === 'diagramview') {
+  // DiagramView (spec §18): top-level only, bare name. Its names resolve
+  // in the importing document, like the members of a TableGroup.
+  if (item.elementType === 'diagramview') {
+    return doc.statements.find(
+      (s) => s.kind === 'DiagramViewDeclaration' && s.name === path,
+    );
+  }
+  // View: top-level OR container-scoped.
+  if (item.elementType === 'view') {
     if (segments.length === 1) {
       return doc.statements.find(
         (s) => s.kind === 'ViewDeclaration' && s.name === segments[0],
@@ -771,6 +788,8 @@ function applyAlias (
     case 'TableGroupDeclaration':
       return { ...stmt, name: item.alias };
     case 'SupertypeGroupDeclaration':
+      return { ...stmt, name: item.alias };
+    case 'DiagramViewDeclaration':
       return { ...stmt, name: item.alias };
     case 'TablePartialDeclaration':
       return { ...stmt, name: item.alias };

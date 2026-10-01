@@ -31,6 +31,7 @@ import {
   SETTING_FLAGS,
   SETTING_KEYS,
   GRANULARITY_VALUES,
+  DIAGRAM_VIEW_CATEGORIES,
 } from './keywords.ts';
 
 /** Subset of Monaco's LanguageConfiguration -- only the fields we set. */
@@ -241,6 +242,10 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       // or at the top level before a name and '{'. Anywhere else it names a
       // field, so it takes the identifier color like any other field name.
       [/note(?![\w$])(?!\s*[:{])(?!\s+(?:[A-Za-z_][\w$]*|"[^"]*")\s*\{)/, 'identifier'],
+
+      // Spec §18.1 (v0.6.3): a DiagramView category keyword opens its list
+      // only before '{'. Elsewhere the same word names an entity or a field.
+      [new RegExp(`(?:${DIAGRAM_VIEW_CATEGORIES.join('|')})(?![\\w$])(?=\\s*\\{)`), 'keyword.declaration'],
 
       // Identifiers and keyword recognition.
       // The parser is the authority on keyword vs identifier disambiguation;

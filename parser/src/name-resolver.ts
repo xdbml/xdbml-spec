@@ -60,6 +60,7 @@ import { checkSupertypeGroups } from './supertypes.ts';
 import { checkConstraints, checkTargets } from './constraints.ts';
 import { versionAtLeast } from './relationships.ts';
 import { checkViews } from './views.ts';
+import { checkDiagramViews } from './diagram-views.ts';
 
 /* -------------------------------------------------------------------------
  * Public types
@@ -155,7 +156,13 @@ export type DiagnosticCode =
   | 'empty-supertype-group'
   // Views (spec §14.7, v0.6.1)
   | 'source-query-in-settings'
-  | 'duplicate-source-query';
+  | 'duplicate-source-query'
+  // Diagram views (spec §18.6, v0.6.3)
+  | 'duplicate-diagram-view'
+  | 'duplicate-diagram-view-category'
+  | 'unresolved-diagram-view-name'
+  | 'ambiguous-diagram-view-name'
+  | 'diagram-view-wrong-category';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -390,6 +397,9 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 6: view source queries (spec §14.7).
   diagnostics.push(...checkViews(flat));
+
+  // Pass 7: diagram views (spec §18.6).
+  diagnostics.push(...checkDiagramViews(flat));
 
   return { diagnostics, symbols };
 }

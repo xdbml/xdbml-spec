@@ -1,67 +1,124 @@
-xDBML -- site: Specification menu with superseded versions folded
-Base: origin/main 99f43e0 (release 0.6.2). Independent of the 0.6.3
-deltas: it touches neither the spec nor any package, so it applies before
-or after "0.6.3, delta 1" and needs no version number.
+xDBML -- 0.6.3, delta 2: grammar and parser (diagram views)
+Base: origin/main ce1294f (site: Specification menu), with 0.6.3 delta 1
+(b4a290c) in it.
+
+The parser now reads DiagramView as Chapter 18 defines it. The renderer and
+playground ignore the new declaration until delta 3, so a document with a
+diagram view still draws its full diagram. Commit locally and do NOT push
+until delta 3: the deployed playground would accept diagram views it cannot
+show yet.
 
 WHAT CHANGED
 ------------
-.vitepress\config.ts
-  One version list, read from spec\ the way prepare-spec.mjs finds the
-  newest file (vN.M.md and vN.M.P.md, numeric sort). The newest is the
-  current draft; the others are superseded. Publishing v0.7 needs no edit
-  here: adding spec\v0.7.md moves v0.6 into the superseded group.
-  Top-bar "Specification" dropdown: Current draft (v0.6), All versions,
-  Grammar. A VitePress dropdown cannot fold a sub-list, so the superseded
-  versions leave it; the All versions page and the sidebar keep them.
-  Sidebar of /spec/ and /grammar/ pages (one shared group instead of two
-  copies): All versions, Current draft, v0.6, then "Superseded versions"
-  as a collapsed group holding v0.5 to v0.1, without the "(superseded)"
-  suffix. On a superseded page the group opens by itself (VitePress
-  useSidebarControl expands a collapsed group holding the active link).
-scripts\prepare-spec.mjs
-  Header comment: the menu no longer needs a hand edit; only the version
-  table in spec\index.md does.
+parser\src\ast.ts
+  DiagramViewDeclaration (name, wildcardBody, categories), DiagramViewCategory
+  (canonical category, keyword as written, wildcard, items) and
+  DiagramViewItem (name as written, span). Joins TopLevelStatement.
+parser\src\parser.ts
+  parseDiagramView at the top level, in every document. Category keywords
+  are case-insensitive; Schemas reads as Containers; lists follow 3.9.
+  Parse errors, each citing 18.1: an Edges category, an unknown category,
+  a body-level * with anything beside it, a DiagramView in a Container, a
+  diagramview import in a Container body. SUPPORTED_XDBML_VERSION 0.6.3.
+parser\src\diagram-views.ts  (NEW)
+  diagramViews(doc), diagramViewMembers(doc, name), checkDiagramViews(doc).
+  Members follow 18.2: Tables and Views first; each listed Container adds
+  its entities unless Tables names one of them, and its database views
+  unless Views names one of them; TableGroups and SupertypeGroups add all
+  their members. Frames follow 18.4. Names follow 18.3: qualified id;
+  else the element outside any Container; else the one inside a Container;
+  an alias under Tables. Table core.users belongs to the implicit Container
+  core.
+parser\src\name-resolver.ts
+  Pass 7 runs checkDiagramViews. New codes: unresolved-diagram-view-name,
+  ambiguous-diagram-view-name, diagram-view-wrong-category,
+  duplicate-diagram-view, duplicate-diagram-view-category (warning without
+  a version declaration, where the lists combine). Extension categories
+  without a version declaration reuse construct-requires-version.
+parser\src\module-resolver.ts
+  reuse { diagramview X } finds the DiagramView X (it found a database view
+  of that name); applyAlias covers DiagramView; flatten() moves a
+  DiagramView that a container-level reuse * cloned into a Container body
+  out to the top level.
+parser\src\keywords.ts, parser\src\monarch.ts
+  DIAGRAM_VIEW_CATEGORIES; Monaco colors them as declarations before '{'
+  only, so an entity or field named tables or notes keeps its color.
+parser\src\index.ts, parser\README.md
+  Exports and a short README section for the diagram view helpers.
+parser\test\run-tests.ts
+  New "v0.6.3 diagram views" group, 20 checks. The version-refusal case
+  moves from 0.6.3 to 0.6.4.
+grammar\xDBML.g4
+  diagramViewDefinition, diagramViewCategory, diagramViewCategoryKeyword,
+  diagramViewItem, diagramViewName and the DIAGRAM_VIEW token. The rule
+  was referenced but never defined; no upstream DBML 3.13.6 rule exists.
+grammar\test-cases.md
+  Twelve v0.6.3 cases.
+CHANGELOG.md
+  v0.6.3: Tooling entries for the parser and the grammar.
+
+DECISIONS APPLIED (from the delta 1 review and the follow-up)
+  Unknown category and DiagramView in a Container: parse errors. Every
+  other 18.6 condition: a diagnostic, so the rest still parses and draws.
 
 FILES
 -----
-  APPLY.txt                 (EDIT)
-  .vitepress\config.ts      (EDIT)
-  scripts\prepare-spec.mjs  (EDIT, comment only)
+  APPLY.txt                        (EDIT)
+  CHANGELOG.md                     (EDIT)
+  grammar\test-cases.md            (EDIT)
+  grammar\xDBML.g4                 (EDIT)
+  parser\README.md                 (EDIT)
+  parser\src\ast.ts                (EDIT)
+  parser\src\diagram-views.ts      (NEW)
+  parser\src\index.ts              (EDIT)
+  parser\src\keywords.ts           (EDIT)
+  parser\src\module-resolver.ts    (EDIT)
+  parser\src\monarch.ts            (EDIT)
+  parser\src\name-resolver.ts      (EDIT)
+  parser\src\parser.ts             (EDIT)
+  parser\test\run-tests.ts         (EDIT)
 
 APPLY (cmd.exe, opened in the unzipped folder)
 ----------------------------------------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\APPLY.txt"                      "%REPO%\APPLY.txt"
-copy /Y "%DELTA%\.vitepress\config.ts"           "%REPO%\.vitepress\config.ts"
-copy /Y "%DELTA%\scripts\prepare-spec.mjs"       "%REPO%\scripts\prepare-spec.mjs"
+copy /Y "%DELTA%\APPLY.txt"                       "%REPO%\APPLY.txt"
+copy /Y "%DELTA%\CHANGELOG.md"                    "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\grammar\test-cases.md"           "%REPO%\grammar\test-cases.md"
+copy /Y "%DELTA%\grammar\xDBML.g4"                "%REPO%\grammar\xDBML.g4"
+copy /Y "%DELTA%\parser\README.md"                "%REPO%\parser\README.md"
+copy /Y "%DELTA%\parser\src\ast.ts"               "%REPO%\parser\src\ast.ts"
+copy /Y "%DELTA%\parser\src\diagram-views.ts"     "%REPO%\parser\src\diagram-views.ts"
+copy /Y "%DELTA%\parser\src\index.ts"             "%REPO%\parser\src\index.ts"
+copy /Y "%DELTA%\parser\src\keywords.ts"          "%REPO%\parser\src\keywords.ts"
+copy /Y "%DELTA%\parser\src\module-resolver.ts"   "%REPO%\parser\src\module-resolver.ts"
+copy /Y "%DELTA%\parser\src\monarch.ts"           "%REPO%\parser\src\monarch.ts"
+copy /Y "%DELTA%\parser\src\name-resolver.ts"     "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\src\parser.ts"            "%REPO%\parser\src\parser.ts"
+copy /Y "%DELTA%\parser\test\run-tests.ts"        "%REPO%\parser\test\run-tests.ts"
 
 cd /d %REPO%
 npm run check
-  Expect: every suite unchanged (parser 275 passed, renderer 218, viewport
-  14, interactive-mount 42, MCP 67, from-mongodb 24, playground 52);
-  "164 button(s) open the snippet below them"; docs build complete.
-npm run docs:dev
-  Check, at the local URL VitePress prints:
-    the Specification dropdown: Current draft (v0.6), All versions, Grammar
-    /spec/v0.6     sidebar: "Superseded versions" closed
-    /spec/v0.3     sidebar: "Superseded versions" open, v0.3 highlighted
-    /grammar/      sidebar: same group as on /spec/
-  Stop the dev server with Ctrl+C.
+  Expect: parser 295 passed (275 before); renderer 218, viewport 14,
+  interactive-mount 42, MCP 67, from-mongodb 24, playground 52, all
+  unchanged; "164 button(s) open the snippet below them"; docs build
+  complete.
 git add -A
-git commit -m "site: Specification menu, superseded versions in a collapsed group"
+git commit -m "0.6.3, delta 2: grammar and parser (diagram views)"
 
-If "0.6.3, delta 1" is already committed and not pushed, a push now also
-publishes that spec text ahead of tool support. Push with the parser delta,
-or push now if the spec text may go live first.
+Do NOT push until delta 3.
 
 VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
-  npm run check     exit 0: every suite unchanged, 164 spec buttons match,
-                    docs build complete
-  built pages       spec/v0.6, spec/current and grammar/index render the
-                    group closed; spec/v0.3 renders it with has-active,
-                    which the client opens on load; links in order v0.6,
-                    v0.5, v0.4, v0.3, v0.2, v0.1
-  nav               "Current draft (v0.6)" in the built home page
+  npm run check         exit 0 with the counts above
+  parser type-check     tsc --noEmit clean, test file included
+  grammar test cases    12 v0.6.3 cases run against the parser: 4 valid,
+                        1 valid with a warning, 7 invalid with the parse
+                        error or diagnostic each names
+  grammar rule check    diagramViewDefinition is now defined; the rules
+                        still referenced without a definition are the
+                        upstream noteDefinition and recordsBlock, as before
+  renderer probe        the draft example 16 (four Containers, three
+                        diagram views) renders its full diagram unchanged
+  em-dashes             none in any changed file

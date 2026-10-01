@@ -23,6 +23,10 @@ import type {
   CloneBlock,
   ContainerBodyItem,
   ContainerDeclaration,
+  DiagramViewCategory,
+  DiagramViewCategoryName,
+  DiagramViewDeclaration,
+  DiagramViewItem,
   ContainerKeyword,
   EdgeDeclaration,
   EntityBodyItem,
@@ -115,7 +119,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6.2';
+export const SUPPORTED_XDBML_VERSION = '0.6.3';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -161,6 +165,20 @@ const IMPORT_ELEMENT_TYPES = new Set([
   'type', 'edge', 'view', 'diagramview',
   'field', 'supertypegroup',
 ]);
+
+/**
+ * DiagramView categories (spec §18.1), by lowercased keyword. `Schemas`, the
+ * DBML name, reads as `Containers`, after the `Schema` keyword (§6.2).
+ */
+const DIAGRAM_VIEW_CATEGORIES: Readonly<Record<string, DiagramViewCategoryName>> = {
+  tables: 'Tables',
+  views: 'Views',
+  containers: 'Containers',
+  schemas: 'Containers',
+  tablegroups: 'TableGroups',
+  supertypegroups: 'SupertypeGroups',
+  notes: 'Notes',
+};
 
 const STRUCTURAL_TYPE_KEYWORDS = new Set([
   'object', 'struct', 'record', 'array', 'list', 'map', 'dict', 'dictionary',
@@ -431,6 +449,7 @@ export class Parser {
     if (k === 'tablepartial') return this.parseTablePartial();
     if (k === 'tablegroup') return this.parseTableGroup();
     if (k === 'supertypegroup') return this.parseSupertypeGroup();
+    if (k === 'diagramview') return this.parseDiagramView();
     if (k === 'note') return this.parseNoteDeclaration();
     if (k === 'records') return this.parseTopLevelRecords();
     if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
@@ -579,6 +598,12 @@ export class Parser {
         body.push(this.parseEnum());
       } else if (k === 'use' || k === 'reuse') {
         body.push(this.parseModuleDirective('container-body'));
+      } else if (k === 'diagramview') {
+        throw new ParseError(
+          `A DiagramView is a top-level declaration and never appears in a Container (spec §18.1). ` +
+          `Move it out of Container '${name}'.`,
+          t.start,
+        );
       } else {
         // Unknown line; tolerate as no-op rather than fail the whole parse.
         throw new ParseError(
@@ -1005,6 +1030,14 @@ export class Parser {
       throw new ParseError(
         `Unknown import element type '${elemTok.text}'. ` +
         `Expected one of: ${Array.from(IMPORT_ELEMENT_TYPES).join(', ')}.`,
+        elemTok.start,
+      );
+    }
+    if (elementType === 'diagramview' && context !== 'file-scope') {
+      // Spec §18.1, §27.5: a DiagramView is a top-level declaration, so its
+      // import goes at file scope, where the declaration itself would.
+      throw new ParseError(
+        'A DiagramView is a top-level declaration: import it at file scope, not inside a Container body (spec §18.1, §27.5).',
         elemTok.start,
       );
     }
@@ -2131,6 +2164,119 @@ export class Parser {
       name,
       settings,
       members,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /* ----- DiagramView (spec §18, defined in v0.6.3) ----- */
+
+  /**
+   * `DiagramView <name> { <Category> { <names> | * } ... }`, or
+   * `DiagramView <name> { * }` for every element of every category.
+   * Category keywords are case-insensitive; `Schemas` reads as `Containers`.
+   * Lists follow spec §3.9: whitespace between names, with commas and
+   * semicolons allowed and meaningless. Names stay unresolved here; the
+   * checks of §18.6 run after parsing, in `checkDiagramViews()`, so a bad
+   * name gets a located diagnostic and the rest of the diagram still draws.
+   * Two conditions stop the parse because they leave no category to read:
+   * an unknown category, `Edges` included, and a body-level `*` with
+   * anything beside it.
+   */
+  private parseDiagramView (): DiagramViewDeclaration {
+    const start = this.peek().start;
+    this.advance(); // DiagramView
+    const nameTok = this.peek();
+    if (nameTok.kind !== TokenKind.Identifier && nameTok.kind !== TokenKind.QuotedIdentifier) {
+      throw new ParseError('Expected a name after DiagramView (spec §18.1)', nameTok.start);
+    }
+    const name = this.parseIdentLikeName('DiagramView name');
+    this.expect(TokenKind.LBrace, `Expected '{' after DiagramView ${name}`);
+    const categories: DiagramViewCategory[] = [];
+    let wildcardBody = false;
+    this.skipListSeparators();
+    if (this.check(TokenKind.Star)) {
+      const star = this.advance();
+      wildcardBody = true;
+      this.skipListSeparators();
+      if (!this.check(TokenKind.RBrace)) {
+        throw new ParseError(
+          `A '*' body lists every element of every category, so nothing else goes beside it in DiagramView ${name} (spec §18.1)`,
+          star.start,
+        );
+      }
+    }
+    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      const t = this.peek();
+      const k = kw(t);
+      const category = k ? DIAGRAM_VIEW_CATEGORIES[k] : undefined;
+      if (!category) {
+        if (k === 'edges') {
+          throw new ParseError(
+            'Edges is not a DiagramView category: a Ref or an Edge appears in a diagram view when both ' +
+            'of its ends do, so there is nothing to list (spec §18.1, §18.4)',
+            t.start,
+          );
+        }
+        throw new ParseError(
+          `Unknown DiagramView category ${JSON.stringify(t.text)}. Expected Tables, Views, Containers ` +
+          '(or Schemas), TableGroups, SupertypeGroups or Notes, each followed by { names } (spec §18.1)',
+          t.start,
+        );
+      }
+      categories.push(this.parseDiagramViewCategory(category));
+      this.skipListSeparators();
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing DiagramView");
+    return {
+      kind: 'DiagramViewDeclaration',
+      name,
+      wildcardBody,
+      categories,
+      span: this.spanFrom(start),
+    };
+  }
+
+  private parseDiagramViewCategory (category: DiagramViewCategoryName): DiagramViewCategory {
+    const start = this.peek().start;
+    const keywordTok = this.advance();
+    this.expect(TokenKind.LBrace, `Expected '{' after ${keywordTok.text} in a DiagramView`);
+    const items: DiagramViewItem[] = [];
+    let wildcard = false;
+    for (;;) {
+      this.skipListSeparators();
+      const t = this.peek();
+      if (t.kind === TokenKind.RBrace || t.kind === TokenKind.EOF) break;
+      if (t.kind === TokenKind.Star) {
+        this.advance();
+        wildcard = true;
+        continue;
+      }
+      if (t.kind !== TokenKind.Identifier && t.kind !== TokenKind.QuotedIdentifier) {
+        throw new ParseError(
+          `Expected a name or '*' in ${keywordTok.text} { }, got ${t.kind} ${JSON.stringify(t.text)}`,
+          t.start,
+        );
+      }
+      this.advance();
+      let n = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
+      while (this.check(TokenKind.Dot)) {
+        this.advance();
+        const next = this.peek();
+        if (next.kind !== TokenKind.Identifier && next.kind !== TokenKind.QuotedIdentifier) {
+          throw new ParseError(`Expected identifier after '.' in ${keywordTok.text} { }`, next.start);
+        }
+        this.advance();
+        n += `.${next.kind === TokenKind.QuotedIdentifier ? (next.value ?? '') : next.text}`;
+      }
+      items.push({ kind: 'DiagramViewItem', name: n, span: this.spanFrom(t.start) });
+    }
+    this.expect(TokenKind.RBrace, `Expected '}' closing ${keywordTok.text}`);
+    return {
+      kind: 'DiagramViewCategory',
+      category,
+      keyword: keywordTok.text,
+      wildcard,
+      items,
       span: this.spanFrom(start),
     };
   }

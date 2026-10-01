@@ -60,6 +60,7 @@ export type TopLevelStatement =
   | TablePartialDeclaration
   | TableGroupDeclaration
   | SupertypeGroupDeclaration
+  | DiagramViewDeclaration
   | NoteDeclaration
   | TopLevelRecordsDeclaration
   | ModuleImportDirective;
@@ -602,6 +603,59 @@ export interface SupertypeGroupMember {
   name: string;
   /** Member settings; `strategy` is the only recognized one (spec §12.7.4). */
   settings: Setting[];
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * DiagramView (spec §18, defined in v0.6.3)
+ *
+ * A named subset of the model's diagram. The body lists categories, each a
+ * keyword and a list of names or `*`:
+ *
+ *   DiagramView order_flow {
+ *     Containers { sales  billing }
+ *     Tables { sales.orders  crm.customers }
+ *   }
+ *
+ * `{ * }` as the whole body lists every element of every category. The AST
+ * keeps the category keyword as written (`Schemas`, `tables`) next to its
+ * canonical name (`Containers`, `Tables`); names stay unresolved strings,
+ * and `diagramViewMembers()` resolves them (spec §18.2, §18.3, §28.8).
+ * ----------------------------------------------------------------------- */
+
+export type DiagramViewCategoryName =
+  | 'Tables'
+  | 'Views'
+  | 'Containers'
+  | 'TableGroups'
+  | 'SupertypeGroups'
+  | 'Notes';
+
+export interface DiagramViewDeclaration {
+  kind: 'DiagramViewDeclaration';
+  name: string;
+  /** True when the whole body is `{ * }`: every element of every category. */
+  wildcardBody: boolean;
+  categories: DiagramViewCategory[];
+  span: Span;
+}
+
+export interface DiagramViewCategory {
+  kind: 'DiagramViewCategory';
+  /** Canonical category: `Schemas` reads as `Containers`. */
+  category: DiagramViewCategoryName;
+  /** The keyword as written, for round trips and the DBML-form check of §18.5. */
+  keyword: string;
+  /** True when the list holds `*`; names written beside it have no effect. */
+  wildcard: boolean;
+  items: DiagramViewItem[];
+  span: Span;
+}
+
+export interface DiagramViewItem {
+  kind: 'DiagramViewItem';
+  /** Name as written: `orders` or `sales.orders`. */
+  name: string;
   span: Span;
 }
 

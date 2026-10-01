@@ -25,6 +25,12 @@ A backward-compatible point release of the v0.6 draft. Chapter 18 defines diagra
 
 - **Appendix D**: item 10, on the DBML form of `DiagramView`. Items 10 to 14 become 11 to 15.
 
+#### Tooling
+
+- **Parser (`@xdbml/parse`)**: reads `DiagramView`, where it raised "Unknown top-level construct", in every document, as a `DiagramViewDeclaration` with one category node per category, `Schemas` read as `Containers`, and a flag for the body-level `{ * }`. An `Edges` category, an unknown category, and a `DiagramView` in a Container fail the parse with a message that cites §18.1. `diagramViews()` lists the diagram views of a document after module resolution, and `diagramViewMembers()` returns the members of one (§18.2) with the Containers, TableGroups and supertype groups drawn around them (§18.4). `resolveNames()` reports `unresolved-diagram-view-name`, `ambiguous-diagram-view-name`, `diagram-view-wrong-category`, `duplicate-diagram-view` and `duplicate-diagram-view-category`, and `construct-requires-version` for `Containers`, `Views` or `SupertypeGroups` in a document without a version declaration (§18.6). `reuse { diagramview X }` imports the diagram view `X`, where it imported a database view of that name; the import is refused in a Container body, and a `reuse *` in a Container body moves an imported diagram view to the top level. The editor colors the category keywords before `{`. Reads `xdbml: 0.6.3`.
+
+- **Grammar**: `diagramViewDefinition`, which the grammar referenced without defining, with `diagramViewCategory` and `DIAGRAM_VIEW`. `grammar/test-cases.md` gains twelve v0.6.3 cases, each checked against the parser.
+
 ### Changed
 
 #### Spec

@@ -1855,6 +1855,178 @@ Table customers {
 }
 ```
 
+## §18 Diagram views (v0.6.3)
+
+### VALID -- Containers narrowed by the entities named beside them (§18.1, §18.2)
+
+```
+xdbml: 0.6
+
+Schema sales {
+  Table orders      { id int [pk] }
+  Table order_lines { id int [pk] }
+  Table returns     { id int [pk] }
+}
+
+Schema billing {
+  Table invoices { id int [pk] }
+}
+
+Schema crm {
+  Table customers { id int [pk] }
+}
+
+DiagramView order_flow {
+  Containers {
+    sales
+    billing
+  }
+  Tables {
+    sales.orders
+    sales.order_lines
+    crm.customers
+  }
+}
+```
+
+### VALID -- the DBML form in a document without a version declaration (§18.5)
+
+```
+Table core.users      { id int [pk] }
+Table analytics.events { id int [pk] }
+
+DiagramView "Sales team" {
+  Tables { core.users }
+  Schemas { analytics }
+}
+
+DiagramView everything { * }
+```
+
+### VALID -- commas and semicolons in category lists (§3.9)
+
+```
+xdbml: 0.6
+
+Table a { id int [pk] }
+Table b { id int [pk] }
+
+DiagramView v {
+  Tables { a, b; }
+}
+```
+
+### INVALID -- an Edges category (§18.1)
+
+```
+xdbml: 0.6
+
+Table a { id int [pk] }
+
+DiagramView v {
+  Edges { * }
+}
+```
+
+### INVALID -- a DiagramView inside a Container (§18.1)
+
+```
+xdbml: 0.6
+
+Schema sales {
+  Table orders { id int [pk] }
+  DiagramView v { Tables { orders } }
+}
+```
+
+### INVALID -- a name that matches nothing (unresolved-diagram-view-name, §18.3)
+
+```
+xdbml: 0.6
+
+Table orders { id int [pk] }
+
+DiagramView v {
+  Tables { order }
+}
+```
+
+### INVALID -- an unqualified name held by two Containers (ambiguous-diagram-view-name, §18.3)
+
+```
+xdbml: 0.6
+
+Schema a { Table orders { id int [pk] } }
+Schema b { Table orders { id int [pk] } }
+
+DiagramView v {
+  Tables { orders }
+}
+```
+
+### INVALID -- a database view under Tables (diagram-view-wrong-category, §18.3)
+
+```
+xdbml: 0.6
+
+Table orders { id int [pk] }
+
+View revenue [materialized: true] {
+  source_query: 'SELECT 1 AS total'
+  total int
+}
+
+DiagramView v {
+  Tables { revenue }
+}
+```
+
+### INVALID -- Schemas and Containers in one diagram view (duplicate-diagram-view-category, §18.1)
+
+```
+xdbml: 0.6
+
+Schema sales { Table orders { id int [pk] } }
+
+DiagramView v {
+  Schemas { sales }
+  Containers { sales }
+}
+```
+
+### VALID with a warning -- a category written twice without a version declaration (duplicate-diagram-view-category, §18.6)
+
+```
+Table a { id int [pk] }
+Table b { id int [pk] }
+
+DiagramView v {
+  Tables { a }
+  Tables { b }
+}
+```
+
+### INVALID -- two diagram views with one name (duplicate-diagram-view, §18.1)
+
+```
+xdbml: 0.6
+
+Table a { id int [pk] }
+
+DiagramView v { Tables { a } }
+DiagramView v { Tables { * } }
+```
+
+### INVALID -- Containers without a version declaration (construct-requires-version, §18.5)
+
+```
+Table core.users { id int [pk] }
+
+DiagramView v {
+  Containers { core }
+}
+```
+
 ---
 
 ## Test runner
