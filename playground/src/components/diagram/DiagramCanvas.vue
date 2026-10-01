@@ -29,7 +29,7 @@
       <template v-if="diagramViewNames.length > 0">
         <label
           for="diagram-view-select"
-          class="pl-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500"
+          class="pl-2 pr-1 text-xs text-gray-500 dark:text-slate-400"
         >Diagram</label>
         <select
           id="diagram-view-select"
