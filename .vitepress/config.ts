@@ -12,6 +12,8 @@ import { examples as exampleManifest } from '../scripts/examples-manifest.mjs'
 // esbuild-based config compiler treats it as a JSON module rather than
 // trying to evaluate it.
 import xdbmlGrammar from '../tools/textmate/xdbml.tmLanguage.json' with { type: 'json' }
+import fs from 'node:fs'
+import path from 'node:path'
 
 // xDBML.org site configuration
 // https://vitepress.dev/reference/site-config
@@ -30,6 +32,34 @@ assertHelpIsConsistent(process.cwd())
 // The deploy.yml workflow sets the SITE_BASE environment variable to control which
 // mode we build in. Defaults to '/' for local development (`npm run docs:dev`).
 const base = process.env.SITE_BASE || '/'
+
+// Specification versions, read from /spec/ the way scripts/prepare-spec.mjs
+// finds the newest one: vN.M.md and vN.M.P.md, sorted numerically, newest
+// first. The newest is the current draft; the others are superseded and sit
+// in a collapsed sidebar group, which opens by itself on one of its pages.
+// Publishing a new version adds /spec/vN.M.md and nothing here.
+const specVersions: string[] = fs
+  .readdirSync(path.join(process.cwd(), 'spec'))
+  .map((name) => /^v(\d+)\.(\d+)(?:\.(\d+))?\.md$/.exec(name))
+  .filter((m): m is RegExpExecArray => m !== null)
+  .map((m) => ({ slug: m[0].replace(/\.md$/, ''), parts: [Number(m[1]), Number(m[2]), Number(m[3] ?? 0)] }))
+  .sort((a, b) => b.parts[0] - a.parts[0] || b.parts[1] - a.parts[1] || b.parts[2] - a.parts[2])
+  .map((v) => v.slug)
+const [currentSpec, ...supersededSpecs] = specVersions
+
+const specSidebarGroup = {
+  text: 'Specification',
+  items: [
+    { text: 'All versions',  link: '/spec/' },
+    { text: 'Current draft', link: '/spec/current' },
+    { text: currentSpec,     link: `/spec/${currentSpec}` },
+    {
+      text: 'Superseded versions',
+      collapsed: true,
+      items: supersededSpecs.map((v) => ({ text: v, link: `/spec/${v}` })),
+    },
+  ],
+}
 
 export default defineConfig({
   // Site metadata
@@ -125,17 +155,14 @@ export default defineConfig({
           { text: 'Recipes',                 link: '/recipes/' },
         ]
       },
+      // A top-bar dropdown cannot fold a sub-list, so it carries the
+      // current draft only; every version is one click away on the All
+      // versions page and in the sidebar of each specification page.
       { text: 'Specification',
         items: [
-          { text: 'Current draft',         link: '/spec/current' },
-          { text: 'All versions',          link: '/spec/' },
-          { text: 'v0.6',                  link: '/spec/v0.6' },
-          { text: 'v0.5 (superseded)',     link: '/spec/v0.5' },
-          { text: 'v0.4 (superseded)',     link: '/spec/v0.4' },
-          { text: 'v0.3 (superseded)',     link: '/spec/v0.3' },
-          { text: 'v0.2 (superseded)',     link: '/spec/v0.2' },
-          { text: 'v0.1 (superseded)',     link: '/spec/v0.1' },
-          { text: 'Grammar',                link: '/grammar/' },
+          { text: `Current draft (${currentSpec})`, link: '/spec/current' },
+          { text: 'All versions',                   link: '/spec/' },
+          { text: 'Grammar',                        link: '/grammar/' },
         ]
       },
       // Playground is a standalone Vue app, NOT a VitePress page.
@@ -180,19 +207,7 @@ export default defineConfig({
     // Sidebars per top-level section
     sidebar: {
       '/spec/': [
-        {
-          text: 'Specification',
-          items: [
-            { text: 'All versions',           link: '/spec/' },
-            { text: 'Current draft',          link: '/spec/current' },
-            { text: 'v0.6',                   link: '/spec/v0.6' },
-            { text: 'v0.5 (superseded)',      link: '/spec/v0.5' },
-            { text: 'v0.4 (superseded)',      link: '/spec/v0.4' },
-            { text: 'v0.3 (superseded)',      link: '/spec/v0.3' },
-            { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },
-            { text: 'v0.1 (superseded)',      link: '/spec/v0.1' },
-          ]
-        },
+        specSidebarGroup,
         {
           text: 'Reference',
           items: [
@@ -316,19 +331,7 @@ export default defineConfig({
       ],
 
       '/grammar/': [
-        {
-          text: 'Specification',
-          items: [
-            { text: 'All versions',           link: '/spec/' },
-            { text: 'Current draft',          link: '/spec/current' },
-            { text: 'v0.6',                   link: '/spec/v0.6' },
-            { text: 'v0.5 (superseded)',      link: '/spec/v0.5' },
-            { text: 'v0.4 (superseded)',      link: '/spec/v0.4' },
-            { text: 'v0.3 (superseded)',      link: '/spec/v0.3' },
-            { text: 'v0.2 (superseded)',      link: '/spec/v0.2' },
-            { text: 'v0.1 (superseded)',      link: '/spec/v0.1' },
-          ]
-        },
+        specSidebarGroup,
         {
           text: 'Reference',
           items: [

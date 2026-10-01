@@ -1,43 +1,67 @@
-xDBML -- finish the 0.6.2 release with one command
-Replaces xdbml-0.6.2-release-fix.zip; do not apply that one.
-
-RUN
----
-Unzip, then in cmd.exe:
-
-    <unzipped folder>\apply.cmd
-
-(If the repository is not at C:\Repos\Hackolade\xdbml-spec, pass its path:
- apply.cmd D:\path\to\xdbml-spec)
-
-apply.cmd copies the two files below into the repository and runs
-tools\release.cmd 0.6.2 from its root. Do not run release-preflight first:
-the failed run left version bumps in the tree, and preflight requires a
-clean one.
-
-What the run does for 0.6.2:
-  [1/6] parse 0.6.2 is on npm: skipped
-  [2/6] render 0.6.2 is on npm: skipped
-  [3/6] MCP server: install (retried until npm resolves 0.6.2), checks,
-        tests, deploy
-  [4/6] rendering API: install, type-check, deploy
-  [5/6] prints the live dist-tags
-  [6/6] git add, commit "release 0.6.2", push, tools\github-release.cmd 0.6.2
+xDBML -- site: Specification menu with superseded versions folded
+Base: origin/main 99f43e0 (release 0.6.2). Independent of the 0.6.3
+deltas: it touches neither the spec nor any package, so it applies before
+or after "0.6.3, delta 1" and needs no version number.
 
 WHAT CHANGED
 ------------
-tools\release.cmd
-  Resumable: a package already on npm at the version is not installed,
-  tested or published again, so after any failure the same command picks
-  up where it stopped. npm install in steps 2 to 4 runs with
-  --prefer-online and retries every 10 seconds for up to 3 minutes.
-  New step 6 commits, pushes and runs github-release.cmd (itself already
-  safe to rerun: an existing tag or release is kept or updated).
-tools\RELEASE.md
-  Step 6 and the resume behavior described.
+.vitepress\config.ts
+  One version list, read from spec\ the way prepare-spec.mjs finds the
+  newest file (vN.M.md and vN.M.P.md, numeric sort). The newest is the
+  current draft; the others are superseded. Publishing v0.7 needs no edit
+  here: adding spec\v0.7.md moves v0.6 into the superseded group.
+  Top-bar "Specification" dropdown: Current draft (v0.6), All versions,
+  Grammar. A VitePress dropdown cannot fold a sub-list, so the superseded
+  versions leave it; the All versions page and the sidebar keep them.
+  Sidebar of /spec/ and /grammar/ pages (one shared group instead of two
+  copies): All versions, Current draft, v0.6, then "Superseded versions"
+  as a collapsed group holding v0.5 to v0.1, without the "(superseded)"
+  suffix. On a superseded page the group opens by itself (VitePress
+  useSidebarControl expands a collapsed group holding the active link).
+scripts\prepare-spec.mjs
+  Header comment: the menu no longer needs a hand edit; only the version
+  table in spec\index.md does.
 
 FILES
 -----
-  tools\release.cmd   (EDIT)
-  tools\RELEASE.md    (EDIT)
-  apply.cmd           (runs the above; not copied into the repository)
+  APPLY.txt                 (EDIT)
+  .vitepress\config.ts      (EDIT)
+  scripts\prepare-spec.mjs  (EDIT, comment only)
+
+APPLY (cmd.exe, opened in the unzipped folder)
+----------------------------------------------
+set REPO=C:\Repos\Hackolade\xdbml-spec
+set DELTA=%CD%
+
+copy /Y "%DELTA%\APPLY.txt"                      "%REPO%\APPLY.txt"
+copy /Y "%DELTA%\.vitepress\config.ts"           "%REPO%\.vitepress\config.ts"
+copy /Y "%DELTA%\scripts\prepare-spec.mjs"       "%REPO%\scripts\prepare-spec.mjs"
+
+cd /d %REPO%
+npm run check
+  Expect: every suite unchanged (parser 275 passed, renderer 218, viewport
+  14, interactive-mount 42, MCP 67, from-mongodb 24, playground 52);
+  "164 button(s) open the snippet below them"; docs build complete.
+npm run docs:dev
+  Check, at the local URL VitePress prints:
+    the Specification dropdown: Current draft (v0.6), All versions, Grammar
+    /spec/v0.6     sidebar: "Superseded versions" closed
+    /spec/v0.3     sidebar: "Superseded versions" open, v0.3 highlighted
+    /grammar/      sidebar: same group as on /spec/
+  Stop the dev server with Ctrl+C.
+git add -A
+git commit -m "site: Specification menu, superseded versions in a collapsed group"
+
+If "0.6.3, delta 1" is already committed and not pushed, a push now also
+publishes that spec text ahead of tool support. Push with the parser delta,
+or push now if the spec text may go live first.
+
+VERIFICATION RUN HERE (Linux, Node 22)
+---------------------------------------
+  npm run check     exit 0: every suite unchanged, 164 spec buttons match,
+                    docs build complete
+  built pages       spec/v0.6, spec/current and grammar/index render the
+                    group closed; spec/v0.3 renders it with has-active,
+                    which the client opens on load; links in order v0.6,
+                    v0.5, v0.4, v0.3, v0.2, v0.1
+  nav               "Current draft (v0.6)" in the built home page

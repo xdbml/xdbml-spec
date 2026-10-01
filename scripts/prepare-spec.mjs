@@ -20,8 +20,9 @@
 // The output is gitignored. The canonical source remains /spec/vN.M.md.
 //
 // Releasing a new version needs no edit here: add /spec/vN.M.md, and the
-// next build picks it up. The nav entry in .vitepress/config.ts and the
-// version table in /spec/index.md are still maintained by hand.
+// next build picks it up. .vitepress/config.ts finds the versions the same
+// way for the menu and the sidebars. The version table in /spec/index.md is
+// still maintained by hand.
 
 import fs from 'node:fs';
 import path from 'node:path';
