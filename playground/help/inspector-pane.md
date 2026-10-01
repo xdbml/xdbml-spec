@@ -23,21 +23,23 @@ The inspector slides in from the right when you select something in the diagram.
 - **Fields** (any field row, at any nesting depth)
 - **Relationships** (`Ref:` declaration lines)
 - **Supertype groups** (the half-circle symbols; see [**Supertype groups**](./supertype-groups))
+- **The diagram on display**, by clicking an empty area of the canvas: the Project on Main ERD, or the diagram view shown (see [**Diagram views**](./diagram-views))
 
-Selecting anything opens the inspector if it was closed. Clicking the empty canvas deselects and hides the inspector.
+Selecting anything opens the inspector if it was closed.
 
 ## How to close it
 
 Two ways:
 
 - **Click the × button** on the inspector header. The inspector is hidden and the selection is cleared.
-- **Click an empty area of the canvas**. The selection is cleared, which also closes the inspector.
+
+A click on an empty area of the canvas does not close it: it shows the diagram on display, as described below.
 
 Once closed manually, the inspector stays hidden until you make a new selection. Your "explicitly closed" state persists across reloads, so if you prefer working without the inspector you don't have to dismiss it every session.
 
 ## What's in each kind of inspector
 
-The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD`, `REF`, `SUPERTYPE GROUP`) and the element's name. Below that, the body is organized into labeled sections that vary by kind.
+The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD`, `REF`, `SUPERTYPE GROUP`, `DIAGRAM`, `DIAGRAM VIEW`) and the element's name. Below that, the body is organized into labeled sections that vary by kind.
 
 **Container inspector** shows:
 - Identification: keyword (Container / Schema / Database / etc.), name, member count
@@ -71,6 +73,11 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - Materialization: strategy, merge and discriminator, the intent for a later physical derivation
 - Settings: custom or unrecognized settings
 - Note: the group's note if present
+
+**Diagram inspector**, opened by a click on an empty area of the canvas, shows the diagram on display:
+- On Main ERD: the Project's name and targets ("None declared" without a `Project`); counts of the entities, database views, Containers, relationships and Edges of the model; the names of its diagram views; and the Project's note
+- On a diagram view: its members, with the Containers framed around them; its categories as written; its custom properties; and its note (see [**Diagram views**](./diagram-views))
+- Switching the Diagram menu while this pane is open shows the diagram you switch to
 
 ## Links between panes
 

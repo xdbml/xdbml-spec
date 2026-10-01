@@ -128,7 +128,7 @@ See [Supertype groups](./supertype-groups).
 
 | Cursor | Where | What it indicates |
 |---|---|---|
-| Default (arrow) | Empty canvas | No action available; click to deselect |
+| Default (arrow) | Empty canvas | Click to inspect the diagram on display |
 | Pointer (hand) | Anywhere clickable: entity headers, field rows, container bodies, relationship lines, supertype group symbols | Clickable to select |
 | Grab / grabbing | Entity header band when held | Drag in progress |
 | Col-resize | Pane dividers | Drag to resize the pane |

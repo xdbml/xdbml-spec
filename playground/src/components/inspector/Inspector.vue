@@ -4,7 +4,7 @@
          empty state has visual symmetry with the populated state. -->
     <div class="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-slate-700">
       <div class="flex items-center gap-2 min-w-0">
-        <template v-if="resolved">
+        <template v-if="resolved || showDiagram">
           <span
             class="text-[10px] uppercase tracking-wide font-semibold px-1.5 py-0.5 rounded"
             :class="kindBadgeClass"
@@ -30,7 +30,14 @@
     </div>
 
     <!-- Body -->
-    <div v-if="resolved" class="flex-1 overflow-y-auto">
+    <div v-if="showDiagram && parser.flatAst" class="flex-1 overflow-y-auto">
+      <DiagramInspector
+        :doc="parser.flatAst"
+        :diagram-view="diagramView"
+        @edit-source="onEditSource"
+      />
+    </div>
+    <div v-else-if="resolved" class="flex-1 overflow-y-auto">
       <ContainerInspector
         v-if="resolved.kind === 'container'"
         :container="resolved.node"
@@ -112,9 +119,12 @@ import EntityInspector    from './EntityInspector.vue';
 import FieldInspector     from './FieldInspector.vue';
 import RefInspector       from './RefInspector.vue';
 import SupertypeGroupInspector from './SupertypeGroupInspector.vue';
+import DiagramInspector   from './DiagramInspector.vue';
 
 const props = defineProps<{
   selection: Selection;
+  /** The diagram view on display, or null for Main ERD (spec §18). */
+  diagramView: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -130,7 +140,11 @@ const resolved = computed<ResolvedSelection>(() =>
   resolveSelection(parser.flatAst, props.selection),
 );
 
+/** The empty canvas was clicked: show the diagram on display. */
+const showDiagram = computed(() => props.selection?.kind === 'diagram');
+
 const kindLabel = computed(() => {
+  if (showDiagram.value) return props.diagramView ? 'Diagram view' : 'Diagram';
   if (!resolved.value) return '';
   switch (resolved.value.kind) {
     case 'container': return resolved.value.node.keyword;
@@ -146,6 +160,7 @@ const kindLabel = computed(() => {
 });
 
 const kindBadgeClass = computed(() => {
+  if (showDiagram.value) return 'bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-200';
   if (!resolved.value) return 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-slate-200';
   switch (resolved.value.kind) {
     case 'container': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300';
@@ -161,6 +176,7 @@ const kindBadgeClass = computed(() => {
 });
 
 const titleLabel = computed(() => {
+  if (showDiagram.value) return props.diagramView ?? 'Main ERD';
   if (!resolved.value) return '';
   switch (resolved.value.kind) {
     case 'container': return resolved.value.node.name;

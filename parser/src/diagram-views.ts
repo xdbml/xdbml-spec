@@ -45,6 +45,17 @@ export interface DiagramViewMembers {
   supertypeGroups: string[];
 }
 
+/**
+ * The note of a diagram view (spec §18.1): its first `Note` in the body,
+ * otherwise the `note` setting in its brackets, otherwise undefined.
+ */
+export function diagramViewNote (view: DiagramViewDeclaration): string | undefined {
+  if (view.notes.length > 0) return view.notes[0].body;
+  const s = view.settings.find((x) => x.name === 'note');
+  const v = s?.value;
+  return v && v.kind === 'StringValue' ? v.value : undefined;
+}
+
 /** Every DiagramView of a document, in declaration order, after module resolution. */
 export function diagramViews (doc: XDbmlDocument): DiagramViewDeclaration[] {
   return flatten(doc).statements.filter(
@@ -364,6 +375,28 @@ export function checkDiagramViews (doc: XDbmlDocument): Diagnostic[] {
       });
     }
     seen.add(view.name);
+
+    // §18.1: the brackets take `note` and custom properties only.
+    for (const setting of view.settings) {
+      if (setting.name === 'note' || setting.name.startsWith('x_')) continue;
+      diagnostics.push({
+        severity: 'error',
+        code: 'unknown-diagram-view-setting',
+        message: `Diagram view '${view.name}' writes the setting '${setting.nameSource}'. A diagram view takes ` +
+          'a note and custom x_ properties in its brackets, and no other setting (spec §18.1).',
+        span: setting.span,
+      });
+    }
+    // §18.5: a note and the brackets are xDBML extensions.
+    if (!declared && (view.settings.length > 0 || view.notes.length > 0)) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'construct-requires-version',
+        message: `Diagram view '${view.name}' carries a note or settings, an xDBML extension that needs a ` +
+          'version declaration such as xdbml: 0.6 at the top of the document (spec §18.5).',
+        span: (view.settings[0] ?? view.notes[0]).span,
+      });
+    }
 
     const written = new Map<DiagramViewCategoryName, DiagramViewCategory>();
     for (const c of view.categories) {

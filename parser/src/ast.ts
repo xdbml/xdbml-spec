@@ -634,6 +634,10 @@ export type DiagramViewCategoryName =
 export interface DiagramViewDeclaration {
   kind: 'DiagramViewDeclaration';
   name: string;
+  /** Bracket settings: `note` and custom `x_` properties (spec §18.1). */
+  settings: Setting[];
+  /** `Note:` / `Note { }` elements of the body. `diagramViewNote()` gives the note. */
+  notes: NoteBlock[];
   /** True when the whole body is `{ * }`: every element of every category. */
   wildcardBody: boolean;
   categories: DiagramViewCategory[];

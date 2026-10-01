@@ -582,22 +582,31 @@ subtypeSetting
 // ---- §18 DiagramView (defined in v0.6.3) -----------------------------------
 // A named subset of the model's diagram. Each category lists names, or '*'
 // for every element of its kind, and '{ * }' as the whole body lists every
-// element of every category. A DiagramView is top-level only: it never
-// appears in a Container body (§18.1).
+// element of every category. A note goes in the brackets or in the body, as
+// for a TableGroup. A DiagramView is top-level only: it never appears in a
+// Container body (§18.1).
 //
 // An unknown category, Edges included, matches no alternative and fails the
 // parse. The other conditions of §18.6 are checked after parsing: a name
 // that resolves to nothing, to several elements, or to an element of another
-// kind; a category written twice; two diagram views with one name; and
-// Containers, Views or SupertypeGroups in a document without a version
+// kind; a category written twice; two diagram views with one name; a
+// setting other than note or an x_ property; and Containers, Views or
+// SupertypeGroups, a note, or settings, in a document without a version
 // declaration (§18.5).
 
 diagramViewDefinition
-    : DIAGRAM_VIEW (IDENTIFIER | quotedIdentifier) LBRACE
-        ( listSeparator* STAR listSeparator*
-        | (diagramViewCategory | listSeparator)*
-        )
+    : DIAGRAM_VIEW (IDENTIFIER | quotedIdentifier) settingsBlock? LBRACE
+        (diagramViewBodyItem | listSeparator)*
       RBRACE
+    ;
+
+// A '*' body item lists every element of every category and stands with no
+// category beside it; notes may sit beside it. The settings brackets take
+// `note` and x_ custom properties only (§18.1), checked after parsing.
+diagramViewBodyItem
+    : diagramViewCategory
+    | noteDefinition               // §18.1 (v0.6.3)
+    | STAR
     ;
 
 diagramViewCategory

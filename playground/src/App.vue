@@ -35,6 +35,7 @@
           ref="diagramRef"
           :selection="selection"
           @select="onSelect"
+          @diagram-view-change="activeDiagramView = $event"
         />
       </section>
 
@@ -54,6 +55,7 @@
       >
         <Inspector
           :selection="selection"
+          :diagram-view="activeDiagramView"
           @close="onInspectorClose"
           @edit-source="onEditSource"
           @select="onSelect"
@@ -85,7 +87,8 @@
  * The Inspector pane is hidden when nothing is selected. Clicking
  * anything in the diagram opens it. The X button on the inspector
  * header closes it (and clears the selection). Clicking the diagram
- * background also clears the selection.
+ * background selects the diagram on display: the Project on Main ERD,
+ * or the diagram view shown (spec §18).
  *
  * Selection state lives here because three children need to know it:
  *   - DiagramCanvas paints the highlight on whatever is selected
@@ -193,6 +196,9 @@ function loadSelection (): Selection {
 }
 
 const selection = ref<Selection>(loadSelection());
+
+/** The diagram view on display, or null for Main ERD; reported by the canvas. */
+const activeDiagramView = ref<string | null>(null);
 
 watch(selection, (s) => {
   try {

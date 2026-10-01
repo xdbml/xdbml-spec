@@ -114,6 +114,7 @@ Note order_states {
 // it contributes all of its entities. crm is not listed: customers appears
 // alone in a crm frame, and its line to party is not drawn.
 DiagramView order_to_cash {
+  Note: 'From the order to its invoice and payment'
   Containers {
     sales
     billing
@@ -131,6 +132,7 @@ DiagramView order_to_cash {
 // Parties. The supertype group brings party, person and organization, and
 // the line from customers to party appears since both ends are members.
 DiagramView parties {
+  Note: 'Customers and the legal nature of the party behind each one'
   Tables {
     crm.customers
   }
@@ -142,6 +144,7 @@ DiagramView parties {
 // Catalog usage. order_lines comes from sales without its Container's other
 // entities. Its line to products appears; its line to orders does not.
 DiagramView catalog_usage {
+  Note: 'Where products are ordered'
   Tables {
     catalog.products
     catalog.categories

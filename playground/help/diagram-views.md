@@ -32,6 +32,21 @@ An entity looks the same in every diagram view and in Main ERD, since a diagram 
 
 Sticky notes and TableGroup frames are not drawn in the playground yet, in any diagram. A `Notes { ... }` list in a diagram view is checked, and has no visible effect for now.
 
+## Inspecting a diagram view
+
+Click an empty area of the canvas while a diagram view is on display: the inspector shows its members, the Containers framed around them, its categories as written, its custom properties and its note. A diagram view takes a note in its brackets or in its body, as a TableGroup does:
+
+```xdbml
+DiagramView order_to_cash [note: 'From the order to its invoice and payment'] {
+  Containers {
+    sales
+    billing
+  }
+}
+```
+
+On Main ERD, the same click shows the Project and its note.
+
 ## What each diagram keeps of its own
 
 Main ERD and each diagram view keep their own:

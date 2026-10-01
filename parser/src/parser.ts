@@ -2179,8 +2179,9 @@ export class Parser {
    * checks of §18.6 run after parsing, in `checkDiagramViews()`, so a bad
    * name gets a located diagnostic and the rest of the diagram still draws.
    * Two conditions stop the parse because they leave no category to read:
-   * an unknown category, `Edges` included, and a body-level `*` with
-   * anything beside it.
+   * an unknown category, `Edges` included, and a body-level `*` with a
+   * category beside it. A note may sit in the brackets or in the body
+   * (spec §18.1, v0.6.3).
    */
   private parseDiagramView (): DiagramViewDeclaration {
     const start = this.peek().start;
@@ -2190,23 +2191,32 @@ export class Parser {
       throw new ParseError('Expected a name after DiagramView (spec §18.1)', nameTok.start);
     }
     const name = this.parseIdentLikeName('DiagramView name');
+    // Spec §18.1 (v0.6.3): `note` and custom properties in the brackets.
+    // Other settings are reported by checkDiagramViews(), not here.
+    const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, `Expected '{' after DiagramView ${name}`);
     const categories: DiagramViewCategory[] = [];
+    const notes: NoteBlock[] = [];
     let wildcardBody = false;
-    this.skipListSeparators();
-    if (this.check(TokenKind.Star)) {
-      const star = this.advance();
-      wildcardBody = true;
+    for (;;) {
       this.skipListSeparators();
-      if (!this.check(TokenKind.RBrace)) {
-        throw new ParseError(
-          `A '*' body lists every element of every category, so nothing else goes beside it in DiagramView ${name} (spec §18.1)`,
-          star.start,
-        );
-      }
-    }
-    while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
       const t = this.peek();
+      if (t.kind === TokenKind.RBrace || t.kind === TokenKind.EOF) break;
+      if (this.atNoteElement()) {
+        notes.push(this.parseNoteBlockOrSetting());
+        continue;
+      }
+      if (t.kind === TokenKind.Star) {
+        if (categories.length > 0 || wildcardBody) {
+          throw new ParseError(
+            `A '*' body lists every element of every category, so no category goes beside it in DiagramView ${name} (spec §18.1)`,
+            t.start,
+          );
+        }
+        this.advance();
+        wildcardBody = true;
+        continue;
+      }
       const k = kw(t);
       const category = k ? DIAGRAM_VIEW_CATEGORIES[k] : undefined;
       if (!category) {
@@ -2219,17 +2229,24 @@ export class Parser {
         }
         throw new ParseError(
           `Unknown DiagramView category ${JSON.stringify(t.text)}. Expected Tables, Views, Containers ` +
-          '(or Schemas), TableGroups, SupertypeGroups or Notes, each followed by { names } (spec §18.1)',
+          '(or Schemas), TableGroups, SupertypeGroups or Notes, each followed by { names }, or a Note (spec §18.1)',
+          t.start,
+        );
+      }
+      if (wildcardBody) {
+        throw new ParseError(
+          `A '*' body lists every element of every category, so no category goes beside it in DiagramView ${name} (spec §18.1)`,
           t.start,
         );
       }
       categories.push(this.parseDiagramViewCategory(category));
-      this.skipListSeparators();
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing DiagramView");
     return {
       kind: 'DiagramViewDeclaration',
       name,
+      settings,
+      notes,
       wildcardBody,
       categories,
       span: this.spanFrom(start),

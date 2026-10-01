@@ -38,7 +38,7 @@ export {
 export type { ModuleSource } from './module-resolver.ts';
 export { resolveNames, SymbolTable } from './name-resolver.ts';
 export { checkViews, viewSourceQuery } from './views.ts';
-export { checkDiagramViews, diagramViewMembers, diagramViews } from './diagram-views.ts';
+export { checkDiagramViews, diagramViewMembers, diagramViewNote, diagramViews } from './diagram-views.ts';
 export type { DiagramViewMembers } from './diagram-views.ts';
 export {
   bodyConstraints,

@@ -21,7 +21,7 @@ import {
   constraintType, isUndirected,
   resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
   viewSourceQuery,
-  diagramViewMembers, diagramViews,
+  diagramViewMembers, diagramViews, diagramViewNote,
 } from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
@@ -4941,6 +4941,33 @@ DiagramView reports { Tables { orders } }`,
     const no = ['tables varchar', 'notes int', 'Tablesx {', 'views object'];
     const bad = [...yes.filter((t) => !re.test(t)), ...no.filter((t) => re.test(t))];
     return bad.length ? bad.join('; ') : undefined;
+  });
+  check('v0.6.3 §18.1: a diagram view takes a note in its brackets or its body; the body note wins', () => {
+    const doc = parse(`xdbml: 0.6
+Table a { id int [pk] }
+DiagramView b1 [note: 'In brackets', x_owner: 'data-team'] { Tables { a } }
+DiagramView b2 {
+  Note: 'In the body'
+  Tables { a }
+}
+DiagramView b3 [note: 'Brackets'] {
+  Note { 'Body block' }
+  Tables { a }
+}
+DiagramView b4 { Note: 'Beside a star' * }
+DiagramView b5 { Tables { a } }`);
+    const notes = diagramViews(doc).map((v) => `${v.name}=${diagramViewNote(v) ?? '-'}`).join(' ');
+    if (notes !== 'b1=In brackets b2=In the body b3=Body block b4=Beside a star b5=-') return notes;
+    const found = resolveNames(doc).diagnostics.map((d) => d.code);
+    return found.length ? found.join(', ') : undefined;
+  });
+  check('v0.6.3 §18.6: a setting other than note or x_ is an error; a note or settings need a version declaration', () => {
+    const bad = codes('xdbml: 0.6\nTable a { id int [pk] }\nDiagramView v [color: \'#fff\'] { Tables { a } }');
+    if (bad.join() !== 'error:unknown-diagram-view-setting') return `bad: ${bad}`;
+    const dbmlNote = codes("Table a { id int [pk] }\nDiagramView v {\n Note: 'x'\n Tables { a }\n}");
+    const dbmlSetting = codes("Table a { id int [pk] }\nDiagramView v [note: 'x'] { Tables { a } }");
+    if (dbmlNote.join() !== 'error:construct-requires-version') return `dbml note: ${dbmlNote}`;
+    return dbmlSetting.join() === 'error:construct-requires-version' ? undefined : `dbml setting: ${dbmlSetting}`;
   });
   check('v0.6.3: every DIAGRAM_VIEW_CATEGORIES keyword opens a category', () => {
     const bad: string[] = [];
