@@ -4,9 +4,50 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.6.2 -- 2026
+## v0.6.3 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A backward-compatible point release of the v0.6 draft. Chapter 18 defines diagram views, the subject areas or sub-models of a model's diagram: the elements a diagram view contains, how a listed Container combines with the entities named beside it, how names resolve, and what a renderer draws. A relationship appears in a diagram view when both of its ends do, so the `Edges` category is dropped. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.
+
+### Added
+
+#### Spec
+
+- **Diagram view (§18)**: the chapter is rewritten, from one example and a list of categories into six sections. A diagram view lists entities under `Tables`, database views under `Views`, Containers under `Containers`, TableGroups, supertype groups and sticky notes, with `*` for every element of a category and `{ * }` for every element of every category; a category left out or empty lists nothing (§18.1). A listed Container contributes all of its entities and database views, unless `Tables` names some of its entities or `Views` some of its database views, in which case it contributes only those named; a TableGroup or a supertype group contributes all of its members (§18.2). Names resolve as the endpoints of a `Ref` do: an unqualified name names the element of that name outside any Container, or else the one inside a Container, and is an error when several Containers hold one (§18.3). A renderer draws the frame of each Container and TableGroup around the members it holds, and each `Ref` and Edge whose two ends lie in members, and keeps positions and display options for each diagram view (§18.4). The DBML form, which Holistics added to DBML in April 2026, reads in every document (§18.5), and §18.6 lists the conditions a parser reports. Every condition is an error, except a category written twice in a document without a version declaration, which DBML accepts: there it is a warning.
+
+- **AST (§28.8)**: a DiagramView carries one Category node per category; its members are computed, not stored.
+
+- **Conformance (§31)**: item 19, reading diagram views.
+
+- **Appendix A**: the DiagramView categories.
+
+- **Appendix D**: item 10, on the DBML form of `DiagramView`. Items 10 to 14 become 11 to 15.
+
+### Changed
+
+#### Spec
+
+- **`Edges` category removed (§18.1)**: v0.1 through v0.6.2 listed an `Edges` category. A `Ref` or an Edge appears in a diagram view when both of its ends do, so `Edges` is now an error.
+
+- **`Schemas` category (§18.1)**: accepted as an alias of `Containers`, as in DBML.
+
+- **Supertype group notation (§12.9)**: the subtypes connected to the symbol in a diagram view are the subtypes among its members.
+
+### Fixed
+
+- **This changelog**: the `v0.6.1` heading, dropped in 0.6.2, is restored.
+
+### Not changed (compatibility)
+
+- Backward-compatible throughout. `@xdbml/parse` read no `DiagramView` before 0.6.3, so no document that parsed before contains one.
+
+---
+
+## v0.6.2 -- 2026
+
+**Status**: Draft -- superseded by v0.6.3
 **Released**: 2026-09-30
 
 A backward-compatible point release of the v0.6 draft. Three DBML forms that the parser rejected or misread now parse as DBML reads them, and two rules the specification already stated are now reported. The AI reference, llms.txt, is rewritten from the specification, and CI checks every example in it. Every v0.6 document without a name collision or a Container target problem remains valid, and documents continue to declare `xdbml: 0.6`, though the parser now also reads `xdbml: 0.6.2`.
@@ -28,6 +69,9 @@ A backward-compatible point release of the v0.6 draft. Three DBML forms that the
 - **Renderer (`@xdbml/render`) and playground**: a type such as `varchar(20)[]` displays as written rather than as `varchar[](20)`. The help page on relationships gives its conceptual example the verb that reads in the direction it names.
 - **MCP server and llms.txt**: llms.txt is rewritten from the specification, with a table of what goes in the brackets and in the body of each construct, every field setting, the quoting and separator rules, the referenced side of each relationship operator, and a checklist. It gains Common mistakes for a missing comma between settings, a reversed relationship, a foreign key to part of a composite key, a block in a View body, a `Ref` in a Container, relationship settings beside an inline `ref:`, quotes and function defaults, types and settings from other languages, cardinality in the entity settings of an Edge, and a path across an array. The MCP tests now validate every example in llms.txt: a Right example with no diagnostic, a Wrong example with the diagnostic its comment names. `mcp/src/reference.ts` is regenerated; the server serves it once redeployed.
 
+---
+
+## v0.6.1 -- 2026
 
 **Status**: Draft -- superseded by v0.6.2
 **Released**: 2026-09-29
