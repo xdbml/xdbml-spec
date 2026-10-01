@@ -42,6 +42,15 @@ if errorlevel 1 (
   for /f %%u in ('npm whoami') do echo [ok]   npm login: %%u
 )
 
+REM --- curl, which release.cmd uses to check that a tarball is served --------
+where curl >nul 2>&1
+if errorlevel 1 (
+  echo [FAIL] curl not found. It ships with Windows 10 and later, in System32.
+  set /a PROBLEMS+=1
+) else (
+  echo [ok]   curl
+)
+
 REM --- publish rights on the scope -------------------------------------------
 call npm access list packages @xdbml >nul 2>&1
 if errorlevel 1 (
