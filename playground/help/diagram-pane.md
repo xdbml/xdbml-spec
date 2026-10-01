@@ -47,8 +47,9 @@ The collapse state persists across page reloads, scoped per field path within ea
 
 ## The diagram toolbar
 
-The diagram's toolbar holds undo and redo for layout changes, and two menus:
+The diagram's toolbar holds undo and redo for layout changes, and up to three menus:
 
+- **Diagram**, at the left end of the toolbar when the document declares diagram views, switches between the full diagram, Main ERD, and each diagram view. See [**Diagram views**](./diagram-views).
 - **Arrange** lays the diagram out again. **Relational** places related entities near each other and puts each supertype above its subtypes; **Star schema** places the most-referencing entity at the center.
 - **Display** chooses what the diagram draws. Under Relationships: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**. Under Labels: **Relationship names**, which shows the names of named `Ref`s and of supertype groups, off by default. The choices are remembered between sessions, and the Display button is highlighted while a relationship kind is hidden.
 

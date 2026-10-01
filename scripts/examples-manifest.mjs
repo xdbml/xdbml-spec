@@ -190,4 +190,13 @@ export const examples = [
     description: 'Formula 1 race results declared with the constraints block (spec \u00a710). Each table states its keys the way the source DDL does: named primary keys, composite primary and unique keys listed in key order (`(raceid, driverid, stop)` on pitstops, `(year, round)` on races), and check expressions in single quotes, with backticks where the expression holds a quote. Simple unnamed keys stay inline as `[pk]` and `[unique]` (\u00a710.3). Foreign keys carry their constraint names on the `Ref` (\u00a711.2), and the composite foreign key from pitstops references the unique key `(raceid, driverid)` of results rather than its primary key, which the referenced-key rule accepts (\u00a711.17). A MongoDB collection declares a unique key on a nested field, `identity.driverref`.',
     generators:  [],
   },
+  {
+    file:        '16-diagram-views.xdbml',
+    slug:        '16-diagram-views',
+    title:       'Diagram views: subject areas (v0.6.3)',
+    domain:      'Retail order to cash',
+    paradigm:    'PostgreSQL relational',
+    description: 'An order-to-cash model of a retailer split into subject areas with diagram views (spec \u00a718). Four Containers hold the model, `crm`, `catalog`, `sales` and `billing`, with a database view of monthly revenue and a supertype group on parties. `order_to_cash` lists `sales` and `billing` and names two entities of `sales` under Tables, so `sales` contributes those two and its database view, `billing` contributes all of its entities, and `crm.customers` appears alone in a `crm` frame (\u00a718.2). `parties` lists the `legal_nature` supertype group beside `customers`, and `catalog_usage` takes `order_lines` from `sales` without the other entities of `sales`. A relationship appears in a diagram view only when both of its ends are members, and an entity keeps the same attributes and markers in every diagram view (\u00a718.4). In the playground, the Diagram menu of the diagram toolbar switches between the full diagram and each diagram view, and each keeps its own layout.',
+    generators:  [],
+  },
 ];

@@ -84,6 +84,9 @@ slug  = "relationships-crows-foot"
 title = "Supertype groups"
 slug  = "supertype-groups"
 [[nodes.children]]
+title = "Diagram views"
+slug  = "diagram-views"
+[[nodes.children]]
 title = "Nested fields"
 slug  = "nested-fields"
 [[nodes.children]]

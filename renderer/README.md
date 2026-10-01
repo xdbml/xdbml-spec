@@ -51,6 +51,12 @@ or a `DiagramModel`, and returns an SVG string. Options:
   shape `buildDiagram` consumes, controlling which nested rows are collapsed.
 - `userPositions` / `edgeOffsets`: drag/auto-arrange position overlays,
   applied before serializing.
+- `diagramView`: the name of a diagram view (spec §18) to draw instead of
+  the full diagram: its members, the Containers holding them, and the
+  relationships and Edges whose two ends are members. Field markers and ids
+  stay as in the full diagram. A name the document does not declare draws the
+  full diagram; check it first with `diagramViews()` from `@xdbml/parse`.
+  `buildDiagram(doc, collapsedPaths, { diagramView })` takes the same option.
 - `theme`: a partial override merged over the default theme.
 - `background`: a solid background color (default transparent, matching the
   playground where the grid is a CSS backdrop).
@@ -112,6 +118,8 @@ handle.zoomToFit();
 handle.setInput(newSource);       // re-render on edit
 const state = handle.getState();  // { positions, offsets, collapsed, zoom }
 handle.setState(state);           // restore
+handle.setDiagramView('order_flow', savedLayoutForThatView);  // a diagram view (spec §18)
+handle.setDiagramView(null, savedLayoutForTheFullDiagram);     // back to the full diagram
 handle.destroy();
 ```
 

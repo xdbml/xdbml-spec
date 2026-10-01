@@ -1,0 +1,150 @@
+xdbml: 0.6
+
+// ---------------------------------------------------------------------------
+// Diagram views: subject areas of one model.
+//
+// An order-to-cash model of a retailer (spec 18). The model is drawn once
+// as the full diagram, and three diagram views each show a subset of it,
+// as subject areas or sub-models do in data modeling tools. A diagram view
+// declares nothing of its own: every entity keeps the same content in every
+// diagram view, and a relationship appears in one when both of its ends do.
+//
+// In the playground, pick a diagram view in the Diagram menu of the diagram
+// toolbar. Each one keeps its own layout, zoom and Display options.
+// ---------------------------------------------------------------------------
+
+Project retail {
+  targets: PostgreSQL
+  Note: 'Order-to-cash model of a retailer, split into subject areas with diagram views (spec §18).'
+}
+
+Schema crm [target: PostgreSQL] {
+  Table party {
+    id         int [pk]
+    created_at timestamp [not null]
+  }
+  Table person {
+    birth_date date
+  }
+  Table organization {
+    vat_number varchar(20) [unique]
+  }
+  Table customers {
+    id       int [pk]
+    party_id int [not null, ref: > crm.party.id]
+    segment  varchar(20)
+  }
+  Table leads {
+    id     int [pk]
+    source varchar(40)
+  }
+}
+
+Schema catalog [target: PostgreSQL] {
+  Table categories {
+    id   int [pk]
+    name varchar(80) [not null]
+  }
+  Table products {
+    id          int [pk]
+    category_id int [not null, ref: > catalog.categories.id]
+    sku         varchar(32) [unique]
+    list_price  decimal(10,2)
+  }
+}
+
+Schema sales [target: PostgreSQL] {
+  Table orders {
+    id          int [pk]
+    customer_id int [not null, ref: > crm.customers.id]
+    placed_at   timestamp [not null]
+  }
+  Table order_lines {
+    id         int [pk]
+    order_id   int [not null, ref: > sales.orders.id]
+    product_id int [not null, ref: > catalog.products.id]
+    quantity   int [not null]
+  }
+  Table returns {
+    id            int [pk]
+    order_line_id int [not null, ref: > sales.order_lines.id]
+    reason        varchar(200)
+  }
+  View monthly_revenue [materialized: true] {
+    source_query: '''
+      SELECT date_trunc('month', o.placed_at) AS month,
+             SUM(l.quantity * p.list_price)   AS revenue
+      FROM sales.orders o
+      JOIN sales.order_lines l ON l.order_id = o.id
+      JOIN catalog.products p  ON p.id = l.product_id
+      GROUP BY 1
+    '''
+    month   date
+    revenue decimal(15,2)
+  }
+}
+
+Schema billing [target: PostgreSQL] {
+  Table invoices {
+    id        int [pk]
+    order_id  int [not null, ref: > sales.orders.id]
+    issued_at date [not null]
+    total     decimal(12,2)
+  }
+  Table payments {
+    id         int [pk]
+    invoice_id int [not null, ref: > billing.invoices.id]
+    paid_at    date
+    amount     decimal(12,2)
+  }
+}
+
+SupertypeGroup legal_nature [supertype: crm.party, completeness: total, exclusivity: disjoint] {
+  crm.person
+  crm.organization
+}
+
+Note order_states {
+  'An order moves from placed to shipped to delivered. A return points at one order line.'
+}
+
+// Order to cash. Tables names two entities of sales, so sales contributes
+// those two and leaves returns out; Views names none of its database views,
+// so monthly_revenue comes along. billing is listed with no entity named, so
+// it contributes all of its entities. crm is not listed: customers appears
+// alone in a crm frame, and its line to party is not drawn.
+DiagramView order_to_cash {
+  Containers {
+    sales
+    billing
+  }
+  Tables {
+    sales.orders
+    sales.order_lines
+    crm.customers
+  }
+  Notes {
+    order_states
+  }
+}
+
+// Parties. The supertype group brings party, person and organization, and
+// the line from customers to party appears since both ends are members.
+DiagramView parties {
+  Tables {
+    crm.customers
+  }
+  SupertypeGroups {
+    legal_nature
+  }
+}
+
+// Catalog usage. order_lines comes from sales without its Container's other
+// entities. Its line to products appears; its line to orders does not.
+DiagramView catalog_usage {
+  Tables {
+    catalog.products
+    catalog.categories
+    sales.order_lines
+  }
+}

@@ -1130,6 +1130,45 @@ SupertypeGroup person_role [supertype: crm.Person] {
 // examples that exercise unimplemented features land.
 const pendingV02Examples: Record<string, string> = {};
 
+// v0.6.3 (spec §18): the Diagram menu switches the canvas to a diagram
+// view, built with buildDiagram's diagramView option and arranged on its
+// own. Example 16 carries three diagram views.
+tests.push({
+  name: 'v0.6.3: example 16 order_to_cash draws its members, frames and relationships',
+  source: () => readFileSync(join(examplesDir, '16-diagram-views.xdbml'), 'utf-8'),
+  check: ({ ast }) => {
+    const view = buildDiagram(ast, new Set(), { diagramView: 'order_to_cash' });
+    assertEq(view.entities.map((e) => e.id).join(','),
+      'crm.customers,sales.orders,sales.order_lines,sales.monthly_revenue,billing.invoices,billing.payments', 'members');
+    assertEq(view.containers.map((c) => c.name).join(','), 'crm,sales,billing', 'frames');
+    const ends = view.refs.map((r) => `${r.source?.entityId}>${r.target?.entityId}`).sort().join(' ');
+    assertEq(ends, 'billing.invoices>sales.orders billing.payments>billing.invoices sales.order_lines>sales.orders sales.orders>crm.customers', 'relationships');
+    const fk = view.entities.find((e) => e.id === 'crm.customers')?.fields.find((f) => f.name === 'party_id')?.flags.fk;
+    assertTrue(fk === true, 'customers.party_id keeps its fk marker without party');
+  },
+});
+tests.push({
+  name: 'v0.6.3: arranging a diagram view places its members only, inside their frames',
+  source: () => readFileSync(join(examplesDir, '16-diagram-views.xdbml'), 'utf-8'),
+  check: ({ ast }) => {
+    for (const name of ['order_to_cash', 'parties', 'catalog_usage']) {
+      const base = buildDiagram(ast, new Set(), { diagramView: name });
+      const positions = autoArrange(base, 'relational');
+      assertEq([...positions.keys()].sort().join(','), base.entities.map((e) => e.id).sort().join(','), `${name} positions`);
+      const placed = applyUserPositions(base, positions);
+      for (const e of placed.entities) {
+        if (!e.containerName) continue;
+        const c = placed.containers.find((x) => x.name === e.containerName);
+        assertTrue(!!c && e.bounds.x >= c.bounds.x && e.bounds.y >= c.bounds.y
+          && e.bounds.x + e.bounds.width <= c.bounds.x + c.bounds.width
+          && e.bounds.y + e.bounds.height <= c.bounds.y + c.bounds.height, `${name}: ${e.id} inside ${e.containerName}`);
+      }
+    }
+    const parties = buildDiagram(ast, new Set(), { diagramView: 'parties' });
+    assertEq(parties.supertypeGroups.filter((g) => !g.unresolved).map((g) => g.name).join(','), 'legal_nature', 'parties symbol');
+  },
+});
+
 // Add one test per bundled example.
 for (const file of readdirSync(examplesDir).filter((f) => f.endsWith('.xdbml')).sort()) {
   tests.push({

@@ -91,6 +91,13 @@ export interface MountOptions {
   background?: string;
   /** Initial automatic arrangement when no positions are restored. Default 'relational'. */
   arrange?: ArrangeStrategy;
+  /**
+   * Diagram view (spec §18) to draw instead of the full diagram. Positions,
+   * offsets and zoom belong to whichever diagram the mount shows; the
+   * embedding shell keeps one set per diagram view and passes it to
+   * `setDiagramView`.
+   */
+  diagramView?: string | null;
   /** Fired when the selection changes (entity/field/ref/container or null). */
   onSelect?: (selection: Selection) => void;
   /** Fired after a position/offset change settles (drag drop, arrange, reset). */
@@ -109,6 +116,14 @@ export interface DiagramHandle {
   toggleCollapse (entityId: string, path: string): void;
   setCollapsed (collapsed: Iterable<string>): void;
   arrange (strategy: ArrangeStrategy): void;
+  /** The diagram view shown, or null for the full diagram. */
+  getDiagramView (): string | null;
+  /**
+   * Show a diagram view, or the full diagram with null, together with the
+   * layout to show it with. Without `state`, the current positions apply;
+   * with an empty `positions`, the diagram is arranged afresh.
+   */
+  setDiagramView (name: string | null, state?: Partial<LayoutState>): void;
   getRelationshipVisibility (): RelationshipVisibility;
   setRelationshipVisibility (visibility: Partial<RelationshipVisibility>): void;
   reset (): void;
@@ -138,7 +153,9 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     ...ALL_RELATIONSHIPS_VISIBLE,
     ...(options.relationshipVisibility ?? {}),
   };
-  let model: DiagramModel = buildDiagram(doc, collapsed);
+  let diagramView: string | null = options.diagramView ?? null;
+  const build = (): DiagramModel => buildDiagram(doc, collapsed, { diagramView: diagramView ?? undefined });
+  let model: DiagramModel = build();
 
   // Resolve the theme once up front so the viewport backdrop (painted
   // below) and the serialized shapes (rendered in `render`) share one
@@ -165,7 +182,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
   /* --------------------------------------------------------- rendering */
 
   function recomputeModel (): void {
-    const base = buildDiagram(doc, collapsed);
+    const base = build();
     model = (positions.size > 0 || offsets.size > 0)
       ? applyUserPositions(base, positions, offsets)
       : base;
@@ -245,7 +262,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
   /* --------------------------------------------------- arrange / reset */
 
   function applyArrange (strategy: ArrangeStrategy, emit: boolean): void {
-    const base = buildDiagram(doc, collapsed);
+    const base = build();
     positions = new Map(autoArrange(base, strategy));
     recomputeModel();
     render();
@@ -481,6 +498,24 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
       render();
     },
     arrange: (strategy) => applyArrange(strategy, true),
+    getDiagramView: () => diagramView,
+    setDiagramView (name: string | null, state?: Partial<LayoutState>): void {
+      diagramView = name;
+      if (state?.offsets) {
+        offsets = new Map(Object.entries(state.offsets).map(([id, o]) => [id, { dx: o.dx, dy: o.dy }]));
+      }
+      if (state?.zoom !== undefined) zoom = clampZoom(state.zoom);
+      if (state?.positions && Object.keys(state.positions).length === 0) {
+        positions = new Map();
+        applyArrange(options.arrange ?? 'relational', false);
+        return;
+      }
+      if (state?.positions) {
+        positions = new Map(Object.entries(state.positions).map(([id, p]) => [id, { x: p.x, y: p.y }]));
+      }
+      recomputeModel();
+      render();
+    },
     getRelationshipVisibility: () => ({ ...refVisibility }),
     setRelationshipVisibility (next: Partial<RelationshipVisibility>): void {
       refVisibility = { ...refVisibility, ...next };

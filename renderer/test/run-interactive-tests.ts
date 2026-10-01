@@ -288,6 +288,33 @@ check('destroy removes the viewport', !host.querySelector('svg'));
   sgHandle.destroy();
 }
 
+{
+  // v0.6.3: the mount shows a diagram view (spec §18) and returns to the
+  // full diagram, each with the layout the shell hands it.
+  const dvHost = dom.window.document.createElement('div');
+  dom.window.document.body.appendChild(dvHost);
+  const dvSource = `xdbml: 0.6
+Schema crm { Table customers { id int [pk] }
+ Table leads { id int [pk] } }
+Schema sales { Table orders {
+ id int [pk]
+ customer_id int [ref: > crm.customers.id] } }
+DiagramView ordering { Tables { crm.customers sales.orders } }`;
+  const dvHandle = mount(dvHost, dvSource, {});
+  const ids = (): string => dvHandle.getModel().entities.map((e) => e.id).join(',');
+  check('diagram view: the mount starts on the full diagram', dvHandle.getDiagramView() === null && ids() === 'crm.customers,crm.leads,sales.orders', ids());
+  dvHandle.setDiagramView('ordering', { positions: {}, offsets: {} });
+  check('diagram view: setDiagramView shows the members only', dvHandle.getDiagramView() === 'ordering' && ids() === 'crm.customers,sales.orders', ids());
+  check('diagram view: an empty positions map arranges the diagram view afresh', Object.keys(dvHandle.getState().positions).length === 2,
+    JSON.stringify(dvHandle.getState().positions));
+  check('diagram view: the relationship between two members is drawn', dvHandle.getModel().refs.length === 1);
+  dvHandle.setDiagramView(null, { positions: { 'crm.customers': { x: 500, y: 40 } }, offsets: {} });
+  const cust = dvHandle.getModel().entities.find((e) => e.id === 'crm.customers');
+  check('diagram view: null returns to the full diagram with the positions handed back',
+    dvHandle.getDiagramView() === null && ids() === 'crm.customers,crm.leads,sales.orders' && cust?.bounds.x === 500, ids());
+  dvHandle.destroy();
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failures.length) { console.log(failures.join('\n')); process.exit(1); }
 console.log('All interactive-mount checks passed.');

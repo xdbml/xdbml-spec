@@ -51,6 +51,16 @@ A few conditions change severity with the version the document declares. In an `
 - **`duplicate-primary-key`**: an entity declares its primary key in two places, for example `[pk]` on a field and a `pk` entry in `indexes`.
 - **`null-in-primary-key`**: `null` written on a field of the primary key.
 - **`unresolved-index-field`**: an index names a field the entity does not declare.
+- **`duplicate-diagram-view-category`**: a diagram view writes one category twice, or both `Schemas` and `Containers`, which are one category. Write each category once. In a document without a version declaration it is a warning, since DBML accepts it, and the two lists combine (spec §18.6).
+
+Diagram views (spec §18) add four errors of their own, whatever version the document declares:
+
+- **`unresolved-diagram-view-name`**: a name in a diagram view matches nothing of its category's kind.
+- **`ambiguous-diagram-view-name`**: an unqualified name, such as `orders`, matches entities in several Containers and none outside a Container. Write the qualified name, `sales.orders`.
+- **`diagram-view-wrong-category`**: a name lists an element under the wrong category, such as a database view under `Tables`. The message names the right category. An Edge is never listed: it appears when both of its ends do.
+- **`duplicate-diagram-view`**: two diagram views share one name.
+
+The `Containers`, `Views` and `SupertypeGroups` categories are xDBML extensions: in a document without a version declaration they raise `construct-requires-version`. DBML's own name for Containers, `Schemas`, needs no declaration. See [**Diagram views**](./diagram-views).
 
 ## Rows in the body
 

@@ -16,9 +16,10 @@
  *     `options` may carry `collapsedPaths`, `userPositions`, `theme`, and
  *     a solid `background` color.
  *
- *   buildDiagram(doc, collapsedPaths?): DiagramModel
+ *   buildDiagram(doc, collapsedPaths?, options?): DiagramModel
  *     The pure layout pass: an xDBML document in, a positioned diagram
- *     model out. Re-exported from the layout core.
+ *     model out. Re-exported from the layout core. `options.diagramView`
+ *     names a diagram view (spec §18) to draw instead of the full diagram.
  *
  *   applyUserPositions / autoArrange
  *     Position overlays (drag positions, auto-arrangement strategies),
@@ -59,6 +60,14 @@ export interface RenderOptions extends Omit<SerializeOptions, 'playgroundLink'> 
   /** Per-edge box offsets to overlay before serializing. */
   edgeOffsets?: EdgeOffsets;
   /**
+   * Name of a diagram view (spec §18) to draw instead of the full diagram:
+   * its members, the Containers holding them, and the relationships whose
+   * two ends are members. A name the document does not declare draws the
+   * full diagram; callers that want an error check `diagramViews()` from
+   * `@xdbml/parse` first. Ignored for a prebuilt model.
+   */
+  diagramView?: string;
+  /**
    * When set, and the input is source text, the rendered SVG gains a small
    * "Open in xDBML playground" link in a footer band. Its target carries
    * the schema as a shared `#s=` hash (lz-string), the same format the
@@ -79,7 +88,7 @@ export type RenderInput = string | XDbmlDocument | DiagramModel;
 export function renderToSVG (input: RenderInput, options: RenderOptions = {}): string {
   const model = toModel(input, options);
 
-  const { playgroundLink, arrange: _a, userPositions: _u, edgeOffsets: _e, ...serialize } = options;
+  const { playgroundLink, arrange: _a, userPositions: _u, edgeOffsets: _e, diagramView: _d, ...serialize } = options;
   const serializeOpts: SerializeOptions = { ...serialize };
 
   // The playground link can only be built when we hold the source text;
@@ -113,7 +122,7 @@ function toModel (input: RenderInput, options: RenderOptions): DiagramModel {
     : flatten(input);
 
   const collapsed = options.collapsedPaths as ReadonlySet<CollapsedKey> | undefined;
-  const base = buildDiagram(doc, collapsed ?? new Set());
+  const base = buildDiagram(doc, collapsed ?? new Set(), { diagramView: options.diagramView });
 
   // Explicit positions win, mirroring the playground's saved-layout path:
   // a caller (or a restored layout) that supplies coordinates takes
@@ -162,6 +171,7 @@ export {
 } from './layout/layout.ts';
 
 export type {
+  BuildOptions,
   DiagramModel,
   ContainerLayout,
   EntityLayout,

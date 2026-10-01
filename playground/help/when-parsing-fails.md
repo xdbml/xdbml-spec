@@ -79,6 +79,8 @@ A few patterns to recognize quickly:
 
 **A setting in a body**: `materialized: true` inside a View body, or `headercolor: '#3498DB'` inside a Table body. Settings go in the brackets after the name, as in `View monthly_revenue [materialized: true] { ... }`; the error message names the declaration and shows where the setting goes.
 
+**A diagram view category the parser does not know**: a `DiagramView` lists `Tables`, `Views`, `Containers` (or `Schemas`), `TableGroups`, `SupertypeGroups` and `Notes`. `Edges` is not one: an Edge, like a relationship, appears in a diagram view when both of its ends do. A `DiagramView` also stays at the top level of the document, never inside a Container. See [**Diagram views**](./diagram-views).
+
 **Mixed quote types**: xDBML accepts single quotes (`'foo'`) and backticks (`` `bar` ``) for strings; double quotes are not a primary string delimiter. Switch to single quotes if double quotes don't parse.
 
 **Keywords as field names**: a field may take the name of any keyword without quotes, `note`, `type` or `records` included. `Note` starts a note only before `:` or `{`, and `indexes`, `checks`, `constraints` and `records` start a block only before `{`.

@@ -31,6 +31,12 @@ A backward-compatible point release of the v0.6 draft. Chapter 18 defines diagra
 
 - **Grammar**: `diagramViewDefinition`, which the grammar referenced without defining, with `diagramViewCategory` and `DIAGRAM_VIEW`. `grammar/test-cases.md` gains twelve v0.6.3 cases, each checked against the parser.
 
+- **Renderer (`@xdbml/render`)**: `buildDiagram(doc, collapsedPaths, { diagramView })` and the `diagramView` option of `renderToSVG` draw a diagram view: its members, stacked again in their Containers' columns, a frame for each Container holding a member, and the relationships and Edges whose two ends are members. Field markers come from every relationship of the model, so an attribute keeps `fk` or `dk` when the other end is outside the diagram view, and every id stays the id it has in the full diagram. The interactive mount takes a `diagramView` option and gains `getDiagramView()` and `setDiagramView(name, layout)`.
+
+- **Playground**: a Diagram menu in the diagram toolbar, shown when the document declares diagram views, switches between Main ERD and each diagram view. Positions, Edge offsets, zoom, Display options and undo history belong to the diagram on display; collapsed rows are shared. A diagram view opened for the first time is arranged and fitted. A reload returns to the diagram view on display; renaming or removing it returns to Main ERD. A new help page, Diagram views, and additions to the pages on the diagram pane, the diagnostics panel, parse failures and persistence.
+
+- **Examples**: example 16, Diagram views: subject areas, an order-to-cash model with three diagram views. The §18.2 snippet with a supertype group gains a View in playground button.
+
 ### Changed
 
 #### Spec

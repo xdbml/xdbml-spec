@@ -31,7 +31,7 @@
  * Adding any of those is additive to this module rather than a rewrite.
  */
 
-import { resolveSupertypeGroups } from '@xdbml/parse';
+import { diagramViewMembers, resolveSupertypeGroups } from '@xdbml/parse';
 import type {
   ContainerDeclaration,
   EdgeDeclaration,
@@ -425,11 +425,28 @@ export function makeCollapsedKey (entityId: string, path: string): CollapsedKey 
  * Main entry
  * ----------------------------------------------------------------------- */
 
+/** Options of `buildDiagram`. */
+export interface BuildOptions {
+  /**
+   * Name of a diagram view (spec §18) to draw instead of the full diagram.
+   * The model then holds the members of that diagram view, the Containers
+   * holding them, the relationships and Edges whose two ends are members,
+   * and the supertype groups whose supertype and a subtype are members.
+   * Field markers (fk, dk, ...) stay as in the full diagram, and every id
+   * stays the id it has in the full diagram. A name the document does not
+   * declare draws the full diagram.
+   */
+  diagramView?: string;
+}
+
 export function buildDiagram (
   doc: XDbmlDocument | undefined,
   collapsedPaths: ReadonlySet<CollapsedKey> = new Set(),
+  options: BuildOptions = {},
 ): DiagramModel {
   if (!doc) return emptyDiagram();
+  const members = options.diagramView ? diagramViewMembers(doc, options.diagramView) : undefined;
+  const boxIds = members ? new Set<string>([...members.entities, ...members.views]) : undefined;
 
   // Collect entities and views, grouped by container. Both produce
   // EntityLayout rows in the diagram; views are flagged so the
@@ -709,6 +726,25 @@ export function buildDiagram (
     markRole(parent, master ? 'dm' : 'dk');
   }
 
+  // ---- Diagram view (spec §18) -------------------------------------
+  // The markers above come from every relationship of the model, so an
+  // attribute keeps fk or dk when the other end is outside the diagram
+  // view (§18.4: an entity draws the same everywhere). Only now are the
+  // entities narrowed to the members, then stacked again in their
+  // Containers' columns; a Container with no member is not drawn.
+  let shownEntities = entityLayouts;
+  let shownRefs = refLayouts;
+  let shownContainers = containerLayouts;
+  if (boxIds) {
+    shownEntities = entityLayouts.filter((e) => boxIds.has(e.id));
+    shownRefs = refLayouts.filter((r) =>
+      !!r.source && !!r.target && boxIds.has(r.source.entityId) && boxIds.has(r.target.entityId));
+    const restacked = restackColumns(shownEntities, containerLayouts);
+    shownContainers = restacked.containers;
+    cursorX = restacked.width;
+    maxBottom = restacked.bottom;
+  }
+
   // ---- Edges (property-bearing relationships) ----------------------
   // Collect Edge declarations (top-level and inside containers), build a
   // box for each (reusing the entity layout machinery), resolve its
@@ -733,6 +769,11 @@ export function buildDiagram (
     return entityByName.get(name);
   };
   for (const { decl, containerName } of rawEdges) {
+    if (boxIds) {
+      const s = resolveNode(settingValueAsString(decl.settings, 'source'), containerName);
+      const t = resolveNode(settingValueAsString(decl.settings, 'target'), containerName);
+      if (!s || !t || !boxIds.has(s.id) || !boxIds.has(t.id)) continue;
+    }
     const box = buildEntityLayout(
       edgeAsEntityLike(decl), 0, 0, containerName, collapsedPaths, typeTable, EDGE_HEADER_COLOR,
     );
@@ -754,10 +795,10 @@ export function buildDiagram (
       unresolved: !src || !tgt,
     });
   }
-  positionEdges(entityLayouts, edges);
+  positionEdges(shownEntities, edges);
 
   // ---- Supertype groups (spec §12) ---------------------------------
-  const supertypeGroups = buildSupertypeGroups(doc, entityLayouts);
+  const supertypeGroups = buildSupertypeGroups(doc, shownEntities);
 
   let width = Math.max(cursorX, CANVAS_MARGIN * 2 + 200);
   let height = maxBottom + CANVAS_MARGIN;
@@ -767,14 +808,59 @@ export function buildDiagram (
   }
 
   return {
-    containers: containerLayouts,
-    entities: entityLayouts,
-    refs: refLayouts,
+    containers: shownContainers,
+    entities: shownEntities,
+    refs: shownRefs,
     edges,
     supertypeGroups,
     width,
     height,
   };
+}
+
+/**
+ * Stack the entities shown in a diagram view again, one column per
+ * Container in declaration order and a last column for entities outside
+ * any Container, as `buildDiagram` lays out the full diagram. Moves the
+ * entity bounds in place and returns the Containers that hold one, with
+ * new bounds. Field rows are relative to their entity, so they follow.
+ */
+function restackColumns (
+  entities: EntityLayout[],
+  containers: ContainerLayout[],
+): { containers: ContainerLayout[]; width: number; bottom: number } {
+  const out: ContainerLayout[] = [];
+  let cursorX = CANVAS_MARGIN;
+  let bottom = CANVAS_MARGIN;
+  for (const container of containers) {
+    const own = entities.filter((e) => e.containerName === container.name);
+    if (own.length === 0) continue;
+    const innerTop = CANVAS_MARGIN + CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING;
+    let y = innerTop;
+    for (const e of own) {
+      e.bounds = { ...e.bounds, x: cursorX + CONTAINER_PADDING, y };
+      y += e.bounds.height + ENTITY_GAP_Y;
+    }
+    const height = (y - innerTop) - ENTITY_GAP_Y + CONTAINER_PADDING * 2 + CONTAINER_HEADER_HEIGHT;
+    const placed: ContainerLayout = {
+      ...container,
+      bounds: { x: cursorX, y: CANVAS_MARGIN, width: ENTITY_WIDTH + CONTAINER_PADDING * 2, height },
+    };
+    out.push(placed);
+    bottom = Math.max(bottom, placed.bounds.y + placed.bounds.height);
+    cursorX += placed.bounds.width + CONTAINER_GAP_X;
+  }
+  const orphans = entities.filter((e) => !e.containerName);
+  if (orphans.length > 0) {
+    let y = CANVAS_MARGIN;
+    for (const e of orphans) {
+      e.bounds = { ...e.bounds, x: cursorX, y };
+      y += e.bounds.height + ENTITY_GAP_Y;
+    }
+    bottom = Math.max(bottom, y);
+    cursorX += ENTITY_WIDTH + CONTAINER_GAP_X;
+  }
+  return { containers: out, width: cursorX, bottom };
 }
 
 /**

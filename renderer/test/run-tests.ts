@@ -262,6 +262,73 @@ check('08: has an entity with a composite PK', multiPkEntities.length > 0,
   assertWellFormed('v0.6.1 separators and note fields', renderToSVG(src));
 }
 
+{
+  // v0.6.3: a diagram view (spec §18) draws its members, the Containers
+  // holding them and the relationships whose two ends are members. Field
+  // markers and ids stay as in the full diagram (§18.4).
+  const src = `xdbml: 0.6
+Schema crm {
+  Table party     { id int [pk] }
+  Table person    { birth date }
+  Table customers {
+    id       int [pk]
+    party_id int [ref: > crm.party.id]
+  }
+}
+Schema sales {
+  Table orders {
+    id          int [pk]
+    customer_id int [ref: > crm.customers.id]
+  }
+  Table returns {
+    id       int [pk]
+    order_id int [ref: > sales.orders.id]
+  }
+}
+Edge buys [source: crm.customers, target: sales.orders] { }
+Edge reviews [source: crm.party, target: sales.orders] { }
+SupertypeGroup kinds [supertype: crm.party] { crm.person }
+DiagramView ordering {
+  Tables { crm.customers }
+  Containers { sales }
+}
+DiagramView parties {
+  SupertypeGroups { kinds }
+}`;
+  const doc = flatten(parse(src));
+  const full = buildDiagram(doc);
+  const view = buildDiagram(doc, new Set(), { diagramView: 'ordering' });
+  const ids = (m: typeof full): string => m.entities.map((e) => e.id).join(',');
+  check('v0.6.3: a diagram view draws its members only',
+    ids(view) === 'crm.customers,sales.orders,sales.returns', ids(view));
+  check('v0.6.3: a Container frame is drawn only around a Container holding a member',
+    view.containers.map((c) => c.name).join(',') === 'crm,sales', view.containers.map((c) => c.name).join(','));
+  const refIds = (m: typeof full): string => m.refs.map((r) => r.id).join(',');
+  const kept = full.refs.filter((r) => r.source && r.target && ['crm.customers', 'sales.orders', 'sales.returns'].includes(r.source.entityId)
+    && ['crm.customers', 'sales.orders', 'sales.returns'].includes(r.target.entityId)).map((r) => r.id).join(',');
+  check('v0.6.3: a relationship is drawn when both ends are members, with the id it has in the full diagram',
+    refIds(view) === kept && view.refs.length === 2, `${refIds(view)} vs ${kept}`);
+  const partyId = (m: typeof full): boolean | undefined => m.entities.find((e) => e.id === 'crm.customers')?.fields.find((f) => f.name === 'party_id')?.flags.fk;
+  check('v0.6.3: an attribute keeps its fk marker when the other end is outside the diagram view', partyId(view) === true);
+  check('v0.6.3: an Edge is drawn when both ends are members',
+    view.edges.map((e) => e.name).join(',') === 'buys', view.edges.map((e) => e.name).join(','));
+  const crm = view.containers.find((c) => c.name === 'crm');
+  const cust = view.entities.find((e) => e.id === 'crm.customers');
+  check('v0.6.3: entities are stacked again inside their Container frames',
+    !!crm && !!cust && cust.bounds.y >= crm.bounds.y && cust.bounds.x >= crm.bounds.x
+      && cust.bounds.y + cust.bounds.height <= crm.bounds.y + crm.bounds.height);
+  const parties = buildDiagram(doc, new Set(), { diagramView: 'parties' });
+  check('v0.6.3: a supertype group listed in a diagram view draws its symbol',
+    parties.supertypeGroups.filter((g) => !g.unresolved).map((g) => g.name).join(',') === 'kinds');
+  check('v0.6.3: a supertype group is not drawn when its supertype is outside the diagram view',
+    view.supertypeGroups.every((g) => g.unresolved));
+  const unknown = buildDiagram(doc, new Set(), { diagramView: 'nope' });
+  check('v0.6.3: an undeclared diagram view name draws the full diagram', ids(unknown) === ids(full));
+  const svg = renderToSVG(src, { diagramView: 'ordering' });
+  assertWellFormed('v0.6.3 diagram view render', svg);
+  check('v0.6.3: renderToSVG draws the diagram view', svg.includes('customers') && !svg.includes('>person<'));
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

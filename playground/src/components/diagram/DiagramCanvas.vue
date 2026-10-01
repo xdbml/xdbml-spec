@@ -22,6 +22,28 @@
       v-if="hasAst"
       class="absolute bottom-3 right-3 flex items-center gap-0.5 px-1 py-0.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm select-none"
     >
+      <!-- Diagram view selector (spec §18), shown when the document declares
+           diagram views. "Main ERD" is the full diagram. It sits in the
+           toolbar rather than over the canvas, where a fitted diagram puts
+           its first Container. -->
+      <template v-if="diagramViewNames.length > 0">
+        <label
+          for="diagram-view-select"
+          class="pl-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500"
+        >Diagram</label>
+        <select
+          id="diagram-view-select"
+          class="h-7 max-w-[14rem] pl-1 pr-6 text-xs font-medium text-gray-700 dark:text-slate-200 bg-transparent dark:bg-slate-800 border-none rounded hover:bg-gray-100 dark:hover:bg-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+          :value="activeView ?? ''"
+          title="Show the full diagram or one of the document's diagram views"
+          @change="onDiagramViewChange"
+        >
+          <option value="">Main ERD</option>
+          <option v-for="name in diagramViewNames" :key="name" :value="name">{{ name }}</option>
+        </select>
+        <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
+      </template>
+
       <button
         type="button"
         class="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -231,6 +253,9 @@ const EDGE_OFFSETS_STORAGE_KEY = 'xdbml-playground:edge-offsets';
 const COLLAPSE_STORAGE_KEY = 'xdbml-playground:collapsed-paths';
 const ZOOM_STORAGE_KEY = 'xdbml-playground:zoom';
 const RELATIONSHIP_VISIBILITY_STORAGE_KEY = 'xdbml-playground:relationship-visibility';
+const DIAGRAM_VIEW_STORAGE_KEY = 'xdbml-playground:diagram-view';
+const VIEW_ZOOM_STORAGE_KEY = 'xdbml-playground:diagram-view-zoom';
+const VIEW_VISIBILITY_STORAGE_KEY = 'xdbml-playground:diagram-view-visibility';
 const WORKING_DOC_KEY = '__working__';
 
 type EntityPos = { x: number; y: number };
@@ -240,6 +265,45 @@ type OffMap = Map<string, EdgeOff>;
 
 function currentDocKey (): string {
   return fileSystem.filename ? `file:${fileSystem.filename}` : WORKING_DOC_KEY;
+}
+
+/* ---------------------------------------------------------- diagram views */
+//
+// A diagram view (spec §18) is a subset of the model's diagram. Positions,
+// edge offsets, zoom, Display options and undo history belong to the diagram
+// shown: the full diagram ("Main ERD") keeps the keys it always had, and
+// each diagram view gets its own, under `<doc key>#view:<name>`. Entity
+// content and collapsed rows are shared, since an entity draws the same in
+// every diagram view (§18.4).
+
+const activeView = ref<string | null>(null);
+
+const diagramViewNames = computed<string[]>(() => {
+  const names: string[] = [];
+  for (const s of parser.flatAst?.statements ?? []) {
+    if (s.kind === 'DiagramViewDeclaration' && !names.includes(s.name)) names.push(s.name);
+  }
+  return names;
+});
+
+/** Storage key of the diagram shown, for a document key. */
+function layoutKey (docKey: string): string {
+  return activeView.value ? `${docKey}#view:${activeView.value}` : docKey;
+}
+
+function readJson (key: string): Record<string, unknown> {
+  try {
+    const raw = localStorage.getItem(key);
+    const obj = raw ? JSON.parse(raw) : {};
+    return obj && typeof obj === 'object' ? obj as Record<string, unknown> : {};
+  } catch { return {}; }
+}
+function writeJsonEntry (key: string, entry: string, value: unknown): void {
+  try {
+    const all = readJson(key);
+    all[entry] = value;
+    localStorage.setItem(key, JSON.stringify(all));
+  } catch { /* best-effort */ }
 }
 
 function isEntityPos (v: unknown): v is EntityPos {
@@ -334,8 +398,17 @@ function loadZoom (): number {
   } catch { /* ignore */ }
   return 1;
 }
+/** The stored zoom of a diagram view, or undefined when it has none yet. */
+function loadViewZoom (key: string): number | undefined {
+  const n = readJson(VIEW_ZOOM_STORAGE_KEY)[key];
+  return typeof n === 'number' && n >= ZOOM_MIN && n <= ZOOM_MAX ? n : undefined;
+}
 const zoom = ref<number>(loadZoom());
 watch(zoom, (z) => {
+  if (activeView.value) {
+    writeJsonEntry(VIEW_ZOOM_STORAGE_KEY, layoutKey(currentDocKey()), z);
+    return;
+  }
   try { localStorage.setItem(ZOOM_STORAGE_KEY, String(z)); } catch { /* best-effort */ }
 });
 
@@ -394,8 +467,8 @@ function persistUserPositions (): void {
     const all = loadAllPositions();
     const rec: Record<string, EntityPos> = {};
     for (const [id, p] of userPositions.value) rec[id] = p;
-    all[currentDocKey()] = rec;
-    all[WORKING_DOC_KEY] = rec;
+    all[layoutKey(currentDocKey())] = rec;
+    all[layoutKey(WORKING_DOC_KEY)] = rec;
     localStorage.setItem(POSITIONS_STORAGE_KEY, JSON.stringify(all));
   } catch { /* best-effort */ }
 }
@@ -404,8 +477,8 @@ function persistEdgeOffsets (): void {
     const all = loadAllOffsets();
     const rec: Record<string, EdgeOff> = {};
     for (const [id, o] of edgeOffsets.value) rec[id] = o;
-    all[currentDocKey()] = rec;
-    all[WORKING_DOC_KEY] = rec;
+    all[layoutKey(currentDocKey())] = rec;
+    all[layoutKey(WORKING_DOC_KEY)] = rec;
     localStorage.setItem(EDGE_OFFSETS_STORAGE_KEY, JSON.stringify(all));
   } catch { /* best-effort */ }
 }
@@ -439,6 +512,8 @@ function snapshotLayout (): LayoutSnapshotMaps {
   return { positions, offsets };
 }
 function seedHistory (): void { history.value = seedH(snapshotLayout()); }
+/** Undo history of the diagrams not shown, by layout key; cleared on a document switch. */
+const parkedHistories = new Map<string, LayoutHistory>();
 function commitHistory (): void { history.value = commitH(history.value, snapshotLayout(), HISTORY_CAP); }
 function restoreSnapshot (snap: LayoutSnapshotMaps): void {
   const pos: PosMap = new Map();
@@ -491,18 +566,21 @@ const labelOptions = [
 
 function loadRelationshipVisibility (): RelationshipVisibility {
   // Supertype groups are drawn and relationship names are off by default
-  // (spec 12.9).
+  // (spec 12.9). A diagram view has Display options of its own, starting
+  // from these defaults (spec §18.4).
   const all: RelationshipVisibility = {
     referential: true, foreignMaster: true, inactive: true, conceptual: true,
     supertypeGroups: true, relationshipNames: false,
   };
   try {
-    const raw = localStorage.getItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY);
-    if (!raw) return all;
-    const parsed = JSON.parse(raw);
+    const parsed = activeView.value
+      ? readJson(VIEW_VISIBILITY_STORAGE_KEY)[layoutKey(currentDocKey())]
+      : JSON.parse(localStorage.getItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY) ?? 'null');
     if (parsed && typeof parsed === 'object') {
+      const stored = parsed as Record<string, unknown>;
       for (const opt of [...relationshipOptions, ...labelOptions]) {
-        if (typeof parsed[opt.key] === 'boolean') all[opt.key] = parsed[opt.key];
+        const v = stored[opt.key];
+        if (typeof v === 'boolean') all[opt.key] = v;
       }
     }
   } catch { /* ignore */ }
@@ -516,17 +594,23 @@ const allRelationshipsShown = computed(
 const displayMenuOpen = ref(false);
 const displayWrap = ref<HTMLElement | null>(null);
 
-watch(relationshipVisibility, (v) => {
+function persistRelationshipVisibility (): void {
+  const v = relationshipVisibility.value;
+  if (activeView.value) {
+    writeJsonEntry(VIEW_VISIBILITY_STORAGE_KEY, layoutKey(currentDocKey()), v);
+    return;
+  }
   try {
     localStorage.setItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY, JSON.stringify(v));
   } catch { /* best-effort */ }
-}, { deep: true });
+}
 
 function toggleRelationship (key: keyof RelationshipVisibility): void {
   relationshipVisibility.value = {
     ...relationshipVisibility.value,
     [key]: !relationshipVisibility.value[key],
   };
+  persistRelationshipVisibility();
   handle?.setRelationshipVisibility(relationshipVisibility.value);
 }
 
@@ -543,7 +627,7 @@ const arrangeWrap = ref<HTMLElement | null>(null);
 
 function applyStrategy (strategy: ArrangeStrategy): void {
   if (!parser.flatAst) return;
-  const base = buildDiagram(parser.flatAst, collapsedPaths.value);
+  const base = buildDiagram(parser.flatAst, collapsedPaths.value, { diagramView: activeView.value ?? undefined });
   userPositions.value = new Map(autoArrange(base, strategy));
   persistUserPositions();
   pushLayout();
@@ -609,6 +693,7 @@ function toMount (s: Selection): MountSelection {
 function ensureMount (): void {
   if (handle || !viewportEl.value || !parser.flatAst) return;
   handle = mount(viewportEl.value, parser.flatAst, {
+    diagramView: activeView.value,
     relationshipVisibility: relationshipVisibility.value,
     // In dark mode, hand the renderer its dark palette. The palette also
     // carries the canvas backdrop, so the mount's viewport grid matches.
@@ -642,10 +727,24 @@ let appliedEpoch = -1;
 function resolveLayoutForDocument (): void {
   handle?.setInput(parser.flatAst!);
 
-  const saved = loadPositionsFor(currentDocKey());
-  const savedOff = loadOffsetsFor(currentDocKey());
   const firstResolve = appliedEpoch === -1;
   const isRestore = firstResolve && parser.documentEpoch === 0 && parser.initialRestore;
+
+  // A reload returns to the diagram view the user left; any other document
+  // switch opens on the full diagram.
+  parkedHistories.clear();
+  const remembered = readJson(DIAGRAM_VIEW_STORAGE_KEY)[WORKING_DOC_KEY];
+  activeView.value = isRestore && typeof remembered === 'string' && diagramViewNames.value.includes(remembered)
+    ? remembered
+    : null;
+  persistActiveView();
+  relationshipVisibility.value = loadRelationshipVisibility();
+  handle?.setRelationshipVisibility(relationshipVisibility.value);
+  if (activeView.value) zoom.value = loadViewZoom(layoutKey(currentDocKey())) ?? zoom.value;
+  handle?.setDiagramView(activeView.value, { zoom: zoom.value });
+
+  const saved = loadPositionsFor(layoutKey(currentDocKey()));
+  const savedOff = loadOffsetsFor(layoutKey(currentDocKey()));
 
   if (isRestore) {
     if (saved.size > 0) {
@@ -671,6 +770,54 @@ function resolveLayoutForDocument (): void {
   seedHistory();
   appliedEpoch = parser.documentEpoch;
 }
+
+function persistActiveView (): void {
+  writeJsonEntry(DIAGRAM_VIEW_STORAGE_KEY, WORKING_DOC_KEY, activeView.value);
+}
+
+/**
+ * Show a diagram view, or the full diagram with null. The layout, zoom,
+ * Display options and undo history of the diagram left behind stay where
+ * they are; those of the diagram shown are loaded, or, for a diagram view
+ * opened for the first time, arranged afresh and fitted.
+ */
+function selectDiagramView (name: string | null): void {
+  if (name === activeView.value) return;
+  parkedHistories.set(layoutKey(currentDocKey()), history.value);
+  activeView.value = name;
+  persistActiveView();
+  relationshipVisibility.value = loadRelationshipVisibility();
+  handle?.setRelationshipVisibility(relationshipVisibility.value);
+
+  const saved = loadPositionsFor(layoutKey(currentDocKey()));
+  const savedOff = loadOffsetsFor(layoutKey(currentDocKey()));
+  const savedZoom = name ? loadViewZoom(layoutKey(currentDocKey())) : loadZoom();
+  if (saved.size > 0) {
+    userPositions.value = saved;
+    edgeOffsets.value = savedOff;
+    if (savedZoom !== undefined) zoom.value = savedZoom;
+    handle?.setDiagramView(name, { positions: posObj(), offsets: offObj(), zoom: zoom.value });
+  } else {
+    edgeOffsets.value = new Map();
+    handle?.setDiagramView(name, { offsets: {} });
+    applyStrategy('relational');
+  }
+  const parked = parkedHistories.get(layoutKey(currentDocKey()));
+  if (parked) history.value = parked; else seedHistory();
+}
+
+function onDiagramViewChange (e: Event): void {
+  const value = (e.target as HTMLSelectElement).value;
+  selectDiagramView(value === '' ? null : value);
+}
+
+// A diagram view renamed or removed while it is shown: back to the full diagram.
+// A document switch is left to resolveLayoutForDocument, which picks the
+// diagram on its own.
+watch(diagramViewNames, (names) => {
+  if (parser.documentEpoch !== appliedEpoch) return;
+  if (activeView.value && parser.hasAst && !names.includes(activeView.value)) selectDiagramView(null);
+});
 
 const ready = ref(false);
 

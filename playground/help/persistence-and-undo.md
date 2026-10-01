@@ -18,6 +18,7 @@ Your browser keeps a copy of the following on your device, scoped to `xdbml.org`
 - **Layout dimensions**: editor pane width, inspector pane width
 - **UI state**: whether the inspector is explicitly closed, whether the diagnostics body is expanded or collapsed
 - **The current zoom level**
+- **The diagram on display**, Main ERD or a diagram view, and for each diagram view its own positions, zoom and Display options (see [**Diagram views**](./diagram-views))
 
 The schema text is the biggest and most important of these. Everything else is layout state, useful for picking up where you left off without re-arranging the UI.
 
