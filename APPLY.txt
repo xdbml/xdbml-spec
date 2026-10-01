@@ -1,165 +1,65 @@
-xDBML -- 0.6.3, delta 5: diagram view notes, and the diagram in the inspector
-Base: origin/main c007ce7 (0.6.3, delta 4).
+xDBML -- 0.6.3 release
+Base: 0.6.3 delta 5 (diagram view notes, and the diagram in the inspector).
 
-Two changes agreed after testing delta 3. A diagram view now takes a note,
-in its brackets or its body, and custom properties (spec 18.1). And a click
-on an empty area of the canvas selects the diagram on display, so the
-inspector shows the Project and its note on Main ERD, or the diagram view
-and its note.
-
-WHAT CHANGED
-------------
-spec\v0.6.md
-  18.1  The example gains a body Note. New paragraph: a note in the
-        brackets or in the body, as for a TableGroup; the body note wins
-        when both are written; the brackets also take custom properties
-        and no other setting; both are xDBML extensions.
-  18.5  A note and the settings brackets need a version declaration.
-  18.6  New row: a setting other than note or a custom property. The
-        version row adds a note or settings.
-  19    DiagramView joins the constructs with inline notes.
-  28    Tree: DiagramView gains settings and Note; 28.8 mentions both.
-grammar\xDBML.g4, grammar\test-cases.md
-  diagramViewDefinition takes settingsBlock? and diagramViewBodyItem
-  (category, noteDefinition, or STAR). Three new cases (15 in all).
-parser\src\ast.ts, parser.ts
-  DiagramViewDeclaration gains settings and notes. The body reads
-  Note: '...' and Note { } beside the categories, and beside a body-level *.
-parser\src\diagram-views.ts, name-resolver.ts, index.ts
-  diagramViewNote(view): the body note, else the note setting.
-  New code unknown-diagram-view-setting (error). A note or settings in a
-  document without a version declaration: construct-requires-version.
-parser\test\run-tests.ts
-  Two checks: both note forms and precedence; the setting and version
-  errors. 298 tests.
-playground\src\components\inspector\selection.ts, ast-lookup.ts
-  New selection kind 'diagram': the diagram on display.
-playground\src\components\inspector\DiagramInspector.vue  (NEW)
-  Main ERD: Project name and targets ("None declared" without a Project),
-  counts of entities, database views, Containers, relationships and Edges,
-  the diagram view names, the Project note, Edit in source. A diagram
-  view: member counts and frames, categories as written, custom
-  properties, note, Edit in source.
-playground\src\components\inspector\Inspector.vue, App.vue
-  The inspector shows DiagramInspector for the diagram selection, with
-  the badge DIAGRAM or DIAGRAM VIEW; App passes the diagram view on
-  display, which DiagramCanvas reports through diagram-view-change.
-playground\src\components\diagram\DiagramCanvas.vue
-  A click on the empty canvas selects the diagram instead of clearing the
-  selection, so it no longer closes the inspector (the x button still
-  does). The toolbar stays on one line: with the inspector open and the
-  Diagram menu shown, "Reset positions" wrapped onto two lines.
-playground\help\inspector-pane.md, diagram-views.md, diagram-pane.md,
-diagnostics-panel.md, sixty-second-tour.md, your-first-schema.md,
-visual-cues.md
-  The diagram inspector, diagram view notes, the new code, and every
-  sentence that said a background click deselects.
-examples\16-diagram-views.xdbml
-  Each diagram view has a note.
-public\llms.txt, mcp\src\reference.ts (regenerated)
-  The DiagramView row lists note and custom properties; the section's
-  example has a body Note.
-CHANGELOG.md
-  v0.6.3: Spec entry for diagram view notes; parser, grammar, playground,
-  llms.txt and example entries updated.
-
-DECISION TO CONFIRM
-  The empty-state proposal assumed the inspector stays open with nothing
-  selected; it closes instead. So a background click now selects the
-  diagram (a new selection kind), and closing the inspector is the x
-  button only.
+Sets the release date of v0.6.3 in CHANGELOG.md to 2026-10-01, then runs
+the release scripts, which edit nothing by hand: they publish
+@xdbml/parse and @xdbml/render 0.6.3, deploy the MCP server and the
+rendering API on them, commit the version bumps, push main, tag v0.6.3 and
+publish the GitHub release from the "## v0.6.3" section of CHANGELOG.md.
+If you release on another day, say so and I'll send the date to match.
 
 FILES
 -----
-  APPLY.txt                                                  (EDIT)
-  CHANGELOG.md                                               (EDIT)
-  examples\16-diagram-views.xdbml                            (EDIT)
-  grammar\test-cases.md                                      (EDIT)
-  grammar\xDBML.g4                                           (EDIT)
-  mcp\src\reference.ts                                       (EDIT, generated)
-  parser\src\ast.ts                                          (EDIT)
-  parser\src\diagram-views.ts                                (EDIT)
-  parser\src\index.ts                                        (EDIT)
-  parser\src\name-resolver.ts                                (EDIT)
-  parser\src\parser.ts                                       (EDIT)
-  parser\test\run-tests.ts                                   (EDIT)
-  playground\help\diagnostics-panel.md                       (EDIT)
-  playground\help\diagram-pane.md                            (EDIT)
-  playground\help\diagram-views.md                           (EDIT)
-  playground\help\inspector-pane.md                          (EDIT)
-  playground\help\sixty-second-tour.md                       (EDIT)
-  playground\help\visual-cues.md                             (EDIT)
-  playground\help\your-first-schema.md                       (EDIT)
-  playground\src\App.vue                                     (EDIT)
-  playground\src\components\diagram\DiagramCanvas.vue        (EDIT)
-  playground\src\components\inspector\DiagramInspector.vue   (NEW)
-  playground\src\components\inspector\Inspector.vue          (EDIT)
-  playground\src\components\inspector\ast-lookup.ts          (EDIT)
-  playground\src\components\inspector\selection.ts           (EDIT)
-  public\llms.txt                                            (EDIT)
-  spec\v0.6.md                                               (EDIT)
+  APPLY.txt      (EDIT)
+  CHANGELOG.md   (EDIT: "Released: unreleased" becomes "Released: 2026-10-01")
 
 APPLY (cmd.exe, opened in the unzipped folder)
 ----------------------------------------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\APPLY.txt"                                                  "%REPO%\APPLY.txt"
-copy /Y "%DELTA%\CHANGELOG.md"                                               "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\examples\16-diagram-views.xdbml"                            "%REPO%\examples\16-diagram-views.xdbml"
-copy /Y "%DELTA%\grammar\test-cases.md"                                      "%REPO%\grammar\test-cases.md"
-copy /Y "%DELTA%\grammar\xDBML.g4"                                           "%REPO%\grammar\xDBML.g4"
-copy /Y "%DELTA%\mcp\src\reference.ts"                                       "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\parser\src\ast.ts"                                          "%REPO%\parser\src\ast.ts"
-copy /Y "%DELTA%\parser\src\diagram-views.ts"                                "%REPO%\parser\src\diagram-views.ts"
-copy /Y "%DELTA%\parser\src\index.ts"                                        "%REPO%\parser\src\index.ts"
-copy /Y "%DELTA%\parser\src\name-resolver.ts"                                "%REPO%\parser\src\name-resolver.ts"
-copy /Y "%DELTA%\parser\src\parser.ts"                                       "%REPO%\parser\src\parser.ts"
-copy /Y "%DELTA%\parser\test\run-tests.ts"                                   "%REPO%\parser\test\run-tests.ts"
-copy /Y "%DELTA%\playground\help\diagnostics-panel.md"                       "%REPO%\playground\help\diagnostics-panel.md"
-copy /Y "%DELTA%\playground\help\diagram-pane.md"                            "%REPO%\playground\help\diagram-pane.md"
-copy /Y "%DELTA%\playground\help\diagram-views.md"                           "%REPO%\playground\help\diagram-views.md"
-copy /Y "%DELTA%\playground\help\inspector-pane.md"                          "%REPO%\playground\help\inspector-pane.md"
-copy /Y "%DELTA%\playground\help\sixty-second-tour.md"                       "%REPO%\playground\help\sixty-second-tour.md"
-copy /Y "%DELTA%\playground\help\visual-cues.md"                             "%REPO%\playground\help\visual-cues.md"
-copy /Y "%DELTA%\playground\help\your-first-schema.md"                       "%REPO%\playground\help\your-first-schema.md"
-copy /Y "%DELTA%\playground\src\App.vue"                                     "%REPO%\playground\src\App.vue"
-copy /Y "%DELTA%\playground\src\components\diagram\DiagramCanvas.vue"        "%REPO%\playground\src\components\diagram\DiagramCanvas.vue"
-copy /Y "%DELTA%\playground\src\components\inspector\DiagramInspector.vue"   "%REPO%\playground\src\components\inspector\DiagramInspector.vue"
-copy /Y "%DELTA%\playground\src\components\inspector\Inspector.vue"          "%REPO%\playground\src\components\inspector\Inspector.vue"
-copy /Y "%DELTA%\playground\src\components\inspector\ast-lookup.ts"          "%REPO%\playground\src\components\inspector\ast-lookup.ts"
-copy /Y "%DELTA%\playground\src\components\inspector\selection.ts"           "%REPO%\playground\src\components\inspector\selection.ts"
-copy /Y "%DELTA%\public\llms.txt"                                            "%REPO%\public\llms.txt"
-copy /Y "%DELTA%\spec\v0.6.md"                                               "%REPO%\spec\v0.6.md"
+copy /Y "%DELTA%\APPLY.txt"      "%REPO%\APPLY.txt"
+copy /Y "%DELTA%\CHANGELOG.md"   "%REPO%\CHANGELOG.md"
 
 cd /d %REPO%
 npm run check
-  Expect: parser 298 passed (296 before); renderer 247, viewport 14,
-  interactive-mount 47, MCP 75, from-mongodb 24, playground 55, all
-  unchanged; check-vsix in sync; "165 button(s) open the snippet below
-  them"; docs build complete.
-npm run docs:dev
-  /playground/index.html?example=16-diagram-views
-    Click an empty area of the canvas: the inspector shows DIAGRAM
-    Main ERD, Project retail, Targets PostgreSQL, the counts, the three
-    diagram view names and the Project note. Choose order_to_cash in the
-    Diagram menu: the pane turns to DIAGRAM VIEW order_to_cash, with 5
-    entities, 1 database view, 1 sticky note, frames crm, sales, billing,
-    the categories as written and the note "From the order to its invoice
-    and payment". Click an entity, then the empty canvas: back to the
-    diagram view pane.
-  Stop the dev server with Ctrl+C.
+  Expect: the delta 5 counts, unchanged.
 git add -A
-git commit -m "0.6.3, delta 5: diagram view notes, and the diagram in the inspector"
+git commit -m "0.6.3: release date"
 
-Then apply the release package, xdbml-0.6.3-release.zip.
+1. PREFLIGHT (changes nothing; the tree must be clean, which the commit
+   above ensures)
+tools\release-preflight.cmd 0.6.3
+  Expect every check to pass: npm login and @xdbml scope, 0.6.3 not yet
+  published for either package, wrangler authenticated, dev tooling
+  present, NODE_ENV not production, reference.ts in sync with llms.txt,
+  every test suite green, clean tree. Stop here if anything fails.
 
-VERIFICATION RUN HERE (Linux, Node 22, headless Chromium 141)
--------------------------------------------------------------
-  npm run check     exit 0 with the counts above; vue-tsc clean
-  grammar cases     15 v0.6.3 cases against the parser, all as labeled
-  built playground  the click sequence above gives exactly those panes;
-                    the selection survives a reload; the toolbar keeps
-                    one line (Reset positions 28 px high) with the
-                    inspector open; no page errors
-  em-dashes         none in any changed file
+2. RELEASE
+tools\release.cmd 0.6.3
+  Publishes parse, then render (repointed to parse ^0.6.3), deploys mcp
+  and api on both, prints the live dist-tags, commits the bumps, pushes
+  main, tags v0.6.3 and publishes the GitHub release. After a failure,
+  fix the cause and rerun the same command: it resumes where it stopped.
+
+3. VS CODE EXTENSION 0.6.3
+cd tools\vscode-extension
+npx @vscode/vsce publish
+cd ..\..
+  Or upload tools\vscode-extension\xdbml-0.6.3.vsix by hand at
+  https://marketplace.visualstudio.com/manage/publishers/xdbml
+
+4. LIVE CHECKS, once the site has redeployed from the push
+  https://xdbml.org/playground/index.html?example=16-diagram-views
+    the Diagram menu lists Main ERD and three diagram views; a click on
+    an empty area of the canvas shows the Project, then each diagram view
+    with its note
+  https://xdbml.org/spec/current#_18-diagram-view-subject-areas-and-sub-models
+  https://xdbml.org/llms.txt     (the "Diagram views" section)
+  https://xdbml-render-api.xdbml.workers.dev/health
+    options lists diagram_view
+  The MCP server, from a client: render_xdbml with diagram_view on example
+  16 answers "Rendered ... of diagram view 'order_to_cash'"; an unknown
+  name returns the list of declared diagram views.
+  npm view @xdbml/parse version  and  npm view @xdbml/render version
+    both 0.6.3

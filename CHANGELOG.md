@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.6.3 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-10-01
 
 A backward-compatible point release of the v0.6 draft. Chapter 18 defines diagram views, the subject areas or sub-models of a model's diagram: the elements a diagram view contains, how a listed Container combines with the entities named beside it, how names resolve, and what a renderer draws. A relationship appears in a diagram view when both of its ends do, so the `Edges` category is dropped. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.
 
