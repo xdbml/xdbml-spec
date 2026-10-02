@@ -1,89 +1,156 @@
-xDBML -- 0.6.3 release, fix 2: wait for the tarball, retry installs for longer
-Base: your local main after the second interrupted run of
-tools\release.cmd 0.6.3 (release-fix 1 committed; the run stopped in
-renderer\ while npm install kept getting a 404 on parse-0.6.3.tgz).
+xDBML -- 0.6.4, revision 2: the parser agrees with every case of the grammar test corpus
+Base: origin/main 33c3bed (release 0.6.3). Replaces revision 1: copy every
+file below, over revision 1 if you applied it.
 
-WHAT HAPPENED
-  npm serves a new version in pieces. At [1/6], npm view already answered
-  for @xdbml/parse 0.6.3 (the registry dates it 15:49:59 UTC), so the
-  script went on; at [2/6], npm install still got a 404 on the tarball
-  itself, for the 3 minutes the old retry allowed. Checked from here at
-  16:02 UTC: metadata and tarball are both served now (HTTP 200).
+REVISION 2
+  On Windows, seven corpus cases failed: their imports were read from
+  C:\...\parser\catalog.xdbml instead of grammar\fixtures\. The cause is a
+  parser bug, not the corpus: the module resolver split the importer's path
+  on forward slashes only, so a native Windows path lost its directory and
+  './catalog' was read from the working directory. Any caller passing a
+  Windows path as filePath had the same failure. The resolver now reads
+  backslashes as forward slashes; module keys and import cycles use forward
+  slashes, which Node's fs accepts on Windows. Two new tests: a backslash
+  importer path resolving './lib' and '../shared/types', and an import
+  cycle stopping at such an importer.
+
+A reader reported two cases of grammar/test-cases.md that the parser
+contradicts. Running every case against the 0.6.3 parser found thirteen:
+four parser gaps and nine defective cases. This package fixes all of them,
+makes the parser's test suite run every case, sets the release date, and
+ends with the release.
 
 WHAT CHANGED
 ------------
-tools\release.cmd
-  - One wait, used after every publish and whenever a package is found
-    already published: it ends only when npm view answers AND a plain
-    download of the tarball succeeds (curl, HTTP 2xx), up to 45 minutes,
-    with a line each minute saying which of the two is still missing.
-  - One install routine for parser, renderer, mcp and api: npm install
-    retried every 10 seconds for up to 15 minutes (was 3), numbered tries.
-  - The publish markers in %TEMP% stay: nothing is ever published twice.
-  - A guard at the start: curl must be on the PATH (it ships with
-    Windows 10 and later).
-  - Every failure now ends with the same instruction: rerun the same
-    command.
-tools\release-preflight.cmd
-  Checks that curl is present.
-tools\RELEASE.md
-  How npm serves a version in pieces, and how the script copes.
+parser\src\parser.ts
+  Import item lists are list bodies (spec 3.9, 27.2): one item per line,
+  commas and semicolons optional. They required a comma between items.
+  use / reuse in a document declaring xdbml: 0.1 is a parse error (the
+  module system belongs to v0.2, Appendix D item 3).
+  SUPPORTED_XDBML_VERSION 0.6.4. The initial import-cycle stack holds the
+  importer's path with forward slashes (revision 2).
+parser\src\module-resolver.ts
+  toForwardSlashes(): a local path with backslashes reads as forward
+  slashes; resolveModulePath uses it for the importer path and the source,
+  and treats C:/... as absolute. (Revision 2.)
+parser\src\name-resolver.ts
+  invalid-tuple-positions: positions not running from [0] without a gap,
+  each once (8.6). named-type-shadows-builtin: a Type named like a
+  built-in type, in any letter case (15.2). Both errors from v0.6,
+  warnings in a document declaring an earlier version.
+parser\test\run-tests.ts
+  New group "v0.6.4 grammar test corpus": every case of
+  grammar\test-cases.md, imports resolved against grammar\fixtures\.
+  Six targeted checks, two of them on Windows paths. Type Money in two
+  older tests becomes Type Amount; the version-refusal tests use 0.6.5
+  and 0.6.99. 435 tests (298 before).
+grammar\test-cases.md, grammar\fixtures\ (NEW: catalog, auth, billing,
+internal-helpers, other)
+  Ref cases and the polyglot case declare their entities; module cases
+  read the fixtures; the import equivalence case splits in two (same
+  headings and anchors kept); tuple and built-in cases declare 0.6, each
+  with a 0.5 twin expecting the warning; the newer-patch case declares
+  0.6.99. The introduction and "Test runner" describe the real runner.
+examples\06-financial-services.xdbml, parser\test\examples\ (same file),
+renderer\test\goldens\06-financial-services.svg
+  Type Money becomes Type MonetaryAmount: its four Money fields had the
+  built-in money type all along. The golden differs only in those four
+  type labels.
+spec\v0.6.md
+  3.9 lists import item lists among the list bodies; 27.2 says so; 8.6
+  and 15.2 state the severities; What's new gains a v0.6.4 sentence.
+public\llms.txt, mcp\src\reference.ts (regenerated)
+  A Common mistake for Type Money, and the rule in Fields.
+playground\help\diagnostics-panel.md
+  The two new codes and their severities.
+CHANGELOG.md
+  v0.6.4 section, released 2026-10-02; v0.6.3 superseded.
 
 FILES
 -----
-  APPLY.txt                      (EDIT)
-  tools\release-preflight.cmd    (EDIT)
-  tools\release.cmd              (EDIT)
-  tools\RELEASE.md               (EDIT)
+  APPLY.txt                                            (EDIT)
+  CHANGELOG.md                                         (EDIT)
+  examples\06-financial-services.xdbml                 (EDIT)
+  grammar\fixtures\auth.xdbml                          (NEW)
+  grammar\fixtures\billing.xdbml                       (NEW)
+  grammar\fixtures\catalog.xdbml                       (NEW)
+  grammar\fixtures\internal-helpers.xdbml              (NEW)
+  grammar\fixtures\other.xdbml                         (NEW)
+  grammar\test-cases.md                                (EDIT)
+  mcp\src\reference.ts                                 (EDIT, generated)
+  parser\src\module-resolver.ts                        (EDIT, revision 2)
+  parser\src\name-resolver.ts                          (EDIT)
+  parser\src\parser.ts                                 (EDIT)
+  parser\test\examples\06-financial-services.xdbml     (EDIT)
+  parser\test\run-tests.ts                             (EDIT)
+  playground\help\diagnostics-panel.md                 (EDIT)
+  public\llms.txt                                      (EDIT)
+  renderer\test\goldens\06-financial-services.svg      (EDIT)
+  spec\v0.6.md                                         (EDIT)
 
 APPLY (cmd.exe, opened in the unzipped folder)
 ----------------------------------------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\APPLY.txt"                     "%REPO%\APPLY.txt"
-copy /Y "%DELTA%\tools\release.cmd"             "%REPO%\tools\release.cmd"
-copy /Y "%DELTA%\tools\release-preflight.cmd"   "%REPO%\tools\release-preflight.cmd"
-copy /Y "%DELTA%\tools\RELEASE.md"              "%REPO%\tools\RELEASE.md"
+if not exist "%REPO%\grammar\fixtures" mkdir "%REPO%\grammar\fixtures"
+copy /Y "%DELTA%\APPLY.txt"                                          "%REPO%\APPLY.txt"
+copy /Y "%DELTA%\CHANGELOG.md"                                       "%REPO%\CHANGELOG.md"
+copy /Y "%DELTA%\examples\06-financial-services.xdbml"               "%REPO%\examples\06-financial-services.xdbml"
+copy /Y "%DELTA%\grammar\fixtures\auth.xdbml"                        "%REPO%\grammar\fixtures\auth.xdbml"
+copy /Y "%DELTA%\grammar\fixtures\billing.xdbml"                     "%REPO%\grammar\fixtures\billing.xdbml"
+copy /Y "%DELTA%\grammar\fixtures\catalog.xdbml"                     "%REPO%\grammar\fixtures\catalog.xdbml"
+copy /Y "%DELTA%\grammar\fixtures\internal-helpers.xdbml"            "%REPO%\grammar\fixtures\internal-helpers.xdbml"
+copy /Y "%DELTA%\grammar\fixtures\other.xdbml"                       "%REPO%\grammar\fixtures\other.xdbml"
+copy /Y "%DELTA%\grammar\test-cases.md"                              "%REPO%\grammar\test-cases.md"
+copy /Y "%DELTA%\mcp\src\reference.ts"                               "%REPO%\mcp\src\reference.ts"
+copy /Y "%DELTA%\parser\src\module-resolver.ts"                      "%REPO%\parser\src\module-resolver.ts"
+copy /Y "%DELTA%\parser\src\name-resolver.ts"                        "%REPO%\parser\src\name-resolver.ts"
+copy /Y "%DELTA%\parser\src\parser.ts"                               "%REPO%\parser\src\parser.ts"
+copy /Y "%DELTA%\parser\test\examples\06-financial-services.xdbml"   "%REPO%\parser\test\examples\06-financial-services.xdbml"
+copy /Y "%DELTA%\parser\test\run-tests.ts"                           "%REPO%\parser\test\run-tests.ts"
+copy /Y "%DELTA%\playground\help\diagnostics-panel.md"               "%REPO%\playground\help\diagnostics-panel.md"
+copy /Y "%DELTA%\public\llms.txt"                                    "%REPO%\public\llms.txt"
+copy /Y "%DELTA%\renderer\test\goldens\06-financial-services.svg"    "%REPO%\renderer\test\goldens\06-financial-services.svg"
+copy /Y "%DELTA%\spec\v0.6.md"                                       "%REPO%\spec\v0.6.md"
 
 cd /d %REPO%
-git add APPLY.txt tools\release.cmd tools\release-preflight.cmd tools\RELEASE.md
-git commit -m "release.cmd: wait for the tarball as well as the metadata, retry installs for 15 minutes"
-tools\release.cmd 0.6.3
+npm run check
+  Expect: parser 435 passed (298 before), with a "v0.6.4 grammar test
+  corpus" group of 131 cases; renderer 247, viewport 14, interactive-mount
+  47; MCP 77 (75 before: the new Wrong and Right blocks); from-mongodb 24;
+  playground 55; check-vsix in sync; 165 spec buttons; docs build
+  complete.
+git add -A
+git commit -m "0.6.4: the parser agrees with every case of the grammar test corpus"
 
-  Expect:
-  [1/6] "@xdbml/parse@0.6.3 is already on npm: skipping install, test and
-        publish." then "is live: metadata and tarball."
-  [2/6] npm install (perhaps a few numbered retries), the renderer tests,
-        "+ @xdbml/render@0.6.3", then a wait that may print "still waiting
-        after N minute(s): metadata yes, tarball no" for a while, then
-        "is live: metadata and tarball."
-  [3/6] to [6/6] as before, ending with "Done. 0.6.3 is published,
-        deployed, committed and released."
+RELEASE
+-------
+tools\release-preflight.cmd 0.6.4
+  Expect every check to pass, including the new "[ok]   curl".
+tools\release.cmd 0.6.4
+  If it stops anywhere, run tools\release.cmd 0.6.4 again: nothing is
+  published twice, and it waits for npm to serve each package in full.
+  The VS Code extension does not change in 0.6.4.
 
-  If it stops anywhere, run tools\release.cmd 0.6.3 again. The only stop
-  that needs something from you is a 45-minute timeout on a package npm
-  never serves: then look at the e-mail of the npm account first.
+LIVE CHECKS, once the site has redeployed
+  https://xdbml.org/grammar/test-cases#valid-multi-line-and-comma-separated-equivalence
+    the multi-line form alone, then the single-line form as the next case
+  https://xdbml.org/grammar/test-cases#invalid-tuple-positions-not-contiguous
+    declares xdbml: 0.6, followed by its 0.5 twin
+  https://xdbml.org/playground/index.html?example=06-financial-services
+    no diagnostics; balance and amount fields read MonetaryAmount
+  npm view @xdbml/parse version   prints 0.6.4
 
-Then steps 3 and 4 of the release package: publish the VS Code extension
-and run the live checks.
-
-VERIFICATION HERE (Wine 9 cmd, stub npm, curl and git)
-------------------------------------------------------
-  The script ran end to end under Wine's cmd.exe, with stubs standing in
-  for npm, curl, npx, git and github-release.cmd, each logging its calls:
-  A. Your state now: parse on npm with its marker, render not published,
-     render install failing 3 times, render metadata 4 checks late and
-     tarball 7 checks late, mcp install failing twice, api once.
-     Result: parse skipped, render published once, every wait and retry
-     reported, Done, markers deleted.
-  B. Fresh release with parse lagging (metadata 5, tarball 9 checks), MCP
-     tests failing: stops at [3/6] with both markers kept. Rerun while npm
-     view still lags for render: both packages skipped, render waited for,
-     Done. One publish per package across both runs.
-  C. A package npm never serves: 44 "still waiting" lines, then the
-     45-minute error naming what is missing.
-  Two harness adaptations, in the test copy only: Wine's cmd mishandles
-  "||" after "call" and "cd", so "X || goto :fail" ran as "X" plus
-  "if errorlevel 1 goto :fail"; and curl and timeout, .exe files on
-  Windows, were .cmd stubs here, so the copy calls them with "call".
+VERIFICATION RUN HERE (Linux, Node 22)
+---------------------------------------
+  npm run check     exit 0 with the counts above
+  corpus            131 cases, 0 mismatches (13 against the 0.6.3 parser)
+  corpus, Windows   the same 131 cases with the importer path
+  paths             C:\Repos\Hackolade\xdbml-spec\grammar\fixtures\__case__.xdbml
+                    and readFile mapped onto this checkout: 0 mismatches;
+                    the fixtures were read as C:/Repos/.../grammar/fixtures/
+                    catalog.xdbml, auth, billing and internal-helpers
+  repo scan         no other Type under a built-in name in examples,
+                    spec v0.6, llms.txt, help or tests
+  em-dashes         none in any changed or new file

@@ -1,10 +1,10 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.6.1.
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.6.4. Every case runs in the reference parser's test suite.
 ---
 
 
-A more comprehensive test corpus, with expected ASTs in JSON form, is planned for a future release. The grammar repository (`grammar/`) currently contains the grammar file (`xDBML.g4`) and this reference test corpus only.
+Each case is labeled VALID (no error), VALID with a warning (a warning and no error), or INVALID (a parse error or at least one error diagnostic). The cases that import from `./catalog`, `./auth`, `./billing`, `./internal-helpers` or `./other` read the small files of `grammar/fixtures/`. Since v0.6.4, the reference parser's test suite runs every case and fails when a case and the parser disagree. A corpus with expected ASTs in JSON form is planned for a future release.
 
 ---
 
@@ -117,7 +117,7 @@ Entity org_chart {
 ### INVALID -- tuple positions not contiguous
 
 ```
-xdbml: 0.1
+xdbml: 0.6
 
 Entity bad {
   arr array [
@@ -126,6 +126,23 @@ Entity bad {
   ]
 }
 ```
+
+Expected error: `invalid-tuple-positions`. Positions run from `[0]` without a gap, each once (§8.6).
+
+### VALID with a warning -- tuple positions not contiguous, in a document declaring v0.5 (invalid-tuple-positions)
+
+```
+xdbml: 0.5
+
+Entity bad {
+  arr array [
+    [0] first  object { x int }
+    [2] third  object { x int }
+  ]
+}
+```
+
+No parser checked tuple positions before v0.6.4, so a document declaring a version earlier than 0.6 draws a warning (§8.6).
 
 Expected error (semantic-analysis pass, not grammar): "tuple positions must be contiguous starting at 0."
 
@@ -328,6 +345,22 @@ Expected error (semantic-analysis pass): "Ref source path crosses array; explici
 ### VALID -- explicit .[*] in Ref
 
 ```
+xdbml: 0.6
+
+Entity products {
+  sku varchar [pk]
+}
+
+Entity orders {
+  id         int [pk]
+  line_items array [
+    line_item object {
+      sku      varchar
+      quantity int
+    }
+  ]
+}
+
 Ref: orders.line_items.[*].sku > products.sku
 ```
 
@@ -451,12 +484,26 @@ Entity orders {
 ### INVALID -- named type shadows builtin
 
 ```
-xdbml: 0.1
+xdbml: 0.6
 
 Type varchar {           // shadows builtin
   custom_field int
 }
 ```
+
+Expected error: `named-type-shadows-builtin` (§15.2).
+
+### VALID with a warning -- named type shadows builtin, in a document declaring v0.5 (named-type-shadows-builtin)
+
+```
+xdbml: 0.5
+
+Type varchar {
+  custom_field int
+}
+```
+
+No parser reported this before v0.6.4, so a document declaring a version earlier than 0.6 draws a warning (§15.2).
 
 Expected error (semantic-analysis pass): "named type 'varchar' shadows built-in type keyword; rename or remove."
 
@@ -511,12 +558,34 @@ Ref: orders.customer_id > customers.id
 ### VALID -- explicit source/target cardinality
 
 ```
+xdbml: 0.6
+
+Entity customers {
+  id int [pk]
+}
+
+Entity orders {
+  id          int [pk]
+  customer_id int
+}
+
 Ref: orders.customer_id > customers.id [source: '1..*', target: '1..1']
 ```
 
 ### VALID -- four-key alternative form
 
 ```
+xdbml: 0.6
+
+Entity people {
+  id int [pk]
+}
+
+Entity pets {
+  id       int [pk]
+  owner_id int
+}
+
 Ref: pets.owner_id > people.id [
   min_source: 0, max_source: '*',
   min_target: 0, max_target: 1
@@ -687,6 +756,13 @@ Container events [type: namespace, target: Avro] {
     order_id    string     [not null]
     customer_id int        [not null]
     total       MonetaryAmount
+  }
+}
+
+Container catalog [type: schema, target: Oracle] {
+  Entity products {
+    sku   varchar [pk]
+    title varchar [not null]
   }
 }
 
@@ -880,14 +956,21 @@ Container ordering [type: schema] {
 ```
 xdbml: 0.2
 
-// Multi-line form
+// Multi-line form: one item per line, no separator
 reuse {
   entity products
   entity categories
   type Email
 } from './catalog'
+```
 
-// Equivalent comma-separated single-line form
+The import list is a list body (§3.9, §27.2): the single-line form of the next case imports the same three declarations. The two directives go in separate documents, since importing one declaration twice into one document declares it twice.
+
+### VALID -- comma-separated single-line import list
+
+```
+xdbml: 0.2
+
 reuse { entity products, entity categories, type Email } from './catalog'
 ```
 
@@ -1681,7 +1764,7 @@ Entity A { id int [pk] }
 ### INVALID -- a patch release newer than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.6.2
+xdbml: 0.6.99
 
 Entity A { id int [pk] }
 ```
@@ -2071,16 +2154,4 @@ DiagramView v {
 
 ## Test runner
 
-A reference TypeScript test harness (planned at `grammar/test-runner.ts`) parses each example, captures the resulting AST, and compares it against expected ASTs in `grammar/expected/*.json`. Implementations in other languages can run the same corpus with language-appropriate harnesses.
-
-```
-$ npx @xdbml/test-runner grammar/test-cases.md
-PASS  §4.1.001   version declaration with experimental opt-in
-PASS  §4.1.002   DBML document parses without xdbml: directive
-FAIL  §10.6.005  expected error not raised: Ref source path crosses array
-PASS  §6.1.001   explicit container with type
-...
-PASS rate: 247/250 (98.8%)
-```
-
-A conforming v0.2 implementation should achieve 100% pass rate on the published corpus, including v0.2 module system and scalar Named Type cases. A v0.1-only implementation should achieve 100% pass rate on the v0.1 subset and produce appropriate errors for v0.2 constructs.
+The reference parser runs this corpus in its test suite (`parser/test/run-tests.ts`, the "grammar test corpus" group, part of `npm run check`). For each case it parses the code block with `grammar/fixtures/` as the directory of the importing file, resolves names, and checks the label: VALID means no parse error and no error diagnostic, VALID with a warning means at least one warning and no error, and INVALID means a parse error or at least one error diagnostic. Implementations in other languages can run the same corpus with the same three rules and the same fixtures.

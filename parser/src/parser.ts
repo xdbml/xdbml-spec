@@ -96,7 +96,7 @@ import {
   TokenKind,
   tokenize,
 } from './lexer.ts';
-import { resolveImport, classifyModuleSource, ModuleSourceError } from './module-resolver.ts';
+import { resolveImport, classifyModuleSource, ModuleSourceError, toForwardSlashes } from './module-resolver.ts';
 import type { ParseFn } from './module-resolver.ts';
 
 export class ParseError extends Error {
@@ -119,7 +119,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6.3';
+export const SUPPORTED_XDBML_VERSION = '0.6.4';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -231,6 +231,8 @@ export class Parser {
    * 1-arg form).
    */
   private options: ParseOptions;
+  /** The version the document declares, once read; undefined without a declaration. */
+  private declaredVersion: string | undefined;
   /**
    * The set of file paths currently being parsed in the resolution chain.
    * Used for cycle detection: when resolving a directive whose `from` path
@@ -391,6 +393,7 @@ export class Parser {
       this.advance(); // .
       version += `.${this.advance().text}`;
     }
+    this.declaredVersion = version;
     if (compareVersions(version, SUPPORTED_XDBML_VERSION) > 0) {
       throw new ParseError(
         `This document declares 'xdbml: ${version}', which is newer than the ` +
@@ -852,6 +855,15 @@ export class Parser {
     const start = this.peek().start;
     const modeTok = this.advance(); // 'use' or 'reuse'
     const mode: 'use' | 'reuse' = (modeTok.text.toLowerCase() as 'use' | 'reuse');
+    // Appendix D, item 3: the module system belongs to the v0.2 feature set,
+    // so a document declaring xdbml: 0.1 cannot use it (checked from v0.6.4).
+    if (this.declaredVersion && compareVersions(this.declaredVersion, '0.2') < 0) {
+      throw new ParseError(
+        `The module system (use and reuse) needs xdbml: 0.2 or later; this document declares ` +
+        `xdbml: ${this.declaredVersion} (spec §27, Appendix D).`,
+        modeTok.start,
+      );
+    }
 
     // Import spec: '*' or '{ ... }'
     let spec: ImportSpec;
@@ -861,15 +873,14 @@ export class Parser {
     } else if (this.check(TokenKind.LBrace)) {
       this.advance();
       const items: ImportItem[] = [];
-      // Skip leading whitespace/newlines (already handled by lexer).
-      while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+      // A list body (spec §3.9, §27.2, v0.6.4): items one per line, or
+      // separated by commas, with commas and semicolons optional anywhere
+      // between items. Until v0.6.4 the parser required a comma between
+      // two items, against the multi-line form §27.2 shows.
+      for (;;) {
+        this.skipListSeparators();
+        if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
         items.push(this.parseImportItem(context));
-        if (this.match(TokenKind.Comma)) {
-          // Tolerate trailing comma before the closing brace.
-          continue;
-        } else {
-          break;
-        }
       }
       this.expect(TokenKind.RBrace, "Expected '}' closing import item list");
       if (items.length === 0) {
@@ -2751,7 +2762,7 @@ export function parse (source: string, options: ParseOptions = {}): XDbmlDocumen
   // (so a file that tries to reuse itself triggers cycle detection at
   // the outer level too). If no filePath is provided, the stack is empty.
   const initialStack = new Set<string>();
-  if (options.filePath) initialStack.add(options.filePath);
+  if (options.filePath) initialStack.add(toForwardSlashes(options.filePath));
   const doc = new Parser(tokens, options, initialStack, 0).parseDocument();
   applyEntityAliases(doc);
   return doc;

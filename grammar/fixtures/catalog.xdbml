@@ -1,0 +1,30 @@
+xdbml: 0.2
+
+// Fixture for the module cases of grammar/test-cases.md (spec §27): the
+// files they import from './catalog'. Top-level products and categories,
+// a Container core holding its own products and categories, and a Type.
+
+Entity products {
+  id          int [pk]
+  sku         varchar [unique]
+  category_id int
+}
+
+Entity categories {
+  id   int [pk]
+  name varchar
+}
+
+Type Email varchar [pattern: '^[^@]+@[^@]+$']
+
+Container core [type: schema] {
+  Entity products {
+    id          int [pk]
+    category_id int
+  }
+
+  Entity categories {
+    id   int [pk]
+    name varchar
+  }
+}

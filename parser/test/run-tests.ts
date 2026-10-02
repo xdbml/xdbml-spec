@@ -1462,12 +1462,12 @@ use * from '${CORE}'`,
         // Keyed by the exact normalized href; if the parser wrongly appended
         // '.xdbml' to the URL, this lookup would miss and the test would fail.
         [new URL(AZ).href]: `xdbml: 0.2
-Type Money decimal`,
+Type Amount decimal`,
       };
       return {
         name: 'v0.3 remote: no .xdbml appended to a URL source (query string preserved)',
         source: `xdbml: 0.2
-reuse { type Money } from '${AZ}'`,
+reuse { type Amount } from '${AZ}'`,
         options: {
           filePath: '/local/entry.xdbml',
           readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found (key=${p})`); })(),
@@ -1475,7 +1475,7 @@ reuse { type Money } from '${AZ}'`,
         assert: (doc) => {
           const dir = doc.statements[0];
           if (dir.kind !== 'ModuleImportDirective' || !dir.clone) return 'expected resolved directive';
-          if ((dir.clone.statements[0] as { name?: string }).name !== 'Money') return 'expected Money type';
+          if ((dir.clone.statements[0] as { name?: string }).name !== 'Amount') return 'expected Amount type';
           return null;
         },
       };
@@ -4082,10 +4082,10 @@ Entity e { id int [pk], name varchar; age int, }`,
       source: `xdbml: 0.6
 Project p { database_type: 'PostgreSQL', Note: 'demo', }
 TablePartial audit { created_at timestamp, updated_at timestamp }
-Type Money { amount decimal(12,2), currency varchar }
+Type Amount { amount decimal(12,2), currency varchar }
 Entity a { id int [pk] }
 Entity b {
-  id int, total Money, ~audit,
+  id int, total Amount, ~audit,
   meta json { source varchar, tags varchar },
   payment oneOf { card object { last4 varchar, brand varchar }, cash object { change decimal } } [discriminator: kind],
   constraints { (id) [pk], 'id > 0' },
@@ -4363,8 +4363,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.4 is newer than this parser supports',
-      source: `xdbml: 0.6.4
+      name: 'v0.6.1 §4: xdbml: 0.6.5 is newer than this parser supports',
+      source: `xdbml: 0.6.5
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -4968,10 +4968,10 @@ DiagramView reports { Tables { orders } }`,
     const inBody = flat.statements.some((x) => x.kind === 'ContainerDeclaration' && x.body.some((b) => (b as { kind: string }).kind === 'DiagramViewDeclaration'));
     return kinds === 'ContainerDeclaration,DiagramViewDeclaration' && !inBody ? undefined : kinds;
   });
-  check('v0.6.3 §4.1: the parser reads xdbml: 0.6.3 and refuses 0.6.4', () => {
+  check('v0.6.3 §4.1: the parser reads xdbml: 0.6.3 and refuses a later patch it does not know', () => {
     parse('xdbml: 0.6.3\nTable a { id int [pk] }');
-    try { parse('xdbml: 0.6.4\nTable a { id int [pk] }'); } catch { return undefined; }
-    return '0.6.4 accepted';
+    try { parse('xdbml: 0.6.99\nTable a { id int [pk] }'); } catch { return undefined; }
+    return '0.6.99 accepted';
   });
   check('v0.6.3: Monarch colors a category keyword before { only', () => {
     const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
@@ -5010,6 +5010,64 @@ DiagramView b5 { Tables { a } }`);
     if (dbmlNote.join() !== 'error:construct-requires-version') return `dbml note: ${dbmlNote}`;
     return dbmlSetting.join() === 'error:construct-requires-version' ? undefined : `dbml setting: ${dbmlSetting}`;
   });
+  check('v0.6.4 §27.2: import items one per line, with or without commas or semicolons', () => {
+    const files: Record<string, string> = {
+      '/w/lib.xdbml': 'xdbml: 0.6\nEntity a { id int [pk] }\nEntity b { id int [pk] }\nType T string',
+      '/w/m1.xdbml': "xdbml: 0.6\nreuse {\n  entity a\n  entity b as bb\n  type T\n} from './lib'",
+      '/w/m2.xdbml': "xdbml: 0.6\nreuse { entity a; entity b as bb, type T, } from './lib'",
+    };
+    const opts = (f: string) => ({ filePath: f, readFile: (p: string) => files[p] } as ParseOptions);
+    const names = (f: string) => flatten(parse(files[f], opts(f))).statements.map((x) => (x as { name?: string }).name).join(',');
+    const a = names('/w/m1.xdbml');
+    const b = names('/w/m2.xdbml');
+    return a === 'a,bb,T' && b === a ? undefined : `${a} / ${b}`;
+  });
+  check('v0.6.4 §8.6: tuple positions run from [0] without a gap, each once; any order', () => {
+    const c = (t: string) => codes(`xdbml: 0.6\nEntity e { t array [ ${t} ] }`).join();
+    const bad = ['[0] x int, [2] y int', '[1] x int, [2] y int', '[0] x int, [0] y int'].filter((t) => c(t) !== 'error:invalid-tuple-positions');
+    const good = ['[0] x int, [1] y int', '[1] y int, [0] x int'].filter((t) => c(t) !== '');
+    const old = codes('xdbml: 0.5\nEntity e { t array [ [0] x int, [2] y int ] }').join();
+    if (old !== 'warning:invalid-tuple-positions') return `0.5: ${old}`;
+    return bad.length || good.length ? `bad: ${bad.join(' / ')}; good: ${good.join(' / ')}` : undefined;
+  });
+  check('v0.6.4 §15.2: a Type under a built-in name is an error, a warning before v0.6; target-native names are fine', () => {
+    const err = codes('xdbml: 0.6\nType varchar { f int }').join();
+    const ci = codes('xdbml: 0.6\nType Money { f int }').join();
+    const old = codes('xdbml: 0.5\nType int string').join();
+    const native = codes('xdbml: 0.6\nType number decimal(10,2)\nType serial int').join();
+    if (err !== 'error:named-type-shadows-builtin' || ci !== 'error:named-type-shadows-builtin') return `${err} / ${ci}`;
+    if (old !== 'warning:named-type-shadows-builtin') return `0.5: ${old}`;
+    return native === '' ? undefined : `native: ${native}`;
+  });
+  check('v0.6.4 §27: a Windows importer path with backslashes resolves next to the importer', () => {
+    const read: string[] = [];
+    const files: Record<string, string> = {
+      'C:/repo/models/lib.xdbml': 'xdbml: 0.6\nEntity a { id int [pk] }',
+      'C:/repo/shared/types.xdbml': 'xdbml: 0.6\nType T string',
+    };
+    const readFile = (p: string) => { read.push(p); if (!(p in files)) throw new Error(`no ${p}`); return files[p]; };
+    const src = "xdbml: 0.6\nreuse { entity a } from './lib'\nreuse { type T } from '../shared/types'";
+    const doc = parse(src, { filePath: 'C:\\repo\\models\\main.xdbml', readFile } as ParseOptions);
+    const names = flatten(doc).statements.map((x) => (x as { name?: string }).name).join(',');
+    if (names !== 'a,T') return `names: ${names}`;
+    return read.join(' ') === 'C:/repo/models/lib.xdbml C:/repo/shared/types.xdbml' ? undefined : read.join(' ');
+  });
+  check('v0.6.4 §27: an import cycle stops at the importer when its path uses backslashes', () => {
+    // a imports b, which imports a back: the importer is on the resolution
+    // stack, so b's directive is not followed and a is never read.
+    const reads: string[] = [];
+    const files: Record<string, string> = {
+      'C:/repo/b.xdbml': "xdbml: 0.6\nreuse { entity a } from './a'\nEntity b { id int [pk] }",
+    };
+    const readFile = (p: string) => { reads.push(p); if (!(p in files)) throw new Error(`no ${p}`); return files[p]; };
+    const doc = parse("xdbml: 0.6\nreuse { entity b } from './b'\nEntity a { id int [pk] }", { filePath: 'C:\\repo\\a.xdbml', readFile } as ParseOptions);
+    const names = flatten(doc).statements.map((x) => (x as { name?: string }).name).join(',');
+    return reads.join(' ') === 'C:/repo/b.xdbml' && names === 'b,a' ? undefined : `${reads.join(' ')} / ${names}`;
+  });
+  check('v0.6.4 Appendix D: use and reuse need xdbml: 0.2 or later', () => {
+    const msg = parseError("xdbml: 0.1\nreuse { entity a } from './lib'");
+    return msg.includes('needs xdbml: 0.2 or later') ? undefined : msg || 'accepted';
+  });
   check('v0.6.3: every DIAGRAM_VIEW_CATEGORIES keyword opens a category', () => {
     const bad: string[] = [];
     for (const k of keywordArrays.DIAGRAM_VIEW_CATEGORIES) {
@@ -5019,6 +5077,56 @@ DiagramView b5 { Tables { a } }`);
     }
     return bad.length ? bad.join(', ') : undefined;
   });
+  return results;
+}
+
+/* -------------------------------------------------------------------------
+ * v0.6.4: the grammar test corpus (grammar/test-cases.md), every case
+ *
+ * Each case is a "### VALID -- ...", "### VALID with a warning -- ..." or
+ * "### INVALID -- ..." heading followed by one code block. VALID: no parse
+ * error and no error diagnostic. VALID with a warning: a warning and no
+ * error. INVALID: a parse error or an error diagnostic. Imports resolve
+ * against grammar/fixtures/, as if the case were a file there.
+ * ----------------------------------------------------------------------- */
+
+function runGrammarCorpusTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const grammarDir = join(__dirname, '..', '..', 'grammar');
+  const fixtures = join(grammarDir, 'fixtures');
+  const md = readFileSync(join(grammarDir, 'test-cases.md'), 'utf8');
+  const headings = [...md.matchAll(/^### (VALID with a warning|VALID|INVALID) -- (.*)$/gm)];
+  const options = {
+    filePath: join(fixtures, '__case__.xdbml'),
+    readFile: (p: string) => readFileSync(p, 'utf8'),
+  } as ParseOptions;
+  headings.forEach((h, i) => {
+    const kind = h[1];
+    const title = `corpus: ${kind} -- ${h[2]}`;
+    const end = i + 1 < headings.length ? headings[i + 1].index! : md.length;
+    const section = md.slice(h.index!, end).split(/^## /m)[0];
+    const block = /```[a-z]*\n([\s\S]*?)```/.exec(section);
+    if (!block) {
+      results.push(fail(title, 'no code block under the heading'));
+      return;
+    }
+    let outcome: 'clean' | 'warning' | 'error';
+    let detail = '';
+    try {
+      const d = resolveNames(parse(block[1], options)).diagnostics;
+      const errors = d.filter((x) => x.severity === 'error');
+      const warnings = d.filter((x) => x.severity === 'warning');
+      outcome = errors.length ? 'error' : warnings.length ? 'warning' : 'clean';
+      detail = (errors.length ? errors : warnings).map((x) => `${x.code}: ${x.message}`).join(' | ');
+    } catch (e) {
+      outcome = 'error';
+      detail = `parse error: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    const expected = kind === 'INVALID' ? 'error' : kind === 'VALID' ? 'clean' : 'warning';
+    const okay = expected === outcome || (kind === 'VALID' && outcome === 'warning');
+    results.push(okay ? ok(title) : fail(title, `expected ${expected}, got ${outcome}${detail ? `: ${detail}` : ''}`));
+  });
+  if (headings.length < 100) results.push(fail('corpus: at least 100 cases found', `only ${headings.length}`));
   return results;
 }
 
@@ -5051,13 +5159,15 @@ function main (): void {
   const keywords = runKeywordConsistencyTests();
   const v062 = runV062Tests();
   const v063 = runV063Tests();
+  const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
   const kr = report('Keyword-consistency tests (parser/src/keywords.ts vs parser)', keywords);
   const vr = report('v0.6.2 fixes', v062);
   const dr = report('v0.6.3 diagram views', v063);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed;
+  const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

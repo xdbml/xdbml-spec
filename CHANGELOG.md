@@ -4,9 +4,44 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.6.3 -- 2026
+## v0.6.4 -- 2026
 
 **Status**: Draft -- current
+**Released**: 2026-10-02
+
+A point release of the v0.6 draft that brings the parser in line with four rules the spec already stated, and checks every case of the grammar test corpus. A reader reported two cases of `grammar/test-cases.md` that the parser contradicted; running all of them against the 0.6.3 parser found thirteen. Documents continue to declare `xdbml: 0.6`.
+
+### Changed
+
+#### Spec
+
+- **Import item lists (§3.9, §27.2)**: the items of `use { }` and `reuse { }` form a list body, one per line or separated by commas, with commas and semicolons optional as in every list body. §27.2 always showed the multi-line form, without commas; §3.9 now lists it.
+
+- **Tuple positions (§8.6)**: a gap, a repeated position or a first position other than 0 is an error in a document declaring v0.6 or later, and a warning in a document declaring an earlier version. The rule that positions form a contiguous range from 0 dates from v0.1; until v0.6.4 no parser checked it.
+
+- **Named types under a built-in name (§15.2)**: `Type varchar { ... }` or `Type int string` is an error in a document declaring v0.6 or later, and a warning in a document declaring an earlier version. Built-in types always took precedence; until v0.6.4 no parser reported the declaration.
+
+#### Tooling
+
+- **Parser (`@xdbml/parse`)**: reads the items of an import list one per line, where it required a comma between two items ("Expected '}' closing import item list"). New diagnostics `invalid-tuple-positions` and `named-type-shadows-builtin`, with the severities above; the second compares names in any letter case, as built-in types match, so `Type Money` is reported against the built-in `money`. Refuses `use` and `reuse` in a document declaring `xdbml: 0.1`, since the module system belongs to the v0.2 feature set (Appendix D, item 3). Resolves a relative import next to an importer whose path uses Windows backslashes (`C:\repo\models\main.xdbml`), where it lost the importer's directory and read `./lib` from the working directory; module keys and import cycles use forward slashes, which Node's fs accepts on Windows. Reads `xdbml: 0.6.4`.
+
+- **Grammar test corpus**: all 131 cases of `grammar/test-cases.md` now run in the parser's test suite, so `npm run check` fails when a case and the parser disagree. Three `Ref` cases and the polyglot case declare the entities they name; the module cases import from small files in `grammar/fixtures/`; the multi-line and single-line import forms are two cases, since importing one declaration twice into one document declares it twice; the tuple and built-in-name cases declare `xdbml: 0.6`, each beside a case declaring v0.5 that expects the warning; the case of a patch release newer than the parser declares `xdbml: 0.6.99`, a version no release reaches.
+
+- **Example 06 (financial services)**: its `Type Money` becomes `Type MonetaryAmount`. Its four `Money` fields had the built-in `money` type all along, never the Type; they now reach it.
+
+- **llms.txt**: a Common mistake for a Type named after a built-in type, and the rule in the Fields section.
+
+- **Playground help**: the diagnostics panel page lists the two new codes and their severities.
+
+### Not changed (compatibility)
+
+- A document the 0.6.3 parser accepted parses with the 0.6.4 parser. A document declaring v0.6 with a gap in its tuple positions or a Type under a built-in name now draws an error; one declaring an earlier version, a warning.
+
+---
+
+## v0.6.3 -- 2026
+
+**Status**: Draft -- superseded by v0.6.4
 **Released**: 2026-10-01
 
 A backward-compatible point release of the v0.6 draft. Chapter 18 defines diagram views, the subject areas or sub-models of a model's diagram: the elements a diagram view contains, how a listed Container combines with the entities named beside it, how names resolve, and what a renderer draws. A relationship appears in a diagram view when both of its ends do, so the `Edges` category is dropped. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.

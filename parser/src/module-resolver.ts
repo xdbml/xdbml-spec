@@ -912,8 +912,11 @@ export function classifyModuleSource (from: string): ModuleSource {
  *     exactly as in v0.2.
  *
  * Uses pure string / WHATWG-URL manipulation (no node:path) so the same
- * code runs in Node and the browser. Forward slashes only; Windows paths
- * with backslashes should be normalized before reaching the parser.
+ * code runs in Node and the browser. A local path may use backslashes, as
+ * a native Windows path does (`C:\\repo\\main.xdbml`): they read as forward
+ * slashes, and the key handed to `readFile` uses forward slashes, which
+ * Node's fs accepts on Windows. Until v0.6.4 a backslash path lost its
+ * directory, so './lib' was read from the working directory instead.
  */
 function resolveModulePath (
   fromClause: string,
@@ -935,18 +938,28 @@ function resolveModulePath (
     return new URL(rel, importerPath).href;
   }
 
-  // Local relative source (unchanged v0.2 behavior).
-  let withExt = source.from;
+  // Local relative source (v0.2 behavior, with Windows separators read as
+  // forward slashes from v0.6.4).
+  let withExt = toForwardSlashes(source.from);
   if (!withExt.endsWith('.xdbml')) {
     withExt = `${withExt}.xdbml`;
   }
-  // Absolute path: return as-is.
-  if (withExt.startsWith('/')) return withExt;
+  // Absolute path, POSIX or with a Windows drive letter: return as-is.
+  if (withExt.startsWith('/') || /^[A-Za-z]:\//.test(withExt)) return withExt;
   // No importer context: return as-is (resolver handles it).
   if (!importerPath) return withExt;
   // Resolve relative to importer's directory.
-  const importerDir = posixDirname(importerPath);
+  const importerDir = posixDirname(toForwardSlashes(importerPath));
   return posixJoin(importerDir, withExt);
+}
+
+/**
+ * A local file path with Windows backslashes turned into forward slashes;
+ * a URL key is returned unchanged. The parser keys modules, and detects
+ * import cycles, on paths in this form.
+ */
+export function toForwardSlashes (p: string): string {
+  return isUrlKey(p) ? p : p.replace(/\\/g, '/');
 }
 
 function posixDirname (p: string): string {
