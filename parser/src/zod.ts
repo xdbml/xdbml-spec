@@ -8,55 +8,8 @@
  * The types that do not define the xDBML AST do NOT belong to this module.
  */
 
+import pkg from '../package.json' with { type: 'json' };
 import * as z from 'zod';
-import { GRANULARITY_VALUES } from './keywords.ts';
-import { classifyModuleSource } from './module-resolver.ts';
-
-/**
- * Checks taken from grammar/xDBML.g4 that the node shapes alone do not
- * express. The grammar is permissive about cross-reference rules (a name
- * must resolve, a key field must exist); those stay in the parser's
- * semantic pass. These checks cover the closed vocabularies and the
- * minimum shapes the grammar itself requires.
- */
-
-const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const DOTTED_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/;
-/** `'0..*'`, `'1..1'`, `'2..5'`. The upper bound may be `*`. */
-const CARDINALITY_STRING = /^\d+\.\.(?:\d+|\*)$/;
-
-const GRANULARITY = new Set<string>(GRANULARITY_VALUES);
-
-/** Grammar `elementType`, plus `supertypegroup`, which the grammar's comment omits and the parser accepts. */
-const IMPORT_ELEMENT_TYPES = new Set([
-  'table', 'entity', 'collection', 'record',
-  'enum', 'tablepartial', 'note',
-  'schema', 'container', 'tablegroup', 'supertypegroup',
-  'type', 'edge', 'view', 'diagramview',
-  'field',
-]);
-
-const DIAGRAM_CATEGORY_BY_KEYWORD: Record<string, string> = {
-  tables: 'Tables',
-  views: 'Views',
-  containers: 'Containers',
-  schemas: 'Containers',
-  tablegroups: 'TableGroups',
-  supertypegroups: 'SupertypeGroups',
-  notes: 'Notes',
-};
-
-function settingText (value: { kind: string } | null): string | undefined {
-  if (!value) return undefined;
-  if (
-    (value.kind === 'IdentifierValue' || value.kind === 'StringValue')
-    && 'value' in value
-    && typeof value.value === 'string'
-  ) {
-    return value.value;
-  }
-  return undefined;
-}
 
 /* -------------------------------------------------------------------------
  * Positions
@@ -403,21 +356,7 @@ export const SettingZodType = z
   })
   .describe(
     "A name/value pair inside brackets. The colon separates the name from the value. A flag is a marker with no value, such as `pk`, `not null`, `unique`, `increment`, `inactive`, or `foreign_master`. The settings vocabulary is open.",
-  )
-  .superRefine((setting, ctx) => {
-    if (setting.name === 'granularity') {
-      const text = settingText(setting.value);
-      if (text === undefined || !GRANULARITY.has(text.toLowerCase())) {
-        ctx.addIssue(`granularity must be one of: ${GRANULARITY_VALUES.join(', ')}.`);
-      }
-    }
-    if (setting.name === 'source_cardinality' || setting.name === 'target_cardinality') {
-      const text = setting.value?.kind === 'StringValue' ? setting.value.value : undefined;
-      if (text === undefined || !CARDINALITY_STRING.test(text)) {
-        ctx.addIssue("source_cardinality and target_cardinality are quoted strings such as '0..*', '1..1', or '2..5'.");
-      }
-    }
-  });
+  );
 
 /* -------------------------------------------------------------------------
  * Notes, partials, and the small nodes type expressions embed
@@ -668,16 +607,7 @@ export const TupleTypeZodType = z
   })
   .describe(
     "A heterogeneous tuple: an array whose elements are positional, `[0] name type`, `[1] name type`. The keyword in the source is still `array` or `list`.",
-  )
-  .superRefine((tuple, ctx) => {
-    const positions = new Set(tuple.elements.map((el) => el.position));
-    for (let i = 0; i < tuple.elements.length; i++) {
-      if (!positions.has(i)) {
-        ctx.addIssue('Tuple positions are unique, zero-indexed, and form the contiguous range 0 through n-1.');
-        return;
-      }
-    }
-  });
+  );
 
 /** A key-value collection. */
 export const MapTypeZodType = z
@@ -1272,27 +1202,7 @@ export const RefDeclarationZodType = z
   })
   .describe(
     "A relationship between a child attribute and a parent attribute. The child holds the foreign key or the copied value; the parent holds the identifier or the master value. Without `foreign_master` the relationship is referential, the foreign key. With that flag it records denormalized replication. An endpoint may name an entity rather than an attribute, for a relationship written before the attributes exist; on that form the operator gives direction only, and cardinality stays unstated until a `source` or `target` setting states it. `delete` and `update` are `cascade`, `restrict`, `set null`, `set default`, or `no action`. `source` and `target` are cardinality strings `'1..1'`, `'0..1'`, `'1..*'`, `'0..*'`, or `'N..M'`; `min_source`, `max_source`, `min_target`, and `max_target` state the same bounds separately. `color` is `#rgb` or `#rrggbb`. `inactive` is a flag: the relationship remains, and it is a documentation hint rather than a removal. `source_role`, `target_role`, `source_verb`, and `target_verb` are free text. `constraint_type` is `identifying` (the child's foreign key is part of its primary key) or `non_identifying`; leaving it out means the type is unstated, and it does not apply to a foreign master or to `<>`. `undirected` is `true` or `false`. `note` is free text.",
-  )
-  .superRefine((ref, ctx) => {
-    for (const setting of ref.settings) {
-      if (setting.name === 'source' || setting.name === 'target') {
-        const text = setting.value?.kind === 'StringValue' ? setting.value.value : undefined;
-        if (text === undefined || !CARDINALITY_STRING.test(text)) {
-          ctx.addIssue(`A Ref ${setting.name} setting is a quoted cardinality string such as '0..*' or '1..1'.`);
-        }
-      }
-      if (
-        setting.name === 'min_source' || setting.name === 'max_source'
-        || setting.name === 'min_target' || setting.name === 'max_target'
-      ) {
-        const value = setting.value;
-        const star = value?.kind === 'StringValue' && value.value === '*';
-        if (value?.kind !== 'NumberValue' && !star) {
-          ctx.addIssue(`${setting.name} is a number or '*'.`);
-        }
-      }
-    }
-  });
+  );
 
 /** A reusable set of entity fields. */
 export const TablePartialDeclarationZodType = z
@@ -1430,13 +1340,7 @@ export const DiagramViewCategoryZodType = z
   })
   .describe(
     "One category of a DiagramView: a keyword and a list of names, or `*`. A category appears at most once. `Schemas` is the same category as `Containers`. Relationships have no category.",
-  )
-  .superRefine((category, ctx) => {
-    const expected = DIAGRAM_CATEGORY_BY_KEYWORD[category.keyword.toLowerCase()];
-    if (expected === undefined || expected !== category.category) {
-      ctx.addIssue('The category keyword is Tables, Views, Containers, Schemas, TableGroups, SupertypeGroups, or Notes, and it matches the canonical category. Schemas is stored as Containers.');
-    }
-  });
+  );
 
 /** A named subset of the model's diagram. */
 export const DiagramViewDeclarationZodType = z
@@ -1537,18 +1441,7 @@ export const ImportItemZodType = z
   })
   .describe(
     "One selective import: an element-type keyword, a dotted source path, and an optional `as` alias.",
-  )
-  .superRefine((item, ctx) => {
-    if (!IMPORT_ELEMENT_TYPES.has(item.elementType)) {
-      ctx.addIssue(`Unrecognized import element type '${item.elementType}'.`);
-    }
-    if (!DOTTED_IDENTIFIER.test(item.sourcePath)) {
-      ctx.addIssue('An import path is one or more identifiers separated by dots.');
-    }
-    if (item.alias !== undefined && !IDENTIFIER.test(item.alias)) {
-      ctx.addIssue('An import alias is an identifier.');
-    }
-  });
+  );
 
 /** What a `use` or `reuse` imports. */
 export const ImportSpecZodType = z
@@ -1600,14 +1493,7 @@ export const ModuleImportDirectiveZodType = z
   })
   .describe(
     "An import of declarations from another xDBML file. `reuse` is transitive; `use` is private to this file. The directive's location is where the imported element is placed. A clone block, when present, is the authoritative content and the referenced file is not opened.",
-  )
-  .superRefine((directive, ctx) => {
-    try {
-      classifyModuleSource(directive.from);
-    } catch (err) {
-      ctx.addIssue(err instanceof Error ? err.message : 'Invalid module source.');
-    }
-  });
+  );
 
 /** What a Container body holds. */
 export const ContainerBodyItemZodType = z
@@ -1713,15 +1599,15 @@ export const CloneBlockZodType = z
   );
 
 /** The `xdbml:` header. */
+const version = pkg.version;
+const [major, minor] = version.split('.');
 export const VersionDeclarationZodType = z
   .object({
     kind: z.literal('VersionDeclaration'),
     version: z
       .string()
-      .regex(/^\d+(?:\.\d+)*$/, 'A version is a dot-separated number, such as 0.6 or 0.6.1.')
-      .describe(
-        "The version text as written, SemVer-style `MAJOR.MINOR` or `MAJOR.MINOR.PATCH`, such as `0.6`.",
-      ),
+      .regex(/^\d+(?:\.\d+)*$/, `A semantic version is a dot-separated number, such as ${major}.${minor} or ${version}.`)
+      .describe(`Set to ${major}.${minor}.`),
     get span (): typeof SpanZodType {
       return SpanZodType;
     },
@@ -1735,7 +1621,7 @@ export const ExperimentalDeclarationZodType = z
   .object({
     kind: z.literal('ExperimentalDeclaration'),
     features: z
-      .array(z.string().regex(IDENTIFIER, 'A feature name is an identifier.'))
+      .array(z.string().regex(/^[A-Za-z_]\w*$/, 'A feature name is an identifier.'))
       .describe("The experimental feature names opted into."),
     get span (): typeof SpanZodType {
       return SpanZodType;
