@@ -1457,6 +1457,8 @@ export const DiagramViewDeclarationZodType = z
       .describe(
         "The diagram view name. It is unique among the diagram views of the project and may be quoted.",
       ),
+    settings: z.array(SettingZodType).describe("Bracket settings: `note` and custom `x_` properties."),
+    notes: z.array(NoteBlockZodType),
     wildcardBody: z
       .boolean()
       .describe(

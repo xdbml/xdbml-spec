@@ -1,161 +1,89 @@
-xDBML -- 0.6.3, delta 4: rendering API, MCP server, llms.txt, VS Code 0.6.3
-Base: 0.6.3 delta 3 (renderer, playground and example 16).
+xDBML -- 0.6.3 release, fix 2: wait for the tarball, retry installs for longer
+Base: your local main after the second interrupted run of
+tools\release.cmd 0.6.3 (release-fix 1 committed; the run stopped in
+renderer\ while npm install kept getting a 404 on parse-0.6.3.tgz).
 
-Every tool that reads xDBML now handles diagram views. The rendering API
-and the MCP server build from the published packages, so their new
-parameters go live with the 0.6.3 release (tools\release.cmd 0.6.3), which
-publishes @xdbml/parse and @xdbml/render 0.6.3 before installing them in
-mcp\ and api\. Until then, their type-checks fail against the published
-0.6.2 packages, as expected; here they were checked against the sources.
+WHAT HAPPENED
+  npm serves a new version in pieces. At [1/6], npm view already answered
+  for @xdbml/parse 0.6.3 (the registry dates it 15:49:59 UTC), so the
+  script went on; at [2/6], npm install still got a 404 on the tarball
+  itself, for the 3 minutes the old retry allowed. Checked from here at
+  16:02 UTC: metadata and tarball are both served now (HTTP 200).
 
 WHAT CHANGED
 ------------
-api\src\worker.ts, api\README.md
-  diagram_view (query) and diagramView (JSON body) render one diagram view.
-  An undeclared name returns 400 with the names the document declares; a
-  document with none says so. Tester page: a "Diagram view" field.
-  /health lists the option.
-renderer\src\index.ts, renderer\README.md, renderer\test\run-tests.ts
-  diagramViewNames(input): the names a document declares, in order. The
-  API uses it to refuse an unknown name without depending on the parser,
-  so release.cmd needs no change. One test.
-mcp\src\render-tool.ts, mcp\src\index.ts, mcp\README.md
-  render_xdbml(..., diagram_view?): renders one diagram view; an undeclared
-  name is an error listing the declared ones; the summary names the
-  diagram view. Tool description and landing text updated. The README
-  also lists the existing mode parameter.
-mcp\src\validate-tool.ts
-  The summary counts diagram views ("3 entities, 2 containers and 2
-  diagram views"), unchanged for a document without any; the outcome and
-  the JSON tail carry their names (diagramViews).
-mcp\test\parser-from-source*.mjs, mcp\test\run-tests.ts
-  The test hook also loads @xdbml/render from source. Five tests: the
-  validate summary and JSON tail, an unresolved name, render of a diagram
-  view, an undeclared name with and without diagram views, and the full
-  diagram without the parameter.
-public\llms.txt, mcp\src\reference.ts (regenerated)
-  "Diagram views" section after "Supertype groups", with a checked
-  example and the narrowing rule; a DiagramView row in "What goes where";
-  a Common mistake (an Edges category, parse-error) with its Right form;
-  DiagramView among the top-level declarations of checklist item 6.
-tools\textmate\xdbml.tmLanguage.template.json, scripts\build.mjs,
-scripts\test.mjs, xdbml.tmLanguage.json (rebuilt)
-  diagram-view-categories rule: the seven category keywords before '{',
-  scope keyword.declaration.category.xdbml. Six smoke checks. The site's
-  code blocks use this grammar too.
-tools\vscode-extension\package.json, package-lock.json, CHANGELOG.md,
-README.md, syntaxes\xdbml.tmLanguage.json (synced),
-xdbml-0.6.3.vsix (NEW)
-  Version 0.6.3, following the spec point release; 0.6.2 is skipped,
-  since that release changed no highlighting.
-CHANGELOG.md
-  v0.6.3 Tooling: rendering API, MCP server and llms.txt, VS Code and site
-  highlighting; diagramViewNames in the renderer entry.
+tools\release.cmd
+  - One wait, used after every publish and whenever a package is found
+    already published: it ends only when npm view answers AND a plain
+    download of the tarball succeeds (curl, HTTP 2xx), up to 45 minutes,
+    with a line each minute saying which of the two is still missing.
+  - One install routine for parser, renderer, mcp and api: npm install
+    retried every 10 seconds for up to 15 minutes (was 3), numbered tries.
+  - The publish markers in %TEMP% stay: nothing is ever published twice.
+  - A guard at the start: curl must be on the PATH (it ships with
+    Windows 10 and later).
+  - Every failure now ends with the same instruction: rerun the same
+    command.
+tools\release-preflight.cmd
+  Checks that curl is present.
+tools\RELEASE.md
+  How npm serves a version in pieces, and how the script copes.
 
 FILES
 -----
-  APPLY.txt                                                (EDIT)
-  CHANGELOG.md                                             (EDIT)
-  api\README.md                                            (EDIT)
-  api\src\worker.ts                                        (EDIT)
-  mcp\README.md                                            (EDIT)
-  mcp\src\index.ts                                         (EDIT)
-  mcp\src\reference.ts                                     (EDIT, generated)
-  mcp\src\render-tool.ts                                   (EDIT)
-  mcp\src\validate-tool.ts                                 (EDIT)
-  mcp\test\parser-from-source-hooks.mjs                    (EDIT)
-  mcp\test\parser-from-source.mjs                          (EDIT)
-  mcp\test\run-tests.ts                                    (EDIT)
-  public\llms.txt                                          (EDIT)
-  renderer\README.md                                       (EDIT)
-  renderer\src\index.ts                                    (EDIT)
-  renderer\test\run-tests.ts                               (EDIT)
-  tools\textmate\scripts\build.mjs                         (EDIT)
-  tools\textmate\scripts\test.mjs                          (EDIT)
-  tools\textmate\xdbml.tmLanguage.json                     (EDIT, generated)
-  tools\textmate\xdbml.tmLanguage.template.json            (EDIT)
-  tools\vscode-extension\CHANGELOG.md                      (EDIT)
-  tools\vscode-extension\README.md                         (EDIT)
-  tools\vscode-extension\package-lock.json                 (EDIT)
-  tools\vscode-extension\package.json                      (EDIT)
-  tools\vscode-extension\syntaxes\xdbml.tmLanguage.json    (EDIT, synced)
-  tools\vscode-extension\xdbml-0.6.3.vsix                  (NEW)
+  APPLY.txt                      (EDIT)
+  tools\release-preflight.cmd    (EDIT)
+  tools\release.cmd              (EDIT)
+  tools\RELEASE.md               (EDIT)
 
 APPLY (cmd.exe, opened in the unzipped folder)
 ----------------------------------------------
 set REPO=C:\Repos\Hackolade\xdbml-spec
 set DELTA=%CD%
 
-copy /Y "%DELTA%\APPLY.txt"                                               "%REPO%\APPLY.txt"
-copy /Y "%DELTA%\CHANGELOG.md"                                            "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\api\README.md"                                           "%REPO%\api\README.md"
-copy /Y "%DELTA%\api\src\worker.ts"                                       "%REPO%\api\src\worker.ts"
-copy /Y "%DELTA%\mcp\README.md"                                           "%REPO%\mcp\README.md"
-copy /Y "%DELTA%\mcp\src\index.ts"                                        "%REPO%\mcp\src\index.ts"
-copy /Y "%DELTA%\mcp\src\reference.ts"                                    "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\mcp\src\render-tool.ts"                                  "%REPO%\mcp\src\render-tool.ts"
-copy /Y "%DELTA%\mcp\src\validate-tool.ts"                                "%REPO%\mcp\src\validate-tool.ts"
-copy /Y "%DELTA%\mcp\test\parser-from-source-hooks.mjs"                   "%REPO%\mcp\test\parser-from-source-hooks.mjs"
-copy /Y "%DELTA%\mcp\test\parser-from-source.mjs"                         "%REPO%\mcp\test\parser-from-source.mjs"
-copy /Y "%DELTA%\mcp\test\run-tests.ts"                                   "%REPO%\mcp\test\run-tests.ts"
-copy /Y "%DELTA%\public\llms.txt"                                         "%REPO%\public\llms.txt"
-copy /Y "%DELTA%\renderer\README.md"                                      "%REPO%\renderer\README.md"
-copy /Y "%DELTA%\renderer\src\index.ts"                                   "%REPO%\renderer\src\index.ts"
-copy /Y "%DELTA%\renderer\test\run-tests.ts"                              "%REPO%\renderer\test\run-tests.ts"
-copy /Y "%DELTA%\tools\textmate\scripts\build.mjs"                        "%REPO%\tools\textmate\scripts\build.mjs"
-copy /Y "%DELTA%\tools\textmate\scripts\test.mjs"                         "%REPO%\tools\textmate\scripts\test.mjs"
-copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.json"                    "%REPO%\tools\textmate\xdbml.tmLanguage.json"
-copy /Y "%DELTA%\tools\textmate\xdbml.tmLanguage.template.json"           "%REPO%\tools\textmate\xdbml.tmLanguage.template.json"
-copy /Y "%DELTA%\tools\vscode-extension\CHANGELOG.md"                     "%REPO%\tools\vscode-extension\CHANGELOG.md"
-copy /Y "%DELTA%\tools\vscode-extension\README.md"                        "%REPO%\tools\vscode-extension\README.md"
-copy /Y "%DELTA%\tools\vscode-extension\package-lock.json"                "%REPO%\tools\vscode-extension\package-lock.json"
-copy /Y "%DELTA%\tools\vscode-extension\package.json"                     "%REPO%\tools\vscode-extension\package.json"
-copy /Y "%DELTA%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"   "%REPO%\tools\vscode-extension\syntaxes\xdbml.tmLanguage.json"
-copy /Y "%DELTA%\tools\vscode-extension\xdbml-0.6.3.vsix"                 "%REPO%\tools\vscode-extension\xdbml-0.6.3.vsix"
+copy /Y "%DELTA%\APPLY.txt"                     "%REPO%\APPLY.txt"
+copy /Y "%DELTA%\tools\release.cmd"             "%REPO%\tools\release.cmd"
+copy /Y "%DELTA%\tools\release-preflight.cmd"   "%REPO%\tools\release-preflight.cmd"
+copy /Y "%DELTA%\tools\RELEASE.md"              "%REPO%\tools\RELEASE.md"
 
 cd /d %REPO%
-npm run check
-  Expect: parser 296 passed; renderer 247 (246 before), viewport 14,
-  interactive-mount 47; MCP 75 (67 before); from-mongodb 24; playground
-  55; "check-vsix: xdbml-0.6.3.vsix is in sync with the extension
-  version"; "165 button(s) open the snippet below them"; docs build
-  complete.
-node tools\textmate\scripts\test.mjs
-  Expect: "All checks passed", with six "DiagramView categories" lines.
-cd mcp
-npm run check:reference
-  Expect: "reference.ts is in sync with public/llms.txt."
-cd ..
-git add -A
-git commit -m "0.6.3, delta 4: rendering API, MCP server, llms.txt, VS Code 0.6.3"
+git add APPLY.txt tools\release.cmd tools\release-preflight.cmd tools\RELEASE.md
+git commit -m "release.cmd: wait for the tarball as well as the metadata, retry installs for 15 minutes"
+tools\release.cmd 0.6.3
 
-The commit may be pushed with deltas 2 and 3. The API and MCP parameters
-go live with the release; the VS Code extension goes to the Marketplace
-when you run, from tools\vscode-extension, npx @vscode/vsce publish (see
-PUBLISH.txt), or upload xdbml-0.6.3.vsix by hand.
+  Expect:
+  [1/6] "@xdbml/parse@0.6.3 is already on npm: skipping install, test and
+        publish." then "is live: metadata and tarball."
+  [2/6] npm install (perhaps a few numbered retries), the renderer tests,
+        "+ @xdbml/render@0.6.3", then a wait that may print "still waiting
+        after N minute(s): metadata yes, tarball no" for a while, then
+        "is live: metadata and tarball."
+  [3/6] to [6/6] as before, ending with "Done. 0.6.3 is published,
+        deployed, committed and released."
 
-Still to do for the release, in a separate step: set the "Released" date
-of the v0.6.3 section of CHANGELOG.md, then tools\release-preflight.cmd and
-tools\release.cmd 0.6.3.
+  If it stops anywhere, run tools\release.cmd 0.6.3 again. The only stop
+  that needs something from you is a 45-minute timeout on a package npm
+  never serves: then look at the e-mail of the npm account first.
 
-VERIFICATION RUN HERE (Linux, Node 22)
----------------------------------------
-  npm run check       exit 0 with the counts above
-  type-checks         mcp and api clean against the parser and renderer
-                      sources (tsc with paths to parser\src and renderer\src)
-  API, called in      POST example 16 with diagram_view=order_to_cash: 200
-  process against     SVG with customers and without leads; JSON body
-  the sources         diagramView=parties: 200; diagram_view=nope: 400
-                      "declares no diagram view named 'nope'. Its diagram
-                      views: 'order_to_cash', 'parties', 'catalog_usage'.";
-                      no parameter: the full diagram (both entities)
-  MCP                 render_xdbml summary "Rendered 2 entities and 1
-                      relationship of diagram view 'ordering' (arrange:
-                      relational)."; every llms.txt block checked, including
-                      the new Wrong (parse-error) and Right parts
-  site highlighting   in the built spec, Tables, Containers and Notes in the
-                      18.1 snippet take the color of DiagramView
-  vsix                vsce package: 11 files, the same file list as 0.6.1;
-                      the grammar inside carries diagram-view-categories;
-                      package.json inside reads 0.6.3
-  em-dashes           none in any changed file
+Then steps 3 and 4 of the release package: publish the VS Code extension
+and run the live checks.
+
+VERIFICATION HERE (Wine 9 cmd, stub npm, curl and git)
+------------------------------------------------------
+  The script ran end to end under Wine's cmd.exe, with stubs standing in
+  for npm, curl, npx, git and github-release.cmd, each logging its calls:
+  A. Your state now: parse on npm with its marker, render not published,
+     render install failing 3 times, render metadata 4 checks late and
+     tarball 7 checks late, mcp install failing twice, api once.
+     Result: parse skipped, render published once, every wait and retry
+     reported, Done, markers deleted.
+  B. Fresh release with parse lagging (metadata 5, tarball 9 checks), MCP
+     tests failing: stops at [3/6] with both markers kept. Rerun while npm
+     view still lags for render: both packages skipped, render waited for,
+     Done. One publish per package across both runs.
+  C. A package npm never serves: 44 "still waiting" lines, then the
+     45-minute error naming what is missing.
+  Two harness adaptations, in the test copy only: Wine's cmd mishandles
+  "||" after "call" and "cd", so "X || goto :fail" ran as "X" plus
+  "if errorlevel 1 goto :fail"; and curl and timeout, .exe files on
+  Windows, were .cmd stubs here, so the copy calls them with "call".

@@ -20,7 +20,7 @@
     <!-- Floating controls, bottom-right, outside the scrolling viewport. -->
     <div
       v-if="hasAst"
-      class="absolute bottom-3 right-3 flex items-center gap-0.5 px-1 py-0.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm select-none"
+      class="absolute bottom-3 right-3 flex items-center gap-0.5 px-1 py-0.5 whitespace-nowrap bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-lg shadow-sm select-none"
     >
       <!-- Diagram view selector (spec §18), shown when the document declares
            diagram views. "Main ERD" is the full diagram. It sits in the
@@ -184,7 +184,7 @@
         <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
         <button
           type="button"
-          class="h-7 px-2 flex items-center text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+          class="h-7 px-2 flex items-center whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
           @click="resetPositions"
           title="Reset repositioned entities and edges to the layout default"
         >Reset positions</button>
@@ -241,7 +241,11 @@ const parser = useParserStore();
 const fileSystem = useFileSystemStore();
 
 const props = defineProps<{ selection: Selection }>();
-const emit = defineEmits<{ select: [selection: Selection] }>();
+const emit = defineEmits<{
+  select: [selection: Selection];
+  /** The diagram on display changed: a diagram view name, or null for Main ERD. */
+  'diagram-view-change': [name: string | null];
+}>();
 
 const hasAst = computed(() => parser.hasAst);
 const viewportEl = ref<HTMLDivElement | null>(null);
@@ -277,6 +281,7 @@ function currentDocKey (): string {
 // every diagram view (§18.4).
 
 const activeView = ref<string | null>(null);
+watch(activeView, (name) => emit('diagram-view-change', name));
 
 const diagramViewNames = computed<string[]>(() => {
   const names: string[] = [];
@@ -670,7 +675,9 @@ function pushLayout (): void {
 }
 
 function toInspector (s: MountSelection): Selection {
-  if (!s) return null;
+  // A click on the empty canvas selects the diagram on display, so the
+  // inspector shows the Project on Main ERD, or the diagram view.
+  if (!s) return { kind: 'diagram' };
   if (s.kind === 'entity') return { kind: 'entity', entityId: s.id };
   if (s.kind === 'field') return { kind: 'field', entityId: s.id, path: s.path };
   if (s.kind === 'ref') return { kind: 'ref', refId: s.id };
@@ -682,7 +689,7 @@ function toInspector (s: MountSelection): Selection {
   return { kind: 'container', containerName: s.name };
 }
 function toMount (s: Selection): MountSelection {
-  if (!s) return null;
+  if (!s || s.kind === 'diagram') return null;
   if (s.kind === 'entity') return { kind: 'entity', id: s.entityId };
   if (s.kind === 'field') return { kind: 'field', id: s.entityId, path: s.path };
   if (s.kind === 'ref') return { kind: 'ref', id: s.refId };

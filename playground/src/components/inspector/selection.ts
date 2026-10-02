@@ -24,6 +24,11 @@ export type Selection =
   | { kind: 'ref'; refId: string }
   /** A supertype group (spec §12), by declaration name. */
   | { kind: 'supertypeGroup'; groupName: string }
+  /**
+   * The diagram on display, selected by clicking the empty canvas: the
+   * Project on Main ERD, or the diagram view shown (spec §18).
+   */
+  | { kind: 'diagram' }
   | null;
 
 /**
@@ -45,5 +50,7 @@ export function selectionEquals (a: Selection, b: Selection): boolean {
       return b.kind === 'ref' && a.refId === b.refId;
     case 'supertypeGroup':
       return b.kind === 'supertypeGroup' && a.groupName === b.groupName;
+    case 'diagram':
+      return b.kind === 'diagram';
   }
 }

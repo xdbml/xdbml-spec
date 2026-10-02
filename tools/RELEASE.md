@@ -26,7 +26,8 @@ republished.
 
 `release.cmd` then, halting on any failure:
 
-1. `parser`   bumps, installs, tests, publishes, waits for the registry
+1. `parser`   bumps, installs, tests, publishes, waits until npm serves both
+   its metadata and its tarball (up to 45 minutes, with a line each minute)
 2. `renderer` bumps, repoints its `@xdbml/parse` range, tests, publishes, waits
 3. `mcp`      repoints both ranges, bumps, installs, checks, tests, deploys
 4. `api`      repoints its range, installs, checks, deploys
@@ -37,6 +38,27 @@ republished.
 After a failure, fix the cause and rerun the same command. A package already
 on npm at that version is not installed, tested or published again, and every
 other step can run twice, so the script resumes where it stopped.
+
+npm can accept a publish ("+ @xdbml/parse@0.6.3", "Your package is being
+processed") and serve the version only much later, and in pieces: the
+metadata that `npm view` reads first, the tarball that `npm install` downloads
+some minutes after (a 404 on `/-/parse-0.6.3.tgz` while `npm view` already
+answers). The script copes with all of it:
+
+- after each publish, and whenever a package is found already published, it
+  waits until `npm view` answers *and* a plain download of the tarball
+  succeeds, up to 45 minutes, printing which of the two is still missing;
+- every `npm install` is retried every 10 seconds for up to 15 minutes;
+- each successful `npm publish` leaves a marker file,
+  `%TEMP%\xdbml-release-<version>-parse.published` or `-render.published`, so a
+  rerun never publishes the same version twice, even while npm serves
+  nothing yet. The last step deletes the markers.
+
+So after any failure the answer is the same: rerun `tools\release.cmd` with the
+same version. If npm still serves nothing after 45 minutes, check the e-mail
+of the npm account, which is where npm reports a package it holds back. The
+tarball check uses `curl`, which ships with Windows 10 and later; the
+preflight checks for it.
 
 Every version and range change goes through `npm version` and `npm pkg set`,
 which update `package.json` and `package-lock.json` together. Hand-editing

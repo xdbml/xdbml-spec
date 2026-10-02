@@ -74,7 +74,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | `Ref` | relationship settings | -- | top level, never in a Container |
 | `SupertypeGroup` | `supertype` (required), `completeness`, `exclusivity`, `strategy`, `merge`, `discriminator`, `note` | subtype names, each with an optional `[strategy: ...]` | top level |
 | `TableGroup` | `color`, `note` | entity names | top level |
-| `DiagramView` | none | categories: `Tables`, `Views`, `Containers`, `TableGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
+| `DiagramView` | `note`, custom | `Note:`, and categories: `Tables`, `Views`, `Containers`, `TableGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
 
 A note goes either in the brackets as `note: '...'` or in the body as `Note: '...'`.
 
@@ -331,6 +331,7 @@ Schema crm {
 }
 
 DiagramView order_flow {
+  Note: 'From the order to its invoice and payment'
   Containers {
     sales
     billing

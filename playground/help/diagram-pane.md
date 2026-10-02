@@ -33,7 +33,7 @@ When parsing fails, the diagram keeps showing the last valid state. The diagnost
 
 Three families of interactions:
 
-**Selection.** Click any container, entity, field row, or relationship line to select it. The selected element gets a highlight (thicker outline, blue accent), and the inspector pane opens on the right with its details. Click an empty area of the canvas to deselect.
+**Selection.** Click any container, entity, field row, or relationship line to select it. The selected element gets a highlight (thicker outline, blue accent), and the inspector pane opens on the right with its details. Click an empty area of the canvas to inspect the diagram itself: the Project on Main ERD, or the diagram view on display.
 
 **Navigation.** Pan with arrow keys or by middle-click-dragging. Zoom with Ctrl + scroll, the `+` and `−` buttons in the bottom-right corner, or the percentage input. Detailed coverage on [**Pan and zoom**](./diagram-pan-zoom).
 

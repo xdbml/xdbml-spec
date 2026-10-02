@@ -86,6 +86,10 @@ export function resolveSelection (doc: XDbmlDocument | undefined, sel: Selection
       const group = resolveSupertypeGroups(doc).find((g) => g.declaration.name === sel.groupName);
       return group ? { kind: 'supertypeGroup', group } : null;
     }
+    // The diagram on display is not an AST node: Inspector.vue shows it
+    // with DiagramInspector, from the Project or the diagram view.
+    case 'diagram':
+      return null;
   }
 }
 

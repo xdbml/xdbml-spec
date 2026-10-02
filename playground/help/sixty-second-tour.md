@@ -29,7 +29,7 @@ A few things you can do in this pane:
 - **Click** any entity, field, container, or relationship to select it. The inspector opens on the right with its details.
 - **Drag** an entity's header band to reposition it. Other connected lines re-route automatically.
 - **Ctrl + scroll** to zoom in or out, centered on your cursor. Or use the `+` / `−` controls in the bottom-right corner.
-- **Click the background** to deselect.
+- **Click the background** to inspect the diagram itself: the Project, with its note.
 
 ## The inspector pane (right)
 

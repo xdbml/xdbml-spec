@@ -2017,6 +2017,46 @@ DiagramView v { Tables { a } }
 DiagramView v { Tables { * } }
 ```
 
+### VALID -- a note in the brackets, a note in the body, and a custom property (§18.1)
+
+```
+xdbml: 0.6
+
+Table orders { id int [pk] }
+
+DiagramView ordering [note: 'Orders only', x_owner: 'sales-ops'] {
+  Tables { orders }
+}
+
+DiagramView ordering_too {
+  Note: 'Orders only'
+  Tables { orders }
+}
+```
+
+### INVALID -- a setting other than note or a custom property (unknown-diagram-view-setting, §18.1)
+
+```
+xdbml: 0.6
+
+Table orders { id int [pk] }
+
+DiagramView ordering [color: '#3498DB'] {
+  Tables { orders }
+}
+```
+
+### INVALID -- a note without a version declaration (construct-requires-version, §18.5)
+
+```
+Table orders { id int [pk] }
+
+DiagramView ordering {
+  Note: 'Orders only'
+  Tables { orders }
+}
+```
+
 ### INVALID -- Containers without a version declaration (construct-requires-version, §18.5)
 
 ```

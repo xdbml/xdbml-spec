@@ -162,7 +162,8 @@ export type DiagnosticCode =
   | 'duplicate-diagram-view-category'
   | 'unresolved-diagram-view-name'
   | 'ambiguous-diagram-view-name'
-  | 'diagram-view-wrong-category';
+  | 'diagram-view-wrong-category'
+  | 'unknown-diagram-view-setting';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,

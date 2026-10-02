@@ -77,7 +77,7 @@ A few things to try in the diagram pane:
 - **Drag the `posts` card's header band** to move it. The relationship line re-routes automatically.
 - **Ctrl + scroll** anywhere in the diagram to zoom in or out, centered on your mouse.
 - **Click the relationship line itself** to select it. The inspector shows the source and target paths plus the operator.
-- **Click an empty area of the canvas** to deselect.
+- **Click an empty area of the canvas** to inspect the Project, with its note.
 
 ## Share your work
 
