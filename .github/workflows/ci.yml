@@ -73,6 +73,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: |
             package-lock.json
+            parser/package-lock.json
             playground/package-lock.json
             renderer/package-lock.json
 
