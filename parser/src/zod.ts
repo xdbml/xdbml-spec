@@ -1,21 +1,11 @@
 /**
- * Zod schemas for the xDBML AST.
- *
- * These schemas are the source of truth. Each schema name ends in
- * `ZodType`. The TypeScript types inferred from them (`z.infer`) live in
+ * This module exports the Zod types that define the xDBML abstract syntax tree (AST).
+ * Each type name ends with `ZodType`. The TypeScript types inferred from them live in
  * `./ast.ts` under the unsuffixed names.
  *
- * Each schema mirrors one node in the AST produced by `parse()`. The
- * vocabulary is structural: settings stay open name/value pairs, and
- * check expressions stay opaque strings. Recursive nodes (type
- * expressions, clone blocks, list values) use getters so the cycle is
- * resolved when the schema is used. `span`, `settings`, and the other
- * schema-valued fields are getters too, annotated with `typeof` the child
- * schema, so published declarations reference that schema instead of
- * inlining it.
- *
- * Descriptions quote the xDBML specification (https://xdbml.org/spec/current).
- * They tell a AI model what each construct is and how to read and write it.
+ * Descriptions are used to tell AI models what each construct is and how to read and write it.
+ * 
+ * The types that do not define the xDBML AST do NOT belong to this module.
  */
 
 import * as z from 'zod';
@@ -1776,36 +1766,4 @@ export const XDbmlDocumentZodType = z
   })
   .describe(
     "An xDBML document: an optional version declaration, an optional experimental opt-in, and top-level declarations. xDBML describes the structural and semantic layer of data: entities, fields, types, relationships, and their meaning.",
-  );
-
-/**
- * Options for resolving module imports. Not part of the document.
- * `readFile` is a host callback, so this schema is not JSON.
- */
-export const ParseOptionsZodType = z
-  .object({
-    filePath: z
-      .string()
-      .optional()
-      .describe(
-        "Path of the file being parsed. A relative `from` path is resolved against that file's directory. The parser fills this in for files it loads through `readFile`.",
-      ),
-    readFile: z
-      .function({
-        input: [z.string()],
-        output: z.string(),
-      })
-      .optional()
-      .describe(
-        "Reads a module when its directive has no clone block. The argument is a path, or an `https://` URL for a remote module. Return the source text.",
-      ),
-    /**
-     * Maximum recursion depth when resolving directives. Cycles are
-     * allowed. The parser's default is 8. The specification
-     * does not define this limit.
-     */
-    maxDepth: z.number().optional(),
-  })
-  .describe(
-    "Options for resolving `use` and `reuse`. Not part of the document. When a directive has a clone block, that clone is authoritative and the referenced file is not opened.",
   );

@@ -2,7 +2,10 @@ import type * as z from 'zod';
 import type * as schemas from './zod.ts';
 
 /**
- * xDBML AST types inferred from the Zod schemas in `./zod.ts`, which are the source of truth.
+ * This module exports the TypeScript types that define the xDBML abstract syntax tree (AST).
+ * These types are inferred from the Zod types in `./zod.ts`, which are the source of truth.
+ * 
+ * The types that do not define the xDBML AST do NOT belong to this module.
  */
 export type AllOfType = z.infer<typeof schemas.AllOfTypeZodType>;
 export type AnyOfType = z.infer<typeof schemas.AnyOfTypeZodType>;
@@ -51,7 +54,6 @@ export type NullValue = z.infer<typeof schemas.NullValueZodType>;
 export type NumberValue = z.infer<typeof schemas.NumberValueZodType>;
 export type ObjectType = z.infer<typeof schemas.ObjectTypeZodType>;
 export type OneOfType = z.infer<typeof schemas.OneOfTypeZodType>;
-export type ParseOptions = z.infer<typeof schemas.ParseOptionsZodType>;
 export type PartialInjection = z.infer<typeof schemas.PartialInjectionZodType>;
 export type PathArrayIndex = z.infer<typeof schemas.PathArrayIndexZodType>;
 export type PathArrayWildcard = z.infer<typeof schemas.PathArrayWildcardZodType>;

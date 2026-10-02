@@ -30,13 +30,13 @@ import type {
   ImportSpec,
   ModuleImportDirective,
   ObjectType,
-  ParseOptions,
   TopLevelStatement,
   TypeDeclaration,
   TypeExpression,
   XDbmlDocument,
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
+import type { ParseOptions } from './parse-options.ts';
 
 /**
  * Produce a new XDbmlDocument with all module-system directives replaced

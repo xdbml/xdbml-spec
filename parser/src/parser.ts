@@ -56,7 +56,6 @@ import type {
   ObjectType,
   OneOfType,
   PartialInjection,
-  ParseOptions,
   PathSegment,
   PolymorphicAlternative,
   Position,
@@ -98,6 +97,7 @@ import {
 } from './lexer.ts';
 import { resolveImport, classifyModuleSource, ModuleSourceError, toForwardSlashes } from './module-resolver.ts';
 import type { ParseFn } from './module-resolver.ts';
+import type { ParseOptions } from './parse-options.ts';
 
 export class ParseError extends Error {
   position: Position;
