@@ -35,7 +35,7 @@ import {
   TARGET_NATIVE_TYPES,
 } from '../src/keywords.ts';
 import * as keywordArrays from '../src/keywords.ts';
-import { parse as parse062, resolveNames as resolveNames062 } from '../src/index.ts';
+import { resolveNames as resolveNames062 } from '../src/index.ts';
 import { entityConstraints, primaryKey } from '../src/constraints.ts';
 import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
 
@@ -86,6 +86,12 @@ function assertDocumentSchema (doc: XDbmlDocument): void {
   }
 }
 
+function parseDocument (source: string, options: ParseOptions = {}): XDbmlDocument {
+  const doc = parse(source, options);
+  assertDocumentSchema(doc);
+  return doc;
+}
+
 interface TestResult {
   name: string;
   passed: boolean;
@@ -134,8 +140,7 @@ function runExampleTests (): TestResult[] {
     const path = join(examplesDir, filename);
     const source = readFileSync(path, 'utf8');
     try {
-      const doc = parse(source);
-      assertDocumentSchema(doc);
+      const doc = parseDocument(source);
       const summary = summarizeDocument(doc);
       results.push(ok(`Parse ${filename}`, summary));
     } catch (e) {
@@ -3714,7 +3719,7 @@ Entity A { }`,
         if (doc.version?.version !== '0.6') return 'version 0.6 not parsed';
         for (const v of ['0.7', '1.0', '0.10']) {
           try {
-            parse(`xdbml: ${v}\nEntity A { }`);
+            parseDocument(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
           } catch (e) {
             if ((e as { code?: string }).code !== 'unsupported-version') return `xdbml: ${v}: wrong error ${(e as Error).message}`;
@@ -3819,7 +3824,7 @@ Table t {
           return st.map((x) => x.name + (x.implied ? '*' : '')).join('+');
         });
         if (JSON.stringify(flags) !== JSON.stringify(['not null*', 'not null', ''])) return `0.6: ${JSON.stringify(flags)}`;
-        const old = parse('xdbml: 0.5\nTable t {\n  a int [pk]\n}');
+        const old = parseDocument('xdbml: 0.5\nTable t {\n  a int [pk]\n}');
         const f = (old.statements[0] as { body: { settings: unknown[] }[] }).body[0];
         return f.settings.length === 1 ? null : '0.5 document got an implied setting';
       },
@@ -3880,7 +3885,7 @@ Table t {
         const got = resolveNames(doc).diagnostics.map((d) => `${d.code}:${d.severity}`).sort();
         const want = ['duplicate-primary-key:warning', 'null-in-primary-key:warning', 'unresolved-index-field:warning'];
         if (JSON.stringify(got) !== JSON.stringify(want)) return `0.5: ${JSON.stringify(got)}`;
-        const dbml = resolveNames(parse('Table t {\n  id int [pk]\n  indexes {\n    nope\n  }\n}')).diagnostics.map((d) => `${d.code}:${d.severity}`);
+        const dbml = resolveNames(parseDocument('Table t {\n  id int [pk]\n  indexes {\n    nope\n  }\n}')).diagnostics.map((d) => `${d.code}:${d.severity}`);
         return JSON.stringify(dbml) === JSON.stringify(['unresolved-index-field:warning']) ? null : `DBML: ${JSON.stringify(dbml)}`;
       },
     },
@@ -4118,7 +4123,7 @@ View v { source_query: 'SELECT id FROM b', id int, }`,
       source: `Table t { email varchar }`,
       assert: () => {
         try {
-          parse(`Table t {
+          parseDocument(`Table t {
   email varchar
   name  varchar
   indexes { email, name }
@@ -4216,7 +4221,7 @@ Edge e [source: a, target: b] { note varchar }`,
       source: `Entity e { id int [pk] }`,
       assert: () => {
         try {
-          parse(`View monthly_revenue {
+          parseDocument(`View monthly_revenue {
   materialized: true
   month date [pk]
 }`);
@@ -4232,7 +4237,7 @@ Edge e [source: a, target: b] { note varchar }`,
       source: `Entity e { id int [pk] }`,
       assert: () => {
         try {
-          parse(`Table users {
+          parseDocument(`Table users {
   headercolor: '#3498DB'
   id int [pk]
 }`);
@@ -4374,8 +4379,7 @@ Entity e { id int [pk] }`,
   const results: TestResult[] = [];
   for (const c of cases) {
     try {
-      const doc = parse(c.source, c.options ?? {});
-      assertDocumentSchema(doc);
+      const doc = parseDocument(c.source, c.options ?? {});
       if (c.expectError) {
         // Parser accepted input that should have been rejected.
         results.push(fail(c.name, 'expected parse to throw, but it succeeded'));
@@ -4430,8 +4434,7 @@ function runKeywordConsistencyTests (): TestResult[] {
 
   function tryParse (source: string, expect: (doc: XDbmlDocument) => string | null): string | null {
     try {
-      const doc = parse(source);
-      assertDocumentSchema(doc);
+      const doc = parseDocument(source);
       return expect(doc);
     } catch (e) {
       return (e as Error).message;
@@ -4675,11 +4678,11 @@ function runV062Tests (): TestResult[] {
     }
   };
   const codes = (src: string): string[] =>
-    resolveNames062(parse062(src)).diagnostics.map((d) => `${d.severity}:${d.code}`);
+    resolveNames062(parseDocument(src)).diagnostics.map((d) => `${d.severity}:${d.code}`);
 
   check('v0.6.2 §3.3: an unquoted hex color reads as a string, in a document with or without a version', () => {
     for (const head of ['xdbml: 0.6\n', '']) {
-      const doc = parse062(`${head}Table t [headercolor: #3498DB] { id int [pk] }\nTableGroup g [color: #345] { t }`);
+      const doc = parseDocument(`${head}Table t [headercolor: #3498DB] { id int [pk] }\nTableGroup g [color: #345] { t }`);
       const t = doc.statements[0] as EntityDeclaration;
       const v = t.settings[0].value as { kind: string; value: string };
       if (v.kind !== 'StringValue' || v.value !== '#3498DB') return `got ${JSON.stringify(v)}`;
@@ -4688,12 +4691,12 @@ function runV062Tests (): TestResult[] {
     return undefined;
   });
   check('v0.6.2 §3.3: # with other than three or six hex digits stays a lex error', () => {
-    try { parse062('xdbml: 0.6\nTable t [headercolor: #34] { id int [pk] }'); } catch { return undefined; }
+    try { parseDocument('xdbml: 0.6\nTable t [headercolor: #34] { id int [pk] }'); } catch { return undefined; }
     return 'no error';
   });
   check('v0.6.2 §7.4: a relationship names an entity by its alias, inline and in a Ref', () => {
     const src = 'xdbml: 0.6\nTable very_long as V { id int [pk] }\nTable o {\n id int [pk]\n v_id int [ref: > V.id]\n v2 int\n}\nRef: o.v2 > V.id';
-    const doc = parse062(src);
+    const doc = parseDocument(src);
     if ((doc.statements[0] as EntityDeclaration).alias !== 'V') return 'alias lost';
     const found = codes(src);
     return found.length ? found.join(', ') : undefined;
@@ -4703,13 +4706,13 @@ function runV062Tests (): TestResult[] {
     return found.includes('error:ref-target-not-key') ? undefined : found.join(', ');
   });
   check('v0.6.2 §7.4: an alias that repeats an entity name leaves the entity in place', () => {
-    const doc = parse062('xdbml: 0.6\nTable a as b { id int [pk] }\nTable b { id int [pk] }\nTable o {\n id int [pk]\n b_id int\n}\nRef: o.b_id > b.id');
+    const doc = parseDocument('xdbml: 0.6\nTable a as b { id int [pk] }\nTable b { id int [pk] }\nTable o {\n id int [pk]\n b_id int\n}\nRef: o.b_id > b.id');
     const ref = doc.statements[3] as unknown as { spec: { target: { path: { name: string }[] } } };
     const first = ref.spec?.target?.path?.[0]?.name;
     return first === 'b' ? undefined : `endpoint rewritten to ${first}`;
   });
   check('v0.6.2 §8.1: empty brackets right after a type name belong to it', () => {
-    const doc = parse062('xdbml: 0.6\nTable t {\n id int [pk]\n a text[]\n b varchar(20)[]\n c int[][]\n d int []\n e int [not null]\n}');
+    const doc = parseDocument('xdbml: 0.6\nTable t {\n id int [pk]\n a text[]\n b varchar(20)[]\n c int[][]\n d int []\n e int [not null]\n}');
     const got = (doc.statements[0] as EntityDeclaration).body
       .map((f) => {
         const t = (f as { type?: { name: string; params?: string[] } }).type;
@@ -4766,9 +4769,9 @@ function runV063Tests (): TestResult[] {
     }
   };
   const codes = (src: string): string[] =>
-    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`);
+    resolveNames(parseDocument(src)).diagnostics.map((d) => `${d.severity}:${d.code}`);
   const members = (src: string, name: string): string => {
-    const m = diagramViewMembers(parse(src), name);
+    const m = diagramViewMembers(parseDocument(src), name);
     if (!m) return 'none';
     return [
       `E=${m.entities.join(',')}`, `V=${m.views.join(',')}`, `C=${m.containers.join(',')}`,
@@ -4776,7 +4779,7 @@ function runV063Tests (): TestResult[] {
     ].join(' ');
   };
   const parseError = (src: string): string => {
-    try { parse(src); } catch (e) { return e instanceof Error ? e.message : String(e); }
+    try { parseDocument(src); } catch (e) { return e instanceof Error ? e.message : String(e); }
     return '';
   };
 
@@ -4802,14 +4805,14 @@ Note states { 'An order moves from placed to shipped.' }
 `;
 
   check('v0.6.3 §18.1: a DiagramView parses, with Schemas read as Containers and keywords in any case', () => {
-    const doc = parse(`${MODEL}DiagramView v {\n  schemas { sales }\n  TABLES { sales.orders, crm.customers; }\n  Notes { * }\n}`);
+    const doc = parseDocument(`${MODEL}DiagramView v {\n  schemas { sales }\n  TABLES { sales.orders, crm.customers; }\n  Notes { * }\n}`);
     const v = doc.statements.find((x) => x.kind === 'DiagramViewDeclaration');
     if (!v || v.kind !== 'DiagramViewDeclaration') return 'no DiagramViewDeclaration';
     const got = v.categories.map((c) => `${c.keyword}->${c.category}${c.wildcard ? '*' : ''}:${c.items.map((i) => i.name).join('+')}`).join(' ');
     return got === 'schemas->Containers:sales TABLES->Tables:sales.orders+crm.customers Notes->Notes*:' ? undefined : got;
   });
   check('v0.6.3 §18.1: a quoted name and a body-level * parse; the body-level * lists every category', () => {
-    const doc = parse('Table a { id int [pk] }\nDiagramView "Sales team" { * }');
+    const doc = parseDocument('Table a { id int [pk] }\nDiagramView "Sales team" { * }');
     const v = diagramViews(doc)[0];
     if (!v || v.name !== 'Sales team' || !v.wildcardBody) return JSON.stringify(v);
     return members('Table a { id int [pk] }\nTable b { id int [pk] }\nDiagramView all { * }', 'all') === 'E=a,b V= C= G= S= N=' ? undefined : members('Table a { id int [pk] }\nTable b { id int [pk] }\nDiagramView all { * }', 'all');
@@ -4912,7 +4915,7 @@ DiagramView v {
     return want.every((w) => found.includes(w)) && wrong === 3 ? undefined : found;
   });
   check('v0.6.3 §18.6: messages name the right category and the qualified candidates', () => {
-    const d = resolveNames(parse(`xdbml: 0.6
+    const d = resolveNames(parseDocument(`xdbml: 0.6
 Schema a { Table orders { id int [pk] } }
 Schema b { Table orders { id int [pk] } }
 View revenue [materialized: true] { source_query: 'SELECT 1 AS t'
@@ -4947,7 +4950,7 @@ DiagramView reports { Tables { orders } }`,
       '/w/main.xdbml': "xdbml: 0.6\nTable orders { id int [pk] }\nreuse { diagramview reports } from './a'",
     };
     const opts: ParseOptions = { filePath: '/w/main.xdbml', readFile: (p: string) => { if (!(p in files)) throw new Error(`no ${p}`); return files[p]; } } as ParseOptions;
-    const doc = parse(files['/w/main.xdbml'], opts);
+    const doc = parseDocument(files['/w/main.xdbml'], opts);
     const kinds = flatten(doc).statements.map((x) => x.kind).join(',');
     if (kinds !== 'EntityDeclaration,DiagramViewDeclaration') return kinds;
     const got = diagramViewMembers(doc, 'reports')?.entities.join();
@@ -4961,16 +4964,16 @@ DiagramView reports { Tables { orders } }`,
     };
     const opts = (f: string): ParseOptions => ({ filePath: f, readFile: (p: string) => files[p] } as ParseOptions);
     let badMsg = '';
-    try { parse(files['/w/bad.xdbml'], opts('/w/bad.xdbml')); } catch (e) { badMsg = (e as Error).message; }
+    try { parseDocument(files['/w/bad.xdbml'], opts('/w/bad.xdbml')); } catch (e) { badMsg = (e as Error).message; }
     if (!badMsg.includes('import it at file scope')) return `bad: ${badMsg}`;
-    const flat = flatten(parse(files['/w/star.xdbml'], opts('/w/star.xdbml')));
+    const flat = flatten(parseDocument(files['/w/star.xdbml'], opts('/w/star.xdbml')));
     const kinds = flat.statements.map((x) => x.kind).join(',');
     const inBody = flat.statements.some((x) => x.kind === 'ContainerDeclaration' && x.body.some((b) => (b as { kind: string }).kind === 'DiagramViewDeclaration'));
     return kinds === 'ContainerDeclaration,DiagramViewDeclaration' && !inBody ? undefined : kinds;
   });
   check('v0.6.3 §4.1: the parser reads xdbml: 0.6.3 and refuses a later patch it does not know', () => {
-    parse('xdbml: 0.6.3\nTable a { id int [pk] }');
-    try { parse('xdbml: 0.6.99\nTable a { id int [pk] }'); } catch { return undefined; }
+    parseDocument('xdbml: 0.6.3\nTable a { id int [pk] }');
+    try { parseDocument('xdbml: 0.6.99\nTable a { id int [pk] }'); } catch { return undefined; }
     return '0.6.99 accepted';
   });
   check('v0.6.3: Monarch colors a category keyword before { only', () => {
@@ -4984,7 +4987,7 @@ DiagramView reports { Tables { orders } }`,
     return bad.length ? bad.join('; ') : undefined;
   });
   check('v0.6.3 §18.1: a diagram view takes a note in its brackets or its body; the body note wins', () => {
-    const doc = parse(`xdbml: 0.6
+    const doc = parseDocument(`xdbml: 0.6
 Table a { id int [pk] }
 DiagramView b1 [note: 'In brackets', x_owner: 'data-team'] { Tables { a } }
 DiagramView b2 {
@@ -5017,7 +5020,7 @@ DiagramView b5 { Tables { a } }`);
       '/w/m2.xdbml': "xdbml: 0.6\nreuse { entity a; entity b as bb, type T, } from './lib'",
     };
     const opts = (f: string) => ({ filePath: f, readFile: (p: string) => files[p] } as ParseOptions);
-    const names = (f: string) => flatten(parse(files[f], opts(f))).statements.map((x) => (x as { name?: string }).name).join(',');
+    const names = (f: string) => flatten(parseDocument(files[f], opts(f))).statements.map((x) => (x as { name?: string }).name).join(',');
     const a = names('/w/m1.xdbml');
     const b = names('/w/m2.xdbml');
     return a === 'a,bb,T' && b === a ? undefined : `${a} / ${b}`;
@@ -5047,7 +5050,7 @@ DiagramView b5 { Tables { a } }`);
     };
     const readFile = (p: string) => { read.push(p); if (!(p in files)) throw new Error(`no ${p}`); return files[p]; };
     const src = "xdbml: 0.6\nreuse { entity a } from './lib'\nreuse { type T } from '../shared/types'";
-    const doc = parse(src, { filePath: 'C:\\repo\\models\\main.xdbml', readFile } as ParseOptions);
+    const doc = parseDocument(src, { filePath: 'C:\\repo\\models\\main.xdbml', readFile } as ParseOptions);
     const names = flatten(doc).statements.map((x) => (x as { name?: string }).name).join(',');
     if (names !== 'a,T') return `names: ${names}`;
     return read.join(' ') === 'C:/repo/models/lib.xdbml C:/repo/shared/types.xdbml' ? undefined : read.join(' ');
@@ -5060,7 +5063,7 @@ DiagramView b5 { Tables { a } }`);
       'C:/repo/b.xdbml': "xdbml: 0.6\nreuse { entity a } from './a'\nEntity b { id int [pk] }",
     };
     const readFile = (p: string) => { reads.push(p); if (!(p in files)) throw new Error(`no ${p}`); return files[p]; };
-    const doc = parse("xdbml: 0.6\nreuse { entity b } from './b'\nEntity a { id int [pk] }", { filePath: 'C:\\repo\\a.xdbml', readFile } as ParseOptions);
+    const doc = parseDocument("xdbml: 0.6\nreuse { entity b } from './b'\nEntity a { id int [pk] }", { filePath: 'C:\\repo\\a.xdbml', readFile } as ParseOptions);
     const names = flatten(doc).statements.map((x) => (x as { name?: string }).name).join(',');
     return reads.join(' ') === 'C:/repo/b.xdbml' && names === 'b,a' ? undefined : `${reads.join(' ')} / ${names}`;
   });
@@ -5071,7 +5074,7 @@ DiagramView b5 { Tables { a } }`);
   check('v0.6.3: every DIAGRAM_VIEW_CATEGORIES keyword opens a category', () => {
     const bad: string[] = [];
     for (const k of keywordArrays.DIAGRAM_VIEW_CATEGORIES) {
-      const doc = parse(`xdbml: 0.6\nDiagramView v { ${k} { * } }`);
+      const doc = parseDocument(`xdbml: 0.6\nDiagramView v { ${k} { * } }`);
       const v = doc.statements[0];
       if (v.kind !== 'DiagramViewDeclaration' || v.categories.length !== 1) bad.push(k);
     }
@@ -5113,7 +5116,7 @@ function runGrammarCorpusTests (): TestResult[] {
     let outcome: 'clean' | 'warning' | 'error';
     let detail = '';
     try {
-      const d = resolveNames(parse(block[1], options)).diagnostics;
+      const d = resolveNames(parseDocument(block[1], options)).diagnostics;
       const errors = d.filter((x) => x.severity === 'error');
       const warnings = d.filter((x) => x.severity === 'warning');
       outcome = errors.length ? 'error' : warnings.length ? 'warning' : 'clean';
