@@ -30,7 +30,6 @@
  */
 
 export * from './ast.ts';
-export * from './zod.ts';
 export type { ParseOptions } from './parse-options.ts';
 export { tokenize, TokenKind, LexError } from './lexer.ts';
 export type { Token } from './lexer.ts';

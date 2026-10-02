@@ -23,8 +23,8 @@ import {
   resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
   viewSourceQuery,
   diagramViewMembers, diagramViews, diagramViewNote,
-  XDbmlDocumentZodType,
 } from '../src/index.ts';
+import { XDbmlDocumentZodType } from '../src/zod.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
   BSON_TYPES,
