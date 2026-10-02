@@ -2,7 +2,7 @@
 
 The parser for [xDBML](https://xdbml.org) (eXtended Database Markup Language), a strict superset of DBML 3.13.6 for describing the shape and meaning of structured and semi-structured data. It turns xDBML source into an abstract syntax tree (AST), resolves module imports, and resolves names, with precise line and column diagnostics.
 
-Dependency-free, it runs in Node.js and all modern browsers. It powers the [playground](https://xdbml.org/playground/), the hosted render API, and the MCP server. It exports its AST as both TypeScript types and [Zod](https://zod.dev) types. Zod types are exposed through a subpath: `@xdbml/parse/zod`. Using them requires the consuming application to install `zod`, which is an optional peer dependency of this package.
+Framework-free and dependency-free, it runs anywhere JavaScript runs: the browser, Node, Cloudflare Workers. It powers the [playground](https://xdbml.org/playground/), the hosted render API, and the MCP server. It exports its AST as both TypeScript types and [Zod](https://zod.dev) types. Zod types are exposed through a subpath: `@xdbml/parse/zod`. Using them requires the consuming application to install `zod`, which is an optional peer dependency of this package.
 
 ## Install
 
