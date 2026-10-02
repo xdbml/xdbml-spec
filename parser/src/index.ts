@@ -20,12 +20,17 @@
  *     Run the name-resolution pass. Returns a symbol table for queries
  *     and a list of diagnostics (unresolved references, name conflicts).
  *     The AST is not mutated. Flattens the input internally.
+ * 
+ *   XDbmlDocument and all AST TypeScript types
+ * 
+ *   XDbmlDocumentZodType and all AST Zod types
  *
  * The parser is DBML-3.13.6 compatible: a document without an `xdbml: ...`
  * version header still parses, and DBML constructs are preserved.
  */
 
 export * from './ast.ts';
+export * from './zod.ts';
 export { tokenize, TokenKind, LexError } from './lexer.ts';
 export type { Token } from './lexer.ts';
 export { parse, Parser, ParseError, SUPPORTED_XDBML_VERSION, compareVersions } from './parser.ts';

@@ -10,8 +10,9 @@
  * in a terminal; falls back to plain text when stdout is not a TTY.
  */
 
+import process from 'node:process';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 
@@ -22,6 +23,7 @@ import {
   resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
   viewSourceQuery,
   diagramViewMembers, diagramViews,
+  XDbmlDocumentZodType,
 } from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
@@ -52,6 +54,38 @@ const CYAN = isTTY ? '\x1b[36m' : '';
 const DIM = isTTY ? '\x1b[2m' : '';
 const RESET = isTTY ? '\x1b[0m' : '';
 
+function canonicalJson (value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
+
+function canonicalize (value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      const child = (value as Record<string, unknown>)[key];
+      if (child !== undefined) out[key] = canonicalize(child);
+    }
+    return out;
+  }
+  return value;
+}
+
+function assertDocumentSchema (doc: XDbmlDocument): void {
+  const parsed = XDbmlDocumentZodType.safeParse(doc);
+  if (!parsed.success) {
+    const issues = parsed.error.issues.slice(0, 5).map((issue) => `${issue.path.join('.')}: ${issue.message}`);
+    throw new Error(issues.join('; '));
+  }
+  const before = canonicalJson(doc);
+  const after = canonicalJson(parsed.data);
+  if (before !== after) {
+    let i = 0;
+    while (i < before.length && i < after.length && before[i] === after[i]) i += 1;
+    throw new Error(`Zod schema changed the document near ${JSON.stringify(before.slice(Math.max(0, i - 40), i + 80))}`);
+  }
+}
+
 interface TestResult {
   name: string;
   passed: boolean;
@@ -81,6 +115,10 @@ function fail (name: string, error: string): TestResult {
 
 function runExampleTests (): TestResult[] {
   const results: TestResult[] = [];
+  const rejected = XDbmlDocumentZodType.safeParse({ kind: 'XDbmlDocument' });
+  results.push(rejected.success
+    ? fail('Zod schema rejects an incomplete document', 'accepted')
+    : ok('Zod schema rejects an incomplete document'));
   let files: string[];
   try {
     files = readdirSync(examplesDir)
@@ -97,6 +135,7 @@ function runExampleTests (): TestResult[] {
     const source = readFileSync(path, 'utf8');
     try {
       const doc = parse(source);
+      assertDocumentSchema(doc);
       const summary = summarizeDocument(doc);
       results.push(ok(`Parse ${filename}`, summary));
     } catch (e) {
@@ -4336,6 +4375,7 @@ Entity e { id int [pk] }`,
   for (const c of cases) {
     try {
       const doc = parse(c.source, c.options ?? {});
+      assertDocumentSchema(doc);
       if (c.expectError) {
         // Parser accepted input that should have been rejected.
         results.push(fail(c.name, 'expected parse to throw, but it succeeded'));
@@ -4391,6 +4431,7 @@ function runKeywordConsistencyTests (): TestResult[] {
   function tryParse (source: string, expect: (doc: XDbmlDocument) => string | null): string | null {
     try {
       const doc = parse(source);
+      assertDocumentSchema(doc);
       return expect(doc);
     } catch (e) {
       return (e as Error).message;

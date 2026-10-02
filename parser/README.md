@@ -1,8 +1,8 @@
 # @xdbml/parse
 
-The parser for [xDBML](https://xdbml.org) (eXtended Database Markup Language), a strict superset of DBML 3.13.6 for describing the shape and meaning of structured and semi-structured data. It turns xDBML source into an abstract syntax tree, resolves module imports, and resolves names, with precise line and column diagnostics.
+The parser for [xDBML](https://xdbml.org) (eXtended Database Markup Language), a strict superset of DBML 3.13.6 for describing the shape and meaning of structured and semi-structured data. It turns xDBML source into an abstract syntax tree (AST), resolves module imports, and resolves names, with precise line and column diagnostics.
 
-Framework-free and dependency-free, it runs anywhere JavaScript runs: the browser, Node, Cloudflare Workers. It powers the [playground](https://xdbml.org/playground/), the hosted render API, and the MCP server.
+It works in Node.js and all modern browsers. It powers the [playground](https://xdbml.org/playground/), the hosted render API, and the MCP server. It exports its AST as both TypeScript types and [Zod](https://zod.dev) types, which this package depends on.
 
 ## Install
 
@@ -46,7 +46,7 @@ try {
 }
 ```
 
-The package also exports `tokenize`, `LexError`, `Parser`, `SymbolTable`, and the AST types.
+The package also exports `tokenize`, `LexError`, `Parser`, `SymbolTable`, as well as the AST TypeScript types and Zod types.
 
 For diagram views (spec §18), `diagramViews(doc)` lists the `DiagramView` declarations, and `diagramViewMembers(doc, name)` returns the entities, database views and sticky notes a diagram view contains, with the Containers, TableGroups and supertype groups a renderer frames or draws around them.
 
