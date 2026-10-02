@@ -96,7 +96,7 @@ import {
   TokenKind,
   tokenize,
 } from './lexer.ts';
-import { resolveImport, classifyModuleSource, ModuleSourceError } from './module-resolver.ts';
+import { resolveImport, classifyModuleSource, ModuleSourceError, toForwardSlashes } from './module-resolver.ts';
 import type { ParseFn } from './module-resolver.ts';
 
 export class ParseError extends Error {
@@ -2762,7 +2762,7 @@ export function parse (source: string, options: ParseOptions = {}): XDbmlDocumen
   // (so a file that tries to reuse itself triggers cycle detection at
   // the outer level too). If no filePath is provided, the stack is empty.
   const initialStack = new Set<string>();
-  if (options.filePath) initialStack.add(options.filePath);
+  if (options.filePath) initialStack.add(toForwardSlashes(options.filePath));
   const doc = new Parser(tokens, options, initialStack, 0).parseDocument();
   applyEntityAliases(doc);
   return doc;

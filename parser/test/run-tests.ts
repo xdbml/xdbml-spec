@@ -4998,6 +4998,31 @@ DiagramView b5 { Tables { a } }`);
     if (old !== 'warning:named-type-shadows-builtin') return `0.5: ${old}`;
     return native === '' ? undefined : `native: ${native}`;
   });
+  check('v0.6.4 §27: a Windows importer path with backslashes resolves next to the importer', () => {
+    const read: string[] = [];
+    const files: Record<string, string> = {
+      'C:/repo/models/lib.xdbml': 'xdbml: 0.6\nEntity a { id int [pk] }',
+      'C:/repo/shared/types.xdbml': 'xdbml: 0.6\nType T string',
+    };
+    const readFile = (p: string) => { read.push(p); if (!(p in files)) throw new Error(`no ${p}`); return files[p]; };
+    const src = "xdbml: 0.6\nreuse { entity a } from './lib'\nreuse { type T } from '../shared/types'";
+    const doc = parse(src, { filePath: 'C:\\repo\\models\\main.xdbml', readFile } as ParseOptions);
+    const names = flatten(doc).statements.map((x) => (x as { name?: string }).name).join(',');
+    if (names !== 'a,T') return `names: ${names}`;
+    return read.join(' ') === 'C:/repo/models/lib.xdbml C:/repo/shared/types.xdbml' ? undefined : read.join(' ');
+  });
+  check('v0.6.4 §27: an import cycle stops at the importer when its path uses backslashes', () => {
+    // a imports b, which imports a back: the importer is on the resolution
+    // stack, so b's directive is not followed and a is never read.
+    const reads: string[] = [];
+    const files: Record<string, string> = {
+      'C:/repo/b.xdbml': "xdbml: 0.6\nreuse { entity a } from './a'\nEntity b { id int [pk] }",
+    };
+    const readFile = (p: string) => { reads.push(p); if (!(p in files)) throw new Error(`no ${p}`); return files[p]; };
+    const doc = parse("xdbml: 0.6\nreuse { entity b } from './b'\nEntity a { id int [pk] }", { filePath: 'C:\\repo\\a.xdbml', readFile } as ParseOptions);
+    const names = flatten(doc).statements.map((x) => (x as { name?: string }).name).join(',');
+    return reads.join(' ') === 'C:/repo/b.xdbml' && names === 'b,a' ? undefined : `${reads.join(' ')} / ${names}`;
+  });
   check('v0.6.4 Appendix D: use and reuse need xdbml: 0.2 or later', () => {
     const msg = parseError("xdbml: 0.1\nreuse { entity a } from './lib'");
     return msg.includes('needs xdbml: 0.2 or later') ? undefined : msg || 'accepted';

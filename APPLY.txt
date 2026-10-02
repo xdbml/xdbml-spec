@@ -1,5 +1,18 @@
-xDBML -- 0.6.4: the parser agrees with every case of the grammar test corpus
-Base: origin/main 33c3bed (release 0.6.3).
+xDBML -- 0.6.4, revision 2: the parser agrees with every case of the grammar test corpus
+Base: origin/main 33c3bed (release 0.6.3). Replaces revision 1: copy every
+file below, over revision 1 if you applied it.
+
+REVISION 2
+  On Windows, seven corpus cases failed: their imports were read from
+  C:\...\parser\catalog.xdbml instead of grammar\fixtures\. The cause is a
+  parser bug, not the corpus: the module resolver split the importer's path
+  on forward slashes only, so a native Windows path lost its directory and
+  './catalog' was read from the working directory. Any caller passing a
+  Windows path as filePath had the same failure. The resolver now reads
+  backslashes as forward slashes; module keys and import cycles use forward
+  slashes, which Node's fs accepts on Windows. Two new tests: a backslash
+  importer path resolving './lib' and '../shared/types', and an import
+  cycle stopping at such an importer.
 
 A reader reported two cases of grammar/test-cases.md that the parser
 contradicts. Running every case against the 0.6.3 parser found thirteen:
@@ -14,7 +27,12 @@ parser\src\parser.ts
   commas and semicolons optional. They required a comma between items.
   use / reuse in a document declaring xdbml: 0.1 is a parse error (the
   module system belongs to v0.2, Appendix D item 3).
-  SUPPORTED_XDBML_VERSION 0.6.4.
+  SUPPORTED_XDBML_VERSION 0.6.4. The initial import-cycle stack holds the
+  importer's path with forward slashes (revision 2).
+parser\src\module-resolver.ts
+  toForwardSlashes(): a local path with backslashes reads as forward
+  slashes; resolveModulePath uses it for the importer path and the source,
+  and treats C:/... as absolute. (Revision 2.)
 parser\src\name-resolver.ts
   invalid-tuple-positions: positions not running from [0] without a gap,
   each once (8.6). named-type-shadows-builtin: a Type named like a
@@ -23,8 +41,9 @@ parser\src\name-resolver.ts
 parser\test\run-tests.ts
   New group "v0.6.4 grammar test corpus": every case of
   grammar\test-cases.md, imports resolved against grammar\fixtures\.
-  Four targeted checks. Type Money in two older tests becomes Type Amount;
-  the version-refusal tests use 0.6.5 and 0.6.99. 433 tests (298 before).
+  Six targeted checks, two of them on Windows paths. Type Money in two
+  older tests becomes Type Amount; the version-refusal tests use 0.6.5
+  and 0.6.99. 435 tests (298 before).
 grammar\test-cases.md, grammar\fixtures\ (NEW: catalog, auth, billing,
 internal-helpers, other)
   Ref cases and the polyglot case declare their entities; module cases
@@ -59,6 +78,7 @@ FILES
   grammar\fixtures\other.xdbml                         (NEW)
   grammar\test-cases.md                                (EDIT)
   mcp\src\reference.ts                                 (EDIT, generated)
+  parser\src\module-resolver.ts                        (EDIT, revision 2)
   parser\src\name-resolver.ts                          (EDIT)
   parser\src\parser.ts                                 (EDIT)
   parser\test\examples\06-financial-services.xdbml     (EDIT)
@@ -84,6 +104,7 @@ copy /Y "%DELTA%\grammar\fixtures\internal-helpers.xdbml"            "%REPO%\gra
 copy /Y "%DELTA%\grammar\fixtures\other.xdbml"                       "%REPO%\grammar\fixtures\other.xdbml"
 copy /Y "%DELTA%\grammar\test-cases.md"                              "%REPO%\grammar\test-cases.md"
 copy /Y "%DELTA%\mcp\src\reference.ts"                               "%REPO%\mcp\src\reference.ts"
+copy /Y "%DELTA%\parser\src\module-resolver.ts"                      "%REPO%\parser\src\module-resolver.ts"
 copy /Y "%DELTA%\parser\src\name-resolver.ts"                        "%REPO%\parser\src\name-resolver.ts"
 copy /Y "%DELTA%\parser\src\parser.ts"                               "%REPO%\parser\src\parser.ts"
 copy /Y "%DELTA%\parser\test\examples\06-financial-services.xdbml"   "%REPO%\parser\test\examples\06-financial-services.xdbml"
@@ -95,7 +116,7 @@ copy /Y "%DELTA%\spec\v0.6.md"                                       "%REPO%\spe
 
 cd /d %REPO%
 npm run check
-  Expect: parser 433 passed (298 before), with a "v0.6.4 grammar test
+  Expect: parser 435 passed (298 before), with a "v0.6.4 grammar test
   corpus" group of 131 cases; renderer 247, viewport 14, interactive-mount
   47; MCP 77 (75 before: the new Wrong and Right blocks); from-mongodb 24;
   playground 55; check-vsix in sync; 165 spec buttons; docs build
@@ -125,6 +146,11 @@ VERIFICATION RUN HERE (Linux, Node 22)
 ---------------------------------------
   npm run check     exit 0 with the counts above
   corpus            131 cases, 0 mismatches (13 against the 0.6.3 parser)
+  corpus, Windows   the same 131 cases with the importer path
+  paths             C:\Repos\Hackolade\xdbml-spec\grammar\fixtures\__case__.xdbml
+                    and readFile mapped onto this checkout: 0 mismatches;
+                    the fixtures were read as C:/Repos/.../grammar/fixtures/
+                    catalog.xdbml, auth, billing and internal-helpers
   repo scan         no other Type under a built-in name in examples,
                     spec v0.6, llms.txt, help or tests
   em-dashes         none in any changed or new file
