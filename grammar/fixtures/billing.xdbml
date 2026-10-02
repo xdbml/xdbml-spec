@@ -1,0 +1,8 @@
+xdbml: 0.2
+
+// Fixture for the "aliased import" case of grammar/test-cases.md (spec §27.9).
+
+Entity users {
+  id         int [pk]
+  account_no varchar
+}

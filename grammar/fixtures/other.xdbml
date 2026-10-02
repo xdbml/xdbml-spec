@@ -1,0 +1,12 @@
+xdbml: 0.2
+
+// Fixture for the case of grammar/test-cases.md that imports a Project,
+// which no import may name (spec §27.3).
+
+Project some_project {
+  targets: [PostgreSQL]
+}
+
+Entity widgets {
+  id int [pk]
+}

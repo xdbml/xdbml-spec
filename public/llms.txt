@@ -82,7 +82,7 @@ A note goes either in the brackets as `note: '...'` or in the body as `Note: '..
 
 A field line is `name  type  [settings]`.
 
-Types. In a physical model, use the target's own type names; any type name passes through as written: `varchar(255)`, `decimal(14,2)`, `smallint`, `serial`, `bytea`, `timestamptz` for PostgreSQL, `number(10)` and `varchar2(255)` for Oracle, `objectId`, `string`, `int32`, `int64`, `Decimal128`, `Date` for MongoDB. A logical model uses generic names: `int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`, `timestamp`. A field typed by an Enum or a Type names it (`status service_status`, `address Address`); an Enum declared in a Container is named with its qualifier (`status core.job_status`). A type name close to a declared Type or Enum (`Adress` next to `Type Address`) draws a `possible-type-typo` warning.
+Types. In a physical model, use the target's own type names; any type name passes through as written: `varchar(255)`, `decimal(14,2)`, `smallint`, `serial`, `bytea`, `timestamptz` for PostgreSQL, `number(10)` and `varchar2(255)` for Oracle, `objectId`, `string`, `int32`, `int64`, `Decimal128`, `Date` for MongoDB. A logical model uses generic names: `int`, `bigint`, `varchar`, `decimal(p,s)`, `boolean`, `date`, `timestamp`. A field typed by an Enum or a Type names it (`status service_status`, `address Address`); an Enum declared in a Container is named with its qualifier (`status core.job_status`). A type name close to a declared Type or Enum (`Adress` next to `Type Address`) draws a `possible-type-typo` warning. A Type never takes the name of a built-in type, in any letter case: a field typed `money` or `Money` gets the built-in `money`, so `Type Money` is an error; name it `MonetaryAmount`.
 
 Collection and structured types use xDBML's own syntax, never the Spark, SQL or TypeScript forms:
 
@@ -766,6 +766,22 @@ Table people {
     name
     (email, name)
   }
+}
+```
+
+Naming a Type after a built-in type. `money`, `date`, `json`, `uuid` and the other built-in types take precedence over a Type of the same name, whatever its letter case, so the fields would never reach the Type.
+
+```xdbml
+// Wrong (named-type-shadows-builtin): money is a built-in type
+Type Money {
+  amount   decimal(19,4) [not null]
+  currency varchar(3)    [not null]
+}
+
+// Right
+Type MonetaryAmount {
+  amount   decimal(19,4) [not null]
+  currency varchar(3)    [not null]
 }
 ```
 

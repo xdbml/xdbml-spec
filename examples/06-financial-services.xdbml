@@ -22,7 +22,7 @@ Project banking {
 // Reusable types
 // ============================================================
 
-Type Money {
+Type MonetaryAmount {
   Note: 'A monetary amount in a specific currency. Used throughout banking flows.'
 
   amount    decimal(19,4) [not null,
@@ -153,8 +153,8 @@ Container accounts [type: schema] {
                                  enum: ['checking', 'savings', 'money_market', 'cd', 'credit'],
                                  business_term: 'Account Type',
                                  note: 'Determines applicable interest rates, fees, and regulatory treatment']
-    balance           Money     [note: 'Current account balance; updated atomically with every posted transaction']
-    available_balance Money     [note: 'Available for withdrawal; differs from balance when pending holds exist']
+    balance           MonetaryAmount [note: 'Current account balance; updated atomically with every posted transaction']
+    available_balance MonetaryAmount [note: 'Available for withdrawal; differs from balance when pending holds exist']
     opened_at         timestamp [not null,
                                  granularity: second,
                                  note: 'Account opening timestamp']
@@ -193,8 +193,8 @@ Container accounts [type: schema] {
     effective_date    date      [not null,
                                  business_term: 'Value Date',
                                  note: 'Business date for interest calculation; may differ from posted_at for backdated entries']
-    amount            Money     [note: 'Transaction amount; sign convention varies by transaction type']
-    running_balance   Money     [note: 'Account balance after this transaction posted; denormalized for statement generation']
+    amount            MonetaryAmount [note: 'Transaction amount; sign convention varies by transaction type']
+    running_balance   MonetaryAmount [note: 'Account balance after this transaction posted; denormalized for statement generation']
 
     transaction_type oneOf {
       deposit object {

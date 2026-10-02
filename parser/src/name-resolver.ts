@@ -163,7 +163,10 @@ export type DiagnosticCode =
   | 'unresolved-diagram-view-name'
   | 'ambiguous-diagram-view-name'
   | 'diagram-view-wrong-category'
-  | 'unknown-diagram-view-setting';
+  | 'unknown-diagram-view-setting'
+  // Rules checked from v0.6.4 (spec §8.6, §15.2); warnings before v0.6
+  | 'invalid-tuple-positions'
+  | 'named-type-shadows-builtin';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -401,6 +404,28 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 7: diagram views (spec §18.6).
   diagnostics.push(...checkDiagramViews(flat));
+
+  // Pass 8: Types under the name of a built-in type (spec §15.2).
+  for (const t of flat.statements) {
+    if (t.kind !== 'TypeDeclaration' || !BUILTIN_TYPES.has(t.name.toLowerCase())) continue;
+    {
+      diagnostics.push({
+        severity: 'error',
+        code: 'named-type-shadows-builtin',
+        message: `Type '${t.name}' takes the name of a built-in type. Built-in types take precedence, so a field ` +
+          `typed ${t.name.toLowerCase()} keeps the built-in type: rename the Type (spec §15.2).`,
+        span: t.span,
+      });
+    }
+  }
+
+  // The parser checked neither rule before v0.6.4, so a document declaring
+  // a version earlier than 0.6 draws a warning and stays valid (§8.6, §15.2).
+  if (!versionAtLeast(flat, '0.6')) {
+    for (const d of diagnostics) {
+      if (d.code === 'invalid-tuple-positions' || d.code === 'named-type-shadows-builtin') d.severity = 'warning';
+    }
+  }
 
   return { diagnostics, symbols };
 }
@@ -785,11 +810,24 @@ function resolveTypeExpression (
     case 'SetType':
       resolveTypeExpression(expr.elementType, symbols, diagnostics);
       return;
-    case 'TupleType':
+    case 'TupleType': {
+      // Spec §8.6: positions form a contiguous range from 0, each once.
+      const positions = expr.elements.map((e) => e.position);
+      const sorted = [...positions].sort((a, b) => a - b);
+      if (sorted.some((p, i) => p !== i)) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'invalid-tuple-positions',
+          message: `Tuple positions ${positions.map((p) => `[${p}]`).join(', ')} do not run from [0] to ` +
+            `[${positions.length - 1}], each once: a tuple numbers its elements from 0 without a gap (spec §8.6).`,
+          span: expr.span,
+        });
+      }
       for (const elem of expr.elements) {
         resolveTypeExpression(elem.type, symbols, diagnostics);
       }
       return;
+    }
     case 'JsonType':
       // No nested type expressions.
       return;

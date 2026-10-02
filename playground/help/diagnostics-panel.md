@@ -51,6 +51,10 @@ A few conditions change severity with the version the document declares. In an `
 - **`duplicate-primary-key`**: an entity declares its primary key in two places, for example `[pk]` on a field and a `pk` entry in `indexes`.
 - **`null-in-primary-key`**: `null` written on a field of the primary key.
 - **`unresolved-index-field`**: an index names a field the entity does not declare.
+- **`invalid-tuple-positions`**: the positions of a tuple, `array [ [0] ... [1] ... ]`, skip a number, repeat one, or do not start at `[0]`. A tuple of three elements numbers them `[0]`, `[1]` and `[2]` (spec §8.6).
+- **`named-type-shadows-builtin`**: a Type takes the name of a built-in type, such as `Type Money` or `Type varchar`, in any letter case. Built-in types take precedence, so the fields typed with that name never reach the Type: rename it (spec §15.2).
+
+The last two are errors in a document declaring v0.6 or later, and warnings in a document declaring an earlier version, since no parser checked them before v0.6.4.
 - **`duplicate-diagram-view-category`**: a diagram view writes one category twice, or both `Schemas` and `Containers`, which are one category. Write each category once. In a document without a version declaration it is a warning, since DBML accepts it, and the two lists combine (spec §18.6).
 
 Diagram views (spec §18) add five errors of their own, whatever version the document declares:
