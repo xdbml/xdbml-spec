@@ -1,156 +1,116 @@
-xDBML -- 0.6.4, revision 2: the parser agrees with every case of the grammar test corpus
-Base: origin/main 33c3bed (release 0.6.3). Replaces revision 1: copy every
-file below, over revision 1 if you applied it.
+xDBML -- dependency security update (Dependabot alerts)
+Base: origin/main b72912c (release 0.6.4). Built 2026-10-02.
+No spec, parser, renderer or playground source changes. No version number.
 
-REVISION 2
-  On Windows, seven corpus cases failed: their imports were read from
-  C:\...\parser\catalog.xdbml instead of grammar\fixtures\. The cause is a
-  parser bug, not the corpus: the module resolver split the importer's path
-  on forward slashes only, so a native Windows path lost its directory and
-  './catalog' was read from the working directory. Any caller passing a
-  Windows path as filePath had the same failure. The resolver now reads
-  backslashes as forward slashes; module keys and import cycles use forward
-  slashes, which Node's fs accepts on Windows. Two new tests: a backslash
-  importer path resolving './lib' and '../shared/types', and an import
-  cycle stopping at such an importer.
+HOW TO APPLY
+------------
+Extract this folder anywhere outside the repo and run:
 
-A reader reported two cases of grammar/test-cases.md that the parser
-contradicts. Running every case against the 0.6.3 parser found thirteen:
-four parser gaps and nine defective cases. This package fixes all of them,
-makes the parser's test suite run every case, sets the release date, and
-ends with the release.
+    apply.cmd                      (repo at C:\Repos\Hackolade\xdbml-spec)
+    apply.cmd D:\path\to\xdbml-spec
+
+apply.cmd checks that the seven files are unchanged since b72912c, copies
+them, runs npm ci in root, playground, renderer, mcp and api, runs npm audit
+on the four lockfiles that had findings, then runs the gate (npm run check,
+mcp check:reference and type-check, api type-check). It stops at the first
+failure and does not commit. When it ends green it prints the three git
+commands to commit and push.
+
+The push triggers CI and deploy.yml, which rebuilds the site with npm ci
+from the new lockfiles. GitHub closes each Dependabot alert on its own once
+the patched lockfile is on main. The two Workers need no redeploy: see
+"Workers" below.
+
+WHAT WAS REPORTED
+-----------------
+npm audit on the eight lockfiles at b72912c: 17 findings in four of them.
+parser, renderer, from-mongodb and tools\vscode-extension were clean.
+Dependabot counts one alert per advisory per lockfile, so its list is
+longer (undici alone carries 15 advisories, in two lockfiles).
+
+  root (VitePress site)   vite 5.4.21, esbuild 0.21.5, postcss 8.5.14,
+                          nanoid 3.3.12, and vitepress through vite
+  playground              vite 7.3.3, esbuild 0.27.7, postcss 8.5.15,
+                          nanoid 3.3.12
+  api, mcp                wrangler 4.102 / 4.103 through miniflare 4,
+                          undici 7.28.0 and sharp 0.34.5
+
+Every one of them is build or development tooling. None of the affected
+packages is bundled into the site, the playground or either Worker.
 
 WHAT CHANGED
 ------------
-parser\src\parser.ts
-  Import item lists are list bodies (spec 3.9, 27.2): one item per line,
-  commas and semicolons optional. They required a comma between items.
-  use / reuse in a document declaring xdbml: 0.1 is a parse error (the
-  module system belongs to v0.2, Appendix D item 3).
-  SUPPORTED_XDBML_VERSION 0.6.4. The initial import-cycle stack holds the
-  importer's path with forward slashes (revision 2).
-parser\src\module-resolver.ts
-  toForwardSlashes(): a local path with backslashes reads as forward
-  slashes; resolveModulePath uses it for the importer path and the source,
-  and treats C:/... as absolute. (Revision 2.)
-parser\src\name-resolver.ts
-  invalid-tuple-positions: positions not running from [0] without a gap,
-  each once (8.6). named-type-shadows-builtin: a Type named like a
-  built-in type, in any letter case (15.2). Both errors from v0.6,
-  warnings in a document declaring an earlier version.
-parser\test\run-tests.ts
-  New group "v0.6.4 grammar test corpus": every case of
-  grammar\test-cases.md, imports resolved against grammar\fixtures\.
-  Six targeted checks, two of them on Windows paths. Type Money in two
-  older tests becomes Type Amount; the version-refusal tests use 0.6.5
-  and 0.6.99. 435 tests (298 before).
-grammar\test-cases.md, grammar\fixtures\ (NEW: catalog, auth, billing,
-internal-helpers, other)
-  Ref cases and the polyglot case declare their entities; module cases
-  read the fixtures; the import equivalence case splits in two (same
-  headings and anchors kept); tuple and built-in cases declare 0.6, each
-  with a 0.5 twin expecting the warning; the newer-patch case declares
-  0.6.99. The introduction and "Test runner" describe the real runner.
-examples\06-financial-services.xdbml, parser\test\examples\ (same file),
-renderer\test\goldens\06-financial-services.svg
-  Type Money becomes Type MonetaryAmount: its four Money fields had the
-  built-in money type all along. The golden differs only in those four
-  type labels.
-spec\v0.6.md
-  3.9 lists import item lists among the list bodies; 27.2 says so; 8.6
-  and 15.2 state the severities; What's new gains a v0.6.4 sentence.
-public\llms.txt, mcp\src\reference.ts (regenerated)
-  A Common mistake for Type Money, and the rule in Fields.
-playground\help\diagnostics-panel.md
-  The two new codes and their severities.
-CHANGELOG.md
-  v0.6.4 section, released 2026-10-02; v0.6.3 superseded.
+playground\package-lock.json
+  Lockfile only, within the ranges package.json already declares:
+  vite 7.3.3 -> 7.3.6, esbuild 0.27.7 -> 0.28.2, postcss 8.5.15 -> 8.5.28,
+  nanoid 3.3.12 -> 3.3.19.
 
-FILES
------
-  APPLY.txt                                            (EDIT)
-  CHANGELOG.md                                         (EDIT)
-  examples\06-financial-services.xdbml                 (EDIT)
-  grammar\fixtures\auth.xdbml                          (NEW)
-  grammar\fixtures\billing.xdbml                       (NEW)
-  grammar\fixtures\catalog.xdbml                       (NEW)
-  grammar\fixtures\internal-helpers.xdbml              (NEW)
-  grammar\fixtures\other.xdbml                         (NEW)
-  grammar\test-cases.md                                (EDIT)
-  mcp\src\reference.ts                                 (EDIT, generated)
-  parser\src\module-resolver.ts                        (EDIT, revision 2)
-  parser\src\name-resolver.ts                          (EDIT)
-  parser\src\parser.ts                                 (EDIT)
-  parser\test\examples\06-financial-services.xdbml     (EDIT)
-  parser\test\run-tests.ts                             (EDIT)
-  playground\help\diagnostics-panel.md                 (EDIT)
-  public\llms.txt                                      (EDIT)
-  renderer\test\goldens\06-financial-services.svg      (EDIT)
-  spec\v0.6.md                                         (EDIT)
+api\package.json, api\package-lock.json
+mcp\package.json, mcp\package-lock.json
+  wrangler ^4.146.0 (was ^4.102.0 / ^4.103.0). Every patched wrangler
+  release has a peer dependency on @cloudflare/workers-types ^5, so that
+  moves with it: ^5.20261002.1 (was ^4). Through wrangler: miniflare
+  5.20261001.0-alpha, workerd 1.20261001.1, undici 7.29.1, sharp 0.35.4.
+  In mcp, partyserver 0.5.8 -> 0.5.10 (a dependency of agents): 0.5.8
+  accepts workers-types ^4 only, 0.5.10 accepts ^4 or ^5. It is the only
+  package that moved and ends up in a Worker bundle.
 
-APPLY (cmd.exe, opened in the unzipped folder)
-----------------------------------------------
-set REPO=C:\Repos\Hackolade\xdbml-spec
-set DELTA=%CD%
+package.json, package-lock.json (root)
+  New "overrides" entry: vitepress resolves vite ^6.4.3 instead of its own
+  ^5.4.14. vite 5.4.21 -> 6.4.3, esbuild 0.21.5 -> 0.25.12, postcss
+  8.5.14 -> 8.5.28, nanoid 3.3.12 -> 3.3.19. vitepress stays at 1.6.4.
 
-if not exist "%REPO%\grammar\fixtures" mkdir "%REPO%\grammar\fixtures"
-copy /Y "%DELTA%\APPLY.txt"                                          "%REPO%\APPLY.txt"
-copy /Y "%DELTA%\CHANGELOG.md"                                       "%REPO%\CHANGELOG.md"
-copy /Y "%DELTA%\examples\06-financial-services.xdbml"               "%REPO%\examples\06-financial-services.xdbml"
-copy /Y "%DELTA%\grammar\fixtures\auth.xdbml"                        "%REPO%\grammar\fixtures\auth.xdbml"
-copy /Y "%DELTA%\grammar\fixtures\billing.xdbml"                     "%REPO%\grammar\fixtures\billing.xdbml"
-copy /Y "%DELTA%\grammar\fixtures\catalog.xdbml"                     "%REPO%\grammar\fixtures\catalog.xdbml"
-copy /Y "%DELTA%\grammar\fixtures\internal-helpers.xdbml"            "%REPO%\grammar\fixtures\internal-helpers.xdbml"
-copy /Y "%DELTA%\grammar\fixtures\other.xdbml"                       "%REPO%\grammar\fixtures\other.xdbml"
-copy /Y "%DELTA%\grammar\test-cases.md"                              "%REPO%\grammar\test-cases.md"
-copy /Y "%DELTA%\mcp\src\reference.ts"                               "%REPO%\mcp\src\reference.ts"
-copy /Y "%DELTA%\parser\src\module-resolver.ts"                      "%REPO%\parser\src\module-resolver.ts"
-copy /Y "%DELTA%\parser\src\name-resolver.ts"                        "%REPO%\parser\src\name-resolver.ts"
-copy /Y "%DELTA%\parser\src\parser.ts"                               "%REPO%\parser\src\parser.ts"
-copy /Y "%DELTA%\parser\test\examples\06-financial-services.xdbml"   "%REPO%\parser\test\examples\06-financial-services.xdbml"
-copy /Y "%DELTA%\parser\test\run-tests.ts"                           "%REPO%\parser\test\run-tests.ts"
-copy /Y "%DELTA%\playground\help\diagnostics-panel.md"               "%REPO%\playground\help\diagnostics-panel.md"
-copy /Y "%DELTA%\public\llms.txt"                                    "%REPO%\public\llms.txt"
-copy /Y "%DELTA%\renderer\test\goldens\06-financial-services.svg"    "%REPO%\renderer\test\goldens\06-financial-services.svg"
-copy /Y "%DELTA%\spec\v0.6.md"                                       "%REPO%\spec\v0.6.md"
+DECISION TO CONFIRM: THE VITE OVERRIDE
+--------------------------------------
+The vite advisories cover every release up to 6.4.2. The 5.x line is no
+longer patched (5.4.21 is its last release), and VitePress 1.6.4, the
+latest stable, requires ^5.4.14. npm audit therefore reports "no fix
+available" for vitepress. Three ways out:
 
-cd /d %REPO%
-npm run check
-  Expect: parser 435 passed (298 before), with a "v0.6.4 grammar test
-  corpus" group of 131 cases; renderer 247, viewport 14, interactive-mount
-  47; MCP 77 (75 before: the new Wrong and Right blocks); from-mongodb 24;
-  playground 55; check-vsix in sync; 165 spec buttons; docs build
-  complete.
-git add -A
-git commit -m "0.6.4: the parser agrees with every case of the grammar test corpus"
+  1. Override vite to 6.4.3 under VitePress 1.6.4.   <-- in this package
+     VitePress declares ^5.4.14, so this runs outside its stated range.
+     @vitejs/plugin-vue 5.2.x, which VitePress uses, lists vite 6 as
+     supported. The built site has the same 316 files and 83 pages as
+     the Vite 5 build, with identical text on the pages compared.
+  2. Move to VitePress 2.0.0-alpha.20 (Vite 8). An alpha, with theme and
+     config changes to review. A separate delta if you want it.
+  3. Leave the root as is and dismiss the alerts as "dev server only".
+     The vite and esbuild findings affect vitepress dev on a developer
+     machine, several of them on Windows specifically.
 
-RELEASE
+Remove the override when the site moves to VitePress 2. If you prefer 2
+or 3, drop package.json and package-lock.json from the commit: the other
+five files stand on their own.
+
+WORKERS
 -------
-tools\release-preflight.cmd 0.6.4
-  Expect every check to pass, including the new "[ok]   curl".
-tools\release.cmd 0.6.4
-  If it stops anywhere, run tools\release.cmd 0.6.4 again: nothing is
-  published twice, and it waits for npm to serve each package in full.
-  The VS Code extension does not change in 0.6.4.
+wrangler, miniflare, workerd, undici and sharp run on the machine that
+builds and deploys. They are not part of what is uploaded, so the Workers
+in production were not exposed and need no redeploy for this. The next
+tools\release.cmd run deploys with the new wrangler, and mcp then bundles
+partyserver 0.5.10. Both Workers were bundled with wrangler 4.146.0 here
+(wrangler deploy --dry-run): api 258 KiB, mcp 5589 KiB.
 
-LIVE CHECKS, once the site has redeployed
-  https://xdbml.org/grammar/test-cases#valid-multi-line-and-comma-separated-equivalence
-    the multi-line form alone, then the single-line form as the next case
-  https://xdbml.org/grammar/test-cases#invalid-tuple-positions-not-contiguous
-    declares xdbml: 0.6, followed by its 0.5 twin
-  https://xdbml.org/playground/index.html?example=06-financial-services
-    no diagnostics; balance and amount fields read MonetaryAmount
-  npm view @xdbml/parse version   prints 0.6.4
+VERIFIED ON LINUX, NODE 22.22.2, FROM A CLEAN CLONE
+---------------------------------------------------
+npm ci in root, playground, mcp, api: all four install from the new
+lockfiles, npm audit reports 0 vulnerabilities in each.
+npm run check, exit 0: parser 435 passed; renderer 247, 14 and 47 passed;
+mcp 77 passed; from-mongodb 24 passed; playground 55 passed; check:vsix
+and check:spec-links pass; playground type-check and build; full site
+build.
+mcp: check:reference in sync, type-check clean against workers-types 5.
+api: type-check clean against workers-types 5.
+vitepress dev on Vite 6: serves / and /spec/current.
+The four lockfiles keep their Windows binaries (esbuild, rollup, sharp,
+lightningcss, tailwind oxide, rolldown).
+Not verified here: the run on Windows. apply.cmd does that on your machine.
 
-VERIFICATION RUN HERE (Linux, Node 22)
----------------------------------------
-  npm run check     exit 0 with the counts above
-  corpus            131 cases, 0 mismatches (13 against the 0.6.3 parser)
-  corpus, Windows   the same 131 cases with the importer path
-  paths             C:\Repos\Hackolade\xdbml-spec\grammar\fixtures\__case__.xdbml
-                    and readFile mapped onto this checkout: 0 mismatches;
-                    the fixtures were read as C:/Repos/.../grammar/fixtures/
-                    catalog.xdbml, auth, billing and internal-helpers
-  repo scan         no other Type under a built-in name in examples,
-                    spec v0.6, llms.txt, help or tests
-  em-dashes         none in any changed or new file
+SEEN ON THE WAY, NOT CHANGED
+----------------------------
+api\package-lock.json records @xdbml/render as a link to ..\renderer, not
+as the 0.6.4 registry package that api\package.json names. It was already
+so at b72912c. Consequence: api type-check and deploy read renderer\dist,
+and a fresh clone fails api type-check until the renderer is built.
+APPLY.txt and apply.cmd from the 0.6.4 delivery are committed at the repo
+root.

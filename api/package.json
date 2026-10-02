@@ -13,8 +13,8 @@
     "@xdbml/render": "0.6.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260617.1",
+    "@cloudflare/workers-types": "^5.20261002.1",
     "typescript": "^5.7.3",
-    "wrangler": "^4.102.0"
+    "wrangler": "^4.146.0"
   }
 }

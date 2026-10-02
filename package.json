@@ -38,5 +38,10 @@
     "url": "https://github.com/xdbml/xdbml-spec.git"
   },
   "license": "Apache-2.0",
-  "homepage": "https://xdbml.org"
+  "homepage": "https://xdbml.org",
+  "overrides": {
+    "vitepress": {
+      "vite": "^6.4.3"
+    }
+  }
 }
