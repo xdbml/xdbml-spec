@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.6.5 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-10-03
 
 A backward-compatible point release of the v0.6 draft. An entity may declare internal definitions: named types visible only inside the entity, which a JSON Schema document holds under `$defs` (§15.8). The `Type` declarations of v0.1 stay the reusable types of the whole Project. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.
 

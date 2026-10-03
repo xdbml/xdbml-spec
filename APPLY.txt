@@ -1,78 +1,79 @@
-xDBML -- 0.6.5, delta 4: VS Code 0.6.5, llms.txt and the MCP reference (internal definitions)
-Base: origin/main f78776f (0.6.5, delta 3). Built 2026-10-03.
+xDBML -- release 0.6.5 (internal definitions)
+Base: origin/main e624f51 (0.6.5, delta 4). Built 2026-10-03.
 
-The VS Code extension and the TextMate grammar color `definitions` as a
-block keyword before `{`. llms.txt, and the MCP reference generated from
-it, describe internal definitions (spec 15.8) with three common mistakes.
-This is the last delta of 0.6.5 before the release.
+The last step of 0.6.5: the release date in CHANGELOG.md, then the release
+with tools\release.cmd and the VS Code extension on the Marketplace.
 
 HOW TO APPLY
 ------------
 Unzip the archive at the root of the clone (C:\Repos\Hackolade\xdbml-spec),
-so that apply.cmd lands next to package.json and the other files land on
-their own paths. Then, from cmd.exe at the repo root:
+then, from cmd.exe at the repo root:
 
     apply.cmd
 
-apply.cmd copies nothing. It checks that f78776f is in the history of HEAD
-and that no commit since then touched the delivery's files, that every
-file of the archive holds this delivery's content, and that the working
-tree holds no other change. It then runs the gate (npm run check, mcp
-type-check, the TextMate grammar test). It stops at the first failure and
-does not commit. When it ends green it prints the git commands to commit
-and push. No dependency change in the repo's packages; the .vsix is built.
+apply.cmd copies nothing. It checks that e624f51 is in the history of HEAD
+and that no commit since then touched the delivery's files; that each
+unzipped file holds this delivery's content; and that the working tree
+holds no uncommitted change outside the delivery. It then runs the gate
+(npm run check, mcp type-check) and prints the commands below. It does
+not commit, publish or deploy.
 
 WHAT CHANGED
 ------------
-parser\src\keywords.ts
-  `definitions` in BLOCK_KEYWORDS, which the TextMate build reads.
-tools\textmate\xdbml.tmLanguage.json, tools\textmate\scripts\test.mjs
-  Grammar rebuilt with build.mjs; the test checks `definitions {` and
-  `Definitions{` as block keywords, and `definitions varchar` and
-  `definitions object {` as field names.
-tools\vscode-extension\package.json, package-lock.json, README.md,
-CHANGELOG.md, syntaxes\xdbml.tmLanguage.json
-  Version 0.6.5 (0.6.4 changed no highlighting and is skipped); the
-  grammar synced by scripts\prepare.mjs.
-tools\vscode-extension\xdbml-0.6.5.vsix (NEW)
-  Packaged with npx @vscode/vsce package after npm ci in the extension
-  folder; dist\extension.js came out unchanged. The archive holds version
-  0.6.5 and the grammar with `definitions`.
-public\llms.txt
-  `definitions {` among the block words of the ground rules and in the
-  Entity row of "What goes where"; a section "Internal definitions" after
-  "Nesting and polymorphism"; three common mistakes ($defs, a relational
-  target, an internal definition named from another entity); checklist
-  item 13.
-mcp\src\reference.ts
-  Regenerated from llms.txt (npm run generate:reference).
 CHANGELOG.md
-  v0.6.5 Tooling entries for the extension and for llms.txt.
+  v0.6.5: Released 2026-10-03 (was "unreleased"). If you release on
+  another day, change that line before committing.
 APPLY.txt, apply.cmd
   This delivery.
 
-VERIFIED ON LINUX, NODE 22.22.2, AT f78776f PLUS THIS DELTA
------------------------------------------------------------
+RELEASE, in order, from the repo root
+-------------------------------------
+1. Commit and push the delivery (apply.cmd prints the commands).
+
+2. tools\release-preflight.cmd 0.6.5
+   Expect every check to pass. 0.6.5 is not on npm for @xdbml/parse or
+   @xdbml/render.
+
+3. tools\release.cmd 0.6.5
+   Publishes @xdbml/parse 0.6.5 first, then @xdbml/render 0.6.5 against
+   it, deploys the MCP server and the rendering API, commits "release
+   0.6.5", tags v0.6.5 and creates the GitHub release with notes from the
+   v0.6.5 section of CHANGELOG.md. If it stops anywhere, run the same
+   command again: nothing is published twice.
+   The renderer imports entityDefinitions, new in the 0.6.5 parser, so
+   its build must run against @xdbml/parse 0.6.5. release.cmd sets that
+   dependency before building. Rehearsed here: parser built from source,
+   renderer built against that build (tsc -p tsconfig.build.json, exit
+   0), API type-check against the resulting renderer\dist (exit 0).
+
+4. VS Code extension 0.6.5 (tools\vscode-extension\PUBLISH.txt)
+     cd tools\vscode-extension
+     npx @vscode/vsce publish
+   or upload tools\vscode-extension\xdbml-0.6.5.vsix at
+   https://marketplace.visualstudio.com/manage/publishers/xdbml
+
+VERIFIED ON LINUX, NODE 22.22.2, AT e624f51 PLUS THIS DELIVERY
+--------------------------------------------------------------
 npm run check, exit 0: parser 465 passed; renderer 269, 14 and 47 passed;
-mcp 84 passed (77 before: the new llms.txt section and the six Wrong and
-Right parts of the three mistakes, each checked against the parser);
-from-mongodb 24 passed; playground 58 passed; check:vsix: xdbml-0.6.5.vsix
-is in sync with the extension version; 166 spec buttons open their
-snippet; playground type-check; full site build.
-mcp type-check clean; check:reference in sync.
-tools\textmate\scripts\test.mjs: all checks passed.
-Not verified here: the run on Windows, which apply.cmd does.
+mcp 84 passed; from-mongodb 24 passed; playground 58 passed; check:vsix
+in sync (0.6.5); 166 spec buttons open their snippet; site build.
+mcp type-check clean. scripts\release-notes.mjs 0.6.5 produces the notes
+from the CHANGELOG section, without the Status and Released lines.
 
-NEXT
-----
-The release of 0.6.5 with tools\release.cmd: the parser first, so that the
-renderer, the MCP server and the API build against @xdbml/parse 0.6.5. The
-extension is published from tools\vscode-extension (PUBLISH.txt).
-
-SEEN ON THE WAY, NOT CHANGED
-----------------------------
-A type name that matches an internal definition of another entity,
-`customers.Address` or a bare `Address`, passes through as a target-native
-type with no diagnostic; llms.txt now lists it as a mistake. A warning for
-that case would be a parser change and a spec addition to 15.8.6, for you
-to decide.
+LIVE CHECKS, once the site has redeployed
+-----------------------------------------
+  https://xdbml.org/spec/v0.6#_15-8-internal-definitions-new-in-v0-6-5
+    15.8 with its six subsections; "View in playground" on the 15.8.1
+    example opens it, and billing expands to street, city and country.
+  https://xdbml.org/playground/  Examples menu
+    "Internal definitions (v0.6.5)": claim_submission and claims each
+    expand their own Address; the entity inspector of claim_submission
+    lists seven internal definitions.
+  https://xdbml.org/llms.txt
+    the section "Internal definitions" and checklist item 13.
+  MCP server, validate_xdbml on
+    xdbml: 0.6
+    Project p { targets: Oracle }
+    Table t { a A
+      definitions { A { x int } } }
+    reports definitions-unsupported-target.
