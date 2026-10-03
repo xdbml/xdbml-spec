@@ -15,8 +15,8 @@
  *     dimensions) put the shared dims in a band between the facts.
  *
  * Container membership is respected: each container's members are arranged
- * as one block and the blocks are packed, so the auto-derived container
- * boxes stay tight and non-overlapping. Output is snapped to the canvas
+ * as one block and the blocks are packed in rows sized for a landscape view,
+ * so the auto-derived container boxes stay tight and non-overlapping. Output is snapped to the canvas
  * grid pitch so orthogonal edges run in clean channels.
  */
 import type { DiagramModel, EntityLayout, UserPositions } from './layout.ts';
@@ -28,7 +28,10 @@ const GRID = 20;        // canvas grid pitch (CSS background-size: 20px 20px)
 const GUTTER_X = 64;    // horizontal gap between entity columns
 const GUTTER_Y = 56;    // vertical gap between entity rows
 const BLOCK_GAP = 96;   // gap between packed container / component blocks
-const SWEEPS = 3;       // barycentre refinement passes (relational)
+const SWEEPS = 3;        // barycentre refinement passes (relational)
+// Width-to-height ratio of the view a fresh arrangement should fill: the
+// diagram pane of the playground, and most screens, are landscape.
+const ASPECT = 1.6;
 // Extra row spacing in a component that holds a supertype hierarchy: room
 // between a supertype and its subtypes for the stem, the symbol and the
 // buses of several groups (spec 12.9).
@@ -316,18 +319,41 @@ function cost (
   return total;
 }
 
+// Ring offsets in the order nearestFree tries them: by distance in steps
+// (a cell beside, above or below before a cell across a corner), then on
+// the same row before the same column, then left before right and below
+// before above. Trying the corner cells first put the second entity of a
+// pair diagonally, a row lower: with rows as tall as the tallest entity of
+// the diagram, it landed far below its neighbour, and the edge between
+// them took a bend that a side-by-side pair does not need.
+const RING_OFFSETS: Array<Array<{ dc: number; dr: number }>> = [];
+function ringOffsets (r: number): Array<{ dc: number; dr: number }> {
+  let ring = RING_OFFSETS[r];
+  if (ring) return ring;
+  ring = [];
+  for (let dc = -r; dc <= r; dc++) {
+    for (let dr = -r; dr <= r; dr++) {
+      if (Math.max(Math.abs(dc), Math.abs(dr)) === r) ring.push({ dc, dr }); // ring only
+    }
+  }
+  ring.sort((a, b) =>
+    (Math.abs(a.dc) + Math.abs(a.dr)) - (Math.abs(b.dc) + Math.abs(b.dr))
+    || Math.abs(a.dr) - Math.abs(b.dr)
+    || a.dc - b.dc
+    || b.dr - a.dr);
+  RING_OFFSETS[r] = ring;
+  return ring;
+}
+
 // Spiral outward from the rounded target to the first unoccupied cell.
 function nearestFree (target: Cell, occupied: Set<string>): Cell {
   const key = (col: number, row: number): string => `${col},${row}`;
   if (!occupied.has(key(target.col, target.row))) return { ...target };
   for (let r = 1; r < 256; r++) {
-    for (let dc = -r; dc <= r; dc++) {
-      for (let dr = -r; dr <= r; dr++) {
-        if (Math.max(Math.abs(dc), Math.abs(dr)) !== r) continue; // ring only
-        const col = target.col + dc;
-        const row = target.row + dr;
-        if (!occupied.has(key(col, row))) return { col, row };
-      }
+    for (const { dc, dr } of ringOffsets(r)) {
+      const col = target.col + dc;
+      const row = target.row + dr;
+      if (!occupied.has(key(col, row))) return { col, row };
     }
   }
   return { ...target };
@@ -571,21 +597,54 @@ function groupBlock (
   return { pos: norm, width: (maxX - minX) + padL + padR, height: (maxY - minY) + padTop + padBottom };
 }
 
-// Shelf packing: place blocks left to right, wrap to a new row past a
-// target width chosen to keep the whole arrangement roughly square.
+// Shelf packing: place blocks left to right and wrap to a new row past a
+// target width. The target is the one, among the widths at which a row can
+// break, whose arrangement a landscape view (ASPECT) shows at the largest
+// zoom: the smallest max(width / ASPECT, height), and the smaller area on a
+// tie. A single target derived from the total area wrapped a short block
+// under a tall one, leaving the space beside the tall one empty and the
+// whole arrangement taller than the view.
+interface Shelf {
+  out: Array<{ block: Block; ox: number; oy: number }>;
+  width: number;
+  height: number;
+}
+
+function shelfPack (blocks: Block[], target: number): Shelf {
+  const out: Array<{ block: Block; ox: number; oy: number }> = [];
+  let x = 0; let y = 0; let rowH = 0; let width = 0;
+  for (const b of blocks) {
+    if (x > 0 && x + b.width > target) { x = 0; y += rowH + BLOCK_GAP; rowH = 0; }
+    out.push({ block: b, ox: x, oy: y });
+    width = Math.max(width, x + b.width);
+    x += b.width + BLOCK_GAP;
+    rowH = Math.max(rowH, b.height);
+  }
+  return { out, width, height: y + rowH };
+}
+
 function packBlocks (blocks: Block[]): Array<{ block: Block; ox: number; oy: number }> {
   if (blocks.length === 1) return [{ block: blocks[0] as Block, ox: 0, oy: 0 }];
   let area = 0; let widest = 0;
   for (const b of blocks) { area += b.width * b.height; widest = Math.max(widest, b.width); }
-  const target = Math.max(widest, Math.sqrt(area) * 1.4);
-
-  const out: Array<{ block: Block; ox: number; oy: number }> = [];
-  let x = 0; let y = 0; let rowH = 0;
+  // Candidate targets: the width of each row prefix, the widest block, and
+  // the former area-derived target, so a layout it found stays available.
+  const targets = new Set<number>([widest, Math.max(widest, Math.sqrt(area) * 1.4)]);
+  let run = 0;
   for (const b of blocks) {
-    if (x > 0 && x + b.width > target) { x = 0; y += rowH + BLOCK_GAP; rowH = 0; }
-    out.push({ block: b, ox: x, oy: y });
-    x += b.width + BLOCK_GAP;
-    rowH = Math.max(rowH, b.height);
+    run += b.width;
+    targets.add(Math.max(widest, run));
+    run += BLOCK_GAP;
   }
-  return out;
+  let best: Shelf | undefined;
+  let bestScore = Infinity;
+  for (const t of [...targets].sort((a, b) => a - b)) {
+    const shelf = shelfPack(blocks, t);
+    const score = Math.max(shelf.width / ASPECT, shelf.height);
+    if (score < bestScore || (score === bestScore && best && shelf.width * shelf.height < best.width * best.height)) {
+      best = shelf;
+      bestScore = score;
+    }
+  }
+  return (best as Shelf).out;
 }

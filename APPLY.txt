@@ -1,8 +1,27 @@
-xDBML -- release 0.6.5 (internal definitions)
-Base: origin/main e624f51 (0.6.5, delta 4). Built 2026-10-03.
+xDBML -- renderer: automatic arrangement (after 0.6.5)
+Base: origin/main e836600 (release 0.6.5). Built 2026-10-03.
 
-The last step of 0.6.5: the release date in CHANGELOG.md, then the release
-with tools\release.cmd and the VS Code extension on the Marketplace.
+Example 17 opened in the playground put claim_submission far down its
+Container, a row below adjuster_note. Two causes in the automatic
+arrangement (renderer\src\layout\auto-arrange.ts), which draws the first
+layout of every diagram without saved positions:
+
+  1. A related entity that found its preferred cell taken went to the
+     first free cell of the surrounding ring, and the ring was scanned
+     from a corner: the second entity of a pair landed diagonally, one
+     row lower. Rows are as tall as the tallest entity of the diagram
+     (claim_submission, 1188 px), so "one row lower" meant 1244 px down.
+     The ring is now scanned beside first (left, then right), then below
+     and above, and across a corner last.
+  2. Container blocks were packed in rows of a width derived from the
+     total area, which wrapped the finance block under the tall intake
+     block once intake had two columns. The packer now tries each width
+     at which a row can break and keeps the arrangement a landscape view
+     (1.6:1) shows at the largest zoom, the smaller area on a tie.
+
+Example 17 now opens as in your second screenshot: adjuster_note, then
+claim_submission at the top of intake, and the three Containers in one
+row.
 
 HOW TO APPLY
 ------------
@@ -11,69 +30,61 @@ then, from cmd.exe at the repo root:
 
     apply.cmd
 
-apply.cmd copies nothing. It checks that e624f51 is in the history of HEAD
+apply.cmd copies nothing. It checks that e836600 is in the history of HEAD
 and that no commit since then touched the delivery's files; that each
 unzipped file holds this delivery's content; and that the working tree
 holds no uncommitted change outside the delivery. It then runs the gate
-(npm run check, mcp type-check) and prints the commands below. It does
-not commit, publish or deploy.
+(npm run check, mcp type-check) and prints the commit commands.
 
 WHAT CHANGED
 ------------
+renderer\src\layout\auto-arrange.ts
+  ringOffsets(): the order nearestFree tries the cells of a ring (steps,
+  then same row, then left before right and below before above).
+  shelfPack() and packBlocks(): row width chosen among the break widths
+  by the zoom a landscape view needs; ASPECT = 1.6.
+renderer\test\run-tests.ts
+  A related pair sits side by side on one row; example 17 puts
+  claim_submission beside adjuster_note, top-aligned, and its three
+  Containers in one row.
+renderer\test\goldens\*.svg (16 of 17; 03-iot-telemetry unchanged)
+  Regenerated with UPDATE_GOLDENS=1. Only positions and canvas sizes
+  differ. Examples 16 and 17 checked visually, before and after.
 CHANGELOG.md
-  v0.6.5: Released 2026-10-03 (was "unreleased"). If you release on
-  another day, change that line before committing.
+  "Unreleased" section above v0.6.5 (see the question below).
 APPLY.txt, apply.cmd
   This delivery.
 
-RELEASE, in order, from the repo root
--------------------------------------
-1. Commit and push the delivery (apply.cmd prints the commands).
+EFFECT ON THE SEVENTEEN EXAMPLES (relational arrangement)
+---------------------------------------------------------
+                         before      ring only   this delivery
+  relationships whose
+  entities share a row
+  or a column            27 of 63    57 of 63    59 of 63
+  zoom to fit a
+  1100x700 pane
+  (geometric mean)       0.687       0.742       0.840
+  example 17 zoom        0.28        0.43        0.55
 
-2. tools\release-preflight.cmd 0.6.5
-   Expect every check to pass. 0.6.5 is not on npm for @xdbml/parse or
-   @xdbml/render.
-
-3. tools\release.cmd 0.6.5
-   Publishes @xdbml/parse 0.6.5 first, then @xdbml/render 0.6.5 against
-   it, deploys the MCP server and the rendering API, commits "release
-   0.6.5", tags v0.6.5 and creates the GitHub release with notes from the
-   v0.6.5 section of CHANGELOG.md. If it stops anywhere, run the same
-   command again: nothing is published twice.
-   The renderer imports entityDefinitions, new in the 0.6.5 parser, so
-   its build must run against @xdbml/parse 0.6.5. release.cmd sets that
-   dependency before building. Rehearsed here: parser built from source,
-   renderer built against that build (tsc -p tsconfig.build.json, exit
-   0), API type-check against the resulting renderer\dist (exit 0).
-
-4. VS Code extension 0.6.5 (tools\vscode-extension\PUBLISH.txt)
-     cd tools\vscode-extension
-     npx @vscode/vsce publish
-   or upload tools\vscode-extension\xdbml-0.6.5.vsix at
-   https://marketplace.visualstudio.com/manage/publishers/xdbml
-
-VERIFIED ON LINUX, NODE 22.22.2, AT e624f51 PLUS THIS DELIVERY
+VERIFIED ON LINUX, NODE 22.22.2, AT e836600 PLUS THIS DELIVERY
 --------------------------------------------------------------
-npm run check, exit 0: parser 465 passed; renderer 269, 14 and 47 passed;
-mcp 84 passed; from-mongodb 24 passed; playground 58 passed; check:vsix
-in sync (0.6.5); 166 spec buttons open their snippet; site build.
-mcp type-check clean. scripts\release-notes.mjs 0.6.5 produces the notes
-from the CHANGELOG section, without the Status and Released lines.
+npm run check, exit 0: parser 465; renderer 272 (269 before: the three
+new checks), viewport 14, interactive 47; mcp 84; from-mongodb 24;
+playground 58 (the arranged diagram views of example 16 keep their
+members inside their frames); check:vsix in sync; 166 spec buttons; site
+build. mcp type-check clean.
 
-LIVE CHECKS, once the site has redeployed
------------------------------------------
-  https://xdbml.org/spec/v0.6#_15-8-internal-definitions-new-in-v0-6-5
-    15.8 with its six subsections; "View in playground" on the 15.8.1
-    example opens it, and billing expands to street, city and country.
-  https://xdbml.org/playground/  Examples menu
-    "Internal definitions (v0.6.5)": claim_submission and claims each
-    expand their own Address; the entity inspector of claim_submission
-    lists seven internal definitions.
-  https://xdbml.org/llms.txt
-    the section "Internal definitions" and checklist item 13.
-  MCP server, validate_xdbml on
-    xdbml: 0.6
-    Project p { targets: Oracle }
-    Table t { a A
-      definitions { A { x int } } }
-    reports definitions-unsupported-target.
+WHERE IT SHOWS
+--------------
+The playground, once the site redeploys: every document opened without
+a saved layout. A layout saved in your browser for example 17 stays as
+it is; Arrange in the diagram toolbar applies the new arrangement.
+renderToSVG, the MCP render tool and the rendering API use the published
+@xdbml/render, so they change at the next release.
+
+QUESTION
+--------
+CHANGELOG.md lists this under "Unreleased". Either it rides with the next
+spec change, or it ships now as 0.6.6. A 0.6.6 of the packages with the
+spec still at 0.6.5 would need SUPPORTED_XDBML_VERSION and the spec
+version to move together, or the package and language versions to part.

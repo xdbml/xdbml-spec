@@ -366,6 +366,33 @@ Entity other { a Address }`;
   assertWellFormed('v0.6.5 internal definitions render', renderToSVG(src));
 }
 
+{
+  // Auto-arrange (relational): the second entity of a related pair goes
+  // beside the first, on the same row, never across a corner; and the
+  // container blocks of example 17 share one row, so claim_submission sits
+  // at the top of `intake` beside adjuster_note instead of a row lower.
+  const pair = buildDiagram(flatten(parse(`xdbml: 0.6
+Entity a { id int [pk], b_id int [ref: > b.id] }
+Entity b { id int [pk] }`)));
+  const placed = applyUserPositions(pair, autoArrange(pair, 'relational'));
+  const pa = placed.entities.find((e) => e.id === 'a')?.bounds;
+  const pb = placed.entities.find((e) => e.id === 'b')?.bounds;
+  check('arrange: two related entities sit side by side on one row',
+    !!pa && !!pb && pa.y === pb.y && pa.x !== pb.x, JSON.stringify({ pa, pb }));
+  const ex17 = examples.find((e) => e.name === '17-internal-definitions');
+  if (ex17) {
+    const base = buildDiagram(flatten(parse(ex17.source)));
+    const m = applyUserPositions(base, autoArrange(base, 'relational'));
+    const at = (id: string) => m.entities.find((e) => e.id === id)?.bounds;
+    const note = at('intake.adjuster_note'); const sub = at('intake.claim_submission');
+    check('arrange: example 17 puts claim_submission beside adjuster_note, top-aligned',
+      !!note && !!sub && note.y === sub.y && note.x < sub.x, JSON.stringify({ note, sub }));
+    const tops = m.containers.map((c) => c.bounds.y);
+    check('arrange: example 17 lays its three containers out in one row',
+      tops.length === 3 && tops.every((y) => y === tops[0]), tops.join(','));
+  }
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

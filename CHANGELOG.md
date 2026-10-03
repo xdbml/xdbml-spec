@@ -4,6 +4,18 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
+## Unreleased
+
+Changes on `main` since v0.6.5. The playground serves them as soon as they are pushed; the npm packages, the MCP server and the rendering API take them at the next release.
+
+### Changed
+
+#### Tooling
+
+- **Renderer: automatic arrangement (`autoArrange`, relational and star)**: two changes to the first layout of a diagram, the one the playground draws for a document without saved positions and the one `renderToSVG` draws by default. The free cell next to a placed entity is now searched beside it first, then above or below it, and across a corner last; the second entity of a related pair used to land across a corner, a row lower, and with rows as tall as the tallest entity of the diagram it could sit far below its neighbour, as `claim_submission` did in example 17. The blocks of the containers, and of unconnected groups of entities, are packed in rows of the width that lets a landscape view show the arrangement at the largest zoom, instead of a width derived from the total area. Over the seventeen examples, relationships whose two entities share a row or a column go from 27 of 63 to 59 of 63, and the zoom at which a 1100 by 700 pane fits the whole arrangement rises by 22% on average. A saved layout is unchanged; Arrange in the diagram toolbar applies the new arrangement to it. The goldens of sixteen examples change accordingly.
+
+---
+
 ## v0.6.5 -- 2026
 
 **Status**: Draft -- current
