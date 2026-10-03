@@ -1,116 +1,82 @@
-xDBML -- dependency security update (Dependabot alerts)
-Base: origin/main b72912c (release 0.6.4). Built 2026-10-02.
-No spec, parser, renderer or playground source changes. No version number.
+xDBML -- 0.6.5, delta 1: spec text (internal definitions)
+Base: origin/main 666eaba (dependency security update). Built 2026-10-03.
+
+An entity may declare internal definitions, the named types a JSON Schema
+document holds under $defs, in a definitions { } block (spec 15.8). This
+delta is the spec text and the changelog. The parser does not read the
+block yet: grammar and parser come in delta 2, so the new snippets get no
+"View in playground" button until then.
 
 HOW TO APPLY
 ------------
-Extract this folder anywhere outside the repo and run:
+Extract this folder anywhere outside the repo and run, from cmd.exe in it:
 
     apply.cmd                      (repo at C:\Repos\Hackolade\xdbml-spec)
     apply.cmd D:\path\to\xdbml-spec
 
-apply.cmd checks that the seven files are unchanged since b72912c, copies
-them, runs npm ci in root, playground, renderer, mcp and api, runs npm audit
-on the four lockfiles that had findings, then runs the gate (npm run check,
-mcp check:reference and type-check, api type-check). It stops at the first
-failure and does not commit. When it ends green it prints the three git
-commands to commit and push.
-
-The push triggers CI and deploy.yml, which rebuilds the site with npm ci
-from the new lockfiles. GitHub closes each Dependabot alert on its own once
-the patched lockfile is on main. The two Workers need no redeploy: see
-"Workers" below.
-
-WHAT WAS REPORTED
------------------
-npm audit on the eight lockfiles at b72912c: 17 findings in four of them.
-parser, renderer, from-mongodb and tools\vscode-extension were clean.
-Dependabot counts one alert per advisory per lockfile, so its list is
-longer (undici alone carries 15 advisories, in two lockfiles).
-
-  root (VitePress site)   vite 5.4.21, esbuild 0.21.5, postcss 8.5.14,
-                          nanoid 3.3.12, and vitepress through vite
-  playground              vite 7.3.3, esbuild 0.27.7, postcss 8.5.15,
-                          nanoid 3.3.12
-  api, mcp                wrangler 4.102 / 4.103 through miniflare 4,
-                          undici 7.28.0 and sharp 0.34.5
-
-Every one of them is build or development tooling. None of the affected
-packages is bundled into the site, the playground or either Worker.
+apply.cmd checks that 666eaba is in the history of HEAD and that the four
+files are unchanged since 666eaba, copies them, and runs the gate
+(npm run check). It stops at the first failure and does not commit. When it
+ends green it prints the three git commands to commit and push. No package
+or lockfile changes, so no npm install.
 
 WHAT CHANGED
 ------------
-playground\package-lock.json
-  Lockfile only, within the ranges package.json already declares:
-  vite 7.3.3 -> 7.3.6, esbuild 0.27.7 -> 0.28.2, postcss 8.5.15 -> 8.5.28,
-  nanoid 3.3.12 -> 3.3.19.
+spec\v0.6.md
+  15.8 (NEW) Internal definitions, six subsections: declaration, with the
+  JSON Schema 2020-12 rendering of the example; visibility and resolution;
+  imports; targets; lowering; validation summary.
+  3.9  definitions entries form a list body.
+  3.10 definitions is the seventh body word, only before {.
+  15.5 entries of a definitions block are scoped to their entity.
+  27.8 a field imported on its own takes the shape of the internal
+       definition it names.
+  28   Definition node under Entity in the AST tree.
+  29.1 MongoDB, Avro and JSON Schema rows; 29.2 both lists.
+  31   item 20, reading internal definitions.
+  Appendix A: definitions among the block keywords.
+  What's new: a v0.6.5 sentence.
+CHANGELOG.md
+  v0.6.5 section, unreleased; v0.6.4 superseded by v0.6.5.
+APPLY.txt, apply.cmd
+  This delivery.
 
-api\package.json, api\package-lock.json
-mcp\package.json, mcp\package-lock.json
-  wrangler ^4.146.0 (was ^4.102.0 / ^4.103.0). Every patched wrangler
-  release has a peer dependency on @cloudflare/workers-types ^5, so that
-  moves with it: ^5.20261002.1 (was ^4). Through wrangler: miniflare
-  5.20261001.0-alpha, workerd 1.20261001.1, undici 7.29.1, sharp 0.35.4.
-  In mcp, partyserver 0.5.8 -> 0.5.10 (a dependency of agents): 0.5.8
-  accepts workers-types ^4 only, 0.5.10 accepts ^4 or ^5. It is the only
-  package that moved and ends up in a Worker bundle.
+DECISIONS APPLIED (confirmed in chat, 2026-10-03)
+-------------------------------------------------
+  Keyword definitions, no $defs alias.
+  Entry form: a Type declaration without the Type keyword.
+  An entry under the name of a Type (or an Enum) otherwise visible to the
+  entity takes precedence there and draws a warning.
+  Error for relational targets, Cassandra, ScyllaDB, Neo4j, Memgraph,
+  Neptune and JanusGraph; every other target accepts it, MongoDB included.
+  UDTs stay project-level Types; no container-scoped Types.
+  Entity bodies only, at most one block per body.
+  TablePartial fields resolve where the TablePartial is declared.
+  A field imported on its own takes the definition's shape inlined; a
+  recursive definition makes that import an error.
+  Point release 0.6.5; documents keep declaring xdbml: 0.6.
+  No version-based warning tier: no parser read the block before 0.6.5.
 
-package.json, package-lock.json (root)
-  New "overrides" entry: vitepress resolves vite ^6.4.3 instead of its own
-  ^5.4.14. vite 5.4.21 -> 6.4.3, esbuild 0.21.5 -> 0.25.12, postcss
-  8.5.14 -> 8.5.28, nanoid 3.3.12 -> 3.3.19. vitepress stays at 1.6.4.
-
-DECISION TO CONFIRM: THE VITE OVERRIDE
---------------------------------------
-The vite advisories cover every release up to 6.4.2. The 5.x line is no
-longer patched (5.4.21 is its last release), and VitePress 1.6.4, the
-latest stable, requires ^5.4.14. npm audit therefore reports "no fix
-available" for vitepress. Three ways out:
-
-  1. Override vite to 6.4.3 under VitePress 1.6.4.   <-- in this package
-     VitePress declares ^5.4.14, so this runs outside its stated range.
-     @vitejs/plugin-vue 5.2.x, which VitePress uses, lists vite 6 as
-     supported. The built site has the same 316 files and 83 pages as
-     the Vite 5 build, with identical text on the pages compared.
-  2. Move to VitePress 2.0.0-alpha.20 (Vite 8). An alpha, with theme and
-     config changes to review. A separate delta if you want it.
-  3. Leave the root as is and dismiss the alerts as "dev server only".
-     The vite and esbuild findings affect vitepress dev on a developer
-     machine, several of them on Windows specifically.
-
-Remove the override when the site moves to VitePress 2. If you prefer 2
-or 3, drop package.json and package-lock.json from the commit: the other
-five files stand on their own.
-
-WORKERS
--------
-wrangler, miniflare, workerd, undici and sharp run on the machine that
-builds and deploys. They are not part of what is uploaded, so the Workers
-in production were not exposed and need no redeploy for this. The next
-tools\release.cmd run deploys with the new wrangler, and mcp then bundles
-partyserver 0.5.10. Both Workers were bundled with wrangler 4.146.0 here
-(wrangler deploy --dry-run): api 258 KiB, mcp 5589 KiB.
-
-VERIFIED ON LINUX, NODE 22.22.2, FROM A CLEAN CLONE
----------------------------------------------------
-npm ci in root, playground, mcp, api: all four install from the new
-lockfiles, npm audit reports 0 vulnerabilities in each.
+VERIFIED ON LINUX, NODE 22.22.2, FROM A CLEAN CLONE AT 666eaba
+--------------------------------------------------------------
+npm ci in root, parser, renderer, mcp, from-mongodb, playground.
 npm run check, exit 0: parser 435 passed; renderer 247, 14 and 47 passed;
 mcp 77 passed; from-mongodb 24 passed; playground 55 passed; check:vsix
-and check:spec-links pass; playground type-check and build; full site
-build.
-mcp: check:reference in sync, type-check clean against workers-types 5.
-api: type-check clean against workers-types 5.
-vitepress dev on Vite 6: serves / and /spec/current.
-The four lockfiles keep their Windows binaries (esbuild, rollup, sharp,
-lightningcss, tailwind oxide, rolldown).
+and check:spec-links pass; playground type-check; full site build, with
+the seven 15.8 headings present in spec/v0.6.html.
+The JSON Schema block of 15.8.1, extracted from spec\v0.6.md, validates
+against the 2020-12 meta-schema; an instance whose country is "be" fails
+the CountryCode pattern through $ref.
 Not verified here: the run on Windows. apply.cmd does that on your machine.
+
+NEXT
+----
+Delta 2: grammar and parser. definitions in the ANTLR grammar, the
+Monarch and TextMate keyword lists, parseEntityBody, an entity scope in the
+name resolver, the conditions of 15.8.6, grammar test cases, and the
+"View in playground" button on the 15.8.1 snippet.
 
 SEEN ON THE WAY, NOT CHANGED
 ----------------------------
-api\package-lock.json records @xdbml/render as a link to ..\renderer, not
-as the 0.6.4 registry package that api\package.json names. It was already
-so at b72912c. Consequence: api type-check and deploy read renderer\dist,
-and a fresh clone fails api type-check until the renderer is built.
-APPLY.txt and apply.cmd from the 0.6.4 delivery are committed at the repo
-root.
+The apply.cmd committed at the repo root by 666eaba has empty Guards and
+Copy sections (nothing under [1/5] and [2/5]). This delivery replaces it.

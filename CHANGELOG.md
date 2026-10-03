@@ -4,9 +4,40 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.6.4 -- 2026
+## v0.6.5 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A backward-compatible point release of the v0.6 draft. An entity may declare internal definitions: named types visible only inside the entity, which a JSON Schema document holds under `$defs` (§15.8). The `Type` declarations of v0.1 stay the reusable types of the whole Project. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.
+
+### Added
+
+#### Spec
+
+- **Internal definitions (§15.8)**: a `definitions { }` block in the body of an entity holds entries in the form of a Type declaration without the `Type` keyword, object-shaped or scalar. An entry is visible to the fields of its entity and to the other entries of its block, and nowhere else (§15.8.2). A type name in the entity resolves among the entries before any declaration outside the entity; an entry under the name of a Type or an Enum otherwise visible draws a warning; the fields an entity receives from a TablePartial resolve where the TablePartial is declared. An imported entity brings its block along, and a field imported on its own takes the shape of the internal definition it names (§15.8.3). The block is an error in an entity whose target is relational, Cassandra, ScyllaDB, Neo4j, Memgraph, Neptune or JanusGraph (§15.8.4). A generator writes the entries as `$defs` or `definitions` in JSON Schema, named records in Avro and nested messages in Protobuf, and inlines them for other targets, MongoDB included (§15.8.5). §15.8.6 lists the conditions a parser reports.
+
+- **Conformance (§31)**: item 20, reading internal definitions.
+
+- **Appendix A**: `definitions` among the block keywords.
+
+### Changed
+
+#### Spec
+
+- **Body keywords (§3.10)**: `definitions` is the seventh word that starts an element, only when `{` follows it, so a field may still be named `definitions`. Its entries form a list body (§3.9).
+
+- **Scope (§15.5), field-level imports (§27.8), AST (§28), round-trip targets (§29.1) and lossiness boundary (§29.2)**: each takes internal definitions into account.
+
+### Not changed (compatibility)
+
+- Backward-compatible throughout. `@xdbml/parse` read no `definitions` block before 0.6.5, so no document that parsed before contains one.
+
+---
+
+## v0.6.4 -- 2026
+
+**Status**: Draft -- superseded by v0.6.5
 **Released**: 2026-10-02
 
 A point release of the v0.6 draft that brings the parser in line with four rules the spec already stated, and checks every case of the grammar test corpus. A reader reported two cases of `grammar/test-cases.md` that the parser contradicted; running all of them against the 0.6.3 parser found thirteen. Documents continue to declare `xdbml: 0.6`.
