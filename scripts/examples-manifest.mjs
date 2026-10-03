@@ -199,4 +199,13 @@ export const examples = [
     description: 'An order-to-cash model of a retailer split into subject areas with diagram views (spec \u00a718). Four Containers hold the model, `crm`, `catalog`, `sales` and `billing`, with a database view of monthly revenue and a supertype group on parties. `order_to_cash` lists `sales` and `billing` and names two entities of `sales` under Tables, so `sales` contributes those two and its database view, `billing` contributes all of its entities, and `crm.customers` appears alone in a `crm` frame (\u00a718.2). `parties` lists the `legal_nature` supertype group beside `customers`, and `catalog_usage` takes `order_lines` from `sales` without the other entities of `sales`. A relationship appears in a diagram view only when both of its ends are members, and an entity keeps the same attributes and markers in every diagram view (\u00a718.4). In the playground, the Diagram menu of the diagram toolbar switches between the full diagram and each diagram view, and each keeps its own layout.',
     generators:  [],
   },
+  {
+    file:        '17-internal-definitions.xdbml',
+    slug:        '17-internal-definitions',
+    title:       'Internal definitions (v0.6.5)',
+    domain:      'Insurance claims intake',
+    paradigm:    'JSON Schema + MongoDB + Oracle',
+    description: 'Reusable shapes scoped to one entity with the definitions block (spec \u00a715.8). The `intake` Container describes the payloads of a claims API in JSON Schema: `claim_submission` declares Address, Party, two incident shapes for a `oneOf`, Attachment and two scalar definitions with patterns, which a generator writes under `$defs` in that entity\u2019s schema, and `adjuster_note` declares a recursive Comment. The MongoDB `claims` collection declares an Address of its own, shaped differently, with no name collision, since an internal definition is visible only inside its entity (\u00a715.8.2); its generator writes the shapes in place because `$jsonSchema` has no `$ref`. The Oracle `payments` table takes no internal definitions (\u00a715.8.4) and reuses the Project-level Type MonetaryAmount, which lowers to a user-defined type. In the diagram, a field typed by an internal definition expands like one typed by a Type, and the entity inspector lists the definitions of the selected entity.',
+    generators:  [],
+  },
 ];

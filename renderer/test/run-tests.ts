@@ -332,6 +332,40 @@ DiagramView parties {
     diagramViewNames(src).join(',') === 'ordering,parties', diagramViewNames(src).join(','));
 }
 
+{
+  // v0.6.5: a field typed by an internal definition (spec §15.8) expands
+  // like one typed by a Type. Names resolve where they are written
+  // (§15.8.2): the body of a project Type uses the project's Types even
+  // when the entity has an entry of the same name, an entry is not visible
+  // in another entity, and a recursive entry stops at its second level.
+  const src = `xdbml: 0.6
+Type Inner { p int }
+Type Outer { inner Inner }
+Entity customers {
+  id      string  [not null]
+  billing Address [not null]
+  o       Outer
+  root    Node
+  definitions {
+    Address { street string, country CountryCode }
+    CountryCode string [pattern: '^[A-Z]{2}$']
+    Inner { q int }
+    Node { v int, children array [Node] }
+  }
+}
+Entity other { a Address }`;
+  const model = buildDiagram(flatten(parse(src)));
+  const rows = (id: string): string => (model.entities.find((e) => e.id === id)?.fields ?? []).map((f) => f.path).join(',');
+  check('v0.6.5: a field typed by an internal definition expands its fields',
+    rows('customers').includes('billing.street') && rows('customers').includes('billing.country'), rows('customers'));
+  check('v0.6.5: a project Type body resolves at project scope, past an entry of the same name',
+    rows('customers').includes('o.inner.p') && !rows('customers').includes('o.inner.q'), rows('customers'));
+  check('v0.6.5: a recursive internal definition expands once, without a caret on the repeat',
+    rows('customers').includes('root.children') && !rows('customers').includes('root.children.[*].v'), rows('customers'));
+  check('v0.6.5: an internal definition is not visible in another entity', rows('other') === 'a', rows('other'));
+  assertWellFormed('v0.6.5 internal definitions render', renderToSVG(src));
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

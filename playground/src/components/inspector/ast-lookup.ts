@@ -44,7 +44,7 @@ import type {
 // runner, which resolves relative paths but not the Vite alias. The
 // layout module only type-imports @xdbml/parse, so nothing else follows.
 import { collectRefDeclarations } from '../../../../renderer/src/layout/layout.ts';
-import { resolveSupertypeGroups, type ResolvedSupertypeGroup } from '@xdbml/parse';
+import { entityDefinitions, resolveSupertypeGroups, type ResolvedSupertypeGroup } from '@xdbml/parse';
 
 import type { Selection } from './selection';
 
@@ -150,9 +150,15 @@ function resolveField (doc: XDbmlDocument, entityId: string, path: string): Reso
   // references (a ScalarType whose name matches a top-level Type declaration)
   // also need step-through: traversing into a field of type `MonetaryAmount`
   // resolves to a field inside the `Type MonetaryAmount { ... }` body.
+  // Spec §15.8.2: inside the entity, its internal definitions come before
+  // the project's Types; traverseFieldPath switches to the project table
+  // when it steps into a project Type, as the diagram does.
   const typeTable = collectTypeTable(doc);
+  const local = entityDefinitions(found.entity.body as EntityDeclaration['body']);
+  const entityTable: ReadonlyMap<string, TypeDeclaration> =
+    local.size > 0 ? new Map([...typeTable, ...local]) : typeTable;
   const segments = path.split('.');
-  const traversal = traverseFieldPath(found.entity, segments, typeTable);
+  const traversal = traverseFieldPath(found.entity, segments, { entity: entityTable, project: typeTable, local: new Set(local.values()) });
   if (!traversal) return null;
   return {
     kind: 'field',
@@ -267,10 +273,22 @@ function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null
  * "{card}" in a oneOf shows the parent field's inspector. A future
  * version could open a sub-inspector for the alternative's type.
  */
+/**
+ * The type tables a field path resolves names in: the entity's scope
+ * (its internal definitions over the project's Types), the project's
+ * scope, and the entity's internal definitions themselves, so a step
+ * into a declaration knows which scope its body uses (spec §15.8.2).
+ */
+interface TypeScopes {
+  entity: ReadonlyMap<string, TypeDeclaration>;
+  project: ReadonlyMap<string, TypeDeclaration>;
+  local: ReadonlySet<TypeDeclaration>;
+}
+
 function traverseFieldPath (
   entity: EntityOrView,
   segments: readonly string[],
-  typeTable: ReadonlyMap<string, TypeDeclaration>,
+  scopes: TypeScopes,
 ): { field: FieldDeclaration; ancestors: readonly FieldDeclaration[] } | null {
   if (segments.length === 0) return null;
 
@@ -281,6 +299,7 @@ function traverseFieldPath (
 
   let currentField: FieldDeclaration = top;
   let currentType: TypeExpression = top.type;
+  let table = scopes.entity;
   const ancestors: FieldDeclaration[] = [];
 
   for (let i = 1; i < segments.length; i++) {
@@ -293,11 +312,12 @@ function traverseFieldPath (
       continue;
     }
 
-    const childField = findNamedField(currentType, seg, typeTable);
-    if (!childField) return null;
+    const child = findNamedField(currentType, seg, table, scopes);
+    if (!child) return null;
     ancestors.push(currentField);
-    currentField = childField;
-    currentType = childField.type;
+    currentField = child.field;
+    currentType = child.field.type;
+    table = child.table;
   }
 
   return { field: currentField, ancestors };
@@ -344,22 +364,27 @@ function traverseStructuralStep (type: TypeExpression, seg: string): TypeExpress
 function findNamedField (
   type: TypeExpression,
   name: string,
-  typeTable: ReadonlyMap<string, TypeDeclaration>,
-): FieldDeclaration | null {
+  table: ReadonlyMap<string, TypeDeclaration>,
+  scopes: TypeScopes,
+): { field: FieldDeclaration; table: ReadonlyMap<string, TypeDeclaration> } | null {
+  const inScope = (field: FieldDeclaration | null, next: ReadonlyMap<string, TypeDeclaration>) =>
+    (field ? { field, table: next } : null);
   switch (type.kind) {
     case 'ObjectType':
-      return findFieldInBody(type.fields, name);
+      return inScope(findFieldInBody(type.fields, name), table);
     case 'JsonType':
-      return type.fields ? findFieldInBody(type.fields, name) : null;
+      return type.fields ? inScope(findFieldInBody(type.fields, name), table) : null;
     case 'ScalarType': {
-      // A ScalarType whose name matches a top-level Type declaration is
-      // a reference to a user-defined type. Step into that type's body
-      // and look for the named field. Genuine scalars (int, varchar)
-      // don't have fields and fall through to null. Same resolution
-      // as the diagram's named-type expansion.
-      const decl = typeTable.get(type.name);
+      // A ScalarType whose name matches a Type declaration, or an internal
+      // definition of the entity, is a reference to a user-defined type.
+      // Step into its body and look for the named field. Genuine scalars
+      // (int, varchar) don't have fields and fall through to null. Same
+      // resolution as the diagram's named-type expansion: an internal
+      // definition's body stays in the entity's scope, a project Type's
+      // body resolves at project scope (spec §15.8.2).
+      const decl = table.get(type.name);
       if (!decl) return null;
-      return findFieldInBody(decl.body, name);
+      return inScope(findFieldInBody(decl.body, name), scopes.local.has(decl) ? table : scopes.project);
     }
     default:
       return null;

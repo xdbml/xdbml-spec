@@ -96,6 +96,25 @@ Table products {
 
 The same type used in multiple fields expands at each occurrence. If your schema uses a `MonetaryAmount` type in five different entities, all five places show the same `amount` + `currency` structure. The visual repetition is information: it tells you "this is the same type used here." You can collapse any individual occurrence independently if it gets too noisy.
 
+### Internal definitions
+
+An entity can declare named types of its own in a `definitions { }` block (spec §15.8), the way a JSON Schema document holds `$defs`. A field typed by one of them expands exactly like a field typed by a top-level `Type`:
+
+```xdbml
+Entity customers {
+  billing Address   // expands inline: street + city
+
+  definitions {
+    Address {
+      street string
+      city   string
+    }
+  }
+}
+```
+
+An internal definition is visible only inside its entity. Another entity can declare an `Address` of a different shape, and each expands its own. Inside the entity, a name resolves among its internal definitions first; inside the body of a top-level `Type`, among the top-level Types only, so a field of a `Type` never expands into an internal definition that shares its type's name. The entity inspector lists the internal definitions of the selected entity.
+
 ### Recursive types
 
 A `Type` can reference itself (directly or via another type), forming a cycle. For example:

@@ -38,6 +38,7 @@ These files serve three audiences:
 | Supertype groups (v0.5)                            | Parties and roles               | Logical model                           | [View](./14-supertype-groups) · <a href="/examples/14-supertype-groups.xdbml" download="14-supertype-groups.xdbml">Download</a>                                           |
 | Constraints: keys and checks (v0.6)                | Motorsport results              | Oracle schema plus a MongoDB collection | [View](./15-constraints) · <a href="/examples/15-constraints.xdbml" download="15-constraints.xdbml">Download</a>                                                          |
 | Diagram views: subject areas (v0.6.3)              | Retail order to cash            | PostgreSQL relational                   | [View](./16-diagram-views) · <a href="/examples/16-diagram-views.xdbml" download="16-diagram-views.xdbml">Download</a>                                                    |
+| Internal definitions (v0.6.5)                      | Insurance claims intake         | JSON Schema + MongoDB + Oracle          | [View](./17-internal-definitions) · <a href="/examples/17-internal-definitions.xdbml" download="17-internal-definitions.xdbml">Download</a>                               |
 <!-- examples-table:end -->
 
 The **View** link opens the rendered example with syntax highlighting and the VitePress theme. The **Download** link serves the raw `.xdbml` file for use with parsers, generators, or your own tooling.

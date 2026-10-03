@@ -31,7 +31,7 @@
  * Adding any of those is additive to this module rather than a rewrite.
  */
 
-import { diagramViewMembers, resolveSupertypeGroups } from '@xdbml/parse';
+import { diagramViewMembers, entityDefinitions, resolveSupertypeGroups } from '@xdbml/parse';
 import type {
   ContainerDeclaration,
   EdgeDeclaration,
@@ -1071,12 +1071,25 @@ function buildEntityLayout (
   const fields: FieldLayout[] = [];
   let rowY = ENTITY_HEADER_HEIGHT;
 
+  // Spec §15.8.2: inside the entity, a type name resolves among its
+  // internal definitions first, then among the project's Types; inside the
+  // body of a project Type, among the project's Types only. `entityTable`
+  // is the entity's scope, `typeTable` the project's. A row keeps the
+  // table of the place its field is written, and an expansion switches to
+  // the project table when it enters a project Type.
+  const local = entityDefinitions(entity.body as EntityDeclaration['body']);
+  const localDecls = new Set<TypeDeclaration>(local.values());
+  const entityTable: ReadonlyMap<string, TypeDeclaration> =
+    local.size > 0 ? new Map([...typeTable, ...local]) : typeTable;
+
   // Helper that walks one FieldDeclaration -- emits its own row and
   // optionally recurses into nested children. Returns the next rowY.
   //
-  // `namedTypeAncestors` tracks the named-Type names we're currently
-  // inside (during recursive expansion of NamedTypeReference). When a
-  // field's type references a Type that's already in the ancestry,
+  // `namedTypeAncestors` tracks the named-Type declarations we're
+  // currently inside (during recursive expansion of NamedTypeReference);
+  // declarations rather than names, since an internal definition and a
+  // project Type may share a name (spec §15.8.2). When a field's type
+  // references a declaration that's already in the ancestry,
   // recursion stops and the row renders without a caret -- a self-
   // contained signal to the user that they've hit a cycle. The user
   // can still see the type name; they just can't drill into it again
@@ -1085,7 +1098,8 @@ function buildEntityLayout (
     field: FieldDeclaration,
     indent: number,
     parentPath: string,
-    namedTypeAncestors: ReadonlySet<string>,
+    namedTypeAncestors: ReadonlySet<TypeDeclaration>,
+    table: ReadonlyMap<string, TypeDeclaration>,
   ): void => {
     const path = parentPath ? `${parentPath}.${field.name}` : field.name;
     const flags = computeFieldFlags(field);
@@ -1093,7 +1107,7 @@ function buildEntityLayout (
     // it returns undefined for a ScalarType whose name is in the
     // ancestry, which keeps `hasChildren` false and suppresses the
     // caret for the recursive row.
-    const nested = describeNested(field.type, typeTable, namedTypeAncestors);
+    const nested = describeNested(field.type, table, namedTypeAncestors);
     const hasChildren = nested !== undefined;
 
     fields.push({
@@ -1111,7 +1125,7 @@ function buildEntityLayout (
     rowY += ROW_HEIGHT;
 
     if (hasChildren && !collapsedPaths.has(makeCollapsedKey(entityId, path))) {
-      emitNestedChildren(field.type, indent + 1, path, namedTypeAncestors);
+      emitNestedChildren(field.type, indent + 1, path, namedTypeAncestors, table);
     }
   };
 
@@ -1121,12 +1135,13 @@ function buildEntityLayout (
     type: TypeExpression,
     indent: number,
     parentPath: string,
-    namedTypeAncestors: ReadonlySet<string>,
+    namedTypeAncestors: ReadonlySet<TypeDeclaration>,
+    table: ReadonlyMap<string, TypeDeclaration>,
   ): void => {
     switch (type.kind) {
       case 'ObjectType': {
         for (const item of type.fields) {
-          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, namedTypeAncestors);
+          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, namedTypeAncestors, table);
           // Note/PartialInjection inside object bodies aren't visualized
           // as rows -- they belong to the inspector/details panel later.
         }
@@ -1135,7 +1150,7 @@ function buildEntityLayout (
       case 'JsonType': {
         if (!type.fields) return;
         for (const item of type.fields) {
-          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, namedTypeAncestors);
+          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, namedTypeAncestors, table);
         }
         return;
       }
@@ -1147,7 +1162,7 @@ function buildEntityLayout (
         const elementLabel = type.elementName ?? '[*]';
         const elementSegment = type.elementName ? `[${type.elementName}]` : '[*]';
         const elementPath = `${parentPath}.${elementSegment}`;
-        const elementHasChildren = describeNested(type.elementType, typeTable, namedTypeAncestors) !== undefined;
+        const elementHasChildren = describeNested(type.elementType, table, namedTypeAncestors) !== undefined;
         fields.push({
           entityId,
           name: elementLabel,
@@ -1158,19 +1173,19 @@ function buildEntityLayout (
           indent,
           path: elementPath,
           hasChildren: elementHasChildren,
-          childKind: describeNested(type.elementType, typeTable, namedTypeAncestors)?.childKind,
+          childKind: describeNested(type.elementType, table, namedTypeAncestors)?.childKind,
           synthetic: true,
         });
         rowY += ROW_HEIGHT;
         if (elementHasChildren && !collapsedPaths.has(makeCollapsedKey(entityId, elementPath))) {
-          emitNestedChildren(type.elementType, indent + 1, elementPath, namedTypeAncestors);
+          emitNestedChildren(type.elementType, indent + 1, elementPath, namedTypeAncestors, table);
         }
         return;
       }
       case 'TupleType': {
         for (const elem of type.elements) {
           const tuplePath = `${parentPath}.[${elem.position}]`;
-          const elemHasChildren = describeNested(elem.type, typeTable, namedTypeAncestors) !== undefined;
+          const elemHasChildren = describeNested(elem.type, table, namedTypeAncestors) !== undefined;
           fields.push({
             entityId,
             name: `[${elem.position}] ${elem.name}`,
@@ -1181,12 +1196,12 @@ function buildEntityLayout (
             indent,
             path: tuplePath,
             hasChildren: elemHasChildren,
-            childKind: describeNested(elem.type, typeTable, namedTypeAncestors)?.childKind,
+            childKind: describeNested(elem.type, table, namedTypeAncestors)?.childKind,
             synthetic: true,
           });
           rowY += ROW_HEIGHT;
           if (elemHasChildren && !collapsedPaths.has(makeCollapsedKey(entityId, tuplePath))) {
-            emitNestedChildren(elem.type, indent + 1, tuplePath, namedTypeAncestors);
+            emitNestedChildren(elem.type, indent + 1, tuplePath, namedTypeAncestors, table);
           }
         }
         return;
@@ -1199,7 +1214,7 @@ function buildEntityLayout (
         // type's fields recursing one further indent below.
         for (const alt of type.alternatives) {
           const altPath = `${parentPath}.{${alt.name}}`;
-          const altHasChildren = describeNested(alt.type, typeTable, namedTypeAncestors) !== undefined;
+          const altHasChildren = describeNested(alt.type, table, namedTypeAncestors) !== undefined;
           fields.push({
             entityId,
             name: `{${alt.name}}`,
@@ -1210,12 +1225,12 @@ function buildEntityLayout (
             indent,
             path: altPath,
             hasChildren: altHasChildren,
-            childKind: describeNested(alt.type, typeTable, namedTypeAncestors)?.childKind,
+            childKind: describeNested(alt.type, table, namedTypeAncestors)?.childKind,
             synthetic: true,
           });
           rowY += ROW_HEIGHT;
           if (altHasChildren && !collapsedPaths.has(makeCollapsedKey(entityId, altPath))) {
-            emitNestedChildren(alt.type, indent + 1, altPath, namedTypeAncestors);
+            emitNestedChildren(alt.type, indent + 1, altPath, namedTypeAncestors, table);
           }
         }
         return;
@@ -1224,8 +1239,8 @@ function buildEntityLayout (
         // Two synthetic rows: key and value. Each may recurse.
         const keyPath = `${parentPath}.<key>`;
         const valPath = `${parentPath}.<value>`;
-        const keyHasChildren = describeNested(type.keyType, typeTable, namedTypeAncestors) !== undefined;
-        const valHasChildren = describeNested(type.valueType, typeTable, namedTypeAncestors) !== undefined;
+        const keyHasChildren = describeNested(type.keyType, table, namedTypeAncestors) !== undefined;
+        const valHasChildren = describeNested(type.valueType, table, namedTypeAncestors) !== undefined;
         fields.push({
           entityId,
           name: '<key>',
@@ -1236,12 +1251,12 @@ function buildEntityLayout (
           indent,
           path: keyPath,
           hasChildren: keyHasChildren,
-          childKind: describeNested(type.keyType, typeTable, namedTypeAncestors)?.childKind,
+          childKind: describeNested(type.keyType, table, namedTypeAncestors)?.childKind,
           synthetic: true,
         });
         rowY += ROW_HEIGHT;
         if (keyHasChildren && !collapsedPaths.has(makeCollapsedKey(entityId, keyPath))) {
-          emitNestedChildren(type.keyType, indent + 1, keyPath, namedTypeAncestors);
+          emitNestedChildren(type.keyType, indent + 1, keyPath, namedTypeAncestors, table);
         }
         fields.push({
           entityId,
@@ -1253,18 +1268,18 @@ function buildEntityLayout (
           indent,
           path: valPath,
           hasChildren: valHasChildren,
-          childKind: describeNested(type.valueType, typeTable, namedTypeAncestors)?.childKind,
+          childKind: describeNested(type.valueType, table, namedTypeAncestors)?.childKind,
           synthetic: true,
         });
         rowY += ROW_HEIGHT;
         if (valHasChildren && !collapsedPaths.has(makeCollapsedKey(entityId, valPath))) {
-          emitNestedChildren(type.valueType, indent + 1, valPath, namedTypeAncestors);
+          emitNestedChildren(type.valueType, indent + 1, valPath, namedTypeAncestors, table);
         }
         return;
       }
       case 'SetType': {
         const elemPath = `${parentPath}.<item>`;
-        const elemHasChildren = describeNested(type.elementType, typeTable, namedTypeAncestors) !== undefined;
+        const elemHasChildren = describeNested(type.elementType, table, namedTypeAncestors) !== undefined;
         fields.push({
           entityId,
           name: '<item>',
@@ -1275,12 +1290,12 @@ function buildEntityLayout (
           indent,
           path: elemPath,
           hasChildren: elemHasChildren,
-          childKind: describeNested(type.elementType, typeTable, namedTypeAncestors)?.childKind,
+          childKind: describeNested(type.elementType, table, namedTypeAncestors)?.childKind,
           synthetic: true,
         });
         rowY += ROW_HEIGHT;
         if (elemHasChildren && !collapsedPaths.has(makeCollapsedKey(entityId, elemPath))) {
-          emitNestedChildren(type.elementType, indent + 1, elemPath, namedTypeAncestors);
+          emitNestedChildren(type.elementType, indent + 1, elemPath, namedTypeAncestors, table);
         }
         return;
       }
@@ -1297,13 +1312,15 @@ function buildEntityLayout (
         // named type without going through a FieldDeclaration boundary
         // (e.g. `array [SomeType]`, `oneOf { ... case: SomeType }`),
         // so the emitField guard alone isn't enough.
-        if (namedTypeAncestors.has(type.name)) return;
-        const typeDecl = typeTable.get(type.name);
-        if (!typeDecl) return;
+        const typeDecl = table.get(type.name);
+        if (!typeDecl || namedTypeAncestors.has(typeDecl)) return;
         const childAncestors = new Set(namedTypeAncestors);
-        childAncestors.add(type.name);
+        childAncestors.add(typeDecl);
+        // An internal definition's body stays in the entity's scope; a
+        // project Type's body resolves at project scope (spec §15.8.2).
+        const childTable = localDecls.has(typeDecl) ? table : typeTable;
         for (const item of typeDecl.body) {
-          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, childAncestors);
+          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, childAncestors, childTable);
         }
         return;
       }
@@ -1315,7 +1332,7 @@ function buildEntityLayout (
 
   for (const item of entity.body) {
     if (item.kind !== 'FieldDeclaration') continue;
-    emitField(item as FieldDeclaration, 0, '', new Set<string>());
+    emitField(item as FieldDeclaration, 0, '', new Set<TypeDeclaration>(), entityTable);
   }
 
   // Second pass: flag fields that participate in a composite primary
@@ -1407,7 +1424,7 @@ function buildEntityLayout (
 function describeNested (
   type: TypeExpression,
   typeTable: ReadonlyMap<string, TypeDeclaration>,
-  namedTypeAncestors: ReadonlySet<string>,
+  namedTypeAncestors: ReadonlySet<TypeDeclaration>,
 ): { childKind: NonNullable<FieldLayout['childKind']> } | undefined {
   switch (type.kind) {
     case 'ObjectType':
@@ -1448,9 +1465,8 @@ function describeNested (
       // childKind 'object' because the Type's body is an object shape.
       // A scalar with no matching Type and no further structure is a
       // genuine scalar -- no caret.
-      if (namedTypeAncestors.has(type.name)) return undefined;
       const decl = typeTable.get(type.name);
-      if (!decl) return undefined;
+      if (!decl || namedTypeAncestors.has(decl)) return undefined;
       const hasFields = decl.body.some((b) => b.kind === 'FieldDeclaration');
       return hasFields ? { childKind: 'object' } : undefined;
     }

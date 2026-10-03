@@ -62,6 +62,18 @@
       </div>
     </InspectorSection>
 
+    <!-- Internal definitions (spec §15.8): the named types this entity
+         declares for itself in its definitions block, visible only inside
+         it. Fields typed by one expand in the diagram. -->
+    <InspectorSection v-if="definitions.length > 0" title="Internal definitions">
+      <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <template v-for="d in definitions" :key="d.name">
+          <dt class="font-mono text-gray-900 dark:text-slate-100 break-all">{{ d.name }}</dt>
+          <dd class="text-gray-500 dark:text-slate-400">{{ d.shape }}</dd>
+        </template>
+      </dl>
+    </InspectorSection>
+
     <InspectorSection title="Settings">
       <SettingsTable :settings="standardSettings" />
     </InspectorSection>
@@ -108,7 +120,7 @@ import { highlightSql }   from './sqlHighlight';
 import { supertypeGroupsOf } from './ast-lookup';
 import type { Selection } from './selection';
 import { useParserStore } from '@/stores/parserStore';
-import { entityConstraints, viewSourceQuery } from '@xdbml/parse';
+import { entityConstraints, entityDefinitions, viewSourceQuery } from '@xdbml/parse';
 import type { Constraint, ConstraintSource } from '@xdbml/parse';
 
 const props = defineProps<{
@@ -128,6 +140,21 @@ const parser = useParserStore();
 const entityId = computed(() => (props.container ? `${props.container.name}.${props.entity.name}` : props.entity.name));
 
 const groups = computed(() => supertypeGroupsOf(parser.flatAst, entityId.value));
+
+// The entries of the entity's definitions block (spec §15.8), each with a
+// short description of its shape: the field count of the object form, or
+// the base type of the scalar form.
+const definitions = computed(() => {
+  if (props.entity.kind !== 'EntityDeclaration') return [];
+  return [...entityDefinitions(props.entity.body).values()].map((d) => {
+    const fields = d.body.filter((b) => b.kind === 'FieldDeclaration').length;
+    let shape: string;
+    if (!d.scalarBase) shape = `object, ${fields} ${fields === 1 ? 'field' : 'fields'}`;
+    else if (d.scalarBase.kind === 'ScalarType') shape = d.scalarBase.params?.length ? `${d.scalarBase.name}(${d.scalarBase.params.join(', ')})` : d.scalarBase.name;
+    else shape = d.scalarBase.kind.replace(/Type$/, '').replace(/^./, (c) => c.toLowerCase());
+    return { name: d.name, shape };
+  });
+});
 
 // Every key and check of the entity (spec §28.6). Views declare none.
 const constraints = computed<Constraint[]>(() => {

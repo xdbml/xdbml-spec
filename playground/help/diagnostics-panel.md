@@ -67,6 +67,16 @@ Diagram views (spec §18) add five errors of their own, whatever version the doc
 
 The `Containers`, `Views` and `SupertypeGroups` categories, and a diagram view's note and settings, are xDBML extensions: in a document without a version declaration they raise `construct-requires-version`. DBML's own name for Containers, `Schemas`, needs no declaration. See [**Diagram views**](./diagram-views).
 
+Internal definitions (spec §15.8) add five conditions of their own, with the same severity whatever version the document declares, since no parser read a `definitions` block before 0.6.5:
+
+- **`definitions-outside-entity`** (error): a TablePartial or an Edge holds a `definitions` block. Internal definitions belong to an entity; declare a shape reused elsewhere as a `Type`. In a View, the block stops the parse with a message citing §15.8.1.
+- **`duplicate-definitions-block`** (error): an entity declares a second `definitions` block. Put every entry in one.
+- **`duplicate-definition`** (error): two entries of one block share a name.
+- **`definitions-unsupported-target`** (error): the entity's target takes no internal definitions: a relational target, Cassandra, ScyllaDB, Neo4j, Memgraph, Neptune or JanusGraph. Declare the shape as a `Type` at the top of the document (spec §15.8.4).
+- **`definition-shadows-type`** (warning): an entry takes the name of a Type or an Enum declared outside the entity. Inside the entity, the entry wins.
+
+An entry under the name of a built-in type, such as `money`, raises `named-type-shadows-builtin` as an error in every version.
+
 ## Rows in the body
 
 Each row shows:

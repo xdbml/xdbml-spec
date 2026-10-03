@@ -1,18 +1,18 @@
 @echo off
 setlocal
-REM 0.6.5, delta 2: grammar and parser (internal definitions).
-REM Copies seventeen files into the repo and runs the verification gate.
+REM 0.6.5, delta 3: renderer, playground and example 17 (internal definitions).
+REM Copies sixteen files into the repo and runs the verification gate.
 REM It does not commit or push: the last lines print the commands for that.
 REM Usage:  apply.cmd                 (repo at C:\Repos\Hackolade\xdbml-spec)
 REM         apply.cmd D:\path\to\xdbml-spec
 set REPO=C:\Repos\Hackolade\xdbml-spec
 if not "%~1"=="" set REPO=%~1
 set SRC=%~dp0
-set BASE=a68fbc2
-set EDITED=APPLY.txt apply.cmd CHANGELOG.md grammar/test-cases.md grammar/xDBML.g4 parser/README.md parser/src/ast.ts parser/src/constraints.ts parser/src/index.ts parser/src/module-resolver.ts parser/src/monarch.ts parser/src/name-resolver.ts parser/src/parser.ts parser/test/run-tests.ts
-set NEW=grammar/fixtures/crm.xdbml parser/src/definitions.ts parser/src/targets.ts
+set BASE=9bc0bb0
+set EDITED=APPLY.txt apply.cmd CHANGELOG.md examples/README.md playground/help/diagnostics-panel.md playground/help/inspector-pane.md playground/help/nested-fields.md playground/src/components/inspector/EntityInspector.vue playground/src/components/inspector/ast-lookup.ts playground/test/run-tests.ts renderer/src/layout/layout.ts renderer/test/run-tests.ts scripts/examples-manifest.mjs spec/v0.6.md
+set NEW=examples/17-internal-definitions.xdbml renderer/test/goldens/17-internal-definitions.svg
 
-if not exist "%REPO%\parser\src\parser.ts" (
+if not exist "%REPO%\renderer\src\layout\layout.ts" (
   echo ERROR: no xdbml-spec repository at %REPO%
   echo        Pass its path: apply.cmd D:\path\to\xdbml-spec
   exit /b 1
@@ -21,7 +21,7 @@ if /i "%SRC%"=="%REPO%\" (
   echo ERROR: run apply.cmd from the extracted folder, not from the repo.
   exit /b 1
 )
-if not exist "%SRC%parser\src\definitions.ts" (
+if not exist "%SRC%examples\17-internal-definitions.xdbml" (
   echo ERROR: files are missing next to apply.cmd. Extract the whole folder.
   exit /b 1
 )
@@ -44,7 +44,7 @@ if errorlevel 1 (
 for %%F in (%NEW%) do call :absent "%%~F" || exit /b 1
 
 echo.
-echo [2/3] Copy the seventeen files
+echo [2/3] Copy the sixteen files
 for %%F in (%EDITED% %NEW%) do call :copyone "%%~F" || goto :fail
 
 echo.
@@ -61,7 +61,7 @@ echo  Done. Gate green. Nothing is committed yet.
 echo  To commit and push, from %REPO%:
 echo.
 echo    git add %EDITED% %NEW%
-echo    git commit -m "0.6.5, delta 2: grammar and parser (internal definitions)"
+echo    git commit -m "0.6.5, delta 3: renderer, playground and example 17 (internal definitions)"
 echo    git push
 echo ============================================================
 exit /b 0

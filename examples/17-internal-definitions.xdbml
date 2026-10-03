@@ -1,0 +1,148 @@
+xdbml: 0.6
+
+// ---------------------------------------------------------------------------
+// Internal definitions: reusable shapes scoped to one entity.
+//
+// A claims intake platform for an insurer (spec 15.8). Claims arrive through
+// an API described in JSON Schema, are tracked in MongoDB, and are paid from
+// an Oracle schema. Each of the three Containers reuses shapes in the way
+// its target does:
+//
+//   - In JSON Schema, every entity lowers to a schema of its own, and the
+//     shapes it reuses go under $defs inside that schema. The entities of
+//     the `intake` Container declare them in a `definitions { }` block.
+//   - MongoDB accepts the same block for modeling; its $jsonSchema has no
+//     $ref, so a generator writes each shape in place. The `claims`
+//     collection holds an Address of its own, shaped differently from the
+//     one of `claim_submission`, without a name collision.
+//   - Oracle takes no internal definitions. A shape reused there is a Type
+//     declared at the top of the document, which lowers to a user-defined
+//     type, here MonetaryAmount.
+//
+// A type name resolves where it is written: inside an entity, among its
+// internal definitions first; inside the body of a Type, among the Types of
+// the Project only.
+// ---------------------------------------------------------------------------
+
+Project claims {
+  targets: ['JSON Schema', MongoDB, Oracle]
+  Note: 'Claims intake: API schemas, an operational store and payments (spec §15.8).'
+}
+
+// Shared by every Container: one canonical shape for the whole Project.
+Type CurrencyCode varchar(3) [pattern: '^[A-Z]{3}$', note: 'ISO 4217']
+
+Type MonetaryAmount {
+  amount   decimal(12,2) [not null]
+  currency CurrencyCode  [not null]
+}
+
+Container intake [target: 'JSON Schema'] {
+  Note: 'Payloads accepted by the claims API, one JSON Schema document per entity.'
+
+  Entity claim_submission {
+    submission_id string       [not null, note: 'Assigned by the API gateway']
+    submitted_at  timestamp    [not null]
+    policy_number PolicyNumber [not null]
+    claimant      Party        [not null]
+    witnesses     array [Party]
+    incident      oneOf {
+      vehicle  VehicleIncident
+      property PropertyIncident
+    } [not null, discriminator: incident_kind]
+    estimate      MonetaryAmount
+    attachments   array [Attachment]
+
+    definitions {
+      PolicyNumber string [pattern: '^POL-[0-9]{8}$']
+      Address {
+        street      string [not null]
+        city        string [not null]
+        postal_code string
+        country     CountryCode [not null]
+      }
+      CountryCode string [pattern: '^[A-Z]{2}$', note: 'ISO 3166-1 alpha-2']
+      Party {
+        full_name string [not null]
+        email     string [format: 'email']
+        phone     string
+        address   Address
+      }
+      VehicleIncident {
+        occurred_at   timestamp [not null]
+        location      Address   [not null]
+        plate         string    [not null]
+        other_vehicle string
+      }
+      PropertyIncident {
+        occurred_at timestamp [not null]
+        location    Address   [not null]
+        cause       string    [not null, note: 'fire, water, theft, storm, other']
+      }
+      Attachment {
+        file_name  string [not null]
+        media_type string [not null]
+        size_bytes integer [minimum: 1]
+      }
+    }
+  }
+
+  Entity adjuster_note {
+    note_id       string  [not null]
+    submission_id string  [not null]
+    thread        Comment [not null]
+
+    definitions {
+      // A recursive shape: a JSON Schema generator writes it as a $defs
+      // entry that refers to itself.
+      Comment {
+        author  string    [not null]
+        written timestamp [not null]
+        body    string    [not null]
+        replies array [Comment]
+      }
+    }
+  }
+}
+
+Database operations [target: MongoDB] {
+  Collection claims {
+    _id           objectId [pk]
+    submission_id string   [not null, unique]
+    status        string   [not null, note: 'open, under_review, approved, rejected, paid']
+    claimant      Contact  [not null]
+    reserve       MonetaryAmount
+    timeline      array [Event]
+
+    definitions {
+      // The intake schema also has an Address; this one is a different
+      // shape, and neither is visible outside its entity.
+      Address {
+        line    string [not null]
+        country string [not null]
+      }
+      Contact {
+        full_name string [not null]
+        address   Address
+      }
+      Event {
+        at   Date   [not null]
+        kind string [not null]
+        by   string
+      }
+    }
+  }
+}
+
+Schema finance [target: Oracle] {
+  Table payments {
+    payment_id number(11)     [pk]
+    claim_id   varchar2(24)   [not null]
+    paid_on    date           [not null]
+    amount     MonetaryAmount [not null]
+  }
+}
+
+Ref: operations.claims.submission_id - intake.claim_submission.submission_id
+Ref: intake.adjuster_note.submission_id > intake.claim_submission.submission_id
+Ref: finance.payments.claim_id > operations.claims._id

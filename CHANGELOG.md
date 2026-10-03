@@ -27,6 +27,12 @@ A backward-compatible point release of the v0.6 draft. An entity may declare int
 
 - **Grammar**: `definitionsBlock`, `definitionEntry` and `DEFINITIONS`, with `definitions` among the field names. `grammar/test-cases.md` gains thirteen v0.6.5 cases, each checked against the parser, two of them importing from the new fixture `grammar/fixtures/crm.xdbml`.
 
+- **Renderer (`@xdbml/render`)**: a field typed by an internal definition expands in the diagram like a field typed by a Type. Each entity resolves names among its own internal definitions before the project's Types, and an expansion that enters a project Type resolves the names of its body among the project's Types only, as §15.8.2 states. The recursion guard tracks declarations rather than names, so an internal definition and a project Type of one name do not stop each other. The renderer imports `entityDefinitions` from `@xdbml/parse`, so its own build needs the 0.6.5 parser.
+
+- **Playground**: the inspector resolves a row inside an internal definition with the same scoping, and the entity inspector lists the internal definitions of the selected entity, each with the field count of the object form or the base type of the scalar form. The help pages cover the five diagnostic codes, internal definitions in the nested-fields page, and the new inspector section. The §15.8.1 example of the spec opens in the playground.
+
+- **Example 17, internal definitions**: an insurer's claims intake across three targets. The JSON Schema entities declare their shapes in `definitions` blocks, one of them recursive and two used as `oneOf` alternatives; a MongoDB collection declares an Address of another shape under the same name; an Oracle table reuses the Project-level Type `MonetaryAmount`, since relational targets take no internal definitions.
+
 ### Changed
 
 #### Spec

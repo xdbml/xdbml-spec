@@ -392,6 +392,33 @@ Container reporting {
     },
   },
 
+  {
+    name: 'v0.6.5: Inspector resolves a field inside an internal definition, and a project Type body at project scope',
+    source: `xdbml: 0.6
+Type Inner { p int }
+Type Outer { inner Inner }
+Entity customers {
+  billing Address
+  o       Outer
+  definitions {
+    Address { street string, city string }
+    Inner { q int }
+  }
+}
+`,
+    check: ({ ast }) => {
+      const street = resolveSelection(ast, { kind: 'field', entityId: 'customers', path: 'billing.street' });
+      assertTrue(street !== null && street.kind === 'field', 'billing.street resolves');
+      if (!street || street.kind !== 'field') return;
+      assertEq(street.node.name, 'street', 'field inside the entry Address');
+      assertEq(street.ancestors.map((a) => a.name).join('.'), 'billing', 'ancestor chain');
+      const p = resolveSelection(ast, { kind: 'field', entityId: 'customers', path: 'o.inner.p' });
+      assertTrue(p !== null && p.kind === 'field', 'o.inner.p resolves through the project Type Inner');
+      const q = resolveSelection(ast, { kind: 'field', entityId: 'customers', path: 'o.inner.q' });
+      assertTrue(q === null, 'o.inner.q does not resolve: the entry Inner is not visible in a project Type body');
+    },
+  },
+
   /* ---- Name alignment (commit acca7cd) ------------------------------- */
   //
   // The alignment fix lives in EntityCard.vue's nameLeftEdge() at the
@@ -1166,6 +1193,26 @@ tests.push({
     }
     const parties = buildDiagram(ast, new Set(), { diagramView: 'parties' });
     assertEq(parties.supertypeGroups.filter((g) => !g.unresolved).map((g) => g.name).join(','), 'legal_nature', 'parties symbol');
+  },
+});
+
+// v0.6.5 (spec §15.8): example 17 declares internal definitions in JSON
+// Schema and MongoDB entities. Each entity expands its own Address, and the
+// inspector resolves a field inside a definition.
+tests.push({
+  name: 'v0.6.5: example 17 expands each entity\'s own internal definitions, and the inspector resolves inside them',
+  source: () => readFileSync(join(examplesDir, '17-internal-definitions.xdbml'), 'utf-8'),
+  check: ({ ast }) => {
+    const model = buildDiagram(ast);
+    const paths = (id: string): string[] => model.entities.find((e) => e.id === id)?.fields.map((f) => f.path) ?? [];
+    const intake = paths('intake.claim_submission');
+    assertTrue(intake.includes('claimant.address.street') && intake.includes('incident.{vehicle}.location.country'), 'intake Address expands');
+    const ops = paths('operations.claims');
+    assertTrue(ops.includes('claimant.address.line') && !ops.includes('claimant.address.street'), 'claims expands its own Address');
+    const note = paths('intake.adjuster_note');
+    assertTrue(note.includes('thread.replies') && !note.some((p) => p.startsWith('thread.replies.')), 'recursive Comment stops');
+    const resolved = resolveSelection(ast, { kind: 'field', entityId: 'intake.claim_submission', path: 'claimant.address.country' });
+    assertTrue(resolved !== null && resolved.kind === 'field' && resolved.node.name === 'country', 'inspector resolves claimant.address.country');
   },
 });
 
