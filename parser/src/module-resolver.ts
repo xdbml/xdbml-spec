@@ -37,6 +37,8 @@ import type {
   XDbmlDocument,
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
+import { entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
+import type { LocalTypes } from './definitions.ts';
 
 /**
  * Produce a new XDbmlDocument with all module-system directives replaced
@@ -664,8 +666,18 @@ function findFieldTarget (
   }
   if (!currentField) return undefined;
 
+  // Spec §15.8.3: a type name that resolves among the internal definitions
+  // of the source entity is replaced with the definition's shape, since the
+  // name is not visible outside that entity. A field reached through the
+  // body of a project Type resolves its names at project scope and is
+  // copied as it is.
+  const local = entityDefinitions(entity.body);
+  const context = `Field import '${segments.join('.')}'`;
+  const inline = (f: FieldDeclaration, scope: LocalTypes | undefined): FieldDeclaration =>
+    (scope && scope.size > 0 ? inlineInternalDefinitions(f, scope, context) : f);
+
   // If no more segments, we're done.
-  if (fieldSegments.length === 1) return currentField;
+  if (fieldSegments.length === 1) return inline(currentField, local);
 
   // -- Step 3: walk nested segments through object-typed fields.
   // Build a local Named-Type table from the source doc so the walker
@@ -676,7 +688,8 @@ function findFieldTarget (
     if (s.kind === 'TypeDeclaration') typeTable.set(s.name, s);
   }
 
-  return walkObjectFieldPath(currentField, fieldSegments.slice(1), typeTable);
+  const found = walkObjectFieldPath(currentField, fieldSegments.slice(1), typeTable, local);
+  return found ? inline(found.field, found.local) : undefined;
 }
 
 /**
@@ -688,13 +701,15 @@ function walkObjectFieldPath (
   startField: FieldDeclaration,
   remaining: string[],
   typeTable: Map<string, TypeDeclaration>,
-): FieldDeclaration | undefined {
+  local: LocalTypes | undefined,
+): { field: FieldDeclaration; local: LocalTypes | undefined } | undefined {
   let current = startField;
+  let scope = local;
   for (const seg of remaining) {
-    const objType = derefToObject(current.type, typeTable, 0);
-    if (!objType) return undefined;
+    const deref = derefToObject(current.type, typeTable, 0, scope);
+    if (!deref) return undefined;
     let next: FieldDeclaration | undefined;
-    for (const item of objType.fields) {
+    for (const item of deref.obj.fields) {
       if (item.kind === 'FieldDeclaration' && item.name === seg) {
         next = item;
         break;
@@ -702,8 +717,9 @@ function walkObjectFieldPath (
     }
     if (!next) return undefined;
     current = next;
+    scope = deref.local;
   }
-  return current;
+  return { field: current, local: scope };
 }
 
 const BUILTIN_TYPE_NAMES = new Set<string>([
@@ -725,9 +741,10 @@ function derefToObject (
   type: TypeExpression,
   typeTable: Map<string, TypeDeclaration>,
   depth: number,
-): ObjectType | undefined {
+  local: LocalTypes | undefined,
+): { obj: ObjectType; local: LocalTypes | undefined } | undefined {
   if (depth > 8) return undefined;
-  if (type.kind === 'ObjectType') return type;
+  if (type.kind === 'ObjectType') return { obj: type, local };
   if (type.kind !== 'ScalarType') return undefined;
 
   // ScalarType might be a builtin or a reference to a declared Named
@@ -735,21 +752,29 @@ function derefToObject (
   // name matches a builtin, no Named-Type deref is possible.
   if (BUILTIN_TYPE_NAMES.has(type.name.toLowerCase())) return undefined;
 
-  const td = typeTable.get(type.name);
+  // An internal definition of the source entity comes first and keeps the
+  // entity's scope; the body of a project Type resolves at project scope
+  // (spec §15.8.2).
+  const own = local?.get(type.name);
+  const td = own ?? typeTable.get(type.name);
   if (!td) return undefined;
+  const scope = own ? local : undefined;
 
   // Object-form Named Type: body holds the fields directly.
   if (!td.scalarBase && td.body.length > 0) {
     return {
-      kind: 'ObjectType',
-      keyword: 'object',
-      fields: td.body,
-      span: td.span,
+      obj: {
+        kind: 'ObjectType',
+        keyword: 'object',
+        fields: td.body,
+        span: td.span,
+      },
+      local: scope,
     };
   }
   // Scalar-form Named Type: recurse into the base.
   if (td.scalarBase) {
-    return derefToObject(td.scalarBase, typeTable, depth + 1);
+    return derefToObject(td.scalarBase, typeTable, depth + 1, scope);
   }
   return undefined;
 }

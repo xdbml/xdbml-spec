@@ -247,6 +247,11 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       // only before '{'. Elsewhere the same word names an entity or a field.
       [new RegExp(`(?:${DIAGRAM_VIEW_CATEGORIES.join('|')})(?![\\w$])(?=\\s*\\{)`), 'keyword.declaration'],
 
+      // Spec §15.8 (v0.6.5): `definitions` opens the internal definitions of
+      // an entity only before '{', and takes the color of the other body
+      // blocks (`indexes`, `constraints`). Elsewhere it names a field.
+      [/definitions(?![\w$])(?=\s*\{)/, 'keyword.setting'],
+
       // Identifiers and keyword recognition.
       // The parser is the authority on keyword vs identifier disambiguation;
       // Monarch does coarse highlighting based on lowercase comparison.

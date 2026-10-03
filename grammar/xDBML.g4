@@ -298,8 +298,8 @@ topLevelStatement
 //
 // List bodies: Entity (and its synonyms), TablePartial, Edge, View,
 // object-shaped Type, object / struct / record, json schema, oneOf / anyOf /
-// allOf, Enum, constraints, checks, TableGroup, SupertypeGroup, Project, and
-// DiagramView with its categories (§18). The top level and a
+// allOf, Enum, constraints, checks, definitions, TableGroup, SupertypeGroup,
+// Project, and DiagramView with its categories (§18). The top level and a
 // Container body hold declarations, separated by whitespace only. A records
 // row ends at the end of its line (§26).
 
@@ -326,6 +326,7 @@ entityBodyItem
     | checksBlock
     | constraintsBlock             // v0.6 §10
     | recordsBlock                 // §26 (upstream DBML)
+    | definitionsBlock             // v0.6.5 §15.8; Entity bodies only, see below
     | noteDefinition
     ;
 
@@ -389,6 +390,27 @@ typeDefinition
         (fieldDeclaration | listSeparator)*
       RBRACE
     | TYPE_KW IDENTIFIER typeExpression settingsBlock?   // scalar (v0.2 form)
+    ;
+
+// ---- §15.8 Internal definitions (new for v0.6.5) ---------------------------
+// Named types visible only inside the entity that declares them. Each entry
+// is a typeDefinition without TYPE_KW: the object form, with optional
+// settings before the body, or the scalar form. The entries form a list
+// body (§3.9). `definitions` is a keyword only when `{` follows it, so a
+// field may still be named `definitions` (§3.10). entityBodyItem also
+// serves TablePartial, where the resolver reports the block
+// (definitions-outside-entity, §15.8.6); edgeBody and the View body do not
+// accept it.
+
+definitionsBlock
+    : DEFINITIONS LBRACE (definitionEntry | listSeparator)* RBRACE
+    ;
+
+definitionEntry
+    : IDENTIFIER settingsBlock? LBRACE              // object form
+        (fieldDeclaration | listSeparator)*
+      RBRACE
+    | IDENTIFIER typeExpression settingsBlock?      // scalar form
     ;
 
 // ---- §25 Module system (new in v0.2) --------------------------------------
@@ -791,17 +813,17 @@ fieldDeclaration
 
 // ---- §3.10 Keywords and field names (v0.6.1) ------------------------------
 // No keyword is reserved as the name of a field or of an enum value. In a
-// body, six words start an element, each only when the token that element
-// needs follows it: Note before ':' or '{'; indexes, checks, constraints and
-// records before '{'; source_query before ':'. A field declaration never has
-// ':' or '{' right after its name, so two tokens of lookahead separate the
-// readings. fieldName lists these six; every other keyword also names a
-// field, and an implementation whose lexer reserves keyword tokens accepts
-// them here as well.
+// body, seven words start an element, each only when the token that element
+// needs follows it: Note before ':' or '{'; indexes, checks, constraints,
+// records and definitions before '{'; source_query before ':'. A field
+// declaration never has ':' or '{' right after its name, so two tokens of
+// lookahead separate the readings. fieldName lists these seven; every other
+// keyword also names a field, and an implementation whose lexer reserves
+// keyword tokens accepts them here as well.
 
 fieldName
     : IDENTIFIER
-    | NOTE | INDEXES | CHECKS | CONSTRAINTS | RECORDS | SOURCE_QUERY
+    | NOTE | INDEXES | CHECKS | CONSTRAINTS | RECORDS | DEFINITIONS | SOURCE_QUERY
     ;
 
 tablePartialInjection
@@ -1110,6 +1132,7 @@ SEMICOLON           : ';' ;
 DOT                 : '.' ;
 CONSTRAINTS         : 'constraints' ;   // v0.6 §10; contextual: a keyword only before '{'
 RECORDS             : 'records' ;       // §26; contextual: a keyword only before '{' (v0.6.1 §3.10)
+DEFINITIONS         : 'definitions' ;   // v0.6.5 §15.8; contextual: a keyword only before '{'
 SOURCE_QUERY        : 'source_query' ;  // §14.3; contextual: a keyword only before ':' (v0.6.1 §3.10)
 TILDE               : '~' ;
 LANGLE              : '<' ;

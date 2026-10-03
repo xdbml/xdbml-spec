@@ -1,10 +1,10 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.6.4. Every case runs in the reference parser's test suite.
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.6.5. Every case runs in the reference parser's test suite.
 ---
 
 
-Each case is labeled VALID (no error), VALID with a warning (a warning and no error), or INVALID (a parse error or at least one error diagnostic). The cases that import from `./catalog`, `./auth`, `./billing`, `./internal-helpers` or `./other` read the small files of `grammar/fixtures/`. Since v0.6.4, the reference parser's test suite runs every case and fails when a case and the parser disagree. A corpus with expected ASTs in JSON form is planned for a future release.
+Each case is labeled VALID (no error), VALID with a warning (a warning and no error), or INVALID (a parse error or at least one error diagnostic). The cases that import from `./catalog`, `./auth`, `./billing`, `./crm`, `./internal-helpers` or `./other` read the small files of `grammar/fixtures/`. Since v0.6.4, the reference parser's test suite runs every case and fails when a case and the parser disagree. A corpus with expected ASTs in JSON form is planned for a future release.
 
 ---
 
@@ -2147,6 +2147,211 @@ Table core.users { id int [pk] }
 
 DiagramView v {
   Containers { core }
+}
+```
+
+## §15.8 Internal definitions (v0.6.5)
+
+### VALID -- internal definitions in an entity, object and scalar forms (§15.8.1)
+
+```
+xdbml: 0.6
+
+Project crm { targets: 'JSON Schema' }
+
+Entity customers {
+  id       string  [not null]
+  billing  Address [not null]
+  contacts array [Contact]
+
+  definitions {
+    Address {
+      street  string [not null]
+      country CountryCode
+    }
+    CountryCode string [pattern: '^[A-Z]{2}$']
+    Contact [note: 'One way to reach the customer'] {
+      kind    string [not null]
+      address Address
+    }
+  }
+}
+```
+
+### VALID -- a field named definitions beside the block, and commas between entries (§3.9, §3.10)
+
+```
+xdbml: 0.6
+
+Collection settings {
+  _id         objectId [pk]
+  definitions varchar
+  theme       Theme
+
+  definitions { Theme { color string, font string }, Size int }
+}
+```
+
+### VALID -- MongoDB accepts the block; its generator inlines the shapes (§15.8.4, §15.8.5)
+
+```
+xdbml: 0.6
+
+Project shop { targets: MongoDB }
+
+Collection orders {
+  _id      objectId [pk]
+  shipping Address
+
+  definitions {
+    Address { street string, city string }
+  }
+}
+```
+
+### VALID with a warning -- an entry named like a Type of the Project (definition-shadows-type, §15.8.2)
+
+```
+xdbml: 0.6
+
+Type Address { line string }
+
+Entity customers {
+  id      string [not null]
+  billing Address
+
+  definitions {
+    Address { street string, city string }
+  }
+}
+```
+
+### INVALID -- a definitions block for a relational target (definitions-unsupported-target, §15.8.4)
+
+```
+xdbml: 0.6
+
+Project erp { targets: Oracle }
+
+Table customers {
+  id      number(11) [pk]
+  billing Address
+
+  definitions {
+    Address { street varchar2(100) }
+  }
+}
+```
+
+### INVALID -- a definitions block for a property graph target (definitions-unsupported-target, §15.8.4)
+
+```
+xdbml: 0.6
+
+Project graph { targets: Neo4j }
+
+Entity Person {
+  id   string [pk]
+  home Address
+
+  definitions {
+    Address { city string }
+  }
+}
+```
+
+### INVALID -- a definitions block in a TablePartial (definitions-outside-entity, §15.8.1)
+
+```
+xdbml: 0.6
+
+TablePartial audited {
+  created Stamp
+
+  definitions {
+    Stamp { at timestamp, by varchar }
+  }
+}
+```
+
+### INVALID -- a definitions block in a View (§15.8.1)
+
+```
+xdbml: 0.6
+
+View active_customers {
+  id varchar
+
+  definitions {
+    Address { street varchar }
+  }
+}
+```
+
+### INVALID -- a second definitions block (duplicate-definitions-block, §15.8.1)
+
+```
+xdbml: 0.6
+
+Entity customers {
+  billing Address
+  definitions { Address { street string } }
+  definitions { Phone string }
+}
+```
+
+### INVALID -- two entries under one name (duplicate-definition, §15.8.2)
+
+```
+xdbml: 0.6
+
+Entity customers {
+  billing Address
+
+  definitions {
+    Address { street string }
+    Address string
+  }
+}
+```
+
+### INVALID -- an entry under the name of a built-in type (named-type-shadows-builtin, §15.8.2)
+
+```
+xdbml: 0.6
+
+Entity customers {
+  amount money
+
+  definitions {
+    money decimal(10,2)
+  }
+}
+```
+
+### VALID -- a field imported on its own takes the shape of the definitions it names (§15.8.3)
+
+```
+xdbml: 0.6
+
+reuse { field customers.billing } from './crm'
+
+Entity invoices {
+  id      string [not null]
+  bill_to billing
+}
+```
+
+### INVALID -- a field imported on its own that reaches a recursive definition (§15.8.3)
+
+```
+xdbml: 0.6
+
+reuse { field customers.root } from './crm'
+
+Entity trees {
+  id   string [not null]
+  root root
 }
 ```
 

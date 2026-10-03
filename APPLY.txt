@@ -1,11 +1,12 @@
-xDBML -- 0.6.5, delta 1: spec text (internal definitions)
-Base: origin/main 666eaba (dependency security update). Built 2026-10-03.
+xDBML -- 0.6.5, delta 2: grammar and parser (internal definitions)
+Base: origin/main a68fbc2 (0.6.5, delta 1: spec text). Built 2026-10-03.
 
-An entity may declare internal definitions, the named types a JSON Schema
-document holds under $defs, in a definitions { } block (spec 15.8). This
-delta is the spec text and the changelog. The parser does not read the
-block yet: grammar and parser come in delta 2, so the new snippets get no
-"View in playground" button until then.
+The parser reads the definitions { } block of spec 15.8, resolves type
+names in the entity's scope, reports the conditions of 15.8.6, and inlines
+internal definitions into a field imported on its own. The renderer and
+the playground inspector do not expand a field typed by an internal
+definition yet (delta 3): until then the diagram shows "billing Address"
+without its fields, and no error.
 
 HOW TO APPLY
 ------------
@@ -14,69 +15,100 @@ Extract this folder anywhere outside the repo and run, from cmd.exe in it:
     apply.cmd                      (repo at C:\Repos\Hackolade\xdbml-spec)
     apply.cmd D:\path\to\xdbml-spec
 
-apply.cmd checks that 666eaba is in the history of HEAD and that the four
-files are unchanged since 666eaba, copies them, and runs the gate
-(npm run check). It stops at the first failure and does not commit. When it
-ends green it prints the three git commands to commit and push. No package
-or lockfile changes, so no npm install.
+apply.cmd checks that a68fbc2 is in the history of HEAD, that the fourteen
+edited files are unchanged since a68fbc2 and that the three new files do
+not exist yet, copies the seventeen files, and runs the gate (npm run
+check, then mcp type-check). It stops at the first failure and does not
+commit. When it ends green it prints the git commands to commit and push.
+No package or lockfile changes, so no npm install.
 
 WHAT CHANGED
 ------------
-spec\v0.6.md
-  15.8 (NEW) Internal definitions, six subsections: declaration, with the
-  JSON Schema 2020-12 rendering of the example; visibility and resolution;
-  imports; targets; lowering; validation summary.
-  3.9  definitions entries form a list body.
-  3.10 definitions is the seventh body word, only before {.
-  15.5 entries of a definitions block are scoped to their entity.
-  27.8 a field imported on its own takes the shape of the internal
-       definition it names.
-  28   Definition node under Entity in the AST tree.
-  29.1 MongoDB, Avro and JSON Schema rows; 29.2 both lists.
-  31   item 20, reading internal definitions.
-  Appendix A: definitions among the block keywords.
-  What's new: a v0.6.5 sentence.
+parser\src\parser.ts
+  definitions { } in parseEntityBody, only before { (spec 3.10); entries
+  are Type declarations without the keyword, read by the Type parser from
+  the name on (parseTypeDeclFromName); a list body (3.9). In a View body,
+  a parse error citing 15.8.1. SUPPORTED_XDBML_VERSION 0.6.5.
+parser\src\ast.ts
+  DefinitionsBlock { entries: TypeDeclaration[] } in EntityBodyItem.
+parser\src\definitions.ts (NEW)
+  entityDefinitions(), checkDefinitions() (15.8.6),
+  inlineInternalDefinitions() (15.8.3), LocalTypes.
+parser\src\targets.ts (NEW)
+  The target helpers moved out of constraints.ts (relational targets,
+  aliases, effective target), plus declarationTarget() and
+  isDefinitionsExcludedTarget() (15.8.4). Moving them avoids an import
+  cycle between constraints.ts and definitions.ts.
+parser\src\name-resolver.ts
+  Entity scope for field types, entry bodies and near-miss suggestions;
+  Ref paths and composite endpoints walk with the scope of each step, so
+  a name in a project Type body resolves at project scope. Pass 9 runs
+  checkDefinitions after the pre-0.6 downgrade, so its errors stay errors
+  in every version. Five new diagnostic codes.
+parser\src\constraints.ts
+  Key paths walk with the entity scope for the entity's own fields only;
+  a field from a TablePartial resolves at project scope. Imports the
+  target helpers from targets.ts and re-exports isRelationalTarget.
+parser\src\module-resolver.ts
+  Field imports resolve and inline the source entity's internal
+  definitions; a recursive one makes the import fail (15.8.3).
+parser\src\monarch.ts
+  definitions colored as a block keyword before { only.
+parser\src\index.ts
+  Exports entityDefinitions, checkDefinitions, inlineInternalDefinitions,
+  declarationTarget, isDefinitionsExcludedTarget, LocalTypes.
+parser\test\run-tests.ts
+  New group "v0.6.5 internal definitions" (17 tests); the version-refusal
+  test moves from 0.6.5 to 0.6.6. 464 tests (435 before).
+grammar\xDBML.g4
+  definitionsBlock, definitionEntry, DEFINITIONS; definitions in
+  fieldName and entityBodyItem; the 3.10 comment lists seven words.
+grammar\test-cases.md, grammar\fixtures\crm.xdbml (NEW)
+  Thirteen 15.8 cases; two import from the new fixture.
+parser\README.md
+  entityDefinitions and the scoping rule.
 CHANGELOG.md
-  v0.6.5 section, unreleased; v0.6.4 superseded by v0.6.5.
+  v0.6.5 Tooling entries.
 APPLY.txt, apply.cmd
   This delivery.
 
-DECISIONS APPLIED (confirmed in chat, 2026-10-03)
--------------------------------------------------
-  Keyword definitions, no $defs alias.
-  Entry form: a Type declaration without the Type keyword.
-  An entry under the name of a Type (or an Enum) otherwise visible to the
-  entity takes precedence there and draws a warning.
-  Error for relational targets, Cassandra, ScyllaDB, Neo4j, Memgraph,
-  Neptune and JanusGraph; every other target accepts it, MongoDB included.
-  UDTs stay project-level Types; no container-scoped Types.
-  Entity bodies only, at most one block per body.
-  TablePartial fields resolve where the TablePartial is declared.
-  A field imported on its own takes the definition's shape inlined; a
-  recursive definition makes that import an error.
-  Point release 0.6.5; documents keep declaring xdbml: 0.6.
-  No version-based warning tier: no parser read the block before 0.6.5.
+NEW DIAGNOSTIC CODES (15.8.6, same severity in every version)
+-------------------------------------------------------------
+  definitions-outside-entity      error    block in a TablePartial or Edge
+  duplicate-definitions-block     error    second block in one entity
+  duplicate-definition            error    two entries under one name
+  definitions-unsupported-target  error    target excluded by 15.8.4
+  definition-shadows-type         warning  entry named like a Type or Enum
+  named-type-shadows-builtin      error    (existing code) entry under a
+                                           built-in name; an error even in
+                                           a document declaring 0.5
 
-VERIFIED ON LINUX, NODE 22.22.2, FROM A CLEAN CLONE AT 666eaba
---------------------------------------------------------------
-npm ci in root, parser, renderer, mcp, from-mongodb, playground.
-npm run check, exit 0: parser 435 passed; renderer 247, 14 and 47 passed;
+VERIFIED ON LINUX, NODE 22.22.2, AT a68fbc2 PLUS THIS DELTA
+-----------------------------------------------------------
+npm run check, exit 0: parser 464 passed; renderer 247, 14 and 47 passed;
 mcp 77 passed; from-mongodb 24 passed; playground 55 passed; check:vsix
-and check:spec-links pass; playground type-check; full site build, with
-the seven 15.8 headings present in spec/v0.6.html.
-The JSON Schema block of 15.8.1, extracted from spec\v0.6.md, validates
-against the 2020-12 meta-schema; an instance whose country is "be" fails
-the CountryCode pattern through $ref.
-Not verified here: the run on Windows. apply.cmd does that on your machine.
+and check:spec-links pass; playground type-check; full site build.
+mcp: type-check clean, check:reference in sync. api: type-check clean.
+parser: tsc --noEmit clean.
+Each 15.8 corpus case fails or passes for the code its heading names.
+The renderer, given a document from this parser, draws an entity with a
+definitions block without error ("billing Address", unexpanded).
+Not verified here: the ANTLR grammar compiled by the ANTLR tool (no
+Java toolchain here), and the run on Windows. apply.cmd does the latter.
 
 NEXT
 ----
-Delta 2: grammar and parser. definitions in the ANTLR grammar, the
-Monarch and TextMate keyword lists, parseEntityBody, an entity scope in the
-name resolver, the conditions of 15.8.6, grammar test cases, and the
-"View in playground" button on the 15.8.1 snippet.
+Delta 3: renderer and playground. Expand a field typed by an internal
+definition in the diagram and the inspector, with the entity scope; the
+diagnostics panel help page lists the five codes; the "View in
+playground" button on the 15.8.1 example. Then the VS Code delta
+(TextMate block keyword, extension 0.6.5), MCP and llms.txt.
 
 SEEN ON THE WAY, NOT CHANGED
 ----------------------------
-The apply.cmd committed at the repo root by 666eaba has empty Guards and
-Copy sections (nothing under [1/5] and [2/5]). This delivery replaces it.
+An inline [unique] on a nested field does not count as a key for the
+referenced-key rule of 11.17, whether the field sits in an inline object,
+a project Type or an internal definition; the same key declared in
+constraints does count. Internal definitions follow the existing
+behavior. Whether 10.3 means inline keys on nested fields to count is a
+spec question for you.

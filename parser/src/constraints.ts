@@ -42,7 +42,12 @@ import type {
   XDbmlDocument,
 } from './ast.ts';
 import type { Diagnostic } from './name-resolver.ts';
+import { entityDefinitions } from './definitions.ts';
+import type { LocalTypes } from './definitions.ts';
+import { canonicalTarget, effectiveTarget, isRelationalTarget, projectTarget, projectTargets, settingValues } from './targets.ts';
 import { hasForeignMasterFlag, isForeignMaster, versionAtLeast } from './relationships.ts';
+
+export { isRelationalTarget } from './targets.ts';
 
 /* -------------------------------------------------------------------------
  * Normalized constraints (spec §28.6)
@@ -271,12 +276,21 @@ function topFields (body: Body, partials: Map<string, TablePartialDeclaration>, 
   return out;
 }
 
-/** The fields of an object-shaped type, or undefined for any other type. */
-function objectFields (t: TypeExpression, types: Map<string, TypeDeclaration>): FieldList | undefined {
-  if (t.kind === 'ObjectType') return t.fields;
+/**
+ * The fields of an object-shaped type, or undefined for any other type,
+ * with the scope their type names resolve in: an internal definition of
+ * the entity keeps the entity's scope, a project Type does not (§15.8.2).
+ */
+function objectFields (
+  t: TypeExpression,
+  types: Map<string, TypeDeclaration>,
+  local: LocalTypes | undefined,
+): { fields: FieldList; local: LocalTypes | undefined } | undefined {
+  if (t.kind === 'ObjectType') return { fields: t.fields, local };
   if (t.kind === 'ScalarType' || t.kind === 'NamedTypeReference') {
-    const td = types.get(t.name);
-    if (td && !td.scalarBase) return td.body;
+    const own = local?.get(t.name);
+    const td = own ?? types.get(t.name);
+    if (td && !td.scalarBase) return { fields: td.body, local: own ? local : undefined };
   }
   return undefined;
 }
@@ -293,8 +307,12 @@ function walkKeyPath (
   path: ReadonlyArray<PathSegment>,
   fields: ReadonlyArray<FieldDeclaration>,
   types: Map<string, TypeDeclaration>,
+  definitions?: { local: LocalTypes; own: ReadonlySet<FieldDeclaration> },
 ): PathProblem {
   let current: ReadonlyArray<FieldDeclaration> = fields;
+  // The entity's internal definitions apply to its own fields only; a field
+  // received from a TablePartial resolves where the partial is declared.
+  let scope: LocalTypes | undefined;
   const walked: string[] = [];
   for (let i = 0; i < path.length; i++) {
     const seg = path[i];
@@ -304,9 +322,11 @@ function walkKeyPath (
     if (!f) return { kind: 'missing', at: walked.join('.') };
     if (i === path.length - 1) return undefined;
     if (COLLECTION_KINDS.has(f.type.kind)) return { kind: 'collection', at: walked.join('.') };
-    const next = objectFields(f.type, types);
+    if (i === 0) scope = definitions?.own.has(f) ? definitions.local : undefined;
+    const next = objectFields(f.type, types, scope);
     if (!next) return { kind: 'missing', at: `${walked.join('.')}.${(path[i + 1] as { name?: string }).name ?? ''}` };
-    current = next.filter((x): x is FieldDeclaration => x.kind === 'FieldDeclaration');
+    current = next.fields.filter((x): x is FieldDeclaration => x.kind === 'FieldDeclaration');
+    scope = next.local;
   }
   return undefined;
 }
@@ -346,88 +366,6 @@ function findField (body: Body, names: string[]): FieldDeclaration | undefined {
     current = found.type.kind === 'ObjectType' ? found.type.fields : [];
   }
   return found;
-}
-
-/* -------------------------------------------------------------------------
- * Targets (§5.1)
- * ----------------------------------------------------------------------- */
-
-/** Canonical relational targets and their aliases, lower-cased (§5.1). */
-const RELATIONAL_TARGETS = new Set([
-  'oracle',
-  'postgresql', 'postgres', 'pg',
-  'sql server', 'mssql', 'microsoft sql server', 't-sql',
-  'mysql', 'mariadb', 'sqlite',
-  'db2', 'ibm db2', 'db2 luw', 'db2 for z/os', 'db2 z/os',
-  'teradata', 'snowflake', 'databricks',
-  'bigquery', 'google bigquery',
-  'redshift', 'amazon redshift',
-  'synapse analytics', 'azure synapse',
-  'timescaledb',
-]);
-
-/** True for a target name the §11.17 rule covers. Unlisted names are not relational. */
-export function isRelationalTarget (name: string): boolean {
-  return RELATIONAL_TARGETS.has(name.trim().toLowerCase());
-}
-
-function settingValues (v: SettingValue | null): string[] {
-  if (!v) return [];
-  if (v.kind === 'ListValue') return v.items.flatMap(settingValues);
-  if (v.kind === 'StringValue') return [v.value];
-  if (v.kind === 'IdentifierValue') return [v.value];
-  return [];
-}
-
-/** The document-wide target when the Project declares exactly one. */
-function projectTarget (doc: XDbmlDocument): string | undefined {
-  for (const s of doc.statements) {
-    if (s.kind !== 'ProjectDeclaration') continue;
-    for (const item of s.body) {
-      if (item.kind === 'Setting' && (item.name === 'targets' || item.name === 'database_type')) {
-        const values = settingValues(item.value).filter((x) => x !== '');
-        return values.length === 1 ? values[0] : undefined;
-      }
-    }
-  }
-  return undefined;
-}
-
-function effectiveTarget (p: Placed, project: string | undefined): string | undefined {
-  const own = p.container?.settings.find((s) => s.name === 'target');
-  const values = settingValues(own?.value ?? null).filter((x) => x !== '');
-  return values[0] ?? project;
-}
-
-/** Aliases of §5.1, lower-cased, mapped to their canonical name. */
-const TARGET_ALIASES: Record<string, string> = {
-  postgres: 'postgresql', pg: 'postgresql',
-  mssql: 'sql server', 'microsoft sql server': 'sql server', 't-sql': 'sql server',
-  'ibm db2': 'db2', 'db2 luw': 'db2', 'db2 z/os': 'db2 for z/os',
-  'google bigquery': 'bigquery', 'amazon redshift': 'redshift', 'azure synapse': 'synapse analytics',
-  mongo: 'mongodb', 'aws documentdb': 'documentdb', cosmos: 'cosmos db', 'azure cosmos db': 'cosmos db',
-  'apache cassandra': 'cassandra', 'amazon neptune': 'neptune',
-  'apache avro': 'avro', 'apache parquet': 'parquet',
-  'protocol buffers': 'protobuf', proto: 'protobuf', swagger: 'openapi',
-};
-
-function canonicalTarget (name: string): string {
-  const key = name.trim().toLowerCase();
-  return TARGET_ALIASES[key] ?? key;
-}
-
-/** Every target the Project declares, or undefined when it declares none. */
-function projectTargets (doc: XDbmlDocument): string[] | undefined {
-  for (const s of doc.statements) {
-    if (s.kind !== 'ProjectDeclaration') continue;
-    for (const item of s.body) {
-      if (item.kind === 'Setting' && (item.name === 'targets' || item.name === 'database_type')) {
-        const values = settingValues(item.value).filter((x) => x !== '');
-        return values.length > 0 ? values : undefined;
-      }
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -484,6 +422,12 @@ export function checkConstraints (doc: XDbmlDocument): Diagnostic[] {
   for (const { decl } of bodies(doc)) {
     const fields = topFields(decl.body, partials);
     const blocks = decl.body.filter((b) => b.kind === 'ConstraintsBlock');
+    const definitions = decl.kind === 'EntityDeclaration'
+      ? {
+          local: entityDefinitions(decl.body),
+          own: new Set(decl.body.filter((b): b is FieldDeclaration => b.kind === 'FieldDeclaration')),
+        }
+      : undefined;
 
     for (const [i, block] of blocks.entries()) {
       if (block.kind !== 'ConstraintsBlock') continue;
@@ -518,7 +462,7 @@ export function checkConstraints (doc: XDbmlDocument): Diagnostic[] {
           });
         }
         for (const path of e.fields) {
-          const problem = walkKeyPath(path, fields, types);
+          const problem = walkKeyPath(path, fields, types, definitions);
           if (problem?.kind === 'missing') {
             diagnostics.push({
               severity: 'error',
@@ -720,7 +664,7 @@ function checkReferencedKeys (doc: XDbmlDocument, severity: Diagnostic['severity
   const project = projectTarget(doc);
 
   const exemptTarget = (e: EntityEntry): boolean => {
-    const t = effectiveTarget(e.placed, project);
+    const t = effectiveTarget(e.placed.container, project);
     return t !== undefined && !isRelationalTarget(t);
   };
 

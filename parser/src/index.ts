@@ -50,6 +50,9 @@ export {
   primaryKey,
 } from './constraints.ts';
 export type { CheckConstraint, Constraint, ConstraintSource, KeyConstraint } from './constraints.ts';
+export { checkDefinitions, entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
+export type { LocalTypes } from './definitions.ts';
+export { declarationTarget, isDefinitionsExcludedTarget } from './targets.ts';
 export {
   FOREIGN_MASTER_FLAG,
   checkRelationships,

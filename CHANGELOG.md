@@ -21,6 +21,12 @@ A backward-compatible point release of the v0.6 draft. An entity may declare int
 
 - **Appendix A**: `definitions` among the block keywords.
 
+#### Tooling
+
+- **Parser (`@xdbml/parse`)**: reads `definitions { }` in an entity body, only before `{`, as a `DefinitionsBlock` whose entries are `TypeDeclaration` nodes in the object or the scalar form; the entries form a list body. A `definitions` block in a View fails the parse with a message citing §15.8.1. Inside an entity, a type name resolves among its entries before any declaration outside it: in field types, in near-miss suggestions, in `Ref` paths and composite endpoints, and in the key paths of `constraints`. A name written in the body of a project Type, or in a field received from a TablePartial, resolves at project scope. `resolveNames()` reports `definitions-outside-entity`, `duplicate-definitions-block`, `duplicate-definition`, `named-type-shadows-builtin` (for an entry) and `definitions-unsupported-target` as errors, and `definition-shadows-type` as a warning, whatever version the document declares (§15.8.6). A field imported on its own takes the shape of the internal definitions it names, and the import fails with a message naming the definition when it reaches a recursive one (§15.8.3). New exports: `entityDefinitions()`, `checkDefinitions()`, `inlineInternalDefinitions()`, `declarationTarget()`, `isDefinitionsExcludedTarget()`, and the `LocalTypes` type. The target helpers move from `constraints.ts` to a new `targets.ts`; `constraints.ts` re-exports `isRelationalTarget`, so existing imports keep working. The editor colors `definitions` before `{`. Reads `xdbml: 0.6.5`.
+
+- **Grammar**: `definitionsBlock`, `definitionEntry` and `DEFINITIONS`, with `definitions` among the field names. `grammar/test-cases.md` gains thirteen v0.6.5 cases, each checked against the parser, two of them importing from the new fixture `grammar/fixtures/crm.xdbml`.
+
 ### Changed
 
 #### Spec

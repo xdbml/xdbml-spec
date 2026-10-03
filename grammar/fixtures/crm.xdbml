@@ -1,0 +1,24 @@
+xdbml: 0.6
+
+// Fixture for the §15.8 cases of grammar/test-cases.md: an entity with
+// internal definitions, one of them recursive.
+
+Project crm { targets: 'JSON Schema' }
+
+Entity customers {
+  id      string  [not null]
+  billing Address [not null]
+  root    Node
+
+  definitions {
+    Address {
+      street  string [not null]
+      country CountryCode
+    }
+    CountryCode string [pattern: '^[A-Z]{2}$']
+    Node {
+      value    string
+      children array [Node]
+    }
+  }
+}

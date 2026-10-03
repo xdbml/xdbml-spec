@@ -28,6 +28,7 @@ import type {
   DiagramViewDeclaration,
   DiagramViewItem,
   ContainerKeyword,
+  DefinitionsBlock,
   EdgeDeclaration,
   EntityBodyItem,
   EntityDeclaration,
@@ -119,7 +120,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6.4';
+export const SUPPORTED_XDBML_VERSION = '0.6.5';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -695,6 +696,10 @@ export class Parser {
         body.push(this.parseConstraints());
       } else if (this.atBlockKeyword('records')) {
         body.push(this.parseRecordsBlock());
+      } else if (this.atBlockKeyword('definitions')) {
+        // Spec §15.8 (v0.6.5): read here for every body this method reads;
+        // the resolver reports the block outside an Entity (§15.8.6).
+        body.push(this.parseDefinitions());
       } else if (t.kind === TokenKind.Tilde) {
         body.push(this.parsePartialInjection());
       } else {
@@ -1631,6 +1636,37 @@ export class Parser {
   private parseTypeDecl (): TypeDeclaration {
     const start = this.peek().start;
     this.advance(); // Type
+    return this.parseTypeDeclFromName(start);
+  }
+
+  /**
+   * Parse a `definitions { ... }` block (spec §15.8, v0.6.5). Each entry is
+   * a Type declaration without the `Type` keyword; the entries form a list
+   * body (§3.9).
+   */
+  private parseDefinitions (): DefinitionsBlock {
+    const start = this.peek().start;
+    this.advance(); // definitions
+    this.expect(TokenKind.LBrace, "Expected '{' after definitions");
+    const entries: TypeDeclaration[] = [];
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
+      entries.push(this.parseTypeDeclFromName(this.peek().start));
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing definitions");
+    return {
+      kind: 'DefinitionsBlock',
+      entries,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /**
+   * The rest of a Type declaration from its name on: `Type` has been
+   * consumed, or the declaration is an entry of a definitions block.
+   */
+  private parseTypeDeclFromName (start: Position): TypeDeclaration {
     const name = this.parseIdentLikeName('type name');
 
     // After `Type <Name>`, the next token disambiguates the form:
@@ -1745,6 +1781,12 @@ export class Parser {
         body.push(this.parseNoteBlockOrSetting());
       } else if (isKw(this.peek(), 'source_query') && this.peek(1).kind === TokenKind.Colon) {
         body.push(this.parseSourceQueryItem());
+      } else if (this.atBlockKeyword('definitions')) {
+        throw new ParseError(
+          `View '${name}' holds a definitions block: internal definitions belong to an entity, ` +
+          'and a shape reused in a View is declared as a Type (spec §15.8.1).',
+          this.peek().start,
+        );
       } else {
         // Spec §14.2: `materialized: true` and the other settings go in
         // the brackets, never in the body.

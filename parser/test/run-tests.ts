@@ -22,6 +22,7 @@ import {
   resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
   viewSourceQuery,
   diagramViewMembers, diagramViews, diagramViewNote,
+  entityDefinitions, isDefinitionsExcludedTarget,
 } from '../src/index.ts';
 import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
 import {
@@ -4324,8 +4325,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.5 is newer than this parser supports',
-      source: `xdbml: 0.6.5
+      name: 'v0.6.1 §4: xdbml: 0.6.6 is newer than this parser supports',
+      source: `xdbml: 0.6.6
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -5040,6 +5041,219 @@ DiagramView b5 { Tables { a } }`);
 }
 
 /* -------------------------------------------------------------------------
+ * v0.6.5: internal definitions (spec §15.8)
+ * ----------------------------------------------------------------------- */
+
+function runV065Tests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const parseError = (src: string): string => {
+    try {
+      parse(src);
+      return '';
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const entityBody = (src: string): EntityDeclaration['body'] =>
+    (parse(src).statements.find((x) => x.kind === 'EntityDeclaration') as EntityDeclaration).body;
+  const example = `xdbml: 0.6
+Project crm { targets: 'JSON Schema' }
+Entity customers {
+  id       string  [not null]
+  name     string  [not null]
+  billing  Address [not null]
+  shipping Address
+  contacts array [Contact]
+  definitions {
+    Address {
+      street  string [not null]
+      city    string [not null]
+      country CountryCode
+    }
+    CountryCode string [pattern: '^[A-Z]{2}$']
+    Contact [note: 'One way to reach the customer'] {
+      kind    string [not null]
+      value   string [not null]
+      address Address
+    }
+  }
+}`;
+
+  check('v0.6.5 §15.8.1: the spec example parses into one DefinitionsBlock with no diagnostic', () => {
+    const body = entityBody(example);
+    const blocks = body.filter((b) => b.kind === 'DefinitionsBlock');
+    if (blocks.length !== 1 || blocks[0].kind !== 'DefinitionsBlock') return `blocks: ${blocks.length}`;
+    const forms = blocks[0].entries.map((e) => `${e.name}:${e.scalarBase ? 'scalar' : 'object'}:${e.settings.map((x) => x.name).join('+')}`);
+    if (forms.join(' ') !== 'Address:object: CountryCode:scalar:pattern Contact:object:note') return forms.join(' ');
+    const d = codes(example);
+    return d === '' ? undefined : d;
+  });
+  check('v0.6.5 §3.10: a field may be named definitions; only definitions { opens the block', () => {
+    const body = entityBody('xdbml: 0.6\nEntity e {\n  definitions varchar\n  Definitions object { a int }\n  definitions { A int }\n}');
+    const kinds = body.map((b) => (b.kind === 'FieldDeclaration' ? `F:${b.name}` : b.kind)).join(' ');
+    return kinds === 'F:definitions F:Definitions DefinitionsBlock' ? undefined : kinds;
+  });
+  check('v0.6.5 §3.9: the entries of a definitions block form a list body', () => {
+    const body = entityBody('xdbml: 0.6\nEntity e { a A, definitions { A { x int, y int }, B string; C int, } }');
+    const block = body.find((b) => b.kind === 'DefinitionsBlock');
+    const names = block && block.kind === 'DefinitionsBlock' ? block.entries.map((e) => e.name).join(',') : 'none';
+    return names === 'A,B,C' ? undefined : names;
+  });
+  check('v0.6.5 §15.8.1: a definitions block in a View is a parse error that cites §15.8.1', () => {
+    const msg = parseError('xdbml: 0.6\nView v { definitions { A int } }');
+    return msg.includes('§15.8.1') ? undefined : `message: ${msg}`;
+  });
+  check('v0.6.5 §15.8.6: a definitions block in a TablePartial or an Edge is an error', () => {
+    const d = codes('xdbml: 0.6\nTablePartial p { definitions { A int } }\nEntity a { id int [pk] }\nEntity b { id int [pk] }\n' +
+      'Edge e [source: a, target: b] { definitions { A int } }');
+    return d === 'error:definitions-outside-entity error:definitions-outside-entity' ? undefined : d;
+  });
+  check('v0.6.5 §15.8.6: a second block, a repeated entry and a built-in name are errors, in any version', () => {
+    const d = codes('xdbml: 0.6\nEntity e { a A\n definitions { A { x int }\n A string\n varchar int }\n definitions { B int } }');
+    const want = 'error:duplicate-definitions-block error:duplicate-definition error:named-type-shadows-builtin';
+    if (d !== want) return d;
+    const old = codes('xdbml: 0.5\nEntity e { a int\n definitions { Money int } }');
+    return old === 'error:named-type-shadows-builtin' ? undefined : `0.5: ${old}`;
+  });
+  check('v0.6.5 §15.8.2: an entry named like a Type or an Enum draws a warning, and wins inside the entity', () => {
+    // e.a.x resolves through the entry A; through the Type A it would be an
+    // unresolved field.
+    const d = codes('xdbml: 0.6\nType A { y int }\nEnum S { a, b }\nEntity e { a A, s S\n definitions { A { x int }\n S string } }\n' +
+      'Entity f { id int [pk], x int }\nRef: f.x > e.a.x');
+    return d === 'warning:definition-shadows-type warning:definition-shadows-type' ? undefined : d;
+  });
+  check('v0.6.5 §15.8.2: entity fields and entries resolve among the entries; a near miss suggests an entry', () => {
+    const clean = codes('xdbml: 0.6\nEntity e { a A, b array [B], c map [string, B]\n definitions { A { n B }\n B string } }');
+    if (clean !== '') return `clean: ${clean}`;
+    const typo = resolveNames(parse('xdbml: 0.6\nEntity e { a Adress\n definitions { Address { x int } } }')).diagnostics;
+    if (typo.length !== 1 || typo[0].code !== 'possible-type-typo' || !typo[0].message.includes("'Address'")) {
+      return typo.map((x) => x.message).join(' | ');
+    }
+    // An entry of one entity is not visible in another (§15.8.2): there the
+    // name is a target-native type, with no near miss and no fields.
+    const other = codes('xdbml: 0.6\nEntity e { a Address\n definitions { Address { x int } } }\n' +
+      'Entity f { id int, a Address, b Adress }\nEntity g { id int [pk], z int }\nRef: g.z > f.a.x');
+    return other === 'error:invalid-nested-path' ? undefined : `other entity: ${other}`;
+  });
+  check('v0.6.5 §15.8.4: relational targets, Cassandra, ScyllaDB and the property graphs exclude the block; aliases count', () => {
+    const bad: string[] = [];
+    for (const t of ['Oracle', 'postgres', "'SQL Server'", 'Cassandra', "'Apache Cassandra'", 'ScyllaDB', 'Neo4j', 'Memgraph', "'Amazon Neptune'", 'JanusGraph']) {
+      const d = codes(`xdbml: 0.6\nProject p { targets: ${t} }\nTable t { a A\n definitions { A { x int } } }`);
+      if (d !== 'error:definitions-unsupported-target') bad.push(`${t}: ${d}`);
+    }
+    for (const t of ['MongoDB', "'JSON Schema'", 'Avro', 'Protobuf', 'OpenAPI', 'DynamoDB', 'ClickHouse', 'SomethingElse']) {
+      const d = codes(`xdbml: 0.6\nProject p { targets: ${t} }\nTable t { a A\n definitions { A { x int } } }`);
+      if (d !== '') bad.push(`${t}: ${d}`);
+    }
+    return bad.length ? bad.join(' / ') : undefined;
+  });
+  check('v0.6.5 §15.8.4: the Container target applies; no effective target accepts the block', () => {
+    const src = "xdbml: 0.6\nProject p { targets: [MongoDB, Cassandra] }\n" +
+      'Keyspace k [target: Cassandra] { Table t { a A\n definitions { A { x int } } } }\n' +
+      'Database d [target: MongoDB] { Collection c { a A\n definitions { A { x int } } } }\n' +
+      'Entity loose { a A\n definitions { A { x int } } }';
+    const d = codes(src);
+    if (d !== 'error:definitions-unsupported-target') return d;
+    const none = codes('xdbml: 0.6\nEntity e { a A\n definitions { A { x int } } }');
+    if (none !== '') return `no target: ${none}`;
+    return isDefinitionsExcludedTarget('db2 z/os') && !isDefinitionsExcludedTarget('Mongo') ? undefined : 'isDefinitionsExcludedTarget';
+  });
+  check('v0.6.5 §15.8.2: a Ref path and a composite endpoint walk through internal definitions', () => {
+    const tail = '\nEntity d { id int [pk], z string, y string }\n';
+    const good = codes('xdbml: 0.6\nEntity c { id int [pk], addr A\n constraints { addr.zip [unique] }\n definitions { A { zip string, n B }\n B { k int } } }' +
+      tail + 'Ref: d.z > c.addr.zip');
+    if (good !== '') return `good: ${good}`;
+    const deep = codes('xdbml: 0.6\nEntity c { id int [pk], addr A\n definitions { A { n B }\n B { k int } } }' + tail + 'Ref: d.z > c.addr.n.nope');
+    if (!deep.startsWith('error:unresolved-field')) return `deep: ${deep}`;
+    const composite = codes('xdbml: 0.6\nEntity c { id int [pk], addr A\n definitions { A { n B }\n B { k int, j int } } }' + tail + 'Ref: d.(z, y) > c.addr.n.(k, q)');
+    return composite.includes('error:unresolved-field') ? undefined : `composite: ${composite}`;
+  });
+  check('v0.6.5 §15.8.2: names resolve where they are written: a project Type body and a partial use project scope', () => {
+    const viaType = codes('xdbml: 0.6\nType Outer { inner Inner }\nType Inner { p int }\n' +
+      'Entity c { o Outer\n constraints { o.inner.q [unique] }\n definitions { Inner { q int } } }');
+    if (viaType !== 'error:unresolved-key-field warning:definition-shadows-type') return `via Type: ${viaType}`;
+    const viaPartial = codes('xdbml: 0.6\nType Address { p int }\nTablePartial base { addr Address }\n' +
+      'Entity c { ~base\n constraints { addr.q [unique] }\n definitions { Address { q int } } }');
+    if (viaPartial !== 'error:unresolved-key-field warning:definition-shadows-type') return `via partial: ${viaPartial}`;
+    const own = codes('xdbml: 0.6\nType Address { p int }\nEntity c { addr Address\n constraints { addr.q [unique] }\n definitions { Address { q int } } }');
+    return own === 'warning:definition-shadows-type' ? undefined : `own field: ${own}`;
+  });
+  const lib = `xdbml: 0.6
+Type Inner { p int }
+Type Outer { inner Inner }
+Entity customers {
+  id string [pk]
+  billing Address [not null]
+  codes array [CountryCode]
+  root Node
+  o Outer
+  definitions {
+    Address { street string [not null], country CountryCode }
+    CountryCode string [pattern: '^[A-Z]{2}$']
+    Node { v int, children array [Node] }
+    Inner { q int }
+  }
+}`;
+  const importing = (src: string): XDbmlDocument =>
+    parse(src, { filePath: '/v065/main.xdbml', readFile: (p: string) => { if (p !== '/v065/lib.xdbml') throw new Error(`no ${p}`); return lib; } } as ParseOptions);
+  const importedType = (src: string, name: string) =>
+    flatten(importing(src)).statements.find((x) => x.kind === 'TypeDeclaration' && x.name === name) as
+      { scalarBase?: { kind: string; name?: string; elementType?: { name?: string }; elementSettings?: { name: string }[] }; settings: { name: string }[]; body: { kind: string; name?: string; type?: { name?: string }; settings?: { name: string }[] }[] } | undefined;
+  check('v0.6.5 §15.8.3: a field imported on its own takes the shape of the internal definitions it names', () => {
+    const billing = importedType("xdbml: 0.6\nreuse { field customers.billing } from './lib'\nEntity e { b billing }", 'billing');
+    const country = billing?.body.find((f) => f.name === 'country');
+    if (!billing || billing.scalarBase || country?.type?.name !== 'string' || country.settings?.map((x) => x.name).join() !== 'pattern') {
+      return `billing: ${JSON.stringify(billing?.body.map((f) => [f.name, f.type?.name, f.settings?.map((x) => x.name)]))}`;
+    }
+    const codesType = importedType("xdbml: 0.6\nreuse { field customers.codes } from './lib'\nEntity e { c codes }", 'codes');
+    if (codesType?.scalarBase?.elementType?.name !== 'string' || codesType.scalarBase.elementSettings?.map((x) => x.name).join() !== 'pattern') {
+      return `codes: ${JSON.stringify(codesType?.scalarBase)}`;
+    }
+    const nested = importedType("xdbml: 0.6\nreuse { field customers.billing.country } from './lib'\nEntity e { c country }", 'country');
+    if (nested?.scalarBase?.name !== 'string' || nested.settings.map((x) => x.name).join() !== 'pattern') return `nested: ${JSON.stringify(nested)}`;
+    const viaType = importedType("xdbml: 0.6\nreuse { field customers.o.inner } from './lib'\nEntity e { i inner }", 'inner');
+    return viaType?.scalarBase?.name === 'Inner' ? undefined : `through a project Type: ${JSON.stringify(viaType?.scalarBase)}`;
+  });
+  check('v0.6.5 §15.8.3: importing on its own a field that reaches a recursive definition is an error', () => {
+    try {
+      importing("xdbml: 0.6\nreuse { field customers.root } from './lib'\nEntity e { r root }");
+      return 'no error';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes("'Node'") && msg.includes('§15.8.3') ? undefined : msg;
+    }
+  });
+  check('v0.6.5 §15.8.3: an imported entity brings its definitions block', () => {
+    const doc = importing("xdbml: 0.6\nreuse { entity customers } from './lib'");
+    const entity = flatten(doc).statements.find((x) => x.kind === 'EntityDeclaration') as EntityDeclaration | undefined;
+    const names = entity ? [...entityDefinitions(entity.body).keys()].join(',') : 'none';
+    if (names !== 'Address,CountryCode,Node,Inner') return names;
+    const d = resolveNames(doc).diagnostics.filter((x) => x.severity === 'error').map((x) => x.code).join(' ');
+    return d === '' ? undefined : d;
+  });
+  check('v0.6.5 §15.8: Monarch colors definitions before { as a keyword, and a field named definitions as an identifier', () => {
+    const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('definitions'));
+    if (!rule) return 'rule missing';
+    const re = new RegExp(rule[0].source, 'i');
+    const asKeyword = ['definitions {', 'Definitions{', 'definitions  {'].filter((t) => !re.test(t));
+    const asField = ['definitions varchar', 'definitions object {', 'definitionsx {'].filter((t) => re.exec(t)?.index === 0);
+    return asKeyword.length || asField.length ? `keyword missed: ${asKeyword.join(' / ')}; field matched: ${asField.join(' / ')}` : undefined;
+  });
+  return results;
+}
+
+/* -------------------------------------------------------------------------
  * v0.6.4: the grammar test corpus (grammar/test-cases.md), every case
  *
  * Each case is a "### VALID -- ...", "### VALID with a warning -- ..." or
@@ -5118,15 +5332,17 @@ function main (): void {
   const keywords = runKeywordConsistencyTests();
   const v062 = runV062Tests();
   const v063 = runV063Tests();
+  const v065 = runV065Tests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
   const kr = report('Keyword-consistency tests (parser/src/keywords.ts vs parser)', keywords);
   const vr = report('v0.6.2 fixes', v062);
   const dr = report('v0.6.3 diagram views', v063);
+  const fr = report('v0.6.5 internal definitions', v065);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

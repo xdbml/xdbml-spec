@@ -61,6 +61,8 @@ import { checkConstraints, checkTargets } from './constraints.ts';
 import { versionAtLeast } from './relationships.ts';
 import { checkViews } from './views.ts';
 import { checkDiagramViews } from './diagram-views.ts';
+import { checkDefinitions, entityDefinitions } from './definitions.ts';
+import type { LocalTypes } from './definitions.ts';
 
 /* -------------------------------------------------------------------------
  * Public types
@@ -166,7 +168,13 @@ export type DiagnosticCode =
   | 'unknown-diagram-view-setting'
   // Rules checked from v0.6.4 (spec §8.6, §15.2); warnings before v0.6
   | 'invalid-tuple-positions'
-  | 'named-type-shadows-builtin';
+  | 'named-type-shadows-builtin'
+  // Internal definitions (spec §15.8.6, v0.6.5)
+  | 'definitions-outside-entity'
+  | 'duplicate-definitions-block'
+  | 'duplicate-definition'
+  | 'definitions-unsupported-target'
+  | 'definition-shadows-type';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -310,16 +318,21 @@ function typeOrEnumDeclarations (name: string, symbols: SymbolTable): SymbolEntr
  * for three characters or fewer, one edit up to seven characters, two
  * edits from eight. An adjacent transposition counts as one edit.
  */
-function nearMissTypeName (name: string, symbols: SymbolTable): string | undefined {
+function nearMissTypeName (name: string, symbols: SymbolTable, local?: LocalTypes): string | undefined {
   const lower = name.toLowerCase();
   const maxDistance = lower.length <= 3 ? 0 : lower.length <= 7 ? 1 : 2;
   // A qualified name (`core.job_stauts`) compares against qualified
-  // declarations, a bare name against bare ones.
+  // declarations, a bare name against bare ones and against the internal
+  // definitions of the entity (spec §15.8.2).
   const qualified = name.includes('.');
-  let best: { name: string; distance: number } | undefined;
+  const declaredNames: string[] = [];
+  if (!qualified && local) declaredNames.push(...local.keys());
   for (const entry of symbols.entries()) {
     if (entry.kind !== 'type' && entry.kind !== 'enum') continue;
-    const declared = qualified ? entry.qualifiedName : entry.name;
+    declaredNames.push(qualified ? entry.qualifiedName : entry.name);
+  }
+  let best: { name: string; distance: number } | undefined;
+  for (const declared of declaredNames) {
     const candidate = declared.toLowerCase();
     if (Math.abs(candidate.length - lower.length) > maxDistance) continue;
     const distance = editDistance(lower, candidate, maxDistance);
@@ -426,6 +439,12 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
       if (d.code === 'invalid-tuple-positions' || d.code === 'named-type-shadows-builtin') d.severity = 'warning';
     }
   }
+
+  // Pass 9: internal definitions (spec §15.8.6). No parser read a
+  // definitions block before 0.6.5, so each condition keeps its severity
+  // whatever version the document declares; this pass runs after the
+  // downgrade above for that reason.
+  diagnostics.push(...checkDefinitions(flat, (name) => typeOrEnumDeclarations(name, symbols).length > 0));
 
   return { diagnostics, symbols };
 }
@@ -676,10 +695,24 @@ function resolveEntityBody (
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
 ): void {
+  // Spec §15.8.2: the fields of the entity, at any depth, and the entries
+  // of its definitions block resolve a type name among the entries first.
+  const local = entityDefinitions(entity.body);
   for (const item of entity.body) {
     switch (item.kind) {
       case 'FieldDeclaration':
-        resolveFieldDeclaration(item, symbols, diagnostics);
+        resolveFieldDeclaration(item, symbols, diagnostics, local);
+        break;
+      case 'DefinitionsBlock':
+        for (const entry of item.entries) {
+          if (entry.scalarBase) {
+            resolveTypeExpression(entry.scalarBase, symbols, diagnostics, local);
+          } else {
+            for (const f of entry.body) {
+              if (f.kind === 'FieldDeclaration') resolveFieldDeclaration(f, symbols, diagnostics, local);
+            }
+          }
+        }
         break;
       case 'PartialInjection': {
         const target = symbols.lookup(item.partialName);
@@ -722,11 +755,12 @@ function resolveFieldDeclaration (
   field: FieldDeclaration,
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
+  local?: LocalTypes,
 ): void {
   // Resolve the field's type expression. This walks into nested object
   // types, arrays, unions, etc. recursively -- callers don't need to
   // do their own recursion.
-  resolveTypeExpression(field.type, symbols, diagnostics);
+  resolveTypeExpression(field.type, symbols, diagnostics, local);
 
   // Resolve any inline `ref:` setting on the field. Other settings
   // (notes, defaults, etc.) carry no name references that the
@@ -742,7 +776,11 @@ function resolveTypeExpression (
   expr: TypeExpression,
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
+  local?: LocalTypes,
 ): void {
+  // An internal definition of the entity resolves the name (spec §15.8.2).
+  // `entityDefinitions` leaves out built-in names, which take precedence.
+  if ((expr.kind === 'ScalarType' || expr.kind === 'NamedTypeReference') && local?.has(expr.name)) return;
   switch (expr.kind) {
     case 'ScalarType':
       // A ScalarType is a builtin, a reference to a declared Type or
@@ -751,7 +789,7 @@ function resolveTypeExpression (
       // time. A target-native name is valid; the only diagnostic is a
       // warning when it is a near miss of a declared Type or Enum.
       if (!isBuiltinType(expr.name) && typeOrEnumDeclarations(expr.name, symbols).length === 0) {
-        const suggestion = nearMissTypeName(expr.name, symbols);
+        const suggestion = nearMissTypeName(expr.name, symbols, local);
         if (suggestion) {
           diagnostics.push({
             severity: 'warning',
@@ -781,7 +819,7 @@ function resolveTypeExpression (
         // PartialInjection has a name (resolved as a partial reference),
         // NoteBlock has no name resolution surface.
         if (field.kind === 'FieldDeclaration') {
-          resolveTypeExpression(field.type, symbols, diagnostics);
+          resolveTypeExpression(field.type, symbols, diagnostics, local);
         } else if (field.kind === 'PartialInjection') {
           const target = symbols.lookup(field.partialName);
           if (!target || target.kind !== 'tablepartial') {
@@ -800,15 +838,15 @@ function resolveTypeExpression (
       // alias form, the element type is reachable via a nested structure
       // that's covered elsewhere; here we only recurse when present).
       if (expr.elementType) {
-        resolveTypeExpression(expr.elementType, symbols, diagnostics);
+        resolveTypeExpression(expr.elementType, symbols, diagnostics, local);
       }
       return;
     case 'MapType':
-      resolveTypeExpression(expr.keyType, symbols, diagnostics);
-      resolveTypeExpression(expr.valueType, symbols, diagnostics);
+      resolveTypeExpression(expr.keyType, symbols, diagnostics, local);
+      resolveTypeExpression(expr.valueType, symbols, diagnostics, local);
       return;
     case 'SetType':
-      resolveTypeExpression(expr.elementType, symbols, diagnostics);
+      resolveTypeExpression(expr.elementType, symbols, diagnostics, local);
       return;
     case 'TupleType': {
       // Spec §8.6: positions form a contiguous range from 0, each once.
@@ -824,7 +862,7 @@ function resolveTypeExpression (
         });
       }
       for (const elem of expr.elements) {
-        resolveTypeExpression(elem.type, symbols, diagnostics);
+        resolveTypeExpression(elem.type, symbols, diagnostics, local);
       }
       return;
     }
@@ -835,7 +873,7 @@ function resolveTypeExpression (
     case 'AnyOfType':
     case 'AllOfType':
       for (const alt of expr.alternatives) {
-        resolveTypeExpression(alt.type, symbols, diagnostics);
+        resolveTypeExpression(alt.type, symbols, diagnostics, local);
       }
       return;
     case 'UnionType':
@@ -846,7 +884,7 @@ function resolveTypeExpression (
       // resolve, so we skip it.
       for (const member of expr.members) {
         if (member.kind !== 'NullTypeLiteral') {
-          resolveTypeExpression(member, symbols, diagnostics);
+          resolveTypeExpression(member, symbols, diagnostics, local);
         }
       }
       return;
@@ -1023,20 +1061,23 @@ function resolveRefSpec (
     return;
   }
 
-  // PHASE 4: walk the field's type for any further segments.
-  let finalType: TypeExpression | undefined = topField.type;
+  // PHASE 4: walk the field's type for any further segments. The walk
+  // starts in the scope of the entity, where its internal definitions
+  // resolve (spec §15.8.2).
+  let final: Scoped = { type: topField.type, local: entityDefinitions(entity.declaration.body) };
   if (remaining.length > 1) {
     const nested = remaining.slice(1);
-    finalType = walkTypePath(topField.type, nested, symbols, diagnostics, 0);
+    const walked = walkTypePath(final.type, nested, symbols, diagnostics, 0, final.local);
     // walkTypePath returns undefined on error (and has already emitted
     // a diagnostic). Continue to composite validation only when the walk
     // succeeded.
-    if (!finalType) return;
+    if (!walked) return;
+    final = walked;
   }
 
   // Composite endpoint: validate composite fields against the final type.
   if (hasComposite) {
-    const compositeFieldNames = extractFieldNamesFromType(finalType, symbols);
+    const compositeFieldNames = extractFieldNamesFromType(final.type, symbols, final.local);
     if (!compositeFieldNames) {
       // The final type isn't an object-shaped type, so composite-field
       // validation can't apply. Emit a structural diagnostic.
@@ -1094,16 +1135,28 @@ function collectFieldNames (entity: EntityDeclaration): Set<string> {
 
 const MAX_TYPE_WALK_DEPTH = 16;
 
+/**
+ * A type together with the scope its names resolve in: the internal
+ * definitions of the entity (spec §15.8.2), or `undefined` once the walk
+ * has entered the body of a project Type, whose names resolve at project
+ * scope.
+ */
+interface Scoped {
+  type: TypeExpression;
+  local?: LocalTypes;
+}
+
 function walkTypePath (
   startType: TypeExpression,
   segments: ReadonlyArray<PathSegment>,
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
   depth: number,
-): TypeExpression | undefined {
-  let current: TypeExpression = startType;
+  local?: LocalTypes,
+): Scoped | undefined {
+  let current: Scoped = { type: startType, local };
   for (const seg of segments) {
-    const next = stepIntoType(current, seg, symbols, diagnostics, depth);
+    const next = stepIntoType(current.type, seg, symbols, diagnostics, depth, current.local);
     if (!next) return undefined;
     current = next;
   }
@@ -1111,17 +1164,20 @@ function walkTypePath (
 }
 
 function stepIntoType (
-  current: TypeExpression,
+  start: TypeExpression,
   seg: PathSegment,
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
   depth: number,
-): TypeExpression | undefined {
+  local?: LocalTypes,
+): Scoped | undefined {
   // Dereference Named Types up front so the segment-kind switch below
   // operates on the structural form.
-  const resolved = dereferenceNamedType(current, symbols, depth);
+  const resolved = dereferenceNamedType(start, symbols, depth, local);
   if (!resolved) return undefined; // depth limit hit (or unresolved Named Type)
-  current = resolved;
+  const current = resolved.type;
+  const scope = resolved.local;
+  const at = (type: TypeExpression): Scoped => ({ type, local: scope });
 
   switch (seg.kind) {
     case 'PathField': {
@@ -1149,7 +1205,7 @@ function stepIntoType (
         });
         return undefined;
       }
-      return field.type;
+      return at(field.type);
     }
     case 'PathArrayWildcard': {
       if (current.kind === 'ArrayType') {
@@ -1167,10 +1223,10 @@ function stepIntoType (
           });
           return undefined;
         }
-        return current.elementType;
+        return at(current.elementType);
       }
       if (current.kind === 'SetType') {
-        return current.elementType;
+        return at(current.elementType);
       }
       diagnostics.push({
         severity: 'error',
@@ -1182,7 +1238,7 @@ function stepIntoType (
     }
     case 'PathArrayIndex': {
       if (current.kind === 'ArrayType') {
-        return current.elementType;
+        return current.elementType ? at(current.elementType) : undefined;
       }
       if (current.kind === 'TupleType') {
         const elem = current.elements.find((e) => e.position === seg.index);
@@ -1195,7 +1251,7 @@ function stepIntoType (
           });
           return undefined;
         }
-        return elem.type;
+        return at(elem.type);
       }
       diagnostics.push({
         severity: 'error',
@@ -1207,7 +1263,7 @@ function stepIntoType (
     }
     case 'PathMapKey': {
       if (current.kind === 'MapType') {
-        return current.valueType;
+        return at(current.valueType);
       }
       diagnostics.push({
         severity: 'error',
@@ -1236,7 +1292,8 @@ function dereferenceNamedType (
   type: TypeExpression,
   symbols: SymbolTable,
   depth: number,
-): TypeExpression | undefined {
+  local?: LocalTypes,
+): Scoped | undefined {
   if (depth > MAX_TYPE_WALK_DEPTH) return undefined;
 
   // ScalarType might be a Named Type reference (parser ambiguity).
@@ -1248,27 +1305,39 @@ function dereferenceNamedType (
     name = type.name;
   } else {
     // Already a structural form.
-    return type;
+    return { type, local };
   }
 
-  const sym = symbols.lookup(name) ?? symbols.lookupBare(name);
-  if (type.kind === 'ScalarType' && (!sym || sym.kind !== 'type')) {
-    // An Enum or a target-native type: an opaque scalar, so a path that
-    // navigates into it gets the walker's shape diagnostic. A name
-    // declared as a Type or Enum in several containers stays unresolved.
-    if (typeOrEnumDeclarations(name, symbols).length > 1) return undefined;
-    return type;
+  // An internal definition of the entity comes first (spec §15.8.2), and
+  // its body stays in the entity's scope.
+  const own = local?.get(name);
+  let td: TypeDeclaration;
+  let scope: LocalTypes | undefined;
+  if (own) {
+    td = own;
+    scope = local;
+  } else {
+    const sym = symbols.lookup(name) ?? symbols.lookupBare(name);
+    if (type.kind === 'ScalarType' && (!sym || sym.kind !== 'type')) {
+      // An Enum or a target-native type: an opaque scalar, so a path that
+      // navigates into it gets the walker's shape diagnostic. A name
+      // declared as a Type or Enum in several containers stays unresolved.
+      if (typeOrEnumDeclarations(name, symbols).length > 1) return undefined;
+      return { type, local };
+    }
+    if (!sym || sym.kind !== 'type' || sym.declaration.kind !== 'TypeDeclaration') {
+      // Unresolved Named Type reference -- the field-type pass diagnoses
+      // this. Return undefined so the walker bails without emitting a
+      // duplicate error.
+      return undefined;
+    }
+    td = sym.declaration;
+    // The body of a project Type resolves its names at project scope.
+    scope = undefined;
   }
-  if (!sym || sym.kind !== 'type' || sym.declaration.kind !== 'TypeDeclaration') {
-    // Unresolved Named Type reference -- the field-type pass diagnoses
-    // this. Return undefined so the walker bails without emitting a
-    // duplicate error.
-    return undefined;
-  }
-  const td = sym.declaration;
   if (td.scalarBase) {
     // Scalar Named Type -- recurse through to the base.
-    return dereferenceNamedType(td.scalarBase, symbols, depth + 1);
+    return dereferenceNamedType(td.scalarBase, symbols, depth + 1, scope);
   }
   // Object-form Named Type. Synthesize an ObjectType so the walker can
   // navigate its fields uniformly. The span points at the Type
@@ -1280,7 +1349,7 @@ function dereferenceNamedType (
     fields: td.body,
     span: td.span,
   };
-  return synthesized;
+  return { type: synthesized, local: scope };
 }
 
 /**
@@ -1291,8 +1360,9 @@ function dereferenceNamedType (
 function extractFieldNamesFromType (
   type: TypeExpression,
   symbols: SymbolTable,
+  local?: LocalTypes,
 ): Set<string> | undefined {
-  const resolved = dereferenceNamedType(type, symbols, 0);
+  const resolved = dereferenceNamedType(type, symbols, 0, local)?.type;
   if (!resolved || resolved.kind !== 'ObjectType') return undefined;
   const names = new Set<string>();
   for (const f of resolved.fields) {

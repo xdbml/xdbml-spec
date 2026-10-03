@@ -139,7 +139,8 @@ export type EntityBodyItem =
   | ConstraintsBlock
   | NoteBlock
   | PartialInjection
-  | RecordsBlock;
+  | RecordsBlock
+  | DefinitionsBlock;
 
 /* -------------------------------------------------------------------------
  * Field
@@ -324,6 +325,24 @@ export interface TypeDeclaration {
   scalarBase?: TypeExpression;
   settings: Setting[];
   body: (FieldDeclaration | NoteBlock | PartialInjection)[];
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Internal definitions (§15.8, v0.6.5)
+ *
+ * `definitions { ... }` in an entity body. Each entry is a Type declaration
+ * written without the `Type` keyword, in the object form or the scalar
+ * form, and is visible only inside the entity: its fields, at any depth,
+ * and the other entries of the block resolve a type name among the entries
+ * first. The parser reads the block in every body that `parseEntityBody`
+ * reads (Entity, TablePartial, Edge); the resolver reports it outside an
+ * Entity (§15.8.6). `entityDefinitions()` returns the entries by name.
+ * ----------------------------------------------------------------------- */
+
+export interface DefinitionsBlock {
+  kind: 'DefinitionsBlock';
+  entries: TypeDeclaration[];
   span: Span;
 }
 

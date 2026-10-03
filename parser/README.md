@@ -57,6 +57,16 @@ const members = diagramViewMembers(parse(source), 'order_flow');
 console.log(members?.entities); // ['sales.orders', 'billing.invoices', ...]
 ```
 
+For internal definitions (spec §15.8), an entity's `definitions { }` block parses into a `DefinitionsBlock` whose entries are `TypeDeclaration` nodes. `entityDefinitions(body)` returns them by name, the lookup a consumer needs to expand a field typed by an internal definition: inside the entity, a type name resolves among the entries first, and inside the body of a project Type, among the project's declarations only. `isDefinitionsExcludedTarget(name)` tells whether a target takes no internal definitions (§15.8.4).
+
+```ts
+import { parse, entityDefinitions } from '@xdbml/parse';
+
+const entity = parse(source).statements.find((s) => s.kind === 'EntityDeclaration');
+const local = entityDefinitions(entity.body);
+console.log(local.get('Address')?.body); // the fields of the entry Address
+```
+
 ## Learn more
 
 - [xdbml.org](https://xdbml.org), and the language [in 5 minutes](https://xdbml.org/learn/)
