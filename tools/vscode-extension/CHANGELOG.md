@@ -4,6 +4,18 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.5]
+
+Follows xDBML 0.6.5, which defines internal definitions (spec §15.8).
+Version 0.6.4 of the language changed no highlighting, so the extension
+skips 0.6.4.
+
+### Added
+- **`definitions` block**: `definitions` is colored as a block keyword when
+  it opens the internal definitions of an entity, that is before `{`, as
+  `indexes`, `checks`, `constraints` and `records` are. A field named
+  `definitions` keeps the color of any other field name.
+
 ## [0.6.3]
 
 Follows xDBML 0.6.3, which defines diagram views (spec §18). Versions 0.6.2

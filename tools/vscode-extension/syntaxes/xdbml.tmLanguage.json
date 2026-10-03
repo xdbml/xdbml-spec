@@ -139,7 +139,7 @@
     "block-keywords": {
       "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names.",
       "name": "keyword.other.block.xdbml",
-      "match": "\\b((?i:constraints|indexes|records|checks))\\b(?=\\s*\\{)"
+      "match": "\\b((?i:constraints|definitions|indexes|records|checks))\\b(?=\\s*\\{)"
     },
     "diagram-view-categories": {
       "comment": "The categories of a DiagramView body (Tables, Views, Containers or Schemas, TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",

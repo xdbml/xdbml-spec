@@ -169,6 +169,9 @@ async function main () {
   for (const [line, word, expected] of [
     ['  constraints {', 'constraints', true], ['  indexes {', 'indexes', true], ['  checks {', 'checks', true],
     ['  records {', 'records', true], ['  constraints varchar', 'constraints', false],
+    // v0.6.5 (spec 15.8): the internal definitions of an entity.
+    ['  definitions {', 'definitions', true], ['  Definitions{', 'Definitions', true],
+    ['  definitions varchar', 'definitions', false], ['  definitions object {', 'definitions', false],
   ]) {
     const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
     const at = line.indexOf(word);

@@ -176,13 +176,15 @@ export const BSON_TYPES = [
 /* -------------------------------------------------------------------------
  * Entity-body block keywords (TextMate only)
  *
- * The words that open a block inside an entity body. They also appear in
- * SETTING_KEYS above, which colors them in Monaco; the TextMate grammar
- * colors setting keys only inside `[ ]`, so it matches these separately,
- * and only when `{` follows, since a field may carry one of these names.
+ * The words that open a block inside an entity body. `indexes`, `checks`
+ * and `constraints` also appear in SETTING_KEYS above, which colors them in
+ * Monaco; `definitions` (v0.6.5, spec §15.8) has a Monarch rule of its own
+ * that colors it before `{` only. The TextMate grammar colors setting keys
+ * only inside `[ ]`, so it matches these separately, and only when `{`
+ * follows, since a field may carry one of these names.
  * ----------------------------------------------------------------------- */
 
-export const BLOCK_KEYWORDS = ['indexes', 'checks', 'constraints', 'records'] as const;
+export const BLOCK_KEYWORDS = ['indexes', 'checks', 'constraints', 'records', 'definitions'] as const;
 
 /* -------------------------------------------------------------------------
  * DiagramView categories (spec §18.1, v0.6.3)

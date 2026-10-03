@@ -2,7 +2,7 @@
   "name": "xdbml",
   "displayName": "xDBML",
   "description": "Syntax highlighting and editor support for xDBML, a unified, open markup language for describing the shape of structured and semi-structured data, plus the declarative metadata attached to that shape across heterogeneous storage technologies.",
-  "version": "0.6.3",
+  "version": "0.6.5",
   "license": "Apache-2.0",
   "publisher": "xdbml",
   "main": "./dist/extension.js",

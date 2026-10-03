@@ -33,6 +33,10 @@ A backward-compatible point release of the v0.6 draft. An entity may declare int
 
 - **Example 17, internal definitions**: an insurer's claims intake across three targets. The JSON Schema entities declare their shapes in `definitions` blocks, one of them recursive and two used as `oneOf` alternatives; a MongoDB collection declares an Address of another shape under the same name; an Oracle table reuses the Project-level Type `MonetaryAmount`, since relational targets take no internal definitions.
 
+- **VS Code extension 0.6.5**: `definitions` is colored as a block keyword before `{`, as `indexes`, `checks`, `constraints` and `records` are; a field named `definitions` keeps the color of a field name. The TextMate grammar takes `definitions` from `BLOCK_KEYWORDS` in `parser/src/keywords.ts`, and its test checks both readings. The extension skips 0.6.4, which changed no highlighting.
+
+- **`llms.txt` and the MCP reference**: a section on internal definitions, with the spec example, the targets that accept the block and the ones that take none, and three common mistakes: `$defs` instead of `definitions`, internal definitions for a relational target, and an internal definition named from another entity, which passes through silently as a target-native type. Item 13 of the checklist. `mcp/src/reference.ts` is regenerated from it, and every new example is checked against the parser.
+
 ### Changed
 
 #### Spec

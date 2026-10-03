@@ -9,7 +9,7 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 - The first line of every document is `xdbml: 0.6`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
 - Comments are `//` to the end of the line, or `/* ... */`. `#` and `--` are errors.
 - Keywords match any casing, and names are case-sensitive. Write construct keywords capitalized (`Entity`, `Table`, `View`, `Ref`), settings and type keywords in lowercase.
-- A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {` and `records {` start blocks.
+- A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks.
 - Entities, Views, Edges, Types, Enums and TablePartials share one namespace: two of them never have the same name.
 - Declare every entity, Enum and Type that the document names.
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Schema`, `Database`, `Keyspace`, `Namespace`, `Dataset` or `Bucket`.
@@ -65,7 +65,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 |---|---|---|---|
 | `Project` | none | `targets:`, `Note:` | top level, at most once |
 | `Container`, `Schema`, `Database`, ... | `type`, `target`, `note`, custom | entities, Views, Edges, Enums, `Note:` | top level |
-| `Entity`, `Table`, `Collection`, `Record` | `note`, `headercolor`, `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }` | top level or in a Container |
+| `Entity`, `Table`, `Collection`, `Record` | `note`, `headercolor`, `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }`, `definitions { }` | top level or in a Container |
 | `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
 | `Edge` | `source`, `target` (entities), `source_cardinality`, `target_cardinality`, `undirected`, roles and verbs, `note` | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }` | top level or in a Container |
 | `Enum` | none | values, each with an optional `[note: '...']` | top level or in a Container |
@@ -377,6 +377,36 @@ Collection orders {
 ```
 
 The settings of a field with a body come after its closing brace. `array [T]` holds one element type; a comma list of scalars, `array [int, string]`, is shorthand for `array [union [int, string]]`, and a mix of object shapes is a `oneOf`. `json` stores an opaque JSON value; `json { ... }` describes its shape.
+
+## Internal definitions
+
+A shape reused inside one entity goes in the entity's `definitions { }` block, as JSON Schema keeps it under `$defs`. Each entry is written like a `Type` without the keyword: a name and a body of fields, or a name, a type and settings. The fields of the entity, and the other entries, name it like any type.
+
+```xdbml
+Project crm {
+  targets: 'JSON Schema'
+}
+
+Entity customers {
+  id       string  [not null]
+  billing  Address [not null]
+  contacts array [Contact]
+
+  definitions {
+    Address {
+      street  string [not null]
+      country CountryCode
+    }
+    CountryCode string [pattern: '^[A-Z]{2}$']
+    Contact {
+      kind    string [not null]
+      address Address
+    }
+  }
+}
+```
+
+An internal definition is visible only inside its entity, so two entities may each declare an `Address` of a different shape. A shape reused across entities is a `Type` at the top level. JSON Schema, Avro, Protobuf and document targets such as MongoDB accept the block. Relational targets, Cassandra, ScyllaDB, Neo4j, Memgraph, Neptune and JanusGraph take none: there, a reused shape is a `Type`. An entity holds at most one `definitions` block, and a TablePartial, an Edge or a View holds none.
 
 ## Projects and containers
 
@@ -817,6 +847,87 @@ DiagramView ordering {
 }
 ```
 
+Writing `$defs` for internal definitions. xDBML writes the block `definitions`, and `$` is not a character of the language.
+
+```xdbml
+// Wrong (lex-error): $defs is JSON Schema syntax
+Entity customers {
+  billing Address
+  $defs {
+    Address {
+      street string
+    }
+  }
+}
+
+// Right
+Entity customers {
+  billing Address
+  definitions {
+    Address {
+      street string
+    }
+  }
+}
+```
+
+Internal definitions for a relational target. A relational database reuses a shape as a user-defined type of the schema, which a `Type` at the top level declares.
+
+```xdbml
+Project erp {
+  targets: PostgreSQL
+}
+
+// Wrong (definitions-unsupported-target): a relational target takes no internal definitions
+Table customers {
+  id      int [pk]
+  billing Address
+  definitions {
+    Address {
+      street varchar(100)
+    }
+  }
+}
+
+// Right
+Type Address {
+  street varchar(100)
+}
+
+Table customers {
+  id      int [pk]
+  billing Address
+}
+```
+
+Naming an internal definition outside its entity. Another entity does not see it: the name passes through as a target-native type, with no shape, and a qualified name such as `customers.Address` does the same.
+
+```xdbml
+Entity customers {
+  billing Address
+  definitions {
+    Address {
+      street string
+    }
+  }
+}
+
+// Wrong (accepted silently): suppliers.address has no shape
+Entity suppliers {
+  address customers.Address
+}
+
+// Right
+Entity suppliers {
+  address Address
+  definitions {
+    Address {
+      street string
+    }
+  }
+}
+```
+
 ## Checklist before you answer
 
 1. The first line is `xdbml: 0.6`.
@@ -831,6 +942,7 @@ DiagramView ordering {
 10. Every setting comes from this reference, or starts with `x_`. `tags` and `synonyms` are lists.
 11. Edge cardinality uses `source_cardinality` and `target_cardinality`.
 12. Every entity, field, Enum and Type the document names is declared, qualified with its Container where it sits in one.
+13. Internal definitions sit in one `definitions { }` block of the entity that uses them, never for a relational, Cassandra, ScyllaDB or graph target; a shape used by several entities is a top-level `Type`.
 
 To check a schema, run it through an xDBML validator when one is available, or paste it into the playground at https://xdbml.org/playground/: its diagnostics panel lists each error and warning with its line.
 
