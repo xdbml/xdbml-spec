@@ -467,6 +467,30 @@ Edge RATED [source: users, target: items] { ~audit
   check('partial: an Edge lists the fields it injects',
     rows(refs, 'edge:RATED') === 'created_by rating', rows(refs, 'edge:RATED'));
 
+  // Header color of a partial (spec §17.1, as upstream DBML).
+  const colors = build(`xdbml: 0.6
+TablePartial a [headercolor: '#ff0000'] { x int }
+TablePartial b [headercolor: '#00ff00'] { y int }
+Entity own [headercolor: '#0000ff'] { id int [pk]
+ ~a }
+Entity ab { id int [pk]
+ ~a
+ ~b }
+Entity grouped { id int [pk]
+ ~a }
+Entity plain { id int [pk] }
+TableGroup g [color: '#999999'] {
+  grouped
+  plain
+}`);
+  const colorOf = (id: string): string => colors.entities.find((x) => x.id === id)?.headerColor ?? '-';
+  check('partial: the header color of the entity applies over the one of a partial',
+    colorOf('own') === '#0000ff', colorOf('own'));
+  check('partial: among partials the header color of the last one injected applies',
+    colorOf('ab') === '#00ff00', colorOf('ab'));
+  check('partial: the header color of a partial applies over the color of a TableGroup',
+    colorOf('grouped') === '#ff0000' && colorOf('plain') === '#999999', `${colorOf('grouped')} ${colorOf('plain')}`);
+
   // ~name in an object, a json body and a Type (spec §17.1).
   const nested = build(`xdbml: 0.6
 Entity users { id int [pk] }

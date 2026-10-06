@@ -51,8 +51,17 @@ export {
 } from './constraints.ts';
 export type { CheckConstraint, Constraint, ConstraintSource, KeyConstraint } from './constraints.ts';
 export { checkDefinitions, entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
-export { effectiveFieldList, effectiveFields, hasPartialInjection, injectedPartials, tablePartials } from './partials.ts';
-export type { EffectiveField, PartialLookup } from './partials.ts';
+export {
+  effectiveFieldList,
+  effectiveFields,
+  effectiveHeaderColor,
+  effectiveIndexes,
+  effectiveNote,
+  hasPartialInjection,
+  injectedPartials,
+  tablePartials,
+} from './partials.ts';
+export type { EffectiveField, EffectiveIndex, PartialLookup } from './partials.ts';
 export type { LocalTypes } from './definitions.ts';
 export { declarationTarget, isDefinitionsExcludedTarget } from './targets.ts';
 export {

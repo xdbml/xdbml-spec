@@ -106,7 +106,6 @@ import type {
   ContainerDeclaration,
   EdgeDeclaration,
   EntityDeclaration,
-  NoteBlock,
   Span,
   ViewDeclaration,
 } from '@xdbml/parse';
@@ -119,7 +118,7 @@ import { highlightSql }   from './sqlHighlight';
 import { supertypeGroupsOf } from './ast-lookup';
 import type { Selection } from './selection';
 import { useParserStore } from '@/stores/parserStore';
-import { effectiveFieldList, effectiveFields, entityConstraints, entityDefinitions, tablePartials, viewSourceQuery } from '@xdbml/parse';
+import { effectiveFieldList, effectiveFields, effectiveHeaderColor, effectiveNote, entityConstraints, entityDefinitions, tablePartials, viewSourceQuery } from '@xdbml/parse';
 import type { Constraint, ConstraintSource } from '@xdbml/parse';
 
 const props = defineProps<{
@@ -198,9 +197,17 @@ const keywordLabel = computed(() => {
 // Settings table excludes the `note` setting because notes render
 // below in their own Note section; showing them twice would be
 // redundant. (Field-level Inspector applies the same filter.)
-const standardSettings = computed(() =>
-  props.entity.settings.filter((s) => s.name !== 'note'),
-);
+//
+// The header color of a TablePartial the entity injects applies to the
+// entity when it declares none (spec §17.1), so it is listed with the
+// entity's own settings.
+const standardSettings = computed(() => {
+  const own = props.entity.settings.filter((s) => s.name !== 'note');
+  if (own.some((s) => s.name === 'headercolor')) return own;
+  const doc = parser.flatAst;
+  const carried = doc ? effectiveHeaderColor(props.entity, tablePartials(doc)) : undefined;
+  return carried ? [...own, carried] : own;
+});
 
 // Entity/View-level notes can come from two sources: a `Note: '...'`
 // block inside the body (the canonical syntax) or a `[note: '...']`
@@ -208,15 +215,11 @@ const standardSettings = computed(() =>
 // exist (since the body block can be triple-quoted and multi-line,
 // it tends to carry the richer note); fall back to the setting
 // otherwise.
+// The note of a TablePartial the entity injects applies when the entity
+// declares none (spec §17.1); `effectiveNote` settles both.
 const noteBody = computed(() => {
-  for (const item of props.entity.body) {
-    if (item.kind === 'NoteBlock') return (item as NoteBlock).body;
-  }
-  const noteSetting = props.entity.settings.find((s) => s.name === 'note');
-  if (noteSetting && noteSetting.value && noteSetting.value.kind === 'StringValue') {
-    return noteSetting.value.value;
-  }
-  return '';
+  const doc = parser.flatAst;
+  return effectiveNote(props.entity, doc ? tablePartials(doc) : new Map())?.body ?? '';
 });
 
 /**

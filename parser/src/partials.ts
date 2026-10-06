@@ -21,6 +21,13 @@
  * of a `definitions` block. `effectiveFieldList()` applies the same rules
  * to any such list.
  *
+ * At the top level of an Entity or an Edge, a TablePartial brings more
+ * than its fields, as in upstream DBML: its keys and checks (see
+ * `entityConstraints()`), the entries of its `indexes` block
+ * (`effectiveIndexes()`), and its header color and its note where the
+ * entity declares none (`effectiveHeaderColor()`, `effectiveNote()`). In a
+ * nested body only the fields are placed.
+ *
  * A TablePartial does not inject another one (§17.1): a `~name` line in
  * the body of a TablePartial, at any depth, is an error the resolver
  * reports. At the top level of a TablePartial it brings no field here.
@@ -28,7 +35,11 @@
 
 import type {
   FieldDeclaration,
+  IndexEntry,
+  IndexesBlock,
+  NoteBlock,
   PartialInjection,
+  Setting,
   TablePartialDeclaration,
   XDbmlDocument,
 } from './ast.ts';
@@ -127,4 +138,76 @@ export function injectedPartials (
     if (partial && !out.includes(partial)) out.push(partial);
   }
   return out;
+}
+
+/* -------------------------------------------------------------------------
+ * What a TablePartial brings besides its fields (§17.1, as upstream DBML)
+ * ----------------------------------------------------------------------- */
+
+type Declared = { body: ReadonlyArray<{ kind: string }>; settings?: ReadonlyArray<Setting> };
+
+/** An index of an entity, with the TablePartial that declares it when it is injected. */
+export interface EffectiveIndex {
+  entry: IndexEntry;
+  partial?: TablePartialDeclaration;
+}
+
+/**
+ * The indexes of an Entity or an Edge: the entries of its own `indexes`
+ * block, then those of the TablePartials it injects, in the order of the
+ * `~name` lines. An entry of a partial names fields of the partial, which
+ * the entity holds.
+ */
+export function effectiveIndexes (decl: Declared, partials: PartialLookup): EffectiveIndex[] {
+  const out: EffectiveIndex[] = [];
+  const read = (body: ReadonlyArray<{ kind: string }>, partial?: TablePartialDeclaration): void => {
+    for (const item of body) {
+      if (item.kind !== 'IndexesBlock') continue;
+      for (const entry of (item as IndexesBlock).entries) out.push(partial ? { entry, partial } : { entry });
+    }
+  };
+  read(decl.body);
+  for (const partial of injectedPartials(decl, partials)) read(partial.body, partial);
+  return out;
+}
+
+/**
+ * The `headercolor` setting that applies to an Entity: its own, otherwise
+ * that of the last TablePartial injected that declares one.
+ */
+export function effectiveHeaderColor (decl: Declared, partials: PartialLookup): Setting | undefined {
+  const own = decl.settings?.find((s) => s.name === 'headercolor');
+  if (own) return own;
+  let found: Setting | undefined;
+  for (const partial of injectedPartials(decl, partials)) {
+    found = partial.settings.find((s) => s.name === 'headercolor') ?? found;
+  }
+  return found;
+}
+
+/** The note a body declares: `Note` in the body first, then `note:` in the brackets. */
+function declaredNote (decl: Declared): string | undefined {
+  const block = decl.body.find((b) => b.kind === 'NoteBlock') as NoteBlock | undefined;
+  if (block) return block.body;
+  const setting = decl.settings?.find((s) => s.name === 'note');
+  return setting?.value?.kind === 'StringValue' ? setting.value.value : undefined;
+}
+
+/**
+ * The note that applies to an Entity or an Edge: its own, otherwise that
+ * of the last TablePartial injected that declares one, which `partial`
+ * then names.
+ */
+export function effectiveNote (
+  decl: Declared,
+  partials: PartialLookup,
+): { body: string; partial?: TablePartialDeclaration } | undefined {
+  const own = declaredNote(decl);
+  if (own !== undefined) return { body: own };
+  let found: { body: string; partial: TablePartialDeclaration } | undefined;
+  for (const partial of injectedPartials(decl, partials)) {
+    const note = declaredNote(partial);
+    if (note !== undefined) found = { body: note, partial };
+  }
+  return found;
 }

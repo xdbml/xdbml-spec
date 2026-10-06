@@ -67,6 +67,10 @@ Diagram views (spec §18) add five errors of their own, whatever version the doc
 
 The `Containers`, `Views` and `SupertypeGroups` categories, and a diagram view's note and settings, are xDBML extensions: in a document without a version declaration they raise `construct-requires-version`. DBML's own name for Containers, `Schemas`, needs no declaration. See [**Diagram views**](./diagram-views).
 
+TablePartials (spec §17.1) add one condition, with the same severity whatever version the document declares:
+
+- **`partial-injection-in-partial`** (error): the body of a TablePartial, or one of its fields, holds a `~name` line. A TablePartial does not inject another one; write both `~name` lines in the body that needs the fields of both.
+
 Internal definitions (spec §15.8) add five conditions of their own, with the same severity whatever version the document declares, since no parser read a `definitions` block before 0.6.5:
 
 - **`definitions-outside-entity`** (error): a TablePartial or an Edge holds a `definitions` block. Internal definitions belong to an entity; declare a shape reused elsewhere as a `Type`. In a View, the block stops the parse with a message citing §15.8.1.

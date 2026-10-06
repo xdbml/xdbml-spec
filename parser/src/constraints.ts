@@ -46,7 +46,7 @@ import { entityDefinitions } from './definitions.ts';
 import type { LocalTypes } from './definitions.ts';
 import { canonicalTarget, effectiveTarget, isRelationalTarget, projectTarget, projectTargets, settingValues } from './targets.ts';
 import { hasForeignMasterFlag, isForeignMaster, versionAtLeast } from './relationships.ts';
-import { effectiveFieldList, effectiveFields, tablePartials } from './partials.ts';
+import { effectiveFieldList, effectiveFields, effectiveIndexes, tablePartials } from './partials.ts';
 
 export { isRelationalTarget } from './targets.ts';
 
@@ -639,12 +639,11 @@ function referenceableKeys (decl: EntityDeclaration, doc: XDbmlDocument): string
   const keys = entityConstraints(decl, doc)
     .filter((c): c is KeyConstraint => c.kind === 'key')
     .map((k) => k.fields);
-  for (const item of decl.body) {
-    if (item.kind !== 'IndexesBlock') continue;
-    for (const e of item.entries) {
-      if (isPk(e.settings) || !hasFlag(e.settings, 'unique')) continue;
-      keys.push(e.components.flatMap((c) => (c.kind === 'IndexPathComponent' ? [keyPathString(c.path)] : [])));
-    }
+  // The indexes of the TablePartials the entity injects are its indexes
+  // too (§17.1), so a unique one is a key a relationship may reference.
+  for (const { entry: e } of effectiveIndexes(decl, tablePartials(doc))) {
+    if (isPk(e.settings) || !hasFlag(e.settings, 'unique')) continue;
+    keys.push(e.components.flatMap((c) => (c.kind === 'IndexPathComponent' ? [keyPathString(c.path)] : [])));
   }
   return keys;
 }

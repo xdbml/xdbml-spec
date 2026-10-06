@@ -4,17 +4,22 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## Unreleased
+## v0.6.6 -- 2026
 
-Changes on `main` since v0.6.5. The playground serves them as soon as they are pushed; the npm packages, the MCP server and the rendering API take them at the next release.
+**Status**: Draft -- current
+**Released**: 2026-10-06
+
+A point release of the v0.6 draft on TablePartials. §17.1 gave the conflict rule alone; it now states where the fields of a TablePartial go, which bodies take a `~name` line, and what a TablePartial carries to them. The tools apply it: the parser kept a `~name` line without applying it, so the diagram, the relationships and the checks did not see the injected fields. Every document that follows a form the spec described remains valid, and documents continue to declare `xdbml: 0.6`.
 
 ### Changed
 
 #### Spec
 
-- **TablePartial (§17.1)**: the section now states where injected fields go and which bodies take a `~name` line. A `~name` line places the fields of the TablePartial in the entity at the position of the line, in the order the TablePartial declares them. A field the entity declares itself overrides an injected field of the same name and keeps its own position; among partials the last one injected applies, at the position of its `~name` line. This is the behavior of upstream DBML. A `~name` line may also sit among the fields of an `object { }` or a `json { }`, and in the body of a Type or of an entry of a `definitions` block, with the same rules; the grammar and the parser already read it there, and no earlier version of the spec described it. Only the fields are placed in a nested body: the keys and checks of the partial's `constraints` block apply at the top level of an Entity or an Edge. `~` names a TablePartial, never a Type. A TablePartial does not inject another TablePartial: a `~name` line in the body of a TablePartial, or inside one of its fields, is an error (`partial-injection-in-partial`). Upstream DBML rejects that form as well. The parser used to accept it without a diagnostic.
+- **TablePartial (§17.1)**: the section now states where injected fields go and which bodies take a `~name` line. A `~name` line places the fields of the TablePartial in the entity at the position of the line, in the order the TablePartial declares them. A field the entity declares itself overrides an injected field of the same name and keeps its own position; among partials the last one injected applies, at the position of its `~name` line. This is the behavior of upstream DBML. A `~name` line may also sit among the fields of an `object { }` or a `json { }`, and in the body of a Type or of an entry of a `definitions` block, with the same rules; the grammar and the parser already read it there, and no earlier version of the spec described it. Only the fields are placed in a nested body: the keys and checks of the partial's `constraints` block apply at the top level of an Entity or an Edge. `~` names a TablePartial, never a Type. At the top level of an Entity or an Edge, a TablePartial brings its keys and checks, the entries of its `indexes` block, and its header color and its note where the entity declares none, the last partial injected applying among several. This is the behavior of upstream DBML as well. Its other settings stay with it. A TablePartial does not inject another TablePartial: a `~name` line in the body of a TablePartial, or inside one of its fields, is an error (`partial-injection-in-partial`). Upstream DBML rejects that form as well. The parser used to accept it without a diagnostic.
 - **Type and TablePartial (§15.6)**: the comparison table follows §17.1. A Type is named as the type of a field, which holds its shape as a nested value; a TablePartial is injected with a `~name` line and its fields join those of the body.
 - **Edges with named types and partials (§13.5)**: the example injected a Type with `~`, which is an error (`unresolved-partial`). It now declares a TablePartial for the injected properties and a Type for a nested one.
+- **Records (§26.1)**: the implicit column order of a `records { }` block in an entity that injects a TablePartial is the order of §17.1, each injected field at the position of its `~name` line. The section used to list the entity's own fields first, then the injected ones.
+- **Indexes (§9)**: one sentence on the `indexes` block of a TablePartial, whose entries add to the indexes of each entity that injects it (§17.1).
 
 #### Tooling
 
@@ -24,15 +29,24 @@ Changes on `main` since v0.6.5. The playground serves them as soon as they are p
   - an inline `ref:` on a field of a TablePartial draws one relationship per place that injects the partial, and the referenced-key rule (§11.17) checks it at the top level;
   - a `~name` line in the body of a Type or of an entry of `definitions` that names no TablePartial reports `unresolved-partial`, as it did in an entity;
   - in the playground, a click on an injected row opens the field, the inspector names its TablePartial, and Edit in source goes to the line in the TablePartial. The field count of the entity includes the injected fields.
-- **llms.txt**: a "Partials" section, with an example checked against the parser.
+- **Indexes, header color and note of a TablePartial (§17.1)**: `@xdbml/parse` exports `effectiveIndexes()`, `effectiveHeaderColor()` and `effectiveNote()`. The diagram draws an entity in the header color of a partial it injects, over the color of a TableGroup; the inspector shows that color and the note of the partial; and a unique index of a partial is a key a relationship may reference (§11.17).
+- **One diagnostic (§17.1)**: `partial-injection-in-partial` (error) on a `~name` line in the body of a TablePartial or inside one of its fields, whatever version a document declares. The playground help lists it.
+- **`@xdbml/parse`** accepts documents declaring `xdbml: 0.6.6`.
+- **llms.txt**: a "Partials" section, with an example checked against the parser, and the TablePartial and Type rows of "What goes where".
 
 - **Renderer: automatic arrangement (`autoArrange`, relational and star)**: two changes to the first layout of a diagram, the one the playground draws for a document without saved positions and the one `renderToSVG` draws by default. The free cell next to a placed entity is now searched beside it first, then above or below it, and across a corner last; the second entity of a related pair used to land across a corner, a row lower, and with rows as tall as the tallest entity of the diagram it could sit far below its neighbour, as `claim_submission` did in example 17. The blocks of the containers, and of unconnected groups of entities, are packed in rows of the width that lets a landscape view show the arrangement at the largest zoom, instead of a width derived from the total area. Over the seventeen examples, relationships whose two entities share a row or a column go from 27 of 63 to 59 of 63, and the zoom at which a 1100 by 700 pane fits the whole arrangement rises by 22% on average. A saved layout is unchanged; Arrange in the diagram toolbar applies the new arrangement to it. The goldens of sixteen examples change accordingly.
+
+### Not changed (compatibility)
+
+- Backward-compatible for every form the spec described. A document that injects TablePartials now resolves the references to their fields, which used to draw `unresolved-field`.
+- One form that `@xdbml/parse` read without a diagnostic now draws an error: a `~name` line inside a TablePartial. No version of the spec described it, and upstream DBML rejects it.
+- A plain DBML document that uses TablePartials now reads as it does in DBML for fields, indexes, header color and note. One difference remains, stated in §10.4 since v0.6: when an entity and a TablePartial both declare a primary key, the entity's applies, where DBML combines them.
 
 ---
 
 ## v0.6.5 -- 2026
 
-**Status**: Draft -- current
+**Status**: Draft -- superseded by v0.6.6
 **Released**: 2026-10-03
 
 A backward-compatible point release of the v0.6 draft. An entity may declare internal definitions: named types visible only inside the entity, which a JSON Schema document holds under `$defs` (§15.8). The `Type` declarations of v0.1 stay the reusable types of the whole Project. Every v0.6 document remains valid, and documents continue to declare `xdbml: 0.6`.

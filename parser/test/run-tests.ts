@@ -36,7 +36,9 @@ import {
 import * as keywordArrays from '../src/keywords.ts';
 import { parse as parse062, resolveNames as resolveNames062 } from '../src/index.ts';
 import { entityConstraints, primaryKey } from '../src/constraints.ts';
-import { effectiveFields, tablePartials } from '../src/partials.ts';
+import { effectiveFields, effectiveHeaderColor, effectiveIndexes, effectiveNote, tablePartials } from '../src/partials.ts';
+import { keyPathString } from '../src/constraints.ts';
+import type { PathSegment } from '../src/index.ts';
 import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -4326,8 +4328,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.6 is newer than this parser supports',
-      source: `xdbml: 0.6.6
+      name: 'v0.6.1 §4: xdbml: 0.6.7 is newer than this parser supports',
+      source: `xdbml: 0.6.7
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -5461,6 +5463,80 @@ Entity e { id int [pk]
  ~b }
 `);
     return got === 'error:partial-injection-in-partial' ? undefined : `diagnostics: ${got}`;
+  });
+
+  const CARRIED = `xdbml: 0.6
+TablePartial a [headercolor: '#ff0000', note: 'from a'] {
+  x int
+  indexes { x [name: 'ix_a'] }
+}
+TablePartial b [headercolor: '#00ff00'] {
+  y int
+  Note: 'body note of b'
+  indexes { y [unique] }
+}
+Entity own [headercolor: '#0000ff', note: 'own'] { id int [pk]
+ ~a
+ ~b
+ indexes { id } }
+Entity ab { id int [pk]
+ ~a
+ ~b }
+Entity ba { id int [pk]
+ ~b
+ ~a }
+Entity bodynote { id int [pk]
+ ~a
+ Note: 'own body note' }
+Entity child { id int [pk]
+ y int }
+Ref: child.y > ab.y
+`;
+  const carried = (name: string): string => {
+    const doc = parse(CARRIED);
+    const partials = tablePartials(doc);
+    const decl = doc.statements.find((s) => s.kind === 'EntityDeclaration' && s.name === name) as EntityDeclaration;
+    const color = effectiveHeaderColor(decl, partials);
+    const colorText = color?.value && 'value' in color.value ? String(color.value.value) : '-';
+    const indexes = effectiveIndexes(decl, partials)
+      .map((i) => `${keyPathString((i.entry.components[0] as { path: PathSegment[] }).path)}${i.partial ? `<${i.partial.name}` : ''}`).join(',');
+    return `${colorText} | ${effectiveNote(decl, partials)?.body ?? '-'} | ${indexes}`;
+  };
+  // Expected values are those of @dbml/core 10.2.0 for the same document.
+  check('§17.1: the header color and the note of the entity apply over those of a partial', () => {
+    const got = carried('own');
+    return got === '#0000ff | own | id,x<a,y<b' ? undefined : `got: ${got}`;
+  });
+  check('§17.1: among partials the header color and the note of the last one injected apply', () => {
+    const ab = carried('ab');
+    const ba = carried('ba');
+    if (ab !== '#00ff00 | body note of b | x<a,y<b') return `ab: ${ab}`;
+    return ba === '#ff0000 | from a | y<b,x<a' ? undefined : `ba: ${ba}`;
+  });
+  check('§17.1: a Note in the body of the entity applies over the note of a partial', () => {
+    const got = carried('bodynote');
+    return got === '#ff0000 | own body note | x<a' ? undefined : `got: ${got}`;
+  });
+  check('§17.1, §11.17: a unique index of a partial is a key a relationship may reference', () => {
+    const got = codes(CARRIED);
+    if (got !== '') return `diagnostics: ${got}`;
+    const without = codes(CARRIED.replace('  indexes { y [unique] }\n', ''));
+    return without.includes('ref-target-not-key') ? undefined : `without the index: ${without}`;
+  });
+  check('§17.1: a pk entry in the indexes of a partial is the primary key of the entity', () => {
+    const src = `xdbml: 0.6
+TablePartial keyed { a int [not null]
+ b int [not null]
+ indexes { (a, b) [pk] } }
+Entity e { ~keyed
+ c int }
+`;
+    const got = codes(src);
+    if (got !== '') return `diagnostics: ${got}`;
+    const doc = parse(src);
+    const decl = doc.statements.find((s) => s.kind === 'EntityDeclaration') as EntityDeclaration;
+    const pk = primaryKey(decl, doc)?.fields.join(',') ?? '';
+    return pk === 'a,b' ? undefined : `primary key: ${pk}`;
   });
 
   check('§10.4: the primary key of the entity applies over the one of a partial', () => {

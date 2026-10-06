@@ -70,7 +70,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | `Edge` | `source`, `target` (entities), `source_cardinality`, `target_cardinality`, `undirected`, roles and verbs, `note` | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }` | top level or in a Container |
 | `Enum` | none | values, each with an optional `[note: '...']` | top level or in a Container |
 | `Type` | `note`, `tags`, `synonyms`, `business_term` | fields, `~partial` | top level |
-| `TablePartial` | as an Entity | as an Entity, without `~partial` and `definitions { }` | top level |
+| `TablePartial` | `note`, `headercolor` | fields, `Note:`, `constraints { }`, `indexes { }` | top level |
 | `Ref` | relationship settings | -- | top level, never in a Container |
 | `SupertypeGroup` | `supertype` (required), `completeness`, `exclusivity`, `strategy`, `merge`, `discriminator`, `note` | subtype names, each with an optional `[strategy: ...]` | top level |
 | `TableGroup` | `color`, `note` | entity names | top level |
@@ -410,7 +410,7 @@ An internal definition is visible only inside its entity, so two entities may ea
 
 ## Partials
 
-A `TablePartial` declares a set of fields once, for several bodies. A `~name` line places them where it is written, in the order the TablePartial declares them: in an Entity or an Edge, among the fields of an `object { }` or a `json { }`, or in the body of a `Type`. A field the body declares itself overrides an injected field of the same name; among partials, the last one injected applies. The body of a TablePartial holds no `~name` line, at any depth. `~` never names a `Type`: a Type is the type of a field (`billing Address`), and the field holds its shape as a nested value.
+A `TablePartial` declares a set of fields once, for several bodies. A `~name` line places them where it is written, in the order the TablePartial declares them: in an Entity or an Edge, among the fields of an `object { }` or a `json { }`, or in the body of a `Type`. A field the body declares itself overrides an injected field of the same name; among partials, the last one injected applies. At the top level of an Entity or an Edge, a partial also brings the keys and checks of its `constraints { }`, the entries of its `indexes { }`, and its `headercolor` and its note where the entity declares none. In a nested body it brings its fields only. The body of a TablePartial holds no `~name` line, at any depth. `~` never names a `Type`: a Type is the type of a field (`billing Address`), and the field holds its shape as a nested value.
 
 ```xdbml
 TablePartial audit {

@@ -1,140 +1,111 @@
-xDBML -- TablePartial injection applied (after 0.6.5)
-Base: origin/main 59ac805 (renderer: automatic arrangement). Built 2026-10-06.
-This archive replaces xdbml-tablepartial-injection.zip of earlier today: it
-holds that delivery plus `~name` in nested bodies and the 13.5 correction.
+xDBML 0.6.6 -- TablePartials as in DBML, records column order, release
+Base: your local commit of xdbml-tablepartial-injection.zip (the TablePartial
+delivery, on origin/main 59ac805). Built 2026-10-06.
+This archive replaces the xdbml-0.6.6-release.zip of earlier today, which
+left the settings and the indexes of a TablePartial out. It applies whether
+that first archive was never unzipped, unzipped only, or committed.
 
-The playground showed `users` of spec 17.1 with `name` alone: the three
-fields of `base_template` were missing. The parser keeps a `~name` line as
-a node of the body, and nothing applied it. The renderer listed the
-declared fields only, and so did the other readers of an entity's fields:
-
-  - a Ref to an injected field (`Ref: orders.user_id > users.id`) reported
-    "Field 'id' is not declared on entity 'users'", and a top-level
-    `records` declaration reported the same for an injected column;
-  - an inline `ref:` on a field of a TablePartial drew no relationship;
-  - the entity inspector counted 1 field for `users`.
-
-All of these now read the fields through two parser functions,
-effectiveFields() and effectiveFieldList(), which apply your decisions:
-
-  1. Injected fields sit where the `~name` line is written, in the order
-     the TablePartial declares them. A field the body declares itself
-     overrides an injected one and keeps its own place; among partials the
-     last one injected applies, at the place of its `~name` line. Checked
-     against @dbml/core 10.2.0, which gives the same order in each case.
-  2. A TablePartial does not inject another one. `~name` in the body of a
-     TablePartial, or inside one of its fields, is the error
-     `partial-injection-in-partial`, in every version.
-  3. `~name` is allowed among the fields of `object { }` and `json { }`,
-     and in the body of a Type or of an entry of `definitions`. The same
-     rules of position and conflict apply. Only the fields are placed
-     there: a partial's `constraints` block applies at the top level of an
-     Entity or an Edge, as before.
-  4. `~` names a TablePartial, never a Type. 13.5 is corrected.
-
-HOW TO APPLY
+WHAT IT DOES
 ------------
+  1. 17.1: at the top level of an Entity or an Edge, a `~name` line brings
+     what it brings in upstream DBML. Besides the fields: the keys and
+     checks of the TablePartial, the entries of its `indexes` block, and
+     its header color and its note where the entity declares none. Among
+     partials the last one injected applies. Checked case by case against
+     @dbml/core 10.2.0; the parser tests hold its values.
+  2. The warning partial-indexes-not-carried of the first archive is gone.
+  3. 26.1 (records): the implicit column order of a `records { }` block is
+     the order of 17.1, each injected field at the place of its `~name`
+     line. No tool reads that order today, so this is spec text only.
+  4. The CHANGELOG section "Unreleased" becomes "v0.6.6", and the parser
+     accepts `xdbml: 0.6.6`.
+
+TWO POINTS WHERE I HAD TO PICK
+------------------------------
+  a. DBML has two table settings, headercolor and note, and both are
+     carried. The settings xDBML adds (tags, synonyms, business_term,
+     custom x_ properties) stay with the TablePartial: 17.1 says so.
+  b. One difference from DBML remains, and is older than this work: when
+     an entity and a TablePartial both declare a primary key, 10.4 gives
+     the entity's key, where DBML makes one composite key of the two.
+
+HOW TO APPLY AND RELEASE
+------------------------
 Unzip the archive at the root of the clone (C:\Repos\Hackolade\xdbml-spec),
 then, from cmd.exe at the repo root:
 
     apply.cmd
 
-apply.cmd copies nothing. It checks that 59ac805 is in the history of HEAD
-and that no commit since then touched the delivery's files; that each
-unzipped file holds this delivery's content; and that the working tree
-holds no uncommitted change outside the delivery. It then runs the gate
-(npm run check, mcp type-check) and prints the commit commands.
+apply.cmd copies nothing. It checks that 59ac805 is in the history of HEAD;
+that each file of this delivery is, in HEAD, a version this delivery knows
+(the TablePartial delivery, or the first 0.6.6 archive); that each unzipped
+file holds this delivery's content; and that the working tree holds no
+uncommitted change outside the delivery. It then runs the gate (npm run
+check, mcp type-check) and prints these commands:
 
-If the earlier archive is already unzipped in the clone and not committed,
-unzip this one over it: the file list is the same.
+    git add <the files of the delivery>
+    git commit -m "0.6.6: TablePartials as in DBML, records column order, release notes"
+    tools\release-preflight.cmd 0.6.6
+    tools\release.cmd 0.6.6
+
+release-preflight.cmd changes nothing: it checks the npm login, that 0.6.6
+is free for both packages, wrangler, the test suites and a clean tree.
+release.cmd publishes @xdbml/parse then @xdbml/render at 0.6.6, deploys
+the MCP server and the rendering API, commits the version bumps as
+"release 0.6.6", pushes main with your local commits, and tags and
+publishes the GitHub release from the v0.6.6 section of the CHANGELOG.
+No push is needed before it, and no file is edited by hand.
 
 WHAT CHANGED
 ------------
-parser\src\partials.ts (new)
-  effectiveFields(decl, partials): the top-level fields of an Entity or an
-  Edge with the injected fields in place, each with the TablePartial it
-  comes from. effectiveFieldList(items, partials): the same for the fields
-  of an object, a json body or a Type. tablePartials(doc),
-  injectedPartials(), hasPartialInjection().
-parser\src\index.ts
-  Exports the five functions and the types EffectiveField, PartialLookup.
-parser\src\name-resolver.ts
-  Ref endpoints (single, composite, and along a nested path) and top-level
-  records columns are looked up among the effective fields. An injected
-  field resolves its type names at project scope (15.8.2). New error
-  partial-injection-in-partial, at any depth of a TablePartial body.
-  unresolved-partial is now also reported in the body of a Type and of an
-  entry of definitions, which were not walked.
+parser\src\partials.ts, parser\src\index.ts
+  effectiveIndexes(decl, partials): the entity's own index entries, then
+  those of the partials it injects. effectiveHeaderColor() and
+  effectiveNote(): the entity's own, otherwise that of the last partial
+  injected that declares one. All three exported.
 parser\src\constraints.ts
-  The key and index checks and the referenced-key rule (11.17) read the
-  effective fields; a key path steps through fields injected in a nested
-  object. An inline ref received from a partial is checked for each entity
-  that injects it, and a same message is reported once.
-parser\src\supertypes.ts
-  The redeclaration rule (12.5) reads the effective fields.
+  A unique index of an injected partial is a key a relationship may
+  reference (11.17), like a unique index of the entity.
+parser\src\name-resolver.ts
+  As in the TablePartial delivery: the warning of the first archive is
+  removed. The file is in the archive so that it is restored if needed.
+parser\src\parser.ts
+  SUPPORTED_XDBML_VERSION = '0.6.6'.
 renderer\src\layout\layout.ts
-  buildEntityLayout(): rows from the effective fields, for entities, Edge
-  boxes, and the nested rows of an object, a json body and a Type.
-  `unique` lines of an injected partial's constraints block mark their
-  rows. With an injection, the PK mark of the top-level rows comes from
-  primaryKey(), which applies 10.4. collectRefDeclarations(): the inline
-  refs of injected fields, at the top level and in object and json bodies.
-playground\src\components\inspector\ast-lookup.ts, Inspector.vue,
-FieldInspector.vue, EntityInspector.vue
-  A click on an injected row opens the field, at any depth. The
-  Identification block names its TablePartial, and Edit in source goes to
-  the line in the TablePartial. The field count of the entity includes
-  injected fields, and the structural details of a field show its
-  `~name` lines.
+  Header color of an entity: its own, then that of a partial it injects,
+  then the color of its TableGroup.
+playground\src\components\inspector\EntityInspector.vue
+  The note and the header color of an injected partial show for the
+  entity when it declares none.
 spec\v0.6.md
-  17.1: position, conflict rule, nested bodies with an example and its
-  playground button, `~` and Types, no injection in a TablePartial.
-  15.6: the comparison table follows 17.1.
-  13.5: the example declares a TablePartial for the injected properties
-  and a Type for a nested one, with a sentence on each. Button rewritten.
-grammar\xDBML.g4
-  A comment on tablePartialDefinition. No rule changed: the grammar
-  already reads `~name` wherever a field is read.
+  17.1: what a `~name` line brings at the top level and in a nested body,
+  and the state before v0.6.6. The heading keeps its anchor. 26.1: the
+  implicit column order. 9: one sentence on the indexes of a TablePartial.
+  "What's new in v0.6": one sentence for v0.6.6.
+playground\help\diagnostics-panel.md
+  The TablePartial condition, partial-injection-in-partial.
 public\llms.txt, mcp\src\reference.ts
-  "What goes where": the TablePartial and Type rows. A "Partials" section
-  with one example. reference.ts is regenerated from llms.txt.
-parser\test\run-tests.ts (+18), renderer\test\run-tests.ts (+12),
-playground\test\run-tests.ts (+2)
+  The TablePartial row of "What goes where" (`note`, `headercolor`;
+  fields, `Note:`, `constraints { }`, `indexes { }`) and one sentence of
+  "Partials" on what a partial brings.
+parser\test\run-tests.ts (488), renderer\test\run-tests.ts (287)
+  Header color, note and indexes with the values of @dbml/core; a
+  relationship to a field made unique by an index of a partial; the pk
+  entry of a partial's indexes; header color in the diagram, over a
+  TableGroup. The unsupported-version test moves to `xdbml: 0.6.7`.
 CHANGELOG.md
-  "Unreleased": three Spec entries (17.1, 15.6, 13.5), two Tooling entries.
+  "## v0.6.6 -- 2026", Status current, Released 2026-10-06, with a
+  compatibility section. v0.6.5 becomes "superseded by v0.6.6".
 APPLY.txt, apply.cmd
   This delivery.
 
-No golden changes: none of the seventeen examples injects a TablePartial.
+No golden changes. No VS Code extension 0.6.6: nothing in the grammar of
+the highlighter changed, and check:vsix passes with 0.6.5, as it did for
+0.6.2 and 0.6.4.
 
 GATE
 ----
-npm run check: parser 483, renderer 284 + 14 + 47, mcp 85, from-mongodb 24,
+npm run check: parser 488, renderer 287 + 14 + 47, mcp 85, from-mongodb 24,
 playground 60, vsix in sync, 167 spec buttons open their snippet,
 playground type-check and site build clean. mcp type-check clean.
-
-WHERE THE FIX LANDS
--------------------
-The playground on xdbml.org takes it at the site build that follows the
-push. The npm packages, the MCP server and the rendering API take it at the
-next release. Until then `npm run type-check` in renderer\ fails, since it
-compiles against @xdbml/parse 0.6.5 from npm, which lacks the new exports;
-that command is not part of the gate, and release.cmd publishes the parser
-before it builds the renderer.
-
-OPEN POINTS
------------
-  a. 17.1, 15.6 and 13.5 change the spec text. They sit in the CHANGELOG
-     under "Unreleased" without a version mark, and need a number at the
-     next point release (0.6.6).
-  b. 26 (records) still gives the implicit column order as "locally
-     declared fields first, then partial-injected fields in injection
-     order", which differs from the order of 17.1. Not changed here.
-  c. A partial's settings (headercolor, note) and its `indexes` block are
-     not carried to the entity. Upstream DBML carries them, and 17.1 says
-     nothing about them.
-  d. Two limits met on the way, both older than this delivery and left as
-     they were: a Ref path into a `json { }` body reports
-     invalid-nested-path whatever the body holds, and an inline `ref:`
-     written in the body of a Type draws no relationship for the fields
-     typed by it. Fields injected there behave as fields written there.
+scripts\release-notes.mjs 0.6.6 finds the section.

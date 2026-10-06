@@ -35,6 +35,7 @@ import {
   diagramViewMembers,
   effectiveFieldList,
   effectiveFields,
+  effectiveHeaderColor,
   entityDefinitions,
   hasPartialInjection,
   injectedPartials,
@@ -592,9 +593,10 @@ export function buildDiagram (
     for (const entity of containerEntities) {
       const entityId = `${container.name}.${entity.name}`;
       // Header color priority: entity's own [headercolor: '#...'] >
+      // that of the last TablePartial it injects (spec §17.1) >
       // TableGroup membership color > undefined (renderer uses its
       // default keyword-based tinting).
-      const ownColor = settingValueAsString(entity.settings, 'headercolor');
+      const ownColor = headerColorOf(entity, partialScope);
       const headerColor = ownColor ?? tableGroupColors.get(entityId);
       const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable, headerColor, partialScope);
       entityLayouts.push(layout);
@@ -639,7 +641,7 @@ export function buildDiagram (
   if (orphans.length > 0) {
     let entityCursorY = CANVAS_MARGIN;
     for (const entity of orphans) {
-      const ownColor = settingValueAsString(entity.settings, 'headercolor');
+      const ownColor = headerColorOf(entity, partialScope);
       const headerColor = ownColor ?? tableGroupColors.get(entity.name);
       const layout = buildEntityLayout(entity, cursorX, entityCursorY, undefined, collapsedPaths, typeTable, headerColor, partialScope);
       entityLayouts.push(layout);
@@ -1071,6 +1073,16 @@ function edgeAsEntityLike (edge: EdgeDeclaration): EntityLike {
     isView: false,
     settings: edge.settings,
   };
+}
+
+/**
+ * The header color an entity declares, or receives from a TablePartial it
+ * injects (spec §17.1): its own `headercolor`, otherwise that of the last
+ * partial injected that declares one.
+ */
+function headerColorOf (entity: EntityLike, scope: PartialScope): string | undefined {
+  const setting = effectiveHeaderColor(entity, scope.partials);
+  return setting ? settingValueAsString([setting], 'headercolor') : undefined;
 }
 
 /** What `buildEntityLayout` needs to apply TablePartial injections (spec §17.1). */
