@@ -31,7 +31,17 @@
  * Adding any of those is additive to this module rather than a rewrite.
  */
 
-import { diagramViewMembers, entityDefinitions, resolveSupertypeGroups } from '@xdbml/parse';
+import {
+  diagramViewMembers,
+  effectiveFieldList,
+  effectiveFields,
+  entityDefinitions,
+  hasPartialInjection,
+  injectedPartials,
+  primaryKey,
+  resolveSupertypeGroups,
+  tablePartials,
+} from '@xdbml/parse';
 import type {
   ContainerDeclaration,
   EdgeDeclaration,
@@ -43,6 +53,7 @@ import type {
   ScalarType,
   Setting,
   SupertypeGroupDeclaration,
+  TablePartialDeclaration,
   TypeDeclaration,
   TypeExpression,
   ViewDeclaration,
@@ -495,6 +506,10 @@ export function buildDiagram (
     }
   }
 
+  // TablePartials by name (spec §17.1). An entity or an Edge that writes
+  // `~name` holds the partial's fields, so its box lists them.
+  const partialScope: PartialScope = { doc, partials: tablePartials(doc) };
+
   // Build a map from entity-id -> color from TableGroup membership.
   //
   // DBML/xDBML TableGroups support a `color:` setting (xDBML v0.2 §16.2)
@@ -581,7 +596,7 @@ export function buildDiagram (
       // default keyword-based tinting).
       const ownColor = settingValueAsString(entity.settings, 'headercolor');
       const headerColor = ownColor ?? tableGroupColors.get(entityId);
-      const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable, headerColor);
+      const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable, headerColor, partialScope);
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
@@ -626,7 +641,7 @@ export function buildDiagram (
     for (const entity of orphans) {
       const ownColor = settingValueAsString(entity.settings, 'headercolor');
       const headerColor = ownColor ?? tableGroupColors.get(entity.name);
-      const layout = buildEntityLayout(entity, cursorX, entityCursorY, undefined, collapsedPaths, typeTable, headerColor);
+      const layout = buildEntityLayout(entity, cursorX, entityCursorY, undefined, collapsedPaths, typeTable, headerColor, partialScope);
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
@@ -775,7 +790,7 @@ export function buildDiagram (
       if (!s || !t || !boxIds.has(s.id) || !boxIds.has(t.id)) continue;
     }
     const box = buildEntityLayout(
-      edgeAsEntityLike(decl), 0, 0, containerName, collapsedPaths, typeTable, EDGE_HEADER_COLOR,
+      edgeAsEntityLike(decl), 0, 0, containerName, collapsedPaths, typeTable, EDGE_HEADER_COLOR, partialScope,
     );
     box.isEdge = true;
     box.id = containerName ? `edge:${containerName}.${decl.name}` : `edge:${decl.name}`;
@@ -1058,6 +1073,12 @@ function edgeAsEntityLike (edge: EdgeDeclaration): EntityLike {
   };
 }
 
+/** What `buildEntityLayout` needs to apply TablePartial injections (spec §17.1). */
+interface PartialScope {
+  doc: XDbmlDocument;
+  partials: ReadonlyMap<string, TablePartialDeclaration>;
+}
+
 function buildEntityLayout (
   entity: EntityLike,
   x: number,
@@ -1066,6 +1087,7 @@ function buildEntityLayout (
   collapsedPaths: ReadonlySet<CollapsedKey>,
   typeTable: ReadonlyMap<string, TypeDeclaration>,
   headerColor: string | undefined,
+  partialScope: PartialScope,
 ): EntityLayout {
   const entityId = containerName ? `${containerName}.${entity.name}` : entity.name;
   const fields: FieldLayout[] = [];
@@ -1140,17 +1162,19 @@ function buildEntityLayout (
   ): void => {
     switch (type.kind) {
       case 'ObjectType': {
-        for (const item of type.fields) {
-          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, namedTypeAncestors, table);
-          // Note/PartialInjection inside object bodies aren't visualized
-          // as rows -- they belong to the inspector/details panel later.
+        // A `~name` line in the object places the fields of the
+        // TablePartial there (spec §17.1); they resolve their type names
+        // at project scope, like those injected at the top level. A Note
+        // inside an object body is not drawn as a row.
+        for (const { field, partial } of effectiveFieldList(type.fields, partialScope.partials)) {
+          emitField(field, indent, parentPath, namedTypeAncestors, partial ? typeTable : table);
         }
         return;
       }
       case 'JsonType': {
         if (!type.fields) return;
-        for (const item of type.fields) {
-          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, namedTypeAncestors, table);
+        for (const { field, partial } of effectiveFieldList(type.fields, partialScope.partials)) {
+          emitField(field, indent, parentPath, namedTypeAncestors, partial ? typeTable : table);
         }
         return;
       }
@@ -1319,8 +1343,8 @@ function buildEntityLayout (
         // An internal definition's body stays in the entity's scope; a
         // project Type's body resolves at project scope (spec §15.8.2).
         const childTable = localDecls.has(typeDecl) ? table : typeTable;
-        for (const item of typeDecl.body) {
-          if (item.kind === 'FieldDeclaration') emitField(item, indent, parentPath, childAncestors, childTable);
+        for (const { field, partial } of effectiveFieldList(typeDecl.body, partialScope.partials)) {
+          emitField(field, indent, parentPath, childAncestors, partial ? typeTable : childTable);
         }
         return;
       }
@@ -1330,9 +1354,14 @@ function buildEntityLayout (
     }
   };
 
-  for (const item of entity.body) {
-    if (item.kind !== 'FieldDeclaration') continue;
-    emitField(item as FieldDeclaration, 0, '', new Set<TypeDeclaration>(), entityTable);
+  // Spec §17.1: a `~name` line puts the fields of the TablePartial in the
+  // entity, where the line is written. A field the entity declares itself
+  // overrides an injected field of the same name, and among partials the
+  // last one injected applies; `effectiveFields` settles both. A field
+  // received from a partial resolves its type names where the partial is
+  // declared, so it takes the project's table, not the entity's (§15.8.2).
+  for (const { field, partial } of effectiveFields(entity, partialScope.partials)) {
+    emitField(field, 0, '', new Set<TypeDeclaration>(), partial ? typeTable : entityTable);
   }
 
   // Second pass: flag fields that participate in a composite primary
@@ -1379,27 +1408,54 @@ function buildEntityLayout (
   // entry in `indexes` stays unbadged: it declares an index, not a key.
   // Typed structurally, so the renderer also compiles against a parser
   // release that predates the node.
+  //
+  // The unique keys of the TablePartials the entity injects add to its own
+  // (spec §10.1), so their `unique` lines are read as well, after the
+  // entity's. Their `pk` lines are left to the primary key pass below.
   type KeyLine = { kind: string; fields: { kind: string; name?: string }[][]; settings: { name: string }[] };
+  const injected = hasPartialInjection(entity) ? injectedPartials(entity, partialScope.partials) : [];
   let compositeUniqueCount = 0;
-  for (const item of entity.body as ReadonlyArray<{ kind: string; entries?: KeyLine[] }>) {
-    if (item.kind !== 'ConstraintsBlock' || !item.entries) continue;
-    for (const entry of item.entries) {
-      if (entry.kind !== 'KeyConstraintEntry') continue;
-      const isPk = entry.settings.some((s) => s.name === 'pk' || s.name === 'primary key');
-      const isUnique = entry.settings.some((s) => s.name === 'unique');
-      if (isPk === isUnique) continue;
-      const compositeUnique = isUnique && entry.fields.length > 1 ? ++compositeUniqueCount : 0;
-      for (const path of entry.fields) {
-        const dotted = path
-          .filter((seg) => seg.kind === 'PathField')
-          .map((seg) => seg.name ?? '')
-          .join('.');
-        const target = fields.find((f) => f.path === dotted);
-        if (!target) continue;
-        if (isPk) target.flags.pk = true;
-        else if (compositeUnique > 0) target.flags.uniqueKeys.push(compositeUnique);
-        else target.flags.unique = true;
+  const markKeyLines = (body: ReadonlyArray<{ kind: string; entries?: KeyLine[] }>, own: boolean): void => {
+    for (const item of body) {
+      if (item.kind !== 'ConstraintsBlock' || !item.entries) continue;
+      for (const entry of item.entries) {
+        if (entry.kind !== 'KeyConstraintEntry') continue;
+        const isPk = entry.settings.some((s) => s.name === 'pk' || s.name === 'primary key');
+        const isUnique = entry.settings.some((s) => s.name === 'unique');
+        if (isPk === isUnique) continue;
+        if (isPk && !own) continue;
+        const compositeUnique = isUnique && entry.fields.length > 1 ? ++compositeUniqueCount : 0;
+        for (const path of entry.fields) {
+          const dotted = path
+            .filter((seg) => seg.kind === 'PathField')
+            .map((seg) => seg.name ?? '')
+            .join('.');
+          const target = fields.find((f) => f.path === dotted);
+          if (!target) continue;
+          if (isPk) target.flags.pk = true;
+          else if (compositeUnique > 0) target.flags.uniqueKeys.push(compositeUnique);
+          else target.flags.unique = true;
+        }
       }
+    }
+  };
+  markKeyLines(entity.body as ReadonlyArray<{ kind: string; entries?: KeyLine[] }>, true);
+  for (const partial of injected) {
+    markKeyLines(partial.body as ReadonlyArray<{ kind: string; entries?: KeyLine[] }>, false);
+  }
+
+  // Primary key of an entity that injects TablePartials (spec §10.4): the
+  // entity's own declaration applies when it has one, otherwise that of the
+  // last partial injected. An injected field marked `[pk]` is therefore not
+  // always part of the key, and a partial may declare the key in its
+  // `constraints` or `indexes` block, so the top-level rows take their PK
+  // mark from the key the parser resolves rather than from their settings.
+  if (injected.length > 0) {
+    const key = primaryKey(entity as unknown as EntityDeclaration, partialScope.doc);
+    const keyFields = new Set(key?.fields ?? []);
+    for (const f of fields) {
+      if (f.indent === 0 && !f.synthetic) f.flags.pk = keyFields.has(f.path);
+      else if (keyFields.has(f.path)) f.flags.pk = true;
     }
   }
 
@@ -1467,7 +1523,8 @@ function describeNested (
       // genuine scalar -- no caret.
       const decl = typeTable.get(type.name);
       if (!decl || namedTypeAncestors.has(decl)) return undefined;
-      const hasFields = decl.body.some((b) => b.kind === 'FieldDeclaration');
+      // A body may hold its fields through a `~name` line (spec §17.1).
+      const hasFields = decl.body.some((b) => b.kind === 'FieldDeclaration' || b.kind === 'PartialInjection');
       return hasFields ? { childKind: 'object' } : undefined;
     }
     // Union members are scalars/null -- no children to expand.
@@ -1681,6 +1738,12 @@ export function collectRefDeclarations (doc: XDbmlDocument): RefDeclaration[] {
     if (stmt.kind === 'RefDeclaration') out.push(stmt);
   }
 
+  // Spec §17.1: an entity holds the fields of the TablePartials it injects,
+  // their inline refs included, so each entity that injects a partial draws
+  // the relationship from its own copy of the field. The top level of an
+  // entity is therefore walked through `effectiveFields`.
+  const partials = tablePartials(doc);
+
   const collectInline = (entity: EntityDeclaration, containerName: string | undefined): void => {
     const walk = (items: ReadonlyArray<{ kind: string }>, pathPrefix: string): void => {
       for (const item of items) {
@@ -1695,11 +1758,11 @@ export function collectRefDeclarations (doc: XDbmlDocument): RefDeclaration[] {
           ));
         }
 
-        const nested = nestedFieldDeclarations(field);
+        const nested = nestedFieldDeclarations(field, partials);
         if (nested.length) walk(nested, fieldPath);
       }
     };
-    walk(entity.body as ReadonlyArray<{ kind: string }>, '');
+    walk(effectiveFields(entity, partials).map((e) => e.field), '');
   };
 
   for (const stmt of doc.statements) {
@@ -1721,18 +1784,33 @@ export function collectRefDeclarations (doc: XDbmlDocument): RefDeclaration[] {
  * scalar field, and does not recurse: the caller walks one level at a time
  * so it can build the dotted path as it goes.
  */
-function nestedFieldDeclarations (field: FieldDeclaration): FieldDeclaration[] {
+function nestedFieldDeclarations (
+  field: FieldDeclaration,
+  partials: ReadonlyMap<string, TablePartialDeclaration>,
+): FieldDeclaration[] {
   const out: FieldDeclaration[] = [];
+  const isFieldItem = (v: unknown): boolean =>
+    !!v && typeof v === 'object'
+      && ((v as { kind?: string }).kind === 'FieldDeclaration' || (v as { kind?: string }).kind === 'PartialInjection');
   const visit = (node: unknown): void => {
     if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      // A list of fields: the fields a `~name` line places in it are
+      // fields of the body like the others (spec §17.1).
+      if (node.some(isFieldItem)) {
+        for (const e of effectiveFieldList(node as { kind: string }[], partials)) out.push(e.field);
+        return; // the caller descends into these itself
+      }
+      node.forEach(visit);
+      return;
+    }
     const rec = node as Record<string, unknown>;
     if (rec.kind === 'FieldDeclaration') {
       out.push(rec as unknown as FieldDeclaration);
       return; // the caller descends into this one itself
     }
     for (const value of Object.values(rec)) {
-      if (Array.isArray(value)) value.forEach(visit);
-      else if (value && typeof value === 'object') visit(value);
+      if (value && typeof value === 'object') visit(value);
     }
   };
   visit((field as unknown as Record<string, unknown>).type);

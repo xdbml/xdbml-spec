@@ -46,6 +46,7 @@ import { entityDefinitions } from './definitions.ts';
 import type { LocalTypes } from './definitions.ts';
 import { canonicalTarget, effectiveTarget, isRelationalTarget, projectTarget, projectTargets, settingValues } from './targets.ts';
 import { hasForeignMasterFlag, isForeignMaster, versionAtLeast } from './relationships.ts';
+import { effectiveFieldList, effectiveFields, tablePartials } from './partials.ts';
 
 export { isRelationalTarget } from './targets.ts';
 
@@ -197,7 +198,7 @@ export function entityConstraints (
   doc: XDbmlDocument,
 ): Constraint[] {
   const quoted = versionAtLeast(doc, '0.6');
-  const partials = partialIndex(doc);
+  const partials = tablePartials(doc);
   const own = bodyConstraints(decl.body, quoted);
   const injected: Constraint[] = [];
   let partialPk: KeyConstraint | undefined;
@@ -248,32 +249,15 @@ function bodies (doc: XDbmlDocument): Placed[] {
   return out;
 }
 
-function partialIndex (doc: XDbmlDocument): Map<string, TablePartialDeclaration> {
-  const m = new Map<string, TablePartialDeclaration>();
-  for (const s of doc.statements) if (s.kind === 'TablePartialDeclaration') m.set(s.name, s);
-  return m;
-}
-
 function typeIndex (doc: XDbmlDocument): Map<string, TypeDeclaration> {
   const m = new Map<string, TypeDeclaration>();
   for (const s of doc.statements) if (s.kind === 'TypeDeclaration') m.set(s.name, s);
   return m;
 }
 
-/** Top-level fields of a body, including those of injected partials. */
-function topFields (body: Body, partials: Map<string, TablePartialDeclaration>, seen = new Set<string>()): FieldDeclaration[] {
-  const out: FieldDeclaration[] = [];
-  for (const item of body) {
-    if (item.kind === 'FieldDeclaration') out.push(item);
-    else if (item.kind === 'PartialInjection' && !seen.has(item.partialName)) {
-      const p = partials.get(item.partialName);
-      if (p) {
-        seen.add(item.partialName);
-        out.push(...topFields(p.body, partials, seen));
-      }
-    }
-  }
-  return out;
+/** Top-level fields of a body, including those of injected partials (§17.1). */
+function topFields (body: Body, partials: Map<string, TablePartialDeclaration>): FieldDeclaration[] {
+  return effectiveFields({ body }, partials).map((e) => e.field);
 }
 
 /**
@@ -308,8 +292,12 @@ function walkKeyPath (
   fields: ReadonlyArray<FieldDeclaration>,
   types: Map<string, TypeDeclaration>,
   definitions?: { local: LocalTypes; own: ReadonlySet<FieldDeclaration> },
+  partials: Map<string, TablePartialDeclaration> = new Map(),
 ): PathProblem {
   let current: ReadonlyArray<FieldDeclaration> = fields;
+  // Fields a `~name` line places in a nested body (§17.1); like those of
+  // the top level, they resolve their type names at project scope.
+  let injected = new Set<FieldDeclaration>();
   // The entity's internal definitions apply to its own fields only; a field
   // received from a TablePartial resolves where the partial is declared.
   let scope: LocalTypes | undefined;
@@ -323,9 +311,12 @@ function walkKeyPath (
     if (i === path.length - 1) return undefined;
     if (COLLECTION_KINDS.has(f.type.kind)) return { kind: 'collection', at: walked.join('.') };
     if (i === 0) scope = definitions?.own.has(f) ? definitions.local : undefined;
+    else if (injected.has(f)) scope = undefined;
     const next = objectFields(f.type, types, scope);
     if (!next) return { kind: 'missing', at: `${walked.join('.')}.${(path[i + 1] as { name?: string }).name ?? ''}` };
-    current = next.fields.filter((x): x is FieldDeclaration => x.kind === 'FieldDeclaration');
+    const effective = effectiveFieldList(next.fields, partials);
+    current = effective.map((e) => e.field);
+    injected = new Set(effective.filter((e) => e.partial).map((e) => e.field));
     scope = next.local;
   }
   return undefined;
@@ -415,7 +406,7 @@ export function checkConstraints (doc: XDbmlDocument): Diagnostic[] {
   const v06 = versionAtLeast(doc, '0.6');
   // Conditions on constructs that earlier versions accept (§10.10).
   const olderSeverity: Diagnostic['severity'] = v06 ? 'error' : 'warning';
-  const partials = partialIndex(doc);
+  const partials = tablePartials(doc);
   const types = typeIndex(doc);
   const versionSpan = (fallback: Span): Span => (doc.version ? doc.version.span : fallback);
 
@@ -462,7 +453,7 @@ export function checkConstraints (doc: XDbmlDocument): Diagnostic[] {
           });
         }
         for (const path of e.fields) {
-          const problem = walkKeyPath(path, fields, types, definitions);
+          const problem = walkKeyPath(path, fields, types, definitions, partials);
           if (problem?.kind === 'missing') {
             diagnostics.push({
               severity: 'error',
@@ -708,12 +699,16 @@ function checkReferencedKeys (doc: XDbmlDocument, severity: Diagnostic['severity
     if (s.kind === 'RefDeclaration') visitRef(s);
   }
 
-  // Inline refs on top-level fields.
+  // Inline refs on top-level fields, those received from a TablePartial
+  // included: each entity that injects the partial holds the relationship
+  // (§17.1). A partial injected into several entities reports once.
+  const partials = tablePartials(doc);
+  const reportedForPartial = new Map<Setting, Set<string>>();
   for (const p of bodies(doc)) {
     if (p.decl.kind !== 'EntityDeclaration') continue;
     const owner = p.container ? `${p.container.name}.${p.decl.name}` : p.decl.name;
-    for (const item of p.decl.body) {
-      if (item.kind !== 'FieldDeclaration' || hasForeignMasterFlag(item.settings)) continue;
+    for (const { field: item, partial } of effectiveFields(p.decl, partials)) {
+      if (hasForeignMasterFlag(item.settings)) continue;
       for (const st of item.settings) {
         if (st.name !== 'ref' || st.value?.kind !== 'RefValue') continue;
         const source: RefEndpoint = {
@@ -721,7 +716,14 @@ function checkReferencedKeys (doc: XDbmlDocument, severity: Diagnostic['severity
           path: [...owner.split('.'), item.name].map((name) => ({ kind: 'PathField', name, span: item.span })),
           span: item.span,
         };
+        const before = diagnostics.length;
         check(source, st.value.operator, st.value.target, st.span);
+        if (!partial || diagnostics.length === before) continue;
+        const seen = reportedForPartial.get(st) ?? new Set<string>();
+        reportedForPartial.set(st, seen);
+        const message = diagnostics[diagnostics.length - 1].message;
+        if (seen.has(message)) diagnostics.pop();
+        else seen.add(message);
       }
     }
   }

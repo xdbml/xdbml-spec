@@ -1,13 +1,13 @@
 @echo off
 setlocal
-REM Renderer: automatic arrangement, beside before across a corner, rows for a landscape view.
+REM TablePartial injection applied: effective fields in the parser, the renderer and the playground.
 REM Run from the repo root after unzipping the delivery there. apply.cmd copies
 REM nothing: it checks the unzipped files, then runs the verification gate. It
 REM does not commit or push: the last lines print the commands for that.
 set "ROOT=%~dp0"
 cd /d "%ROOT%" || exit /b 1
-set BASE=e836600
-set EDITED=APPLY.txt apply.cmd CHANGELOG.md renderer/src/layout/auto-arrange.ts renderer/test/run-tests.ts renderer/test/goldens/01-blog.svg renderer/test/goldens/02-ecommerce.svg renderer/test/goldens/04-social-graph.svg renderer/test/goldens/05-healthcare-fhir.svg renderer/test/goldens/06-financial-services.svg renderer/test/goldens/07-project-management.svg renderer/test/goldens/08-university-registrar.svg renderer/test/goldens/09-modules-conformed-dimensions.svg renderer/test/goldens/10-modules-consumer.svg renderer/test/goldens/11-modules-remote.svg renderer/test/goldens/12-conceptual-to-denormalized.svg renderer/test/goldens/13-foreign-master-denormalization.svg renderer/test/goldens/14-supertype-groups.svg renderer/test/goldens/15-constraints.svg renderer/test/goldens/16-diagram-views.svg renderer/test/goldens/17-internal-definitions.svg
+set BASE=59ac805
+set EDITED=APPLY.txt apply.cmd CHANGELOG.md grammar/xDBML.g4 mcp/src/reference.ts parser/src/constraints.ts parser/src/index.ts parser/src/name-resolver.ts parser/src/partials.ts parser/src/supertypes.ts parser/test/run-tests.ts playground/src/components/inspector/EntityInspector.vue playground/src/components/inspector/FieldInspector.vue playground/src/components/inspector/Inspector.vue playground/src/components/inspector/ast-lookup.ts playground/test/run-tests.ts public/llms.txt renderer/src/layout/layout.ts renderer/test/run-tests.ts spec/v0.6.md
 
 if not exist ".git" (
   echo ERROR: apply.cmd is not at the root of a clone of xdbml-spec.
@@ -34,26 +34,25 @@ if errorlevel 1 (
   exit /b 1
 )
 REM Each file holds this delivery's content (apply.cmd itself excepted).
-call :sum APPLY.txt 1f75b99f0f928ecdeb51be8b310ab8652603b5d3 || exit /b 1
-call :sum CHANGELOG.md c27ae87a7928ad0f31f30f571ab4938ab5236012 || exit /b 1
-call :sum renderer/src/layout/auto-arrange.ts c19aa6b4cc833b7770771b9197eaf9ad90160c94 || exit /b 1
-call :sum renderer/test/run-tests.ts ead5cc9b9c749879f5affbbfefad49c5a88350ed || exit /b 1
-call :sum renderer/test/goldens/01-blog.svg 970fccf90c676e84b144a4f98db3d040c15d179b || exit /b 1
-call :sum renderer/test/goldens/02-ecommerce.svg 31ae0f913ef9b13d054769131fdc4ba014d831fc || exit /b 1
-call :sum renderer/test/goldens/04-social-graph.svg 02f4900fc608ed87b1b34771f30d04574923695c || exit /b 1
-call :sum renderer/test/goldens/05-healthcare-fhir.svg 3deb5cf14c45801f747bed1d3657ad07277ec8c8 || exit /b 1
-call :sum renderer/test/goldens/06-financial-services.svg e80135eaf8ed8077f7a560a1a0ef7f10b3c0ee53 || exit /b 1
-call :sum renderer/test/goldens/07-project-management.svg 6f5f6a9ac01b692c8267292e246b4e2972c91478 || exit /b 1
-call :sum renderer/test/goldens/08-university-registrar.svg 24a8b356c0c305d06ea2239381ed5b5966a494d0 || exit /b 1
-call :sum renderer/test/goldens/09-modules-conformed-dimensions.svg 38666bcda0523521ddca2b51b8249d3ff6d5ecd8 || exit /b 1
-call :sum renderer/test/goldens/10-modules-consumer.svg 58e78304a370f890953b3e148526e0b3008f69ad || exit /b 1
-call :sum renderer/test/goldens/11-modules-remote.svg 24079a440e1e0b853bba0e02106d102f75819741 || exit /b 1
-call :sum renderer/test/goldens/12-conceptual-to-denormalized.svg b9f4896e0ac815d3791fe10141d9793eff1c8084 || exit /b 1
-call :sum renderer/test/goldens/13-foreign-master-denormalization.svg d965099a25771763307664fffec1121d72de4f3c || exit /b 1
-call :sum renderer/test/goldens/14-supertype-groups.svg 4ca730a9080d65bf40f5b70866fb6d18db11350f || exit /b 1
-call :sum renderer/test/goldens/15-constraints.svg 94f66b0b31813b5a498193aaaf9fd4dcdcd632d9 || exit /b 1
-call :sum renderer/test/goldens/16-diagram-views.svg 3eb3712f5f420232053bc4fc0cebe321d60b1751 || exit /b 1
-call :sum renderer/test/goldens/17-internal-definitions.svg 78986ccd4193db2078da81445a5f75fe4cb713ee || exit /b 1
+call :sum APPLY.txt a77cbb284ecdad1fef80594778ad1c90a713c272 || exit /b 1
+call :sum CHANGELOG.md 1ebecde1fb873e254c94d660da440bcbe0b06678 || exit /b 1
+call :sum grammar/xDBML.g4 2c99adb43a8725e6b960275e90b5fb1ca71045bf || exit /b 1
+call :sum mcp/src/reference.ts c007e2812efe08a47c7ce4e9c42e86e11c3ce4c4 || exit /b 1
+call :sum parser/src/constraints.ts 89fdb3cb45364c71ff8ac4f7a114b950571be88f || exit /b 1
+call :sum parser/src/index.ts e2b71e75ef50bfdbbcd1dc3018b597648e692207 || exit /b 1
+call :sum parser/src/name-resolver.ts 766f8649fbb6f989bb2eb032462ca175469124ed || exit /b 1
+call :sum parser/src/partials.ts 55e1f2247cccfeb919c34ef78c82689cca2d022c || exit /b 1
+call :sum parser/src/supertypes.ts 21a93aa62ea12bc227d23d6e68de010592123071 || exit /b 1
+call :sum parser/test/run-tests.ts 47581eb28afe83beb81d20991d0c5c838d386e07 || exit /b 1
+call :sum playground/src/components/inspector/EntityInspector.vue e4ff8b3141bb52b9c009c4f48817163875db5d3e || exit /b 1
+call :sum playground/src/components/inspector/FieldInspector.vue e5b67b2471b207cac4fab2bdbffcf0cc4f0543ff || exit /b 1
+call :sum playground/src/components/inspector/Inspector.vue 71eba56726a511ef51296526ed1dcdfb1f3c45ca || exit /b 1
+call :sum playground/src/components/inspector/ast-lookup.ts 4e12a5edd4f1bb8e963c2914e3a8bf24ac8445cc || exit /b 1
+call :sum playground/test/run-tests.ts 0a815f75775a42bcf3e6c03605902cc237098f1d || exit /b 1
+call :sum public/llms.txt 927107215f485b570537f76e5bb3cebb705a7d92 || exit /b 1
+call :sum renderer/src/layout/layout.ts 20e20aea4fb07b5a612435a9bde079214c277a0a || exit /b 1
+call :sum renderer/test/run-tests.ts dbf89abf0ce1fd6498cfee0d7014e792f5142684 || exit /b 1
+call :sum spec/v0.6.md 4888acda25b82476d6d08b3d7d4363afcc9fa2bb || exit /b 1
 
 REM The working tree holds no change outside this delivery.
 set "LIST=%TEMP%\xdbml-delivery-files.txt"
@@ -84,7 +83,7 @@ echo ============================================================
 echo  To commit and push, from %ROOT%:
 echo.
 echo    git add %EDITED%
-echo    git commit -m "renderer: automatic arrangement, beside before across a corner, rows for a landscape view"
+echo    git commit -m "TablePartial injection applied: effective fields in the parser, the renderer and the playground"
 echo    git push
 echo ============================================================
 exit /b 0

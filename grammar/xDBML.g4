@@ -314,6 +314,9 @@ tableDefinition
       RBRACE
     ;
 
+// §17.1: a TablePartial does not inject another TablePartial. This rule reads
+// a `~name` line in its body, and inside its fields, as in every other body,
+// and an implementation reports it after parsing (partial-injection-in-partial).
 tablePartialDefinition
     : 'TablePartial' IDENTIFIER settingsBlock? LBRACE
         (entityBodyItem | listSeparator)*

@@ -12,6 +12,10 @@
         <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ entity.name }}</dd>
         <dt v-if="container" class="font-medium text-gray-500 dark:text-slate-400">Container</dt>
         <dd v-if="container" class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ container.name }}</dd>
+        <!-- Spec §17.1: a field the entity receives through a ~name line is
+             declared in the TablePartial, which is where Edit in source goes. -->
+        <dt v-if="partial" class="font-medium text-gray-500 dark:text-slate-400">TablePartial</dt>
+        <dd v-if="partial" class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ partial.name }}</dd>
       </dl>
     </InspectorSection>
 
@@ -71,6 +75,7 @@ import type {
   EntityDeclaration,
   FieldDeclaration,
   Span,
+  TablePartialDeclaration,
   TypeExpression,
   UnionType,
   ViewDeclaration,
@@ -86,6 +91,8 @@ const props = defineProps<{
   ancestors: readonly FieldDeclaration[];
   entity: EntityDeclaration | ViewDeclaration | EdgeDeclaration;
   container: ContainerDeclaration | null;
+  /** The TablePartial that declares the field, or null for a field of the entity itself. */
+  partial?: TablePartialDeclaration | null;
 }>();
 
 defineEmits<{
@@ -215,6 +222,8 @@ function renderTypeBreakdown (t: TypeExpression, indent: number): string {
       for (const f of t.fields) {
         if (f.kind === 'FieldDeclaration') {
           lines.push(`${pad}  ${f.name}: ${renderTypeBreakdown(f.type, indent + 2).trimStart()}`);
+        } else if (f.kind === 'PartialInjection') {
+          lines.push(`${pad}  ~${f.partialName}`);
         }
       }
       lines.push(`${pad}}`);
@@ -246,6 +255,8 @@ function renderTypeBreakdown (t: TypeExpression, indent: number): string {
       for (const f of t.fields) {
         if (f.kind === 'FieldDeclaration') {
           lines.push(`${pad}  ${f.name}: ${renderTypeBreakdown(f.type, indent + 2).trimStart()}`);
+        } else if (f.kind === 'PartialInjection') {
+          lines.push(`${pad}  ~${f.partialName}`);
         }
       }
       lines.push(`${pad}}`);

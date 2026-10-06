@@ -393,6 +393,119 @@ Entity b { id int [pk] }`)));
   }
 }
 
+/* ---- TablePartial injection (spec §17.1) --------------------------- */
+{
+  const build = (src: string): DiagramModel => buildDiagram(flatten(parse(src)));
+  const rows = (m: DiagramModel, id: string): string => {
+    const box = m.entities.find((e) => e.id === id) ?? m.edges.find((e) => e.id === id)?.box;
+    return (box?.fields ?? []).map((f) =>
+      `${f.name}${f.flags.pk ? '*' : ''}${f.flags.unique ? '!' : ''}${f.flags.uniqueKeys.length ? `!${f.flags.uniqueKeys.join('')}` : ''}`).join(' ');
+  };
+
+  // The example of spec §17.1, with a relationship to the injected key.
+  const spec = build(`xdbml: 0.6
+TablePartial base_template {
+  id         int       [pk, not null]
+  created_at timestamp [default: \`SYSTIMESTAMP\`]
+  updated_at timestamp [default: \`SYSTIMESTAMP\`]
+}
+Entity users {
+  ~base_template
+  name varchar
+}
+Entity orders {
+  id      int [pk]
+  user_id int [ref: > users.id]
+}`);
+  check('partial: the entity lists the injected fields where ~name is written',
+    rows(spec, 'users') === 'id* created_at updated_at name', rows(spec, 'users'));
+  const users = spec.entities.find((e) => e.id === 'users');
+  check('partial: the entity is as tall as its four rows',
+    !!users && users.bounds.height === spec.entities.find((e) => e.id === 'orders')!.bounds.height + 2 * (users.fields[1].rowY - users.fields[0].rowY),
+    String(users?.bounds.height));
+  check('partial: a relationship to an injected field resolves and marks it dk',
+    spec.refs.length === 1 && !spec.refs[0].unresolved && !!users?.fields[0].flags.dk);
+  check('partial: the TablePartial itself draws no box',
+    spec.entities.every((e) => e.name !== 'base_template'));
+
+  const over = build(`xdbml: 0.6
+TablePartial a { id int [pk]
+ name varchar(10) }
+TablePartial b { name varchar(20)
+ extra int
+ constraints { (name, extra) [unique] } }
+Entity local_wins { ~a
+ name text
+ ~b }
+Entity last_wins { ~a
+ ~b }
+Entity own_key { x int [pk]
+ ~b
+ ~a }`);
+  check('partial: a field of the entity overrides an injected one',
+    rows(over, 'local_wins') === 'id* name!1 extra!1'
+      && over.entities.find((e) => e.id === 'local_wins')!.fields[1].typeLabel === 'text', rows(over, 'local_wins'));
+  check('partial: among partials the last one injected applies',
+    rows(over, 'last_wins') === 'id* name!1 extra!1'
+      && over.entities.find((e) => e.id === 'last_wins')!.fields[1].typeLabel === 'varchar(20)', rows(over, 'last_wins'));
+  check('partial: the primary key of the entity applies over the one of a partial (§10.4)',
+    rows(over, 'own_key') === 'x* extra!1 id name!1', rows(over, 'own_key'));
+
+  const refs = build(`xdbml: 0.6
+Entity users { id int [pk] }
+TablePartial audit { created_by int [ref: > users.id] }
+Entity orders { id int [pk]
+ ~audit }
+Entity items { id int [pk]
+ ~audit }
+Edge RATED [source: users, target: items] { ~audit
+ rating int }`);
+  check('partial: an inline ref of a partial draws one relationship per entity that injects it',
+    refs.refs.length === 2 && refs.refs.every((r) => !r.unresolved)
+      && refs.refs.map((r) => r.source?.entityId).join(',') === 'orders,items',
+    refs.refs.map((r) => `${r.source?.entityId}.${r.source?.fieldName}`).join(' '));
+  check('partial: an Edge lists the fields it injects',
+    rows(refs, 'edge:RATED') === 'created_by rating', rows(refs, 'edge:RATED'));
+
+  // ~name in an object, a json body and a Type (spec §17.1).
+  const nested = build(`xdbml: 0.6
+Entity users { id int [pk] }
+TablePartial audit {
+  created_at timestamp
+  created_by int [ref: > users.id]
+}
+Type Stamped {
+  ~audit
+  label varchar
+}
+Entity e {
+  id int [pk]
+  profile object {
+    nick varchar
+    ~audit
+  }
+  doc json {
+    ~audit
+  }
+  stamp Stamped
+}
+`);
+  const e = nested.entities.find((x) => x.id === 'e');
+  const paths = (e?.fields ?? []).map((f) => `${f.indent}:${f.path}`).join(' ');
+  check('partial: an object, a json body and a Type list the fields a ~name line places in them',
+    paths === '0:id 0:profile 1:profile.nick 1:profile.created_at 1:profile.created_by '
+      + '0:doc 1:doc.created_at 1:doc.created_by '
+      + '0:stamp 1:stamp.created_at 1:stamp.created_by 1:stamp.label', paths);
+  // An inline ref in the body of a Type draws no relationship for the
+  // fields typed by it, injected or not, so `stamp` brings none.
+  check('partial: an inline ref injected in an object or a json body draws a relationship from that field',
+    nested.refs.length === 2 && nested.refs.every((r) => !r.unresolved && r.target?.entityId === 'users')
+      && nested.refs.map((r) => r.source?.fieldName).join(' ') === 'profile.created_by doc.created_by',
+    nested.refs.map((r) => `${r.source?.fieldName}${r.unresolved ? '?' : ''}`).join(' '));
+  check('partial: the nested injected field carries the fk mark',
+    !!e?.fields.find((f) => f.path === 'profile.created_by')?.flags.fk);
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

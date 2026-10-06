@@ -36,6 +36,7 @@ import {
 import * as keywordArrays from '../src/keywords.ts';
 import { parse as parse062, resolveNames as resolveNames062 } from '../src/index.ts';
 import { entityConstraints, primaryKey } from '../src/constraints.ts';
+import { effectiveFields, tablePartials } from '../src/partials.ts';
 import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -5254,6 +5255,234 @@ Entity customers {
 }
 
 /* -------------------------------------------------------------------------
+ * TablePartial injection applied (spec §17.1)
+ * ----------------------------------------------------------------------- */
+
+function runPartialInjectionTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const fieldsOf = (src: string, entity: string): string => {
+    const doc = parse(src);
+    const decl = doc.statements.find((s) => s.kind === 'EntityDeclaration' && s.name === entity) as EntityDeclaration;
+    return effectiveFields(decl, tablePartials(doc))
+      .map((e) => `${e.field.name}${e.partial ? `<${e.partial.name}` : ''}`).join(' ');
+  };
+
+  const SPEC = `xdbml: 0.6
+TablePartial base_template {
+  id         int       [pk, not null]
+  created_at timestamp
+  updated_at timestamp
+}
+Entity users {
+  ~base_template
+  name varchar
+}
+Entity orders {
+  id      int [pk]
+  user_id int
+}
+`;
+
+  check('§17.1: injected fields sit where the ~name line is written', () => {
+    const got = fieldsOf(SPEC, 'users');
+    const want = 'id<base_template created_at<base_template updated_at<base_template name';
+    return got === want ? undefined : `got: ${got}`;
+  });
+
+  check('§17.1: an injection between two fields keeps both around it', () => {
+    const got = fieldsOf(`xdbml: 0.6
+TablePartial audit { created_at timestamp
+ updated_at timestamp }
+Entity e { a int
+ ~audit
+ b int }`, 'e');
+    return got === 'a created_at<audit updated_at<audit b' ? undefined : `got: ${got}`;
+  });
+
+  const OVERRIDE = `xdbml: 0.6
+TablePartial a { id int [pk]
+ name varchar(10) }
+TablePartial b { name varchar(20)
+ extra int }
+Entity local_wins { ~a
+ name text
+ ~b }
+Entity last_wins { ~a
+ ~b }
+Entity last_wins_reversed { x int
+ ~b
+ ~a }
+`;
+  check('§17.1: a field of the entity overrides an injected one and keeps its place', () => {
+    const got = fieldsOf(OVERRIDE, 'local_wins');
+    return got === 'id<a name extra<b' ? undefined : `got: ${got}`;
+  });
+  check('§17.1: among partials the last one injected applies, at its own position', () => {
+    const one = fieldsOf(OVERRIDE, 'last_wins');
+    const two = fieldsOf(OVERRIDE, 'last_wins_reversed');
+    if (one !== 'id<a name<b extra<b') return `last_wins: ${one}`;
+    return two === 'x extra<b id<a name<a' ? undefined : `last_wins_reversed: ${two}`;
+  });
+
+  check('§17.1: a Ref names a field the entity receives from a TablePartial', () => {
+    const got = codes(`${SPEC}Ref: orders.user_id > users.id\n`);
+    return got === '' ? undefined : `diagnostics: ${got}`;
+  });
+  check('§17.1: a composite endpoint names injected fields', () => {
+    const got = codes(`xdbml: 0.6
+TablePartial tenant_key { tenant_id int [not null]
+ code varchar [not null]
+ constraints { (tenant_id, code) [pk] } }
+Entity accounts { ~tenant_key
+ name varchar }
+Entity entries { id int [pk]
+ tenant_id int
+ account_code varchar }
+Ref: entries.(tenant_id, account_code) > accounts.(tenant_id, code)
+`);
+    return got === '' ? undefined : `diagnostics: ${got}`;
+  });
+  check('§17.1: a Ref to a field no partial brings is still unresolved', () => {
+    const got = codes(`${SPEC}Ref: orders.user_id > users.missing\n`);
+    return got.includes('error:unresolved-field') ? undefined : `diagnostics: ${got}`;
+  });
+  check('§11.17: a Ref to an injected field that is not a key is reported', () => {
+    const got = codes(`${SPEC}Ref: orders.user_id > users.created_at\n`);
+    return got.includes('ref-target-not-key') ? undefined : `diagnostics: ${got}`;
+  });
+  check('§26: top-level records name injected fields', () => {
+    const got = codes(`${SPEC}records users(id, name) {\n  1, 'Ada'\n}\n`);
+    return got === '' ? undefined : `diagnostics: ${got}`;
+  });
+
+  check('§11.17: an inline ref received from a TablePartial is checked once per message', () => {
+    const got = codes(`xdbml: 0.6
+Entity users { id int [pk]
+ email varchar }
+TablePartial audit { created_by varchar [ref: > users.email] }
+Entity orders { id int [pk]
+ ~audit }
+Entity items { id int [pk]
+ ~audit }
+`);
+    const hits = got.split(' ').filter((c) => c.endsWith('ref-target-not-key'));
+    return hits.length === 1 ? undefined : `expected 1 ref-target-not-key, got: ${got}`;
+  });
+
+  check('§17.1: a TablePartial that injects another one is an error, and brings no field', () => {
+    const src = `xdbml: 0.6
+TablePartial a { x int }
+TablePartial b { ~a
+ y int }
+Entity e { ~b
+ z int }
+`;
+    const got = codes(src);
+    if (got !== 'error:partial-injection-in-partial') return `diagnostics: ${got}`;
+    const fields = fieldsOf(src, 'e');
+    return fields === 'y<b z' ? undefined : `fields: ${fields}`;
+  });
+
+  const NESTED = `xdbml: 0.6
+Entity users { id int [pk] }
+TablePartial audit {
+  created_at timestamp
+  created_by int [ref: > users.id]
+}
+Type Stamped {
+  ~audit
+  label varchar
+}
+Entity e {
+  id int [pk]
+  profile object {
+    nick varchar
+    ~audit
+  }
+  doc json {
+    ~audit
+  }
+  stamp Stamped
+}
+`;
+  check('§17.1: a path steps into fields a ~name line places in an object and in a Type', () => {
+    const got = codes(`${NESTED}Entity logs { id int [pk]
+ a int
+ c int }
+Ref: logs.a > e.profile.created_by [foreign_master]
+Ref: logs.c > e.stamp.created_by [foreign_master]
+`);
+    return got === '' ? undefined : `diagnostics: ${got}`;
+  });
+  check('a path into a json body is not navigable, with or without ~name (unchanged)', () => {
+    const literal = codes(`xdbml: 0.6
+Entity users { id int [pk] }
+Entity e { id int [pk]
+ doc json { owner int } }
+Ref: e.doc.owner > users.id
+`);
+    const injected = codes(`${NESTED}Ref: e.doc.created_by > users.id [foreign_master]\n`);
+    return literal === 'error:invalid-nested-path' && injected === literal ? undefined : `literal: ${literal}; injected: ${injected}`;
+  });
+  check('§17.1: a key path names a field injected in a nested object', () => {
+    const got = codes(NESTED.replace('  stamp Stamped\n', '  stamp Stamped\n  constraints {\n    (profile.created_at) [unique]\n  }\n'));
+    return got === '' ? undefined : `diagnostics: ${got}`;
+  });
+  check('§17.1: a nested path to a field no partial brings is still unresolved', () => {
+    const got = codes(`${NESTED}Ref: e.profile.missing > users.id\n`);
+    return got.includes('error:unresolved-field') ? undefined : `diagnostics: ${got}`;
+  });
+  check('§17.1: ~name in a Type body or a nested object names a TablePartial', () => {
+    const got = codes(`xdbml: 0.6
+Type T { ~missing
+ x int }
+Entity e { id int [pk]
+ o object { ~Other } }
+Type Other { y int }
+`);
+    return got === 'error:unresolved-partial error:unresolved-partial' ? undefined : `diagnostics: ${got}`;
+  });
+  check('§17.1: ~name inside a field of a TablePartial is an error as well', () => {
+    const got = codes(`xdbml: 0.6
+TablePartial a { x int }
+TablePartial b { meta object { ~a
+ y int } }
+Entity e { id int [pk]
+ ~b }
+`);
+    return got === 'error:partial-injection-in-partial' ? undefined : `diagnostics: ${got}`;
+  });
+
+  check('§10.4: the primary key of the entity applies over the one of a partial', () => {
+    const doc = parse(`xdbml: 0.6
+TablePartial base { id int [pk] }
+Entity own_key { ~base
+ code varchar [pk] }
+Entity partial_key { ~base
+ code varchar }
+`);
+    const pk = (name: string): string => {
+      const decl = doc.statements.find((s) => s.kind === 'EntityDeclaration' && s.name === name) as EntityDeclaration;
+      return primaryKey(decl, doc)?.fields.join(',') ?? '';
+    };
+    if (pk('own_key') !== 'code') return `own_key: ${pk('own_key')}`;
+    return pk('partial_key') === 'id' ? undefined : `partial_key: ${pk('partial_key')}`;
+  });
+
+  return results;
+}
+
+/* -------------------------------------------------------------------------
  * v0.6.4: the grammar test corpus (grammar/test-cases.md), every case
  *
  * Each case is a "### VALID -- ...", "### VALID with a warning -- ..." or
@@ -5333,6 +5562,7 @@ function main (): void {
   const v062 = runV062Tests();
   const v063 = runV063Tests();
   const v065 = runV065Tests();
+  const partialTests = runPartialInjectionTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -5340,9 +5570,10 @@ function main (): void {
   const vr = report('v0.6.2 fixes', v062);
   const dr = report('v0.6.3 diagram views', v063);
   const fr = report('v0.6.5 internal definitions', v065);
+  const pr = report('TablePartial injection (spec §17.1)', partialTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

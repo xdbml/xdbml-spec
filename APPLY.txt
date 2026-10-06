@@ -1,27 +1,36 @@
-xDBML -- renderer: automatic arrangement (after 0.6.5)
-Base: origin/main e836600 (release 0.6.5). Built 2026-10-03.
+xDBML -- TablePartial injection applied (after 0.6.5)
+Base: origin/main 59ac805 (renderer: automatic arrangement). Built 2026-10-06.
+This archive replaces xdbml-tablepartial-injection.zip of earlier today: it
+holds that delivery plus `~name` in nested bodies and the 13.5 correction.
 
-Example 17 opened in the playground put claim_submission far down its
-Container, a row below adjuster_note. Two causes in the automatic
-arrangement (renderer\src\layout\auto-arrange.ts), which draws the first
-layout of every diagram without saved positions:
+The playground showed `users` of spec 17.1 with `name` alone: the three
+fields of `base_template` were missing. The parser keeps a `~name` line as
+a node of the body, and nothing applied it. The renderer listed the
+declared fields only, and so did the other readers of an entity's fields:
 
-  1. A related entity that found its preferred cell taken went to the
-     first free cell of the surrounding ring, and the ring was scanned
-     from a corner: the second entity of a pair landed diagonally, one
-     row lower. Rows are as tall as the tallest entity of the diagram
-     (claim_submission, 1188 px), so "one row lower" meant 1244 px down.
-     The ring is now scanned beside first (left, then right), then below
-     and above, and across a corner last.
-  2. Container blocks were packed in rows of a width derived from the
-     total area, which wrapped the finance block under the tall intake
-     block once intake had two columns. The packer now tries each width
-     at which a row can break and keeps the arrangement a landscape view
-     (1.6:1) shows at the largest zoom, the smaller area on a tie.
+  - a Ref to an injected field (`Ref: orders.user_id > users.id`) reported
+    "Field 'id' is not declared on entity 'users'", and a top-level
+    `records` declaration reported the same for an injected column;
+  - an inline `ref:` on a field of a TablePartial drew no relationship;
+  - the entity inspector counted 1 field for `users`.
 
-Example 17 now opens as in your second screenshot: adjuster_note, then
-claim_submission at the top of intake, and the three Containers in one
-row.
+All of these now read the fields through two parser functions,
+effectiveFields() and effectiveFieldList(), which apply your decisions:
+
+  1. Injected fields sit where the `~name` line is written, in the order
+     the TablePartial declares them. A field the body declares itself
+     overrides an injected one and keeps its own place; among partials the
+     last one injected applies, at the place of its `~name` line. Checked
+     against @dbml/core 10.2.0, which gives the same order in each case.
+  2. A TablePartial does not inject another one. `~name` in the body of a
+     TablePartial, or inside one of its fields, is the error
+     `partial-injection-in-partial`, in every version.
+  3. `~name` is allowed among the fields of `object { }` and `json { }`,
+     and in the body of a Type or of an entry of `definitions`. The same
+     rules of position and conflict apply. Only the fields are placed
+     there: a partial's `constraints` block applies at the top level of an
+     Entity or an Edge, as before.
+  4. `~` names a TablePartial, never a Type. 13.5 is corrected.
 
 HOW TO APPLY
 ------------
@@ -30,61 +39,102 @@ then, from cmd.exe at the repo root:
 
     apply.cmd
 
-apply.cmd copies nothing. It checks that e836600 is in the history of HEAD
+apply.cmd copies nothing. It checks that 59ac805 is in the history of HEAD
 and that no commit since then touched the delivery's files; that each
 unzipped file holds this delivery's content; and that the working tree
 holds no uncommitted change outside the delivery. It then runs the gate
 (npm run check, mcp type-check) and prints the commit commands.
 
+If the earlier archive is already unzipped in the clone and not committed,
+unzip this one over it: the file list is the same.
+
 WHAT CHANGED
 ------------
-renderer\src\layout\auto-arrange.ts
-  ringOffsets(): the order nearestFree tries the cells of a ring (steps,
-  then same row, then left before right and below before above).
-  shelfPack() and packBlocks(): row width chosen among the break widths
-  by the zoom a landscape view needs; ASPECT = 1.6.
-renderer\test\run-tests.ts
-  A related pair sits side by side on one row; example 17 puts
-  claim_submission beside adjuster_note, top-aligned, and its three
-  Containers in one row.
-renderer\test\goldens\*.svg (16 of 17; 03-iot-telemetry unchanged)
-  Regenerated with UPDATE_GOLDENS=1. Only positions and canvas sizes
-  differ. Examples 16 and 17 checked visually, before and after.
+parser\src\partials.ts (new)
+  effectiveFields(decl, partials): the top-level fields of an Entity or an
+  Edge with the injected fields in place, each with the TablePartial it
+  comes from. effectiveFieldList(items, partials): the same for the fields
+  of an object, a json body or a Type. tablePartials(doc),
+  injectedPartials(), hasPartialInjection().
+parser\src\index.ts
+  Exports the five functions and the types EffectiveField, PartialLookup.
+parser\src\name-resolver.ts
+  Ref endpoints (single, composite, and along a nested path) and top-level
+  records columns are looked up among the effective fields. An injected
+  field resolves its type names at project scope (15.8.2). New error
+  partial-injection-in-partial, at any depth of a TablePartial body.
+  unresolved-partial is now also reported in the body of a Type and of an
+  entry of definitions, which were not walked.
+parser\src\constraints.ts
+  The key and index checks and the referenced-key rule (11.17) read the
+  effective fields; a key path steps through fields injected in a nested
+  object. An inline ref received from a partial is checked for each entity
+  that injects it, and a same message is reported once.
+parser\src\supertypes.ts
+  The redeclaration rule (12.5) reads the effective fields.
+renderer\src\layout\layout.ts
+  buildEntityLayout(): rows from the effective fields, for entities, Edge
+  boxes, and the nested rows of an object, a json body and a Type.
+  `unique` lines of an injected partial's constraints block mark their
+  rows. With an injection, the PK mark of the top-level rows comes from
+  primaryKey(), which applies 10.4. collectRefDeclarations(): the inline
+  refs of injected fields, at the top level and in object and json bodies.
+playground\src\components\inspector\ast-lookup.ts, Inspector.vue,
+FieldInspector.vue, EntityInspector.vue
+  A click on an injected row opens the field, at any depth. The
+  Identification block names its TablePartial, and Edit in source goes to
+  the line in the TablePartial. The field count of the entity includes
+  injected fields, and the structural details of a field show its
+  `~name` lines.
+spec\v0.6.md
+  17.1: position, conflict rule, nested bodies with an example and its
+  playground button, `~` and Types, no injection in a TablePartial.
+  15.6: the comparison table follows 17.1.
+  13.5: the example declares a TablePartial for the injected properties
+  and a Type for a nested one, with a sentence on each. Button rewritten.
+grammar\xDBML.g4
+  A comment on tablePartialDefinition. No rule changed: the grammar
+  already reads `~name` wherever a field is read.
+public\llms.txt, mcp\src\reference.ts
+  "What goes where": the TablePartial and Type rows. A "Partials" section
+  with one example. reference.ts is regenerated from llms.txt.
+parser\test\run-tests.ts (+18), renderer\test\run-tests.ts (+12),
+playground\test\run-tests.ts (+2)
 CHANGELOG.md
-  "Unreleased" section above v0.6.5 (see the question below).
+  "Unreleased": three Spec entries (17.1, 15.6, 13.5), two Tooling entries.
 APPLY.txt, apply.cmd
   This delivery.
 
-EFFECT ON THE SEVENTEEN EXAMPLES (relational arrangement)
----------------------------------------------------------
-                         before      ring only   this delivery
-  relationships whose
-  entities share a row
-  or a column            27 of 63    57 of 63    59 of 63
-  zoom to fit a
-  1100x700 pane
-  (geometric mean)       0.687       0.742       0.840
-  example 17 zoom        0.28        0.43        0.55
+No golden changes: none of the seventeen examples injects a TablePartial.
 
-VERIFIED ON LINUX, NODE 22.22.2, AT e836600 PLUS THIS DELIVERY
---------------------------------------------------------------
-npm run check, exit 0: parser 465; renderer 272 (269 before: the three
-new checks), viewport 14, interactive 47; mcp 84; from-mongodb 24;
-playground 58 (the arranged diagram views of example 16 keep their
-members inside their frames); check:vsix in sync; 166 spec buttons; site
-build. mcp type-check clean.
+GATE
+----
+npm run check: parser 483, renderer 284 + 14 + 47, mcp 85, from-mongodb 24,
+playground 60, vsix in sync, 167 spec buttons open their snippet,
+playground type-check and site build clean. mcp type-check clean.
 
-WHERE IT SHOWS
---------------
-The playground, once the site redeploys: every document opened without
-a saved layout. A layout saved in your browser for example 17 stays as
-it is; Arrange in the diagram toolbar applies the new arrangement.
-renderToSVG, the MCP render tool and the rendering API use the published
-@xdbml/render, so they change at the next release.
+WHERE THE FIX LANDS
+-------------------
+The playground on xdbml.org takes it at the site build that follows the
+push. The npm packages, the MCP server and the rendering API take it at the
+next release. Until then `npm run type-check` in renderer\ fails, since it
+compiles against @xdbml/parse 0.6.5 from npm, which lacks the new exports;
+that command is not part of the gate, and release.cmd publishes the parser
+before it builds the renderer.
 
-QUESTION
---------
-CHANGELOG.md lists this under "Unreleased". Either it rides with the next
-spec change, or it ships now as 0.6.6. A 0.6.6 of the packages with the
-spec still at 0.6.5 would need SUPPORTED_XDBML_VERSION and the spec
-version to move together, or the package and language versions to part.
+OPEN POINTS
+-----------
+  a. 17.1, 15.6 and 13.5 change the spec text. They sit in the CHANGELOG
+     under "Unreleased" without a version mark, and need a number at the
+     next point release (0.6.6).
+  b. 26 (records) still gives the implicit column order as "locally
+     declared fields first, then partial-injected fields in injection
+     order", which differs from the order of 17.1. Not changed here.
+  c. A partial's settings (headercolor, note) and its `indexes` block are
+     not carried to the entity. Upstream DBML carries them, and 17.1 says
+     nothing about them.
+  d. Two limits met on the way, both older than this delivery and left as
+     they were: a Ref path into a `json { }` body reports
+     invalid-nested-path whatever the body holds, and an inline `ref:`
+     written in the body of a Type draws no relationship for the fields
+     typed by it. Fields injected there behave as fields written there.

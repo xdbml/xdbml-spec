@@ -35,6 +35,7 @@ import type {
   XDbmlDocument,
 } from './ast.ts';
 import { versionAtLeast } from './relationships.ts';
+import { effectiveFields } from './partials.ts';
 
 /* -------------------------------------------------------------------------
  * Values and aliases (spec §12.2)
@@ -325,21 +326,9 @@ interface DeclaredAttribute {
 }
 
 function declaredAttributes (entity: EntityDeclaration, index: EntityIndex): DeclaredAttribute[] {
-  const out: DeclaredAttribute[] = [];
-  for (const item of entity.body) {
-    if (item.kind === 'FieldDeclaration') {
-      out.push({ name: item.name, span: item.span });
-    } else if (item.kind === 'PartialInjection') {
-      const partial = index.partials.get(item.partialName);
-      if (!partial) continue;
-      for (const p of partial.body) {
-        if (p.kind === 'FieldDeclaration') {
-          out.push({ name: p.name, span: item.span, viaPartial: item.partialName });
-        }
-      }
-    }
-  }
-  return out;
+  return effectiveFields(entity, index.partials).map((e) => (e.injection
+    ? { name: e.field.name, span: e.injection.span, viaPartial: e.injection.partialName }
+    : { name: e.field.name, span: e.field.span }));
 }
 
 /* -------------------------------------------------------------------------

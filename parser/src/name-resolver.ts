@@ -44,10 +44,12 @@ import type {
   EnumDeclaration,
   FieldDeclaration,
   ObjectType,
+  PartialInjection,
   PathSegment,
   Position,
   RefEndpoint,
   Span,
+  TablePartialDeclaration,
   TopLevelStatement,
   TypeDeclaration,
   TypeExpression,
@@ -58,6 +60,8 @@ import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
 import { checkConstraints, checkTargets } from './constraints.ts';
+import { effectiveFieldList, effectiveFields } from './partials.ts';
+import type { PartialLookup } from './partials.ts';
 import { versionAtLeast } from './relationships.ts';
 import { checkViews } from './views.ts';
 import { checkDiagramViews } from './diagram-views.ts';
@@ -130,6 +134,7 @@ export type DiagnosticCode =
   | 'unresolved-entity'
   | 'unresolved-field'
   | 'unresolved-partial'
+  | 'partial-injection-in-partial'
   | 'unresolved-tablegroup-member'
   | 'unresolved-records-entity'
   | 'unresolved-records-column'
@@ -641,6 +646,25 @@ function resolveTopLevel (
     case 'ViewDeclaration':
       resolveViewBody(stmt, undefined, symbols, diagnostics);
       return;
+    case 'TablePartialDeclaration':
+      // Spec §17.1: a TablePartial does not inject another TablePartial,
+      // in its body or inside a field of its body.
+      for (const item of findInjections(stmt.body)) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'partial-injection-in-partial',
+          message:
+            `TablePartial '${stmt.name}' injects '~${item.partialName}'. A TablePartial does not inject another one: ` +
+            `write '~${item.partialName}' where '~${stmt.name}' is injected, next to it (spec §17.1).`,
+          span: item.span,
+        });
+      }
+      return;
+    case 'TypeDeclaration':
+      // Spec §17.1: a `~name` line in the body of a Type, at any depth,
+      // names a TablePartial. The fields of the body are not walked here.
+      for (const item of findInjections(stmt.body)) reportUnresolvedPartial(item, symbols, diagnostics);
+      return;
     case 'RefDeclaration':
       resolveRefSpec(stmt.spec.source, symbols, diagnostics);
       resolveRefSpec(stmt.spec.target, symbols, diagnostics);
@@ -661,10 +685,9 @@ function resolveTopLevel (
         });
       } else {
         // Validate each column is a field of the entity.
-        const fieldNames = new Set<string>();
-        for (const item of entity.declaration.kind === 'EntityDeclaration' ? entity.declaration.body : []) {
-          if (item.kind === 'FieldDeclaration') fieldNames.add(item.name);
-        }
+        const fieldNames = entity.declaration.kind === 'EntityDeclaration'
+          ? collectFieldNames(entity.declaration, partialLookup(symbols))
+          : new Set<string>();
         for (const col of stmt.columns) {
           if (!fieldNames.has(col)) {
             diagnostics.push({
@@ -710,6 +733,7 @@ function resolveEntityBody (
           } else {
             for (const f of entry.body) {
               if (f.kind === 'FieldDeclaration') resolveFieldDeclaration(f, symbols, diagnostics, local);
+              else if (f.kind === 'PartialInjection') reportUnresolvedPartial(f, symbols, diagnostics);
             }
           }
         }
@@ -1020,7 +1044,7 @@ function resolveRefSpec (
   // composite, validate composite fields against the entity body.
   if (remaining.length === 0) {
     if (hasComposite) {
-      const fieldNameSet = collectFieldNames(entity.declaration);
+      const fieldNameSet = collectFieldNames(entity.declaration, partialLookup(symbols));
       for (const fname of endpoint.compositeFields!) {
         if (!fieldNameSet.has(fname)) {
           diagnostics.push({
@@ -1048,10 +1072,12 @@ function resolveRefSpec (
     });
     return;
   }
-  const topField = entity.declaration.body.find(
-    (item) => item.kind === 'FieldDeclaration' && item.name === topSeg.name,
-  ) as FieldDeclaration | undefined;
-  if (!topField) {
+  // A field the entity receives from a TablePartial is a field of the
+  // entity (spec §17.1), so an endpoint names it like any other.
+  const top = effectiveFields(entity.declaration, partialLookup(symbols))
+    .find((e) => e.field.name === topSeg.name);
+  const topField = top?.field;
+  if (!top || !topField) {
     diagnostics.push({
       severity: 'error',
       code: 'unresolved-field',
@@ -1064,7 +1090,12 @@ function resolveRefSpec (
   // PHASE 4: walk the field's type for any further segments. The walk
   // starts in the scope of the entity, where its internal definitions
   // resolve (spec §15.8.2).
-  let final: Scoped = { type: topField.type, local: entityDefinitions(entity.declaration.body) };
+  // A field received from a TablePartial resolves its type names where the
+  // partial is declared, at project scope (spec §15.8.2).
+  let final: Scoped = {
+    type: topField.type,
+    local: top.partial ? undefined : entityDefinitions(entity.declaration.body),
+  };
   if (remaining.length > 1) {
     const nested = remaining.slice(1);
     const walked = walkTypePath(final.type, nested, symbols, diagnostics, 0, final.local);
@@ -1102,12 +1133,46 @@ function resolveRefSpec (
   }
 }
 
-function collectFieldNames (entity: EntityDeclaration): Set<string> {
-  const names = new Set<string>();
-  for (const item of entity.body) {
-    if (item.kind === 'FieldDeclaration') names.add(item.name);
+function collectFieldNames (entity: EntityDeclaration, partials: PartialLookup): Set<string> {
+  return new Set(effectiveFields(entity, partials).map((e) => e.field.name));
+}
+
+/** Every `~name` line under a node, at any depth. */
+function findInjections (node: unknown, out: PartialInjection[] = []): PartialInjection[] {
+  if (Array.isArray(node)) {
+    for (const n of node) findInjections(n, out);
+  } else if (node && typeof node === 'object') {
+    const rec = node as Record<string, unknown>;
+    if (rec.kind === 'PartialInjection') {
+      out.push(rec as unknown as PartialInjection);
+    } else {
+      for (const [key, value] of Object.entries(rec)) {
+        if (key !== 'span' && value && typeof value === 'object') findInjections(value, out);
+      }
+    }
   }
-  return names;
+  return out;
+}
+
+function reportUnresolvedPartial (item: PartialInjection, symbols: SymbolTable, diagnostics: Diagnostic[]): void {
+  const target = symbols.lookup(item.partialName);
+  if (target && target.kind === 'tablepartial') return;
+  diagnostics.push({
+    severity: 'error',
+    code: 'unresolved-partial',
+    message: `Partial injection '~${item.partialName}' does not resolve to a TablePartial declaration.`,
+    span: item.span,
+  });
+}
+
+/** The TablePartials of the document, read from the symbol table. */
+function partialLookup (symbols: SymbolTable): PartialLookup {
+  return {
+    get: (name) => {
+      const entry = symbols.lookup(name);
+      return entry?.kind === 'tablepartial' ? entry.declaration as TablePartialDeclaration : undefined;
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------
@@ -1193,10 +1258,12 @@ function stepIntoType (
         });
         return undefined;
       }
-      const field = current.fields.find(
-        (f) => f.kind === 'FieldDeclaration' && f.name === seg.name,
-      ) as FieldDeclaration | undefined;
-      if (!field) {
+      // The fields of the object, those a `~name` line places there
+      // included (spec §17.1). An injected field resolves its type names
+      // at project scope (spec §15.8.2).
+      const hit = effectiveFieldList(current.fields, partialLookup(symbols)).find((e) => e.field.name === seg.name);
+      const field = hit?.field;
+      if (!hit || !field) {
         diagnostics.push({
           severity: 'error',
           code: 'unresolved-field',
@@ -1205,7 +1272,7 @@ function stepIntoType (
         });
         return undefined;
       }
-      return at(field.type);
+      return hit.partial ? { type: field.type } : at(field.type);
     }
     case 'PathArrayWildcard': {
       if (current.kind === 'ArrayType') {
@@ -1364,11 +1431,7 @@ function extractFieldNamesFromType (
 ): Set<string> | undefined {
   const resolved = dereferenceNamedType(type, symbols, 0, local)?.type;
   if (!resolved || resolved.kind !== 'ObjectType') return undefined;
-  const names = new Set<string>();
-  for (const f of resolved.fields) {
-    if (f.kind === 'FieldDeclaration') names.add(f.name);
-  }
-  return names;
+  return new Set(effectiveFieldList(resolved.fields, partialLookup(symbols)).map((e) => e.field.name));
 }
 
 function resolveTableGroupMember (

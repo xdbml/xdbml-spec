@@ -419,6 +419,68 @@ Entity customers {
     },
   },
 
+  /* ---- TablePartial injection (spec §17.1) --------------------------- */
+
+  {
+    name: 'a row received from a TablePartial resolves to the field in the partial',
+    source: `xdbml: 0.6
+TablePartial base_template {
+  id         int [pk, not null]
+  created_at timestamp
+}
+Entity users {
+  ~base_template
+  name varchar
+}
+`,
+    check: ({ ast }) => {
+      const id = resolveSelection(ast, { kind: 'field', entityId: 'users', path: 'id' });
+      assertTrue(id !== null && id.kind === 'field', 'users.id resolves');
+      if (!id || id.kind !== 'field') return;
+      assertEq(id.partial?.name ?? '', 'base_template', 'the field names its TablePartial');
+      assertEq(id.entity.name, 'users', 'the entity is the one that injects the partial');
+      const name = resolveSelection(ast, { kind: 'field', entityId: 'users', path: 'name' });
+      assertTrue(name !== null && name.kind === 'field' && name.partial === null, 'a field of the entity names no TablePartial');
+    },
+  },
+
+  {
+    name: 'a row a ~name line places in an object or a Type resolves to the field in the partial',
+    source: `xdbml: 0.6
+Entity users { id int [pk] }
+TablePartial audit {
+  created_at timestamp
+  created_by int [ref: > users.id]
+}
+Type Stamped {
+  ~audit
+  label varchar
+}
+Entity e {
+  id int [pk]
+  profile object {
+    nick varchar
+    ~audit
+  }
+  doc json {
+    ~audit
+  }
+  stamp Stamped
+}
+`,
+    check: ({ ast }) => {
+      for (const path of ['profile.created_at', 'doc.created_by', 'stamp.created_at']) {
+        const hit = resolveSelection(ast, { kind: 'field', entityId: 'e', path });
+        assertTrue(hit !== null && hit.kind === 'field', `${path} resolves`);
+        if (!hit || hit.kind !== 'field') return;
+        assertEq(hit.partial?.name ?? '', 'audit', `${path} names its TablePartial`);
+        assertEq(hit.ancestors.length, 1, `${path} has one ancestor`);
+      }
+      const nick = resolveSelection(ast, { kind: 'field', entityId: 'e', path: 'profile.nick' });
+      assertTrue(nick !== null && nick.kind === 'field' && nick.partial === null, 'a field written in the object names no TablePartial');
+    },
+  },
+
   /* ---- Name alignment (commit acca7cd) ------------------------------- */
   //
   // The alignment fix lives in EntityCard.vue's nameLeftEdge() at the

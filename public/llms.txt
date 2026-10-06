@@ -69,8 +69,8 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
 | `Edge` | `source`, `target` (entities), `source_cardinality`, `target_cardinality`, `undirected`, roles and verbs, `note` | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }` | top level or in a Container |
 | `Enum` | none | values, each with an optional `[note: '...']` | top level or in a Container |
-| `Type` | `note`, `tags`, `synonyms`, `business_term` | fields | top level |
-| `TablePartial` | as an Entity | as an Entity | top level |
+| `Type` | `note`, `tags`, `synonyms`, `business_term` | fields, `~partial` | top level |
+| `TablePartial` | as an Entity | as an Entity, without `~partial` and `definitions { }` | top level |
 | `Ref` | relationship settings | -- | top level, never in a Container |
 | `SupertypeGroup` | `supertype` (required), `completeness`, `exclusivity`, `strategy`, `merge`, `discriminator`, `note` | subtype names, each with an optional `[strategy: ...]` | top level |
 | `TableGroup` | `color`, `note` | entity names | top level |
@@ -407,6 +407,31 @@ Entity customers {
 ```
 
 An internal definition is visible only inside its entity, so two entities may each declare an `Address` of a different shape. A shape reused across entities is a `Type` at the top level. JSON Schema, Avro, Protobuf and document targets such as MongoDB accept the block. Relational targets, Cassandra, ScyllaDB, Neo4j, Memgraph, Neptune and JanusGraph take none: there, a reused shape is a `Type`. An entity holds at most one `definitions` block, and a TablePartial, an Edge or a View holds none.
+
+## Partials
+
+A `TablePartial` declares a set of fields once, for several bodies. A `~name` line places them where it is written, in the order the TablePartial declares them: in an Entity or an Edge, among the fields of an `object { }` or a `json { }`, or in the body of a `Type`. A field the body declares itself overrides an injected field of the same name; among partials, the last one injected applies. The body of a TablePartial holds no `~name` line, at any depth. `~` never names a `Type`: a Type is the type of a field (`billing Address`), and the field holds its shape as a nested value.
+
+```xdbml
+TablePartial audit {
+  created_at timestamp [not null]
+  created_by varchar
+}
+
+Entity invoices {
+  invoice_id int [pk]
+  ~audit
+  total      decimal(12,2) [not null]
+}
+
+Entity shipments {
+  shipment_id int [pk]
+  delivery object {
+    ~audit
+    carrier varchar
+  }
+}
+```
 
 ## Projects and containers
 

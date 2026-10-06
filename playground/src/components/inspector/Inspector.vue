@@ -56,6 +56,7 @@
         :ancestors="resolved.ancestors"
         :entity="resolved.entity"
         :container="resolved.container"
+        :partial="resolved.partial"
         @edit-source="onEditSource"
       />
       <RefInspector

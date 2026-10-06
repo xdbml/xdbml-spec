@@ -34,6 +34,7 @@ import type {
   EntityDeclaration,
   FieldDeclaration,
   RefDeclaration,
+  TablePartialDeclaration,
   TypeDeclaration,
   TypeExpression,
   ViewDeclaration,
@@ -44,7 +45,7 @@ import type {
 // runner, which resolves relative paths but not the Vite alias. The
 // layout module only type-imports @xdbml/parse, so nothing else follows.
 import { collectRefDeclarations } from '../../../../renderer/src/layout/layout.ts';
-import { entityDefinitions, resolveSupertypeGroups, type ResolvedSupertypeGroup } from '@xdbml/parse';
+import { effectiveFieldList, effectiveFields, entityDefinitions, resolveSupertypeGroups, tablePartials, type ResolvedSupertypeGroup } from '@xdbml/parse';
 
 import type { Selection } from './selection';
 
@@ -70,6 +71,12 @@ export type ResolvedSelection =
       ancestors: readonly FieldDeclaration[];
       entity: EntityOrView;
       container: ContainerDeclaration | null;
+      /**
+       * The TablePartial that declares the field, when the entity receives
+       * it through a `~name` line (spec §17.1); null for a field the entity
+       * declares itself. `node.span` then points into the TablePartial.
+       */
+      partial: TablePartialDeclaration | null;
     }
   | { kind: 'ref'; node: RefDeclaration; index: number }
   | { kind: 'supertypeGroup'; group: ResolvedSupertypeGroup }
@@ -158,7 +165,10 @@ function resolveField (doc: XDbmlDocument, entityId: string, path: string): Reso
   const entityTable: ReadonlyMap<string, TypeDeclaration> =
     local.size > 0 ? new Map([...typeTable, ...local]) : typeTable;
   const segments = path.split('.');
-  const traversal = traverseFieldPath(found.entity, segments, { entity: entityTable, project: typeTable, local: new Set(local.values()) });
+  const traversal = traverseFieldPath(
+    found.entity, segments,
+    { entity: entityTable, project: typeTable, local: new Set(local.values()), partials: tablePartials(doc) },
+  );
   if (!traversal) return null;
   return {
     kind: 'field',
@@ -166,6 +176,7 @@ function resolveField (doc: XDbmlDocument, entityId: string, path: string): Reso
     ancestors: traversal.ancestors,
     entity: found.entity,
     container: found.container,
+    partial: traversal.partial,
   };
 }
 
@@ -283,23 +294,30 @@ interface TypeScopes {
   entity: ReadonlyMap<string, TypeDeclaration>;
   project: ReadonlyMap<string, TypeDeclaration>;
   local: ReadonlySet<TypeDeclaration>;
+  /** The TablePartials of the document, for `~name` lines in nested bodies (spec §17.1). */
+  partials: ReadonlyMap<string, TablePartialDeclaration>;
 }
 
 function traverseFieldPath (
   entity: EntityOrView,
   segments: readonly string[],
   scopes: TypeScopes,
-): { field: FieldDeclaration; ancestors: readonly FieldDeclaration[] } | null {
+): { field: FieldDeclaration; ancestors: readonly FieldDeclaration[]; partial: TablePartialDeclaration | null } | null {
   if (segments.length === 0) return null;
 
-  const top = entity.body.find(
-    (b): b is FieldDeclaration => b.kind === 'FieldDeclaration' && b.name === segments[0],
-  );
-  if (!top) return null;
+  // The top-level rows of the diagram are the entity's own fields and
+  // those it receives from TablePartials (spec §17.1), so the first
+  // segment is looked up among both, as the diagram lists them. A field
+  // received from a partial resolves its type names at project scope
+  // (spec §15.8.2).
+  const found = effectiveFields(entity, scopes.partials).find((e) => e.field.name === segments[0]);
+  if (!found) return null;
+  const top = found.field;
+  let partial = found.partial ?? null;
 
   let currentField: FieldDeclaration = top;
   let currentType: TypeExpression = top.type;
-  let table = scopes.entity;
+  let table = partial ? scopes.project : scopes.entity;
   const ancestors: FieldDeclaration[] = [];
 
   for (let i = 1; i < segments.length; i++) {
@@ -318,9 +336,10 @@ function traverseFieldPath (
     currentField = child.field;
     currentType = child.field.type;
     table = child.table;
+    partial = child.partial;
   }
 
-  return { field: currentField, ancestors };
+  return { field: currentField, ancestors, partial };
 }
 
 function isSyntheticSegment (seg: string): boolean {
@@ -366,14 +385,19 @@ function findNamedField (
   name: string,
   table: ReadonlyMap<string, TypeDeclaration>,
   scopes: TypeScopes,
-): { field: FieldDeclaration; table: ReadonlyMap<string, TypeDeclaration> } | null {
-  const inScope = (field: FieldDeclaration | null, next: ReadonlyMap<string, TypeDeclaration>) =>
-    (field ? { field, table: next } : null);
+): { field: FieldDeclaration; table: ReadonlyMap<string, TypeDeclaration>; partial: TablePartialDeclaration | null } | null {
+  // A field a `~name` line places in the body is declared in the
+  // TablePartial and resolves its type names at project scope.
+  const inBody = (body: readonly { kind: string }[], next: ReadonlyMap<string, TypeDeclaration>) => {
+    const hit = effectiveFieldList(body, scopes.partials).find((e) => e.field.name === name);
+    if (!hit) return null;
+    return { field: hit.field, table: hit.partial ? scopes.project : next, partial: hit.partial ?? null };
+  };
   switch (type.kind) {
     case 'ObjectType':
-      return inScope(findFieldInBody(type.fields, name), table);
+      return inBody(type.fields, table);
     case 'JsonType':
-      return type.fields ? inScope(findFieldInBody(type.fields, name), table) : null;
+      return type.fields ? inBody(type.fields, table) : null;
     case 'ScalarType': {
       // A ScalarType whose name matches a Type declaration, or an internal
       // definition of the entity, is a reference to a user-defined type.
@@ -384,21 +408,9 @@ function findNamedField (
       // body resolves at project scope (spec §15.8.2).
       const decl = table.get(type.name);
       if (!decl) return null;
-      return inScope(findFieldInBody(decl.body, name), scopes.local.has(decl) ? table : scopes.project);
+      return inBody(decl.body, scopes.local.has(decl) ? table : scopes.project);
     }
     default:
       return null;
   }
-}
-
-function findFieldInBody (
-  body: readonly { kind: string }[],
-  name: string,
-): FieldDeclaration | null {
-  for (const item of body) {
-    if (item.kind === 'FieldDeclaration' && (item as FieldDeclaration).name === name) {
-      return item as FieldDeclaration;
-    }
-  }
-  return null;
 }

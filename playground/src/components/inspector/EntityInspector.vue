@@ -106,7 +106,6 @@ import type {
   ContainerDeclaration,
   EdgeDeclaration,
   EntityDeclaration,
-  FieldDeclaration,
   NoteBlock,
   Span,
   ViewDeclaration,
@@ -120,7 +119,7 @@ import { highlightSql }   from './sqlHighlight';
 import { supertypeGroupsOf } from './ast-lookup';
 import type { Selection } from './selection';
 import { useParserStore } from '@/stores/parserStore';
-import { entityConstraints, entityDefinitions, viewSourceQuery } from '@xdbml/parse';
+import { effectiveFieldList, effectiveFields, entityConstraints, entityDefinitions, tablePartials, viewSourceQuery } from '@xdbml/parse';
 import type { Constraint, ConstraintSource } from '@xdbml/parse';
 
 const props = defineProps<{
@@ -147,7 +146,8 @@ const groups = computed(() => supertypeGroupsOf(parser.flatAst, entityId.value))
 const definitions = computed(() => {
   if (props.entity.kind !== 'EntityDeclaration') return [];
   return [...entityDefinitions(props.entity.body).values()].map((d) => {
-    const fields = d.body.filter((b) => b.kind === 'FieldDeclaration').length;
+    const doc = parser.flatAst;
+    const fields = effectiveFieldList(d.body, doc ? tablePartials(doc) : new Map()).length;
     let shape: string;
     if (!d.scalarBase) shape = `object, ${fields} ${fields === 1 ? 'field' : 'fields'}`;
     else if (d.scalarBase.kind === 'ScalarType') shape = d.scalarBase.params?.length ? `${d.scalarBase.name}(${d.scalarBase.params.join(', ')})` : d.scalarBase.name;
@@ -245,10 +245,12 @@ const fieldStats = computed(() => {
   // Primary key fields from whichever form declares the key (spec §10.3).
   const key = constraints.value.find((c) => c.kind === 'key' && c.keyKind === 'primary');
   const pk = key && key.kind === 'key' ? key.fields.length : 0;
-  for (const item of props.entity.body) {
-    if (item.kind !== 'FieldDeclaration') continue;
+  // The fields the entity receives from TablePartials count as its own
+  // (spec §17.1), as the diagram lists them.
+  const doc = parser.flatAst;
+  const partials = doc ? tablePartials(doc) : new Map();
+  for (const { field: f } of effectiveFields(props.entity, partials)) {
     total += 1;
-    const f = item as FieldDeclaration;
     for (const s of f.settings) {
       if (s.name === 'not null') notNull += 1;
     }
