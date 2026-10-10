@@ -4,9 +4,40 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.6.6 -- 2026
+## v0.6.7 -- 2026
 
 **Status**: Draft -- current
+**Released**: 2026-10-10
+
+A point release of the v0.6 draft on quoted names. §3.2 defines quoted identifiers, and Appendix D makes every DBML 3.13.6 document valid xDBML, but `@xdbml/parse` read a quoted identifier only as the name of a declaration and after a dot in a path. A key, an index or a relationship on quoted names did not parse, nor did a DBML 3.13.6 document that used them, as `@dbml/core` writes relationships: `Ref:"users"."id" < "posts"."user_id"`. The tools now read a quoted name in every place a name stands, and keep a dot inside quotes in the name. Every document that parsed before still parses, and documents continue to declare `xdbml: 0.6`.
+
+### Changed
+
+#### Spec
+
+- **Identifiers (§3.2)**: the section lists the places where a quoted identifier stands, and states how a qualified name reads. Each segment is bare or quoted on its own, `"sales"."Work Order"`; a dot outside quotes separates two levels, and a dot inside quotes is part of the name, so `"my.table"` is one entity and `my.table` is the entity `table` of the Container `my`. A note gives the state of `@xdbml/parse` before v0.6.7.
+- **Path syntax (§20.1, §20.2)**: a path starts with a name, bare or quoted, as in `"Work Order Part"."Work Order ID"`, and a dot inside a quoted segment is part of the name.
+- **Lexical grammar (Appendix B)**: a name is an identifier or a quoted identifier, in a qualified name, a composite reference and a field path.
+- **Grammar (`grammar/xDBML.g4`)**: a `nameSegment` rule, an identifier or a quoted identifier, stands in every rule that takes a declared name, an entity reference, a path head, the fields of a composite relationship, an import path or alias, a `~name` line, and the name of a Project or a `Ref`.
+
+#### Tooling
+
+- **Quoted names in every name position**: `@xdbml/parse` reads a quoted identifier at the head of a path, so in the key lines of a `constraints` block, in `indexes`, and at both ends of a `Ref`, inline or long; in the fields of a composite relationship, `"Order Line".("Order ID", "Line No")`; in each segment of a dotted entity, Enum or type name, `Table "sales"."Work Order"`; as a TableGroup member; in a top-level `records` declaration and its columns; after `~`; in an import path and its alias; in a tuple element or a polymorphic alternative; and as the name of a `Ref`, `Ref "fk order customer": ...`. It used to reject these forms, at the head of a path with `Expected path start identifier`.
+- **A dot inside quotes stays in the name**: the parser read `"my.table"` and `my.table` as one name, so a quoted name holding a dot reached the entity `table` of the Container `my`, or collided with it. The AST now holds a qualified name with each segment that holds a dot or a double quote written in quotes, as in the source: `sales.Work Order` for `"sales"."Work Order"`, `"my.table"` for `"my.table"`. A name without such characters reads exactly as before. `@xdbml/parse` exports `joinName()`, `splitName()`, `quoteNameSegment()`, `nameQualifier()`, `lastNameSegment()` and `isQualifiedName()` for this form, and the resolver, the key and relationship checks, the module resolver, the diagram and the playground inspector use them, so a field named `"user.id"` and the nested field `user.id` stay two fields, in a key as in the diagram.
+- **`@xdbml/parse`** accepts documents declaring `xdbml: 0.6.7`.
+- **Playground: diagnostics to the clipboard**: the text of the diagnostics panel can be selected and copied with Ctrl+C or Cmd+C; a click that ends a selection no longer jumps to the source, which took the focus to the editor and dropped the selection. A Copy button in the header of the panel copies every diagnostic, one per line, with its severity, line, column, code and message. The playground help describes both.
+- **llms.txt**: one line in "Quoting" on quoting each segment of a qualified name.
+
+### Not changed (compatibility)
+
+- Backward-compatible. Every document that parsed before parses to the same AST, unless it declares or references a quoted name that holds a dot or a double quote: such a name now keeps its quotes in the AST, and reaches only the declaration of that name.
+- A plain DBML document with quoted names in a key, an index or a relationship, which `@xdbml/parse` rejected, now parses as it does in DBML 3.13.6. `~"name"` is the one form `@xdbml/parse` reads where DBML 3.13.6 rejects it.
+
+---
+
+## v0.6.6 -- 2026
+
+**Status**: Draft -- superseded by v0.6.7
 **Released**: 2026-10-06
 
 A point release of the v0.6 draft on TablePartials. §17.1 gave the conflict rule alone; it now states where the fields of a TablePartial go, which bodies take a `~name` line, and what a TablePartial carries to them. The tools apply it: the parser kept a `~name` line without applying it, so the diagram, the relationships and the checks did not see the injected fields. Every document that follows a form the spec described remains valid, and documents continue to declare `xdbml: 0.6`.

@@ -47,6 +47,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { joinName, quoteNameSegment, splitName } from '@xdbml/parse';
 import type { RefDeclaration, RefEndpoint, Setting, Span } from '@xdbml/parse';
 
 import InspectorSection   from './InspectorSection.vue';
@@ -132,8 +133,8 @@ const hasReading = computed(() => readingRows.value.length > 0);
  */
 const sentences = computed(() => {
   const s = props.refDecl.settings;
-  const src = renderEndpoint(props.refDecl.spec.source).split('.')[0];
-  const tgt = renderEndpoint(props.refDecl.spec.target).split('.')[0];
+  const src = splitName(renderEndpoint(props.refDecl.spec.source))[0];
+  const tgt = splitName(renderEndpoint(props.refDecl.spec.target))[0];
 
   const read = (
     subject: string,
@@ -162,9 +163,10 @@ function renderEndpoint (ep: RefEndpoint): string {
     if (p.kind === 'PathArrayWildcard') return '[*]';
     return '?';
   });
-  let result = segs.join('.');
+  // Names that hold a dot keep their quotes (names.ts), as in the source.
+  let result = joinName(segs);
   if (ep.compositeFields && ep.compositeFields.length > 0) {
-    result += `.(${ep.compositeFields.join(', ')})`;
+    result += `.(${ep.compositeFields.map(quoteNameSegment).join(', ')})`;
   }
   return result;
 }

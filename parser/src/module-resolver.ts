@@ -37,6 +37,7 @@ import type {
   XDbmlDocument,
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
+import { joinName, quoteNameSegment, splitName } from './names.ts';
 import { entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
 import type { LocalTypes } from './definitions.ts';
 
@@ -404,7 +405,10 @@ function findImportTarget (
   doc: XDbmlDocument,
 ): TopLevelStatement | FieldDeclaration | undefined {
   const path = item.sourcePath;
-  const segments = path.split('.');
+  // The segments as written, unquoted (names.ts). A field import walks
+  // field names, held as written; every other import compares segments
+  // with the names of declarations, held quoted where they hold a dot.
+  const segments = splitName(path);
 
   // Field imports go through their own walker. The path can be deeper
   // than `container.entity.field` -- the walker handles nested objects,
@@ -412,6 +416,7 @@ function findImportTarget (
   if (item.elementType === 'field') {
     return findFieldTarget(segments, doc);
   }
+  const names = segments.map(quoteNameSegment);
 
   // Entity-shaped items: support container.entity dotted form.
   if (
@@ -424,7 +429,7 @@ function findImportTarget (
       // Bare name -- match a top-level entity OR a container-scoped entity
       // whose bare name is unique.
       const topLevel = doc.statements.find(
-        (s) => s.kind === 'EntityDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'EntityDeclaration' && s.name === names[0],
       );
       if (topLevel) return topLevel;
       // Look inside containers.
@@ -432,7 +437,7 @@ function findImportTarget (
       for (const stmt of doc.statements) {
         if (stmt.kind === 'ContainerDeclaration') {
           for (const body of stmt.body) {
-            if (body.kind === 'EntityDeclaration' && body.name === segments[0]) {
+            if (body.kind === 'EntityDeclaration' && body.name === names[0]) {
               matches.push(body);
             }
           }
@@ -445,11 +450,11 @@ function findImportTarget (
     if (segments.length === 2) {
       // container.entity
       const container = doc.statements.find(
-        (s) => s.kind === 'ContainerDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'ContainerDeclaration' && s.name === names[0],
       );
       if (!container || container.kind !== 'ContainerDeclaration') return undefined;
       const entity = container.body.find(
-        (b) => b.kind === 'EntityDeclaration' && b.name === segments[1],
+        (b) => b.kind === 'EntityDeclaration' && b.name === names[1],
       );
       return entity && entity.kind === 'EntityDeclaration' ? entity : undefined;
     }
@@ -495,16 +500,16 @@ function findImportTarget (
   if (item.elementType === 'edge') {
     if (segments.length === 1) {
       return doc.statements.find(
-        (s) => s.kind === 'EdgeDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'EdgeDeclaration' && s.name === names[0],
       );
     }
     if (segments.length === 2) {
       const container = doc.statements.find(
-        (s) => s.kind === 'ContainerDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'ContainerDeclaration' && s.name === names[0],
       );
       if (!container || container.kind !== 'ContainerDeclaration') return undefined;
       const edge = container.body.find(
-        (b) => b.kind === 'EdgeDeclaration' && b.name === segments[1],
+        (b) => b.kind === 'EdgeDeclaration' && b.name === names[1],
       );
       return edge && edge.kind === 'EdgeDeclaration' ? edge : undefined;
     }
@@ -521,16 +526,16 @@ function findImportTarget (
   if (item.elementType === 'view') {
     if (segments.length === 1) {
       return doc.statements.find(
-        (s) => s.kind === 'ViewDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'ViewDeclaration' && s.name === names[0],
       );
     }
     if (segments.length === 2) {
       const container = doc.statements.find(
-        (s) => s.kind === 'ContainerDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'ContainerDeclaration' && s.name === names[0],
       );
       if (!container || container.kind !== 'ContainerDeclaration') return undefined;
       const view = container.body.find(
-        (b) => b.kind === 'ViewDeclaration' && b.name === segments[1],
+        (b) => b.kind === 'ViewDeclaration' && b.name === names[1],
       );
       return view && view.kind === 'ViewDeclaration' ? view : undefined;
     }
@@ -547,21 +552,21 @@ function findImportTarget (
         (s) => s.kind === 'EnumDeclaration' && s.name === path,
       );
       if (qualifiedTopLevel && qualifiedTopLevel.kind === 'EnumDeclaration') {
-        return { ...qualifiedTopLevel, name: segments[segments.length - 1] };
+        return { ...qualifiedTopLevel, name: names[segments.length - 1] };
       }
     }
     if (segments.length === 1) {
       return doc.statements.find(
-        (s) => s.kind === 'EnumDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'EnumDeclaration' && s.name === names[0],
       );
     }
     if (segments.length === 2) {
       const container = doc.statements.find(
-        (s) => s.kind === 'ContainerDeclaration' && s.name === segments[0],
+        (s) => s.kind === 'ContainerDeclaration' && s.name === names[0],
       );
       if (!container || container.kind !== 'ContainerDeclaration') return undefined;
       const enm = container.body.find(
-        (b) => b.kind === 'EnumDeclaration' && b.name === segments[1],
+        (b) => b.kind === 'EnumDeclaration' && b.name === names[1],
       );
       return enm && enm.kind === 'EnumDeclaration' ? enm : undefined;
     }
@@ -607,11 +612,11 @@ function findFieldTarget (
   // one field segment after).
   if (segments.length >= 3) {
     const container = doc.statements.find(
-      (s) => s.kind === 'ContainerDeclaration' && s.name === segments[0],
+      (s) => s.kind === 'ContainerDeclaration' && s.name === quoteNameSegment(segments[0]),
     );
     if (container && container.kind === 'ContainerDeclaration') {
       const ent = container.body.find(
-        (b) => b.kind === 'EntityDeclaration' && b.name === segments[1],
+        (b) => b.kind === 'EntityDeclaration' && b.name === quoteNameSegment(segments[1]),
       );
       if (ent && ent.kind === 'EntityDeclaration') {
         entity = ent;
@@ -623,7 +628,7 @@ function findFieldTarget (
   // Try 1-segment: top-level entity (declared outside any Container).
   if (!entity) {
     const topLevel = doc.statements.find(
-      (s) => s.kind === 'EntityDeclaration' && s.name === segments[0],
+      (s) => s.kind === 'EntityDeclaration' && s.name === quoteNameSegment(segments[0]),
     );
     if (topLevel && topLevel.kind === 'EntityDeclaration') {
       entity = topLevel;
@@ -639,7 +644,7 @@ function findFieldTarget (
     for (const stmt of doc.statements) {
       if (stmt.kind === 'ContainerDeclaration') {
         for (const item of stmt.body) {
-          if (item.kind === 'EntityDeclaration' && item.name === segments[0]) {
+          if (item.kind === 'EntityDeclaration' && item.name === quoteNameSegment(segments[0])) {
             matches.push(item);
           }
         }
@@ -672,7 +677,7 @@ function findFieldTarget (
   // body of a project Type resolves its names at project scope and is
   // copied as it is.
   const local = entityDefinitions(entity.body);
-  const context = `Field import '${segments.join('.')}'`;
+  const context = `Field import '${joinName(segments)}'`;
   const inline = (f: FieldDeclaration, scope: LocalTypes | undefined): FieldDeclaration =>
     (scope && scope.size > 0 ? inlineInternalDefinitions(f, scope, context) : f);
 
@@ -797,27 +802,31 @@ function applyAlias (
   item: ImportItem,
 ): TopLevelStatement | FieldDeclaration {
   if (!item.alias) return stmt;
+  // Declarations that other declarations reference hold their names in
+  // the form of names.ts; a Note, a DiagramView and a field keep the
+  // alias as written.
+  const declared = quoteNameSegment(item.alias);
   switch (stmt.kind) {
     case 'EntityDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'TypeDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'EnumDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'EdgeDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'ViewDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'ContainerDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'TableGroupDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'SupertypeGroupDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'DiagramViewDeclaration':
       return { ...stmt, name: item.alias };
     case 'TablePartialDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'NoteDeclaration':
       return { ...stmt, name: item.alias };
     case 'FieldDeclaration':

@@ -39,8 +39,12 @@ import {
   entityDefinitions,
   hasPartialInjection,
   injectedPartials,
+  isQualifiedName,
+  joinName,
   primaryKey,
+  quoteNameSegment,
   resolveSupertypeGroups,
+  splitName,
   tablePartials,
 } from '@xdbml/parse';
 import type {
@@ -546,9 +550,10 @@ export function buildDiagram (
       if (!color) continue;
       for (const member of stmt.members) {
         // Member can be `entity` or `container.entity`. Try qualified
-        // form first; if the member contains a dot, it's already qualified.
+        // form first; a member of two or more segments is already
+        // qualified (a dot inside quotes belongs to the name, spec §3.2).
         let resolvedId: string | undefined;
-        if (member.includes('.')) {
+        if (isQualifiedName(member)) {
           // Qualified reference: take as-is.
           resolvedId = member;
         } else {
@@ -701,19 +706,21 @@ export function buildDiagram (
     for (const name of names) {
       // A non-composite endpoint into a nested field arrives as a dotted
       // remainder such as `address.street`, so try the row path first.
+      // Both are in the form of names.ts: a field name that holds a dot
+      // keeps its quotes.
       let row = entity.fields.find((f) => f.path === name);
       // Then exact leaf-name match at any indent (matches dbdiagram.io's
       // intuition that the endpoint field is whatever has that leaf name).
-      if (!row) row = entity.fields.find((f) => f.name === name);
+      if (!row) row = entity.fields.find((f) => quoteNameSegment(f.name) === name);
       // Then any row whose path ends with the endpoint as a suffix.
       if (!row) row = entity.fields.find((f) => f.path.endsWith(`.${name}`));
       // Finally, when the endpoint names a nested field whose parent row is
       // collapsed, walk up the path and mark the deepest visible ancestor,
       // so the marker still shows at the collapsed parent.
-      if (!row && name.includes('.')) {
-        const segments = name.split('.');
+      if (!row && isQualifiedName(name)) {
+        const segments = splitName(name);
         for (let cut = segments.length - 1; cut >= 1 && !row; cut -= 1) {
-          const prefix = segments.slice(0, cut).join('.');
+          const prefix = joinName(segments.slice(0, cut));
           row = entity.fields.find((f) => f.path === prefix);
         }
       }
@@ -1135,7 +1142,9 @@ function buildEntityLayout (
     namedTypeAncestors: ReadonlySet<TypeDeclaration>,
     table: ReadonlyMap<string, TypeDeclaration>,
   ): void => {
-    const path = parentPath ? `${parentPath}.${field.name}` : field.name;
+    // A row path is in the form of names.ts: a field name that holds a
+    // dot keeps its quotes, so `"user.id"` and `user.id` stay two rows.
+    const path = parentPath ? `${parentPath}.${quoteNameSegment(field.name)}` : quoteNameSegment(field.name);
     const flags = computeFieldFlags(field);
     // describeNested handles the named-type recursion guard internally:
     // it returns undefined for a ScalarType whose name is in the
@@ -1399,10 +1408,9 @@ function buildEntityLayout (
       if (!isPkIndex) continue;
       for (const component of entry.components) {
         if (component.kind !== 'IndexPathComponent') continue;
-        const componentPath = component.path
+        const componentPath = joinName(component.path
           .filter((seg) => seg.kind === 'PathField')
-          .map((seg) => (seg as { name: string }).name)
-          .join('.');
+          .map((seg) => (seg as { name: string }).name));
         if (!componentPath) continue;
         // Match the FieldLayout by exact path. For top-level fields
         // path === name; for nested fields path is dot-joined.
@@ -1438,10 +1446,9 @@ function buildEntityLayout (
         if (isPk && !own) continue;
         const compositeUnique = isUnique && entry.fields.length > 1 ? ++compositeUniqueCount : 0;
         for (const path of entry.fields) {
-          const dotted = path
+          const dotted = joinName(path
             .filter((seg) => seg.kind === 'PathField')
-            .map((seg) => seg.name ?? '')
-            .join('.');
+            .map((seg) => seg.name ?? ''));
           const target = fields.find((f) => f.path === dotted);
           if (!target) continue;
           if (isPk) target.flags.pk = true;
@@ -1761,7 +1768,7 @@ export function collectRefDeclarations (doc: XDbmlDocument): RefDeclaration[] {
       for (const item of items) {
         if (item.kind !== 'FieldDeclaration') continue;
         const field = item as unknown as FieldDeclaration;
-        const fieldPath = pathPrefix ? `${pathPrefix}.${field.name}` : field.name;
+        const fieldPath = pathPrefix ? `${pathPrefix}.${quoteNameSegment(field.name)}` : quoteNameSegment(field.name);
 
         for (const setting of field.settings) {
           if (!setting.value || setting.value.kind !== 'RefValue') continue;
@@ -1836,9 +1843,14 @@ function synthesizeRefFromInline (
   containerName: string | undefined,
   fieldSettings: ReadonlyArray<Setting> = [],
 ): RefDeclaration {
-  const sourcePathNames = containerName
-    ? [containerName, entityName, fieldName]
-    : [entityName, fieldName];
+  // Each name splits into the segments it was written with (names.ts):
+  // `core.users` declared at the top level is two segments, and so is a
+  // nested field path such as `address.street`.
+  const sourcePathNames = [
+    ...(containerName ? splitName(containerName) : []),
+    ...splitName(entityName),
+    ...splitName(fieldName),
+  ];
   const sourcePath = sourcePathNames.map((name) => ({
     kind: 'PathField' as const,
     name,
@@ -1897,15 +1909,17 @@ function locateRefEndpoint (
   // (won't match), then `blog_app.posts` (matches), leaving `author_id`
   // as the field name.
   for (let prefixLen = maxPrefix; prefixLen >= 1; prefixLen -= 1) {
-    const entityKey = fieldSegments.slice(0, prefixLen).map((s) => s.name).join('.');
+    const entityKey = joinName(fieldSegments.slice(0, prefixLen).map((s) => s.name));
     const entity = entityByName.get(entityKey);
     if (entity) {
-      const fieldName = endpoint.compositeFields?.[0]
-        ?? fieldSegments.slice(prefixLen).map((s) => s.name).join('.');
+      // Field names in the form of names.ts, like the row paths.
+      const compositeFields = hasComposite ? endpoint.compositeFields!.map(quoteNameSegment) : undefined;
+      const fieldName = compositeFields?.[0]
+        ?? joinName(fieldSegments.slice(prefixLen).map((s) => s.name));
       return {
         entityId: entity.id,
         fieldName: fieldName || undefined,
-        compositeFields: hasComposite ? [...endpoint.compositeFields!] : undefined,
+        compositeFields,
       };
     }
   }
@@ -1916,7 +1930,7 @@ function locateRefEndpoint (
   // an existing attribute-level reading keeps winning, which leaves every
   // document that parsed before this meaning what it meant before.
   if (!hasComposite) {
-    const wholePath = fieldSegments.map((s) => s.name).join('.');
+    const wholePath = joinName(fieldSegments.map((s) => s.name));
     const entity = entityByName.get(wholePath);
     if (entity) return { entityId: entity.id, fieldName: undefined };
   }

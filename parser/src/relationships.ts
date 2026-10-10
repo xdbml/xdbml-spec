@@ -36,6 +36,7 @@ import type {
   Span,
   XDbmlDocument,
 } from './ast.ts';
+import { quoteNameSegment } from './names.ts';
 
 /* -------------------------------------------------------------------------
  * Relationship type
@@ -192,7 +193,9 @@ export function pathToString (path: ReadonlyArray<PathSegment>): string {
   return path
     .map((seg) => {
       switch (seg.kind) {
-        case 'PathField':       return seg.name;
+        // A field name that holds a dot keeps its quotes (names.ts), so
+        // the string tells `"user.id"` from the path `user.id`.
+        case 'PathField':       return quoteNameSegment(seg.name);
         case 'PathArrayIndex':  return `[${seg.index}]`;
         case 'PathArrayWildcard': return '[*]';
         case 'PathMapKey':      return `[${seg.key}]`;
@@ -393,7 +396,7 @@ export function checkRelationships (doc: XDbmlDocument): Diagnostic[] {
 
     // 11.11: at most one master per child attribute. For an inline ref the
     // child is always the field carrying the setting, whatever the operator.
-    const key = `${ownerPath}.${field.name}`;
+    const key = `${ownerPath}.${quoteNameSegment(field.name)}`;
     const previous = claimedChildren.get(key);
     if (previous) {
       diagnostics.push({
@@ -426,7 +429,7 @@ export function checkRelationships (doc: XDbmlDocument): Diagnostic[] {
       // is checked too. Nested field containers vary by type expression;
       // `nestedFields` below normalizes the shapes the AST uses.
       for (const nested of nestedFields(field)) {
-        walkFields([nested], `${ownerPath}.${field.name}`);
+        walkFields([nested], `${ownerPath}.${quoteNameSegment(field.name)}`);
       }
     }
   };

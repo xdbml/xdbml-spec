@@ -309,7 +309,7 @@ listSeparator
     ;
 
 tableDefinition
-    : tableKeyword entityReference (AS IDENTIFIER)? settingsBlock? LBRACE
+    : tableKeyword entityReference (AS nameSegment)? settingsBlock? LBRACE
         (entityBodyItem | listSeparator)*
       RBRACE
     ;
@@ -318,7 +318,7 @@ tableDefinition
 // a `~name` line in its body, and inside its fields, as in every other body,
 // and an implementation reports it after parsing (partial-injection-in-partial).
 tablePartialDefinition
-    : 'TablePartial' IDENTIFIER settingsBlock? LBRACE
+    : 'TablePartial' nameSegment settingsBlock? LBRACE
         (entityBodyItem | listSeparator)*
       RBRACE
     ;
@@ -346,7 +346,7 @@ enumValue
     ;
 
 tableGroupDefinition
-    : 'TableGroup' IDENTIFIER settingsBlock? LBRACE
+    : 'TableGroup' nameSegment settingsBlock? LBRACE
         (entityReference | listSeparator)*
       RBRACE
     ;
@@ -354,7 +354,7 @@ tableGroupDefinition
 // ---- §17.7 Container ------------------------------------------------------
 
 containerDefinition
-    : containerKeyword IDENTIFIER settingsBlock? LBRACE
+    : containerKeyword nameSegment settingsBlock? LBRACE
         containerBody*
       RBRACE
     ;
@@ -389,10 +389,10 @@ tableKeyword
 // `Type Name { fields }` object-shaped form (§13.7).
 
 typeDefinition
-    : TYPE_KW IDENTIFIER settingsBlock? LBRACE      // object-shaped (v0.1 form)
+    : TYPE_KW nameSegment settingsBlock? LBRACE      // object-shaped (v0.1 form)
         (fieldDeclaration | listSeparator)*
       RBRACE
-    | TYPE_KW IDENTIFIER typeExpression settingsBlock?   // scalar (v0.2 form)
+    | TYPE_KW nameSegment typeExpression settingsBlock?   // scalar (v0.2 form)
     ;
 
 // ---- §15.8 Internal definitions (new for v0.6.5) ---------------------------
@@ -410,10 +410,10 @@ definitionsBlock
     ;
 
 definitionEntry
-    : IDENTIFIER settingsBlock? LBRACE              // object form
+    : nameSegment settingsBlock? LBRACE              // object form
         (fieldDeclaration | listSeparator)*
       RBRACE
-    | IDENTIFIER typeExpression settingsBlock?      // scalar form
+    | nameSegment typeExpression settingsBlock?      // scalar form
     ;
 
 // ---- §25 Module system (new in v0.2) --------------------------------------
@@ -445,7 +445,7 @@ importList
     ;
 
 importItem
-    : elementType importPath (AS IDENTIFIER)?
+    : elementType importPath (AS nameSegment)?
     ;
 
 elementType
@@ -458,8 +458,9 @@ elementType
 importPath
     // Distinct from `qualifiedName` (which requires at least one dot) because
     // import paths may be bare identifiers (top-level entities, types, enums)
-    // or dotted (container.entity, container.entity.field).
-    : IDENTIFIER (DOT IDENTIFIER)*
+    // or dotted (container.entity, container.entity.field). Each segment
+    // is bare or quoted (§3.2).
+    : nameSegment (DOT nameSegment)*
     ;
 
 cloneBlock
@@ -492,7 +493,7 @@ cloneContent
 // ---- §17.11 Edge -----------------------------------------------------------
 
 edgeDefinition
-    : EDGE IDENTIFIER edgeSettingsBlock LBRACE
+    : EDGE nameSegment edgeSettingsBlock LBRACE
         (edgeBody | listSeparator)*
       RBRACE
     ;
@@ -518,8 +519,10 @@ edgeBody
     | noteDefinition
     ;
 
+// A bare name or container.entity, each segment bare or quoted (§3.2):
+// "sales"."Work Order". A dot inside quotes belongs to the name.
 entityReference
-    : IDENTIFIER (DOT IDENTIFIER)*   // bare name or container.entity
+    : nameSegment (DOT nameSegment)*
     ;
 
 // ---- §14 View ----------------------------------------------------------------
@@ -534,7 +537,7 @@ entityReference
 // second source_query element in the body.
 
 viewDefinition
-    : VIEW IDENTIFIER viewSettingsBlock? LBRACE
+    : VIEW nameSegment viewSettingsBlock? LBRACE
         (viewBody | listSeparator)*
       RBRACE
     ;
@@ -572,7 +575,7 @@ viewBody
 // parse failure.
 
 supertypeGroupDefinition
-    : SUPERTYPE_GROUP IDENTIFIER supertypeGroupSettingsBlock? LBRACE
+    : SUPERTYPE_GROUP nameSegment supertypeGroupSettingsBlock? LBRACE
         (supertypeGroupMember | listSeparator)*
       RBRACE
     ;
@@ -620,7 +623,7 @@ subtypeSetting
 // declaration (§18.5).
 
 diagramViewDefinition
-    : DIAGRAM_VIEW (IDENTIFIER | quotedIdentifier) settingsBlock? LBRACE
+    : DIAGRAM_VIEW nameSegment settingsBlock? LBRACE
         (diagramViewBodyItem | listSeparator)*
       RBRACE
     ;
@@ -654,7 +657,7 @@ diagramViewItem
     ;
 
 diagramViewName
-    : (IDENTIFIER | quotedIdentifier) (DOT (IDENTIFIER | quotedIdentifier))*
+    : nameSegment (DOT nameSegment)*
     ;
 
 // ---- §17.2 Type expressions (the core recursive type rule) ----------------
@@ -732,7 +735,7 @@ tupleType
     ;
 
 tupleElement
-    : LBRACK NUMBER RBRACK IDENTIFIER typeExpression settingsBlock?
+    : LBRACK NUMBER RBRACK nameSegment typeExpression settingsBlock?
     //  ^^^^^^^^^^^^^^^^^^ position index
     //                     ^^^^^^^^^^ element name
     //                                ^^^^^^^^^^^^^^ element type
@@ -776,7 +779,7 @@ allOfType
     ;
 
 polymorphicAlternative
-    : IDENTIFIER typeExpression settingsBlock?
+    : nameSegment typeExpression settingsBlock?
     //  ^^^^^^^^ alternative name (used as discriminator value and path selector)
     //           ^^^^^^^^^^^^^^ alternative type (usually objectType)
     ;
@@ -830,11 +833,20 @@ fieldName
     ;
 
 tablePartialInjection
-    : TILDE IDENTIFIER
+    : TILDE nameSegment
     ;
 
 quotedIdentifier
     : QUOTED_STRING                    // double-quoted, §3.2 of v0.1 spec
+    ;
+
+// §3.2: a name is a bare identifier or a double-quoted one, wherever a name
+// stands. In a qualified name, an entity reference or a path, a dot outside
+// quotes separates two levels and a dot inside quotes belongs to the name:
+// "my.table" is one name, my.table two.
+nameSegment
+    : IDENTIFIER
+    | quotedIdentifier
     ;
 
 // ---- §17.6 Path syntax for nested-field references ------------------------
@@ -853,12 +865,12 @@ fieldPath
     ;
 
 pathHead
-    : IDENTIFIER                       // entity-relative path start
+    : nameSegment                      // entity-relative path start, bare or quoted
     | qualifiedName                    // container.entity-qualified path start
     ;
 
 qualifiedName
-    : IDENTIFIER (DOT IDENTIFIER)+
+    : nameSegment (DOT nameSegment)+
     ;
 
 pathTail
@@ -942,8 +954,8 @@ keyConstraint
 // declaration forms carry the same settings.
 
 refDefinition
-    : REF IDENTIFIER? LBRACE refSpec settingsBlock? RBRACE        // long form (settings new in v0.4)
-    | REF IDENTIFIER? COLON refSpec settingsBlock?                // short form
+    : REF nameSegment? LBRACE refSpec settingsBlock? RBRACE       // long form (settings new in v0.4)
+    | REF nameSegment? COLON refSpec settingsBlock?               // short form
     ;
 
 refSpec
@@ -952,7 +964,13 @@ refSpec
 
 refEndpoint
     : fieldPath
-    | qualifiedName DOT LPAREN identifierList RPAREN              // composite FK
+    | entityReference DOT LPAREN fieldNameList RPAREN             // composite FK
+    ;
+
+// The fields of a composite endpoint, each bare or quoted (§3.2):
+// "Work Order Part".("Work Order ID", "Part ID").
+fieldNameList
+    : nameSegment (COMMA nameSegment)*
     ;
 
 cardinalityOperator
@@ -1059,7 +1077,7 @@ settingValue
     | NUMBER
     | BOOLEAN_LITERAL
     | NULL_LITERAL
-    | IDENTIFIER
+    | nameSegment                                 // bare or quoted (§3.2)
     | qualifiedName
     | EXPRESSION_LITERAL                          // backtick-quoted
     | HEX_COLOR                                   // #3498DB, read as '#3498DB' (spec §3.3)
@@ -1090,7 +1108,7 @@ multilineString
 // ---- Project definition (extended from upstream with new settings) --------
 
 projectDefinition
-    : PROJECT IDENTIFIER LBRACE
+    : PROJECT nameSegment LBRACE
         (projectSetting | listSeparator)*
       RBRACE
     ;

@@ -26,6 +26,7 @@ import type {
 import type { Diagnostic } from './name-resolver.ts';
 import { flatten } from './module-resolver.ts';
 import { resolveSupertypeGroups } from './supertypes.ts';
+import { isQualifiedName, lastNameSegment, nameQualifier, quoteNameSegment } from './names.ts';
 
 /** The members of a diagram view (spec §18.2) and what a renderer draws with them (§18.4). */
 export interface DiagramViewMembers {
@@ -140,9 +141,8 @@ function buildIndex (doc: XDbmlDocument): Index {
       bare = decl.name;
     } else {
       id = decl.name;
-      const dot = decl.name.lastIndexOf('.');
-      bare = dot > 0 ? decl.name.slice(dot + 1) : decl.name;
-      owner = dot > 0 ? decl.name.slice(0, dot) : undefined;
+      owner = nameQualifier(decl.name);
+      bare = owner ? quoteNameSegment(lastNameSegment(decl.name)) : decl.name;
     }
     add(kind, id, bare, owner, owner === undefined);
     takenNames.add(bare);
@@ -232,7 +232,7 @@ type Resolution =
 function resolveName (name: string, kind: ElementKind, index: Index): Resolution {
   const direct = index.byKindId.get(key(kind, name));
   if (direct) return { ok: true, id: direct.id };
-  if (!name.includes('.') && (kind === 'entity' || kind === 'view')) {
+  if (!isQualifiedName(name) && (kind === 'entity' || kind === 'view')) {
     const top = index.elements.find((e) => e.kind === kind && e.topLevel && e.name === name);
     if (top) return { ok: true, id: top.id };
     const inside = index.elements.filter((e) => e.kind === kind && e.name === name);
@@ -252,7 +252,7 @@ function resolveName (name: string, kind: ElementKind, index: Index): Resolution
 
 function resolveSimple (name: string, kind: ElementKind, index: Index): boolean {
   if (index.byKindId.has(key(kind, name))) return true;
-  if (!name.includes('.')) return index.elements.some((e) => e.kind === kind && e.name === name);
+  if (!isQualifiedName(name)) return index.elements.some((e) => e.kind === kind && e.name === name);
   return false;
 }
 

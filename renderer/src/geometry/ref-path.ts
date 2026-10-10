@@ -10,6 +10,7 @@
 import type { ContainerLayout, EntityLayout, FieldLayout, RefLayout } from '../layout/layout.ts';
 import { CONTAINER_HEADER_HEIGHT, ENTITY_HEADER_HEIGHT, ROW_HEIGHT } from '../layout/layout.ts';
 import type { Side } from './placement.ts';
+import { isQualifiedName, joinName, quoteNameSegment, splitName } from '@xdbml/parse';
 import {
   type Cardinality,
   cardinalityFromOperator,
@@ -218,19 +219,19 @@ function anchorOnSide (entity: EntityLayout, side: Side, fieldName: string | und
  * match.
  */
 function findFieldRow (entity: EntityLayout, fieldName: string): FieldLayout | undefined {
+  // Row paths and field names are in the form of names.ts: a field name
+  // that holds a dot keeps its quotes (spec §3.2).
   const exact = entity.fields.find((f) => f.path === fieldName);
   if (exact) return exact;
 
   for (const f of entity.fields) {
-    const stripped = f.path
-      .split('.')
-      .filter((seg) => !/^[\[\{<].*[\]\}>]$/.test(seg))
-      .join('.');
+    const stripped = joinName(splitName(f.path)
+      .filter((seg) => !/^[\[\{<].*[\]\}>]$/.test(seg)));
     if (stripped === fieldName) return f;
   }
 
-  if (!fieldName.includes('.')) {
-    const leaf = entity.fields.find((f) => f.name === fieldName);
+  if (!isQualifiedName(fieldName)) {
+    const leaf = entity.fields.find((f) => quoteNameSegment(f.name) === fieldName);
     if (leaf) return leaf;
   }
 

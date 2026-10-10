@@ -56,6 +56,7 @@ import type {
   XDbmlDocument,
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
+import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment } from './names.ts';
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
@@ -329,7 +330,7 @@ function nearMissTypeName (name: string, symbols: SymbolTable, local?: LocalType
   // A qualified name (`core.job_stauts`) compares against qualified
   // declarations, a bare name against bare ones and against the internal
   // definitions of the entity (spec §15.8.2).
-  const qualified = name.includes('.');
+  const qualified = isQualifiedName(name);
   const declaredNames: string[] = [];
   if (!qualified && local) declaredNames.push(...local.keys());
   for (const entry of symbols.entries()) {
@@ -495,9 +496,9 @@ function addTopLevelDeclaration (
       // under container `core`, exactly as `Container core { Enum
       // job_status { ... } }` does: same qualified name, same bare name,
       // and declaring both is a duplicate (spec §16).
-      const dot = stmt.name.lastIndexOf('.');
-      if (dot > 0) {
-        addEntry(stmt.name.slice(dot + 1), stmt.name.slice(0, dot), 'enum', stmt, stmt.span, entries, diagnostics, seen);
+      const qualifier = nameQualifier(stmt.name);
+      if (qualifier) {
+        addEntry(quoteNameSegment(lastNameSegment(stmt.name)), qualifier, 'enum', stmt, stmt.span, entries, diagnostics, seen);
       } else {
         addEntry(stmt.name, undefined, 'enum', stmt, stmt.span, entries, diagnostics, seen);
       }
@@ -980,7 +981,7 @@ function resolveRefSpec (
   // checked as a fallback rather than first, so an endpoint that already
   // resolved as entity-plus-attribute keeps that reading and every document
   // that parsed before this means what it meant before.
-  const wholePath = leadingFields.join('.');
+  const wholePath = joinName(leadingFields);
   const entityLevelMatch = (!hasComposite && !hasNonFieldTail)
     ? resolveEntityRef(wholePath, symbols)
     : undefined;
@@ -1003,7 +1004,7 @@ function resolveRefSpec (
   let entity: SymbolEntry | undefined;
   let entityPrefixLen = 0;
   for (let len = maxEntityLen; len >= 1; len -= 1) {
-    const candidate = leadingFields.slice(0, len).join('.');
+    const candidate = joinName(leadingFields.slice(0, len));
     const found = resolveEntityRef(candidate, symbols);
     if (found) {
       entity = found;
@@ -1013,7 +1014,7 @@ function resolveRefSpec (
   }
   if (!entity) {
     if (entityLevelMatch) return; // entity-level endpoint; nothing further to check
-    const guess = leadingFields.slice(0, maxEntityLen).join('.');
+    const guess = joinName(leadingFields.slice(0, maxEntityLen));
     diagnostics.push({
       severity: 'error',
       code: 'unresolved-entity',
@@ -1465,7 +1466,7 @@ function resolveEntityRef (
   const qualified = symbols.lookup(ref);
   if (qualified && qualified.kind === 'entity') return qualified;
   // Try bare.
-  if (!ref.includes('.')) {
+  if (!isQualifiedName(ref)) {
     const bare = symbols.lookupBare(ref);
     if (bare && bare.kind === 'entity') return bare;
   }

@@ -2,56 +2,81 @@
   <!-- Always-visible header bar. The body collapses out when there's
        nothing to show OR the user manually collapsed it. -->
   <section class="bg-white dark:bg-slate-900 border-t border-gray-200 dark:border-slate-700 flex-shrink-0 flex flex-col">
-    <!-- Header bar: status + toggle -->
-    <button
-      type="button"
-      class="h-8 px-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
-      :class="{ 'cursor-pointer': totalCount > 0, 'cursor-default': totalCount === 0 }"
-      :disabled="totalCount === 0"
-      @click="toggle"
-    >
-      <div class="flex items-center gap-2">
-        <!-- Caret only shown when there's something to expand into. -->
-        <svg
-          v-if="totalCount > 0"
-          viewBox="0 0 12 12"
-          class="w-3 h-3 text-gray-500 dark:text-slate-400 transition-transform"
-          :class="{ 'rotate-90': bodyVisible }"
-        >
-          <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <!-- Header bar: status + toggle, and a Copy button beside it. Two
+         sibling buttons, since a button cannot hold another. -->
+    <div class="h-8 flex items-stretch flex-shrink-0">
+      <button
+        type="button"
+        class="flex-1 min-w-0 px-3 flex items-center justify-between text-left hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+        :class="{ 'cursor-pointer': totalCount > 0, 'cursor-default': totalCount === 0 }"
+        :disabled="totalCount === 0"
+        @click="toggle"
+      >
+        <div class="flex items-center gap-2">
+          <!-- Caret only shown when there's something to expand into. -->
+          <svg
+            v-if="totalCount > 0"
+            viewBox="0 0 12 12"
+            class="w-3 h-3 text-gray-500 dark:text-slate-400 transition-transform"
+            :class="{ 'rotate-90': bodyVisible }"
+          >
+            <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+          <span class="text-[11px] uppercase font-semibold tracking-wide text-gray-600 dark:text-slate-300">
+            Diagnostics
+          </span>
+          <!-- Count badges (errors / warnings separately). -->
+          <template v-if="errorCount > 0">
+            <span class="flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
+              <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-100 dark:bg-red-900/30">
+                <svg viewBox="0 0 8 8" class="w-2 h-2">
+                  <path d="M2 2l4 4M6 2l-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </span>
+              {{ errorCount }} {{ errorCount === 1 ? 'error' : 'errors' }}
+            </span>
+          </template>
+          <template v-if="warningCount > 0">
+            <span class="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
+              <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                <svg viewBox="0 0 8 8" class="w-2 h-2">
+                  <path d="M4 1v3.5M4 6v0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </span>
+              {{ warningCount }} {{ warningCount === 1 ? 'warning' : 'warnings' }}
+            </span>
+          </template>
+          <span v-if="totalCount === 0" class="text-xs text-gray-400 dark:text-slate-500">
+            No issues
+          </span>
+        </div>
+        <span v-if="totalCount > 0" class="text-[10px] text-gray-400 dark:text-slate-500">
+          {{ bodyVisible ? 'Click to collapse' : 'Click to expand' }}
+        </span>
+      </button>
+      <button
+        v-if="totalCount > 0"
+        type="button"
+        class="px-3 flex items-center gap-1 text-[11px] border-l border-gray-100 dark:border-slate-800 transition-colors"
+        :class="copyState === 'copied'
+          ? 'text-green-700 dark:text-green-300'
+          : copyState === 'failed'
+            ? 'text-red-700 dark:text-red-300'
+            : 'text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-100 hover:bg-gray-50 dark:hover:bg-slate-800'"
+        title="Copy every diagnostic to the clipboard, one per line"
+        aria-label="Copy diagnostics to the clipboard"
+        @click="onCopyAll"
+      >
+        <svg v-if="copyState !== 'copied'" viewBox="0 0 16 16" class="w-3.5 h-3.5" aria-hidden="true">
+          <rect x="5.5" y="5.5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
+          <path d="M10.5 3.5v-.5a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v6.5A1.5 1.5 0 0 0 4 11h.5" stroke="currentColor" stroke-width="1.3" fill="none"/>
         </svg>
-        <span class="text-[11px] uppercase font-semibold tracking-wide text-gray-600 dark:text-slate-300">
-          Diagnostics
-        </span>
-        <!-- Count badges (errors / warnings separately). -->
-        <template v-if="errorCount > 0">
-          <span class="flex items-center gap-1 text-xs text-red-700 dark:text-red-300">
-            <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-red-100 dark:bg-red-900/30">
-              <svg viewBox="0 0 8 8" class="w-2 h-2">
-                <path d="M2 2l4 4M6 2l-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </span>
-            {{ errorCount }} {{ errorCount === 1 ? 'error' : 'errors' }}
-          </span>
-        </template>
-        <template v-if="warningCount > 0">
-          <span class="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-            <span class="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-100 dark:bg-amber-900/30">
-              <svg viewBox="0 0 8 8" class="w-2 h-2">
-                <path d="M4 1v3.5M4 6v0.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </span>
-            {{ warningCount }} {{ warningCount === 1 ? 'warning' : 'warnings' }}
-          </span>
-        </template>
-        <span v-if="totalCount === 0" class="text-xs text-gray-400 dark:text-slate-500">
-          No issues
-        </span>
-      </div>
-      <span v-if="totalCount > 0" class="text-[10px] text-gray-400 dark:text-slate-500">
-        {{ bodyVisible ? 'Click to collapse' : 'Click to expand' }}
-      </span>
-    </button>
+        <svg v-else viewBox="0 0 16 16" class="w-3.5 h-3.5" aria-hidden="true">
+          <path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <span>{{ copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy' }}</span>
+      </button>
+    </div>
 
     <!-- Body: list of diagnostics. Scrollable internally so a wall of
          errors doesn't push the diagram off-screen. -->
@@ -87,7 +112,7 @@
             </svg>
           </span>
 
-          <div class="flex-1 min-w-0">
+          <div class="flex-1 min-w-0 select-text">
             <div class="text-xs text-gray-900 dark:text-slate-100 leading-snug break-words">
               {{ err.message }}
             </div>
@@ -124,12 +149,17 @@
  *     don't miss obvious errors.
  *   - Clicking a diagnostic emits `goto` with line/column. App.vue
  *     forwards to the editor's exposed revealPosition method.
+ *   - The text of the list can be selected and copied with Ctrl+C or
+ *     Cmd+C. A click that ends a selection does not jump to the source,
+ *     since the jump moves the focus to the editor and the selection
+ *     would be lost. The Copy button in the header copies every
+ *     diagnostic, one per line, in source order.
  *
  * Lex / parse failures arrive as errors. Resolver diagnostics carry
  * their own severity, and the panel counts errors and warnings
  * separately, with a red or amber badge and row icon for each.
  */
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useParserStore } from '@/stores/parserStore';
 import type { ParserError } from '@/types';
@@ -168,6 +198,62 @@ function toggle (): void {
 }
 
 function onErrorClick (err: ParserError): void {
+  // A drag that selects text ends in a click on the row: keep the
+  // selection for Ctrl/Cmd+C rather than jumping to the source.
+  const selection = window.getSelection();
+  if (selection && !selection.isCollapsed && selection.toString().trim() !== '') return;
   emit('goto', { line: err.location.line, column: err.location.column });
+}
+
+/** One line per diagnostic, as the list shows it. */
+function diagnosticLine (err: ParserError): string {
+  const severity = err.severity === 'warning' ? 'Warning' : 'Error';
+  const code = typeof err.code === 'string' ? ` [${err.code}]` : '';
+  return `${severity} at line ${err.location.line}, column ${err.location.column}${code}: ${err.message}`;
+}
+
+const copyState = ref<'idle' | 'copied' | 'failed'>('idle');
+let copyStateTimer: ReturnType<typeof setTimeout> | undefined;
+
+function showCopyState (state: 'copied' | 'failed'): void {
+  copyState.value = state;
+  if (copyStateTimer) clearTimeout(copyStateTimer);
+  copyStateTimer = setTimeout(() => { copyState.value = 'idle'; }, 2000);
+}
+
+/**
+ * Copy through a hidden textarea, for a page served without a secure
+ * context, where `navigator.clipboard` is missing.
+ */
+function copyWithTextarea (text: string): boolean {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  let ok = false;
+  try {
+    ok = document.execCommand('copy');
+  } catch {
+    ok = false;
+  }
+  document.body.removeChild(area);
+  return ok;
+}
+
+async function onCopyAll (): Promise<void> {
+  const text = sortedDiagnostics.value.map(diagnosticLine).join('\n');
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      showCopyState('copied');
+      return;
+    }
+  } catch {
+    // Fall through to the textarea.
+  }
+  showCopyState(copyWithTextarea(text) ? 'copied' : 'failed');
 }
 </script>

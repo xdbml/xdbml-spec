@@ -308,6 +308,76 @@ Entity legacy {
 }
 ```
 
+### VALID -- quoted names at the head of a path, in a key and in a relationship (v0.6.7)
+
+```
+xdbml: 0.6
+
+Container sales {
+  Entity "Work Order" {
+    "Work Order ID" int [pk]
+  }
+}
+
+Entity "Work Order Part" {
+  "Work Order ID" int [ref: > "sales"."Work Order"."Work Order ID"]
+  "Part ID"       int
+  indexes {
+    "Part ID"
+  }
+  constraints {
+    ("Work Order ID", "Part ID") [pk]
+  }
+}
+
+TableGroup operations {
+  "sales"."Work Order"
+  "Work Order Part"
+}
+```
+
+### VALID -- a dot inside quotes is part of the name (v0.6.7)
+
+```
+xdbml: 0.6
+
+Container my {
+  Table table {
+    id int [pk]
+  }
+}
+
+Table "my.table" {
+  id int [pk]
+}
+
+Table other {
+  a int
+  b int
+}
+
+Ref: other.a > my.table.id
+Ref: other.b > "my.table".id
+```
+
+### INVALID -- a quoted name holding a dot does not name an entity of a Container (unresolved-entity, v0.6.7)
+
+```
+xdbml: 0.6
+
+Container my {
+  Table table {
+    id int [pk]
+  }
+}
+
+Table other {
+  a int
+}
+
+Ref: other.a > "my.table".id
+```
+
 ### VALID -- JSONPath alias (parses, normalizes to dot-prefixed)
 
 ```

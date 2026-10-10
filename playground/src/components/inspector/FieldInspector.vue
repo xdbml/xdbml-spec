@@ -69,6 +69,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { joinName } from '@xdbml/parse';
 import type {
   ContainerDeclaration,
   EdgeDeclaration,
@@ -101,7 +102,8 @@ defineEmits<{
 
 const showFullType = ref(false);
 
-const ancestorPath = computed(() => props.ancestors.map((a) => a.name).join('.'));
+// A field name that holds a dot keeps its quotes (names.ts, spec §3.2).
+const ancestorPath = computed(() => joinName(props.ancestors.map((a) => a.name)));
 
 const shortTypeLabel = computed(() => renderShortType(props.field.type));
 

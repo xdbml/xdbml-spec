@@ -530,6 +530,68 @@ Entity e {
     !!e?.fields.find((f) => f.path === 'profile.created_by')?.flags.fk);
 }
 
+/* ---- Quoted names (spec §3.2, §20.1, v0.6.7) ----------------------- */
+{
+  const build = (src: string): DiagramModel => buildDiagram(flatten(parse(src)));
+  const quoted = build(`xdbml: 0.6
+Container sales {
+  Table "Work Order" {
+    "Work Order ID" int [pk]
+  }
+}
+Table "Work Order Part" {
+  "Work Order ID" int [ref: > "sales"."Work Order"."Work Order ID"]
+  "Part ID" int
+  constraints {
+    ("Work Order ID", "Part ID") [pk]
+  }
+}
+Table "Part" {
+  "Part ID" int [pk]
+}
+Ref: "Work Order Part"."Part ID" > "Part"."Part ID"`);
+  const ends = quoted.refs.map((r) => `${r.source?.entityId}.${r.source?.fieldName}>${r.target?.entityId}.${r.target?.fieldName}${r.unresolved ? '?' : ''}`).join(' ');
+  check('quoted: relationships between quoted names resolve, inline and long form',
+    ends === 'Work Order Part.Part ID>Part.Part ID Work Order Part.Work Order ID>sales.Work Order.Work Order ID', ends);
+  const wop = quoted.entities.find((e) => e.id === 'Work Order Part');
+  check('quoted: a key line with quoted fields marks both fields pk',
+    (wop?.fields ?? []).filter((f) => f.flags.pk).map((f) => f.name).join(',') === 'Work Order ID,Part ID',
+    (wop?.fields ?? []).map((f) => `${f.name}:${f.flags.pk}`).join(' '));
+
+  // A dot inside quotes belongs to the name: "my.table" is one entity, and
+  // "user.id" is one field, beside the nested field user.id.
+  const dotted = build(`xdbml: 0.6
+Container my {
+  Table table {
+    id int [pk]
+  }
+}
+Table "my.table" {
+  "user.id" int
+  user object {
+    id int
+  }
+  constraints {
+    ("user.id") [pk]
+  }
+}
+Table other {
+  a int
+  b int
+}
+Ref: other.a > my.table.id
+Ref: other.b > "my.table"."user.id"`);
+  const dt = dotted.entities.find((e) => e.id === '"my.table"');
+  check('quoted: "my.table" and my.table are two entities',
+    !!dt && !!dotted.entities.find((e) => e.id === 'my.table'), dotted.entities.map((e) => e.id).join(' | '));
+  check('quoted: the field "user.id" and the nested field user.id are two rows; the key marks the first',
+    (dt?.fields ?? []).map((f) => `${f.path}${f.flags.pk ? '*' : ''}`).join(' ') === '"user.id"* user user.id',
+    (dt?.fields ?? []).map((f) => `${f.path}${f.flags.pk ? '*' : ''}`).join(' '));
+  const dends = dotted.refs.map((r) => `${r.target?.entityId}.${r.target?.fieldName}${r.unresolved ? '?' : ''}`).join(' ');
+  check('quoted: each Ref reaches its own entity and field',
+    dends === 'my.table.id "my.table"."user.id"', dends);
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

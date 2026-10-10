@@ -40,6 +40,7 @@ import { effectiveFields, effectiveHeaderColor, effectiveIndexes, effectiveNote,
 import { keyPathString } from '../src/constraints.ts';
 import type { PathSegment } from '../src/index.ts';
 import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
+import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment, splitName } from '../src/names.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // The repository's own examples, the same files the site publishes and the
@@ -4328,8 +4329,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.7 is newer than this parser supports',
-      source: `xdbml: 0.6.7
+      name: 'v0.6.1 §4: xdbml: 0.6.8 is newer than this parser supports',
+      source: `xdbml: 0.6.8
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -5608,6 +5609,339 @@ function runGrammarCorpusTests (): TestResult[] {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.6.7: quoted names in every name position (spec §3.2, §20.1)
+ *
+ * A quoted name may stand wherever a name does: at the head of a path, in
+ * a composite Ref, in a qualified entity name, as a TableGroup member, in
+ * a top-level `records` declaration, after `~`. A dot outside quotes
+ * separates levels; a dot inside quotes belongs to the name. The cases
+ * marked DBML are valid DBML 3.13.6, checked against @dbml/core 3.13.6.
+ * ----------------------------------------------------------------------- */
+
+function runQuotedNameTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const clean = (src: string): string | undefined => {
+    const got = codes(src);
+    return got === '' ? undefined : `diagnostics: ${got}`;
+  };
+  const entityNames = (src: string): string => {
+    const out: string[] = [];
+    for (const s of parse(src).statements) {
+      if (s.kind === 'EntityDeclaration') out.push(s.name);
+      if (s.kind === 'ContainerDeclaration') {
+        for (const b of s.body) if (b.kind === 'EntityDeclaration') out.push(`${s.name}/${b.name}`);
+      }
+    }
+    return out.join(' | ');
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+
+  /* ---- names.ts ---- */
+
+  check('names: a segment without a dot or a quote stays bare', () =>
+    same([quoteNameSegment('Work Order'), joinName(['sales', 'Work Order'])], ['Work Order', 'sales.Work Order']));
+  check('names: a segment with a dot or a quote is quoted, with escapes', () =>
+    same([quoteNameSegment('my.table'), quoteNameSegment('a"b'), joinName(['core', 'a.b'])], ['"my.table"', '"a\\"b"', 'core."a.b"']));
+  check('names: splitName keeps a dot inside quotes in the segment', () =>
+    same([splitName('"my.table".id'), splitName('core.users'), splitName('"a\\"b".c')], [['my.table', 'id'], ['core', 'users'], ['a"b', 'c']]));
+  check('names: splitName(joinName(x)) returns x', () => {
+    const samples = [['a'], ['a', 'b'], ['a.b'], ['x', 'a.b', 'c'], ['q"uote', 'back\\slash.dot'], ['Work Order', 'Work Order ID']];
+    const bad = samples.filter((s) => JSON.stringify(splitName(joinName(s))) !== JSON.stringify(s));
+    return bad.length === 0 ? undefined : `round trip failed for ${JSON.stringify(bad)}`;
+  });
+  check('names: qualifier, last segment and isQualifiedName', () =>
+    same(
+      [nameQualifier('core.users'), nameQualifier('"a.b".users'), nameQualifier('"my.table"'), lastNameSegment('core."my.table"'), isQualifiedName('"my.table"'), isQualifiedName('my.table')],
+      ['core', '"a.b"', undefined, 'my.table', false, true],
+    ));
+
+  /* ---- DBML 3.13.6 forms ---- */
+
+  const WO = `Table "Work Order" {
+  "Work Order ID" int [pk]
+  "Status" varchar
+}
+`;
+  check('DBML: composite pk in indexes with quoted columns', () => clean(`Table "Work Order Part" {
+  "Work Order ID" int
+  "Part ID" int
+  indexes {
+    ("Work Order ID", "Part ID") [pk]
+  }
+}`));
+  check('DBML: an index on one quoted column', () => clean(`Table "T" {
+  "Part ID" int
+  indexes {
+    "Part ID" [unique]
+  }
+}`));
+  check('DBML: Ref with quoted endpoints, as @dbml/core writes them', () => {
+    const src = `${WO}Table "Work Order Part" {
+  "Work Order ID" int
+}
+Ref:"Work Order"."Work Order ID" < "Work Order Part"."Work Order ID"`;
+    const ref = parse(src).statements.find((s) => s.kind === 'RefDeclaration');
+    if (!ref || ref.kind !== 'RefDeclaration') return 'no Ref';
+    const names = ref.spec.target.path.map((p) => (p.kind === 'PathField' ? p.name : '?'));
+    return clean(src) ?? same(names, ['Work Order Part', 'Work Order ID']);
+  });
+  check('DBML: inline ref to a quoted target', () => clean(`${WO}Table "Work Order Part" {
+  "Work Order ID" int [ref: > "Work Order"."Work Order ID"]
+}`));
+  check('DBML: composite Ref with quoted fields', () => clean(`Table "A B" {
+  "x y" int
+  "z w" int
+  indexes {
+    ("x y", "z w") [pk]
+  }
+}
+Table "C D" {
+  "x y" int
+  "z w" int
+}
+Ref: "C D".("x y", "z w") > "A B".("x y", "z w")`));
+  check('DBML: quoted schema and table, and a Ref through them', () => {
+    const src = `Table "sales"."Work Order" {
+  "id" int [pk]
+}
+Table sales."Line" {
+  "wo id" int
+}
+Ref: "sales"."Line"."wo id" > "sales"."Work Order"."id"`;
+    return clean(src) ?? same(entityNames(src), 'sales.Work Order | sales.Line');
+  });
+  check('DBML: TableGroup with quoted members', () => clean(`${WO}TableGroup "Ops" {
+  "Work Order"
+}`));
+
+  check('DBML: a quoted Ref name, a quoted alias and a quoted Project name', () => {
+    const src = `Project "Car Maintenance" {
+  database_type: 'Oracle'
+}
+Table "Work Order" as "WO" {
+  id int [pk]
+}
+Table b {
+  wo int
+}
+Ref "fk b wo": b.wo > "WO".id`;
+    const doc = parse(src);
+    const ref = doc.statements.find((s) => s.kind === 'RefDeclaration');
+    const project = doc.statements.find((s) => s.kind === 'ProjectDeclaration');
+    const target = ref && ref.kind === 'RefDeclaration' ? ref.spec.target.path.map((p) => (p.kind === 'PathField' ? p.name : '?')) : [];
+    return clean(src) ?? same([ref && ref.kind === 'RefDeclaration' ? ref.name : undefined, project?.kind === 'ProjectDeclaration' ? project.name : undefined, target],
+      ['fk b wo', 'Car Maintenance', ['Work Order', 'id']]);
+  });
+
+  /* ---- xDBML ---- */
+
+  check('§10.1: constraints key line with quoted fields (the reported case)', () => {
+    const src = `xdbml: 0.6
+Entity "Work Order Part" {
+  "Work Order ID" NUMBER(12)
+  "Part ID" NUMBER(10)
+  "Quantity Used" NUMBER(5) [not null]
+  constraints {
+    ("Work Order ID", "Part ID") [pk]
+  }
+}`;
+    const doc = parse(src);
+    const e = doc.statements[0] as EntityDeclaration;
+    const notNull = e.body.filter((b) => b.kind === 'FieldDeclaration' && b.settings.some((s) => s.name === 'not null')).length;
+    return clean(src) ?? same([primaryKey(e, doc)?.fields, notNull], [['Work Order ID', 'Part ID'], 3]);
+  });
+  check('§10.1: a key on one quoted field, and bare and quoted fields mixed', () => clean(`xdbml: 0.6
+Entity "T" {
+  a int
+  "b c" int
+  "Part ID" int
+  constraints {
+    (a, "b c") [pk]
+    "Part ID" [unique, name: 'uk_t']
+  }
+}`));
+  check('§6: a quoted Container name, and a Ref through it', () => clean(`xdbml: 0.6
+Container "sales ops" [type: schema] {
+  Entity "Work Order" {
+    "id" int [pk]
+  }
+  Entity "Line" {
+    "wo id" int
+  }
+}
+Ref: "sales ops"."Line"."wo id" > "sales ops"."Work Order"."id"`));
+  check('§11.16: entity-level Ref between quoted names', () => clean(`xdbml: 0.6
+Entity "Work Order" {
+  id int [pk]
+}
+Entity "Customer Account" {
+  id int [pk]
+}
+Ref: "Work Order" > "Customer Account"`));
+  check('§9.3: index on a nested path with a quoted head', () => clean(`xdbml: 0.6
+Entity "T" {
+  "the profile" object {
+    "e mail" varchar
+  }
+  indexes {
+    "the profile"."e mail"
+  }
+}`));
+  check('§12, §18: quoted segments in a supertype, a subtype and a diagram view', () => clean(`xdbml: 0.6
+Container sales {
+  Entity "Legal Party" {
+    id int [pk]
+  }
+  Entity "Natural Person" {
+    born date
+  }
+}
+SupertypeGroup legal [supertype: "sales"."Legal Party"] {
+  sales."Natural Person"
+}
+DiagramView "Ops view" {
+  Tables {
+    "sales"."Legal Party"
+  }
+}`));
+  check('§26.2: top-level records with a quoted entity and quoted columns', () => clean(`xdbml: 0.6
+${WO}records "Work Order"("Work Order ID", "Status") {
+  1, 'open'
+}`));
+  check('§17.1: ~"name" injects a TablePartial declared with a quoted name', () => {
+    const src = `xdbml: 0.6
+TablePartial "audit cols" {
+  created_at timestamp
+}
+Entity t {
+  id int [pk]
+  ~"audit cols"
+}`;
+    const doc = parse(src);
+    const t = doc.statements.find((s) => s.kind === 'EntityDeclaration') as EntityDeclaration;
+    return clean(src) ?? same(effectiveFields(t, tablePartials(doc)).map((f) => f.field.name), ['id', 'created_at']);
+  });
+  check('§27: an import names a quoted entity', () => {
+    const files: Record<string, string> = {
+      '/q/lib.xdbml': `xdbml: 0.6
+Container "sales ops" {
+  Entity "Work Order" {
+    id int [pk]
+  }
+}`,
+    };
+    const doc = parse(`xdbml: 0.6
+reuse { entity "sales ops"."Work Order" } from './lib'`, {
+      filePath: '/q/consumer.xdbml',
+      readFile: (p: string) => {
+        if (!(p in files)) throw new Error(`not found: ${p}`);
+        return files[p];
+      },
+    });
+    const d = doc.statements[0];
+    if (d.kind !== 'ModuleImportDirective' || !d.clone) return 'no clone';
+    return same(d.clone.statements.map((s) => (s as { name?: string }).name), ['Work Order']);
+  });
+
+  /* ---- a dot inside quotes belongs to the name ---- */
+
+  const BOTH = `xdbml: 0.6
+Container my {
+  Table table {
+    id int [pk]
+  }
+}
+Table "my.table" {
+  id int [pk]
+}
+Table other {
+  a int
+  b int
+}
+`;
+  check('§3.2: "my.table" and my.table are two entities', () =>
+    clean(BOTH) ?? same(entityNames(BOTH), 'my/table | "my.table" | other'));
+  check('§3.2: a Ref reaches each of the two', () =>
+    clean(`${BOTH}Ref: other.a > my.table.id
+Ref: other.b > "my.table".id`));
+  check('§3.2: "my.table".id does not reach the entity table of Container my', () => {
+    const got = codes(`xdbml: 0.6
+Container my {
+  Table table {
+    id int [pk]
+  }
+}
+Table other {
+  a int
+}
+Ref: other.a > "my.table".id`);
+    return got === 'error:unresolved-entity' ? undefined : `diagnostics: ${got}`;
+  });
+  const DOTTED_FIELD = `xdbml: 0.6
+Table t {
+  "user.id" int
+  user object {
+    id int
+  }
+  constraints {
+    ("user.id") [pk]
+  }
+}
+Table o {
+  uid int
+}
+`;
+  check('§10.2: a key on a field named "user.id" names that field, not user.id', () => {
+    const doc = parse(DOTTED_FIELD);
+    const t = doc.statements[0] as EntityDeclaration;
+    const f = t.body[0];
+    const implied = f.kind === 'FieldDeclaration' && f.settings.some((s) => s.name === 'not null');
+    return same([primaryKey(t, doc)?.fields, implied], [['"user.id"'], true]);
+  });
+  check('§11.17: a Ref to t."user.id" references the key; t.user.id does not', () => {
+    const toKey = codes(`${DOTTED_FIELD}Ref: o.uid > t."user.id"`);
+    const toNested = codes(`${DOTTED_FIELD}Ref: o.uid > t.user.id`);
+    return same([toKey, toNested], ['', 'error:ref-target-not-key']);
+  });
+  check('§16: a type name with a quoted segment', () => {
+    const src = `xdbml: 0.6
+Enum "a.b" {
+  x
+}
+Container s {
+  Enum "st" {
+    p
+  }
+}
+Table t {
+  f1 "a.b"
+  f2 s."st"
+}`;
+    const t = parse(src).statements.find((s) => s.kind === 'EntityDeclaration') as EntityDeclaration;
+    const types = t.body.map((b) => (b.kind === 'FieldDeclaration' && b.type.kind === 'ScalarType' ? b.type.name : '?'));
+    return clean(src) ?? same(types, ['"a.b"', 's.st']);
+  });
+  check('§20: pathToString quotes a field name that holds a dot', () => {
+    const ref = parse(`${DOTTED_FIELD}Ref: o.uid > t."user.id"`).statements.find((s) => s.kind === 'RefDeclaration');
+    if (!ref || ref.kind !== 'RefDeclaration') return 'no Ref';
+    return same(pathToString(ref.spec.target.path), 't."user.id"');
+  });
+
+  return results;
+}
+
 function report (title: string, results: TestResult[]): { passed: number; failed: number } {
   console.log(`\n${CYAN}== ${title} ==${RESET}`);
   let passed = 0;
@@ -5639,6 +5973,7 @@ function main (): void {
   const v063 = runV063Tests();
   const v065 = runV065Tests();
   const partialTests = runPartialInjectionTests();
+  const quotedTests = runQuotedNameTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -5647,9 +5982,10 @@ function main (): void {
   const dr = report('v0.6.3 diagram views', v063);
   const fr = report('v0.6.5 internal definitions', v065);
   const pr = report('TablePartial injection (spec §17.1)', partialTests);
+  const qr = report('v0.6.7 quoted names (spec §3.2, §20.1)', quotedTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

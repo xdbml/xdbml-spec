@@ -27,6 +27,7 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 - A `'` inside `'...'` ends the string. Write it `\'` (`'The customer\'s number'`), or use `'''...'''`. English notes often hold one.
 - Double quotes never delimit a string: `Note: "text"` is an error.
 - A type written in several words is one double-quoted name: `"double precision"`, `"timestamp with time zone"`, `"int unsigned"`. A one-word synonym works as well: `timestamptz`, `float8`.
+- In a qualified name or a path, quote each name on its own: `"sales"."Work Order"."Work Order ID"`, `("Work Order ID", "Part ID") [pk]`. A dot inside quotes is part of the name: `"sales.Work Order"` is one entity named `sales.Work Order`, not an entity of `sales`.
 - Colors are strings: `headercolor: '#3498DB'`, `color: '#999999'`.
 
 ## Separators

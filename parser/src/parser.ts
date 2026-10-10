@@ -93,6 +93,7 @@ import type {
 } from './ast.ts';
 import type { Token } from './lexer.ts';
 import { markPrimaryKeyNotNull } from './constraints.ts';
+import { joinName, quoteNameSegment, splitName } from './names.ts';
 import {
   TokenKind,
   tokenize,
@@ -120,7 +121,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6.6';
+export const SUPPORTED_XDBML_VERSION = '0.6.7';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -583,7 +584,7 @@ export class Parser {
   private parseContainer (): ContainerDeclaration {
     const start = this.peek().start;
     const kwTok = this.advance();
-    const name = this.parseIdentLikeName('container name');
+    const name = this.parseDeclaredName('container name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after Container name");
     const body: ContainerBodyItem[] = [];
@@ -636,7 +637,7 @@ export class Parser {
     let alias: string | undefined;
     if (isKw(this.peek(), 'as')) {
       this.advance();
-      alias = this.parseIdentLikeName('alias');
+      alias = this.parseDeclaredName('alias');
     }
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after entity name");
@@ -655,25 +656,12 @@ export class Parser {
 
   /**
    * Entity names may be bare (`users`), dotted (`core.users` — implicit
-   * container), or quoted (`"my-table"`).
+   * container), or quoted (`"my-table"`), and a dotted name may quote any
+   * of its segments (`"sales"."Work Order"`, spec §3.2). The name is held
+   * in the form of names.ts.
    */
   private parseEntityName (): string {
-    const t = this.peek();
-    if (t.kind === TokenKind.QuotedIdentifier) {
-      this.advance();
-      return t.value ?? '';
-    }
-    if (t.kind !== TokenKind.Identifier) {
-      throw new ParseError(`Expected entity name, got ${t.kind}`, t.start);
-    }
-    this.advance();
-    let name = t.text;
-    while (this.check(TokenKind.Dot)) {
-      this.advance();
-      const next = this.expect(TokenKind.Identifier, 'Expected identifier after dot in entity name');
-      name += `.${next.text}`;
-    }
-    return name;
+    return this.parseQualifiedName('entity name');
   }
 
   private parseEntityBody (construct: string, name: string): EntityBodyItem[] {
@@ -713,10 +701,10 @@ export class Parser {
   private parsePartialInjection (): PartialInjection {
     const start = this.peek().start;
     this.expect(TokenKind.Tilde, "Expected '~'");
-    const nameTok = this.expect(TokenKind.Identifier, "Expected partial name after '~'");
+    const partialName = this.parseDeclaredName("partial name after '~'");
     return {
       kind: 'PartialInjection',
-      partialName: nameTok.text,
+      partialName,
       span: this.spanFrom(start),
     };
   }
@@ -755,25 +743,19 @@ export class Parser {
   private parseTopLevelRecords (): TopLevelRecordsDeclaration {
     const start = this.peek().start;
     this.advance(); // records
-    // Entity reference: bare identifier or dotted path (`core.users`).
+    // Entity reference: a name or a dotted path (`core.users`), each
+    // segment bare or quoted (spec §3.2).
     const refStart = this.peek().start;
-    const head = this.expect(TokenKind.Identifier, "Expected entity name after 'records'");
-    let entityRef = head.text;
-    while (this.check(TokenKind.Dot)) {
-      this.advance();
-      const next = this.expect(TokenKind.Identifier, "Expected identifier after '.' in entity reference");
-      entityRef += `.${next.text}`;
-    }
-    // Explicit column list -- required for top-level form.
+    const entityRef = this.parseQualifiedName("entity name after 'records'");
+    // Explicit column list -- required for top-level form. A column is a
+    // field name, bare or quoted, held as written.
     this.expect(TokenKind.LParen, "Expected '(' starting column list after entity reference");
     const columns: string[] = [];
     if (!this.check(TokenKind.RParen)) {
-      const first = this.expect(TokenKind.Identifier, 'Expected column name');
-      columns.push(first.text);
+      columns.push(this.parseIdentLikeName('column name'));
       while (this.match(TokenKind.Comma)) {
         if (this.check(TokenKind.RParen)) break; // tolerate trailing comma
-        const next = this.expect(TokenKind.Identifier, 'Expected column name after comma');
-        columns.push(next.text);
+        columns.push(this.parseIdentLikeName('column name after comma'));
       }
     }
     this.expect(TokenKind.RParen, "Expected ')' closing column list");
@@ -1070,30 +1052,14 @@ export class Parser {
     }
     this.advance(); // consume element type keyword
 
-    // Dotted source path.
-    const pathHead = this.expect(
-      TokenKind.Identifier,
-      `Expected source path after '${elementType}'`,
-    );
-    let sourcePath = pathHead.text;
-    while (this.check(TokenKind.Dot)) {
-      this.advance();
-      const next = this.expect(
-        TokenKind.Identifier,
-        `Expected identifier after '.' in source path`,
-      );
-      sourcePath += `.${next.text}`;
-    }
+    // Dotted source path, each segment bare or quoted (spec §3.2).
+    const sourcePath = this.parseQualifiedName(`source path after '${elementType}'`);
 
-    // Optional 'as <alias>'
+    // Optional 'as <alias>', bare or quoted, held as written.
     let alias: string | undefined;
     if (isKw(this.peek(), 'as')) {
       this.advance(); // as
-      const aliasTok = this.expect(
-        TokenKind.Identifier,
-        `Expected identifier after 'as'`,
-      );
-      alias = aliasTok.text;
+      alias = this.parseIdentLikeName("identifier after 'as'");
     }
 
     return {
@@ -1387,7 +1353,7 @@ export class Parser {
       this.advance(); // [
       const numTok = this.expect(TokenKind.NumberLiteral, 'Expected position number in tuple');
       this.expect(TokenKind.RBracket, "Expected ']' after position");
-      const nameTok = this.expect(TokenKind.Identifier, 'Expected tuple element name');
+      const elementName = this.parseIdentLikeName('tuple element name');
       const type = this.parseTypeExpression();
       // Optional per-element settings. A following `[` only opens a settings
       // block if it is NOT the next element's `[N]` position marker; otherwise
@@ -1397,7 +1363,7 @@ export class Parser {
       out.push({
         kind: 'TupleElement',
         position: parseInt(numTok.text, 10),
-        name: nameTok.text,
+        name: elementName,
         type,
         settings,
         span: this.spanFrom(start),
@@ -1510,12 +1476,12 @@ export class Parser {
   /** `alternative_name typeExpression [settings]` -- shape is the same as a field declaration, context disambiguates */
   private parsePolymorphicAlternative (): PolymorphicAlternative {
     const start = this.peek().start;
-    const nameTok = this.expect(TokenKind.Identifier, 'Expected polymorphic alternative name');
+    const name = this.parseIdentLikeName('polymorphic alternative name');
     const type = this.parseTypeExpression();
     const settings = this.maybeSettingsBlock();
     return {
       kind: 'PolymorphicAlternative',
-      name: nameTok.text,
+      name,
       type,
       settings,
       span: this.spanFrom(start),
@@ -1580,15 +1546,11 @@ export class Parser {
         t.start,
       );
     }
-    this.advance();
-    let name = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
     // A qualified type name, `core.job_status`, names an Enum declared in
     // a container (spec §16), or a target-native type such as
-    // `public.geometry` that passes through as written.
-    while (this.check(TokenKind.Dot)) {
-      this.advance();
-      name += `.${this.parseIdentLikeName('type name after dot')}`;
-    }
+    // `public.geometry` that passes through as written. Held in the form
+    // of names.ts, so a quoted segment that holds a dot keeps its quotes.
+    let name = this.parseQualifiedName('type name');
     let params: string[] | undefined;
     if (this.check(TokenKind.LParen)) {
       this.advance();
@@ -1667,7 +1629,7 @@ export class Parser {
    * consumed, or the declaration is an entry of a definitions block.
    */
   private parseTypeDeclFromName (start: Position): TypeDeclaration {
-    const name = this.parseIdentLikeName('type name');
+    const name = this.parseDeclaredName('type name');
 
     // After `Type <Name>`, the next token disambiguates the form:
     //
@@ -1749,7 +1711,7 @@ export class Parser {
   private parseEdge (): EdgeDeclaration {
     const start = this.peek().start;
     this.advance(); // Edge
-    const name = this.parseIdentLikeName('edge name');
+    const name = this.parseDeclaredName('edge name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after Edge settings");
     const body = this.parseEntityBody('Edge', name);
@@ -1768,7 +1730,7 @@ export class Parser {
   private parseView (): ViewDeclaration {
     const start = this.peek().start;
     this.advance(); // View
-    const name = this.parseIdentLikeName('view name');
+    const name = this.parseDeclaredName('view name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after View name");
     const body: ViewBodyItem[] = [];
@@ -1827,11 +1789,7 @@ export class Parser {
     const kwTok = this.advance(); // enum
     // DBML form `enum core.job_status { ... }`: the qualifier names the
     // container, as for a schema-qualified Table (spec §7.3, §16).
-    let name = this.parseIdentLikeName('enum name');
-    while (this.check(TokenKind.Dot)) {
-      this.advance();
-      name += `.${this.parseIdentLikeName('enum name after dot')}`;
-    }
+    const name = this.parseQualifiedName('enum name');
     this.expect(TokenKind.LBrace, "Expected '{' after enum name");
     const values: EnumValue[] = [];
     for (;;) {
@@ -1881,8 +1839,9 @@ export class Parser {
     const start = this.peek().start;
     this.advance(); // Ref
     let name: string | undefined;
-    if (this.check(TokenKind.Identifier)) {
+    if (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier)) {
       // Could be the optional name, OR it could be the start of a refSpec.
+      // The name may be quoted, as in DBML: `Ref "fk order customer": ...`.
       // The discriminator: if the next token after the identifier is ':' or '{',
       // it's a named Ref. Otherwise the identifier is the first path of a
       // long-form refSpec inside braces -- but the grammar always requires
@@ -1893,7 +1852,7 @@ export class Parser {
       const next = this.peek(1);
       if (next.kind === TokenKind.Colon || next.kind === TokenKind.LBrace) {
         this.advance();
-        name = id.text;
+        name = id.kind === TokenKind.QuotedIdentifier ? (id.value ?? '') : id.text;
       }
     }
     let spec: RefSpec;
@@ -1969,9 +1928,9 @@ export class Parser {
       this.advance(); // .
       this.advance(); // (
       compositeFields = [];
-      compositeFields.push(this.expect(TokenKind.Identifier, 'Expected field name').text);
+      compositeFields.push(this.parseIdentLikeName('field name'));
       while (this.match(TokenKind.Comma)) {
-        compositeFields.push(this.expect(TokenKind.Identifier, 'Expected field name').text);
+        compositeFields.push(this.parseIdentLikeName('field name'));
       }
       this.expect(TokenKind.RParen, "Expected ')' closing composite field list");
     }
@@ -1993,7 +1952,9 @@ export class Parser {
    *   ."quoted name"              -- quoted-identifier field
    *   .["literal key"]            -- map literal key
    *
-   * We start by consuming an identifier/qualified head, then walk pathTail.
+   * We start by consuming the head, a bare or quoted identifier (spec
+   * §20.1: `"Work Order"."Work Order ID"`), then walk pathTail. Each
+   * PathField holds its name as written, without quotes.
    * The JSONPath-alias forms `[N]`, `[*]` without a leading dot are
    * recognized as well; they normalize to the dot-prefixed form.
    *
@@ -2003,10 +1964,17 @@ export class Parser {
   private parsePathSegments (): PathSegment[] {
     const segments: PathSegment[] = [];
     const headStart = this.peek().start;
-    const headTok = this.expect(TokenKind.Identifier, 'Expected path start identifier');
+    const headTok = this.peek();
+    if (headTok.kind !== TokenKind.Identifier && headTok.kind !== TokenKind.QuotedIdentifier) {
+      throw new ParseError(
+        `Expected path start identifier (got ${headTok.kind} ${JSON.stringify(headTok.text)})`,
+        headTok.start,
+      );
+    }
+    this.advance();
     segments.push({
       kind: 'PathField',
-      name: headTok.text,
+      name: headTok.kind === TokenKind.QuotedIdentifier ? (headTok.value ?? '') : headTok.text,
       span: {
         start: headStart,
         end: headTok.end,
@@ -2104,7 +2072,7 @@ export class Parser {
   private parseTablePartial (): TablePartialDeclaration {
     const start = this.peek().start;
     this.advance(); // TablePartial
-    const name = this.parseIdentLikeName('TablePartial name');
+    const name = this.parseDeclaredName('TablePartial name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after TablePartial name");
     const body = this.parseEntityBody('TablePartial', name);
@@ -2121,21 +2089,14 @@ export class Parser {
   private parseTableGroup (): TableGroupDeclaration {
     const start = this.peek().start;
     this.advance(); // TableGroup
-    const name = this.parseIdentLikeName('TableGroup name');
+    const name = this.parseDeclaredName('TableGroup name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after TableGroup name");
     const members: string[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
       const t = this.peek();
-      if (t.kind === TokenKind.Identifier) {
-        this.advance();
-        let n = t.text;
-        while (this.check(TokenKind.Dot)) {
-          this.advance();
-          const next = this.expect(TokenKind.Identifier, 'Expected identifier after dot');
-          n += `.${next.text}`;
-        }
-        members.push(n);
+      if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
+        members.push(this.parseQualifiedName('TableGroup member'));
         // optional trailing semicolons in some sources
         this.match(TokenKind.Semicolon);
       } else if (t.kind === TokenKind.Semicolon || t.kind === TokenKind.Comma) {
@@ -2176,7 +2137,7 @@ export class Parser {
         nameTok.start,
       );
     }
-    const name = this.parseIdentLikeName('SupertypeGroup name');
+    const name = this.parseDeclaredName('SupertypeGroup name');
     const settings = this.maybeSettingsBlock();
     this.expect(TokenKind.LBrace, "Expected '{' after SupertypeGroup name and settings");
     const members: SupertypeGroupMember[] = [];
@@ -2184,17 +2145,7 @@ export class Parser {
       const t = this.peek();
       if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
         const memberStart = t.start;
-        this.advance();
-        let n = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
-        while (this.check(TokenKind.Dot)) {
-          this.advance();
-          const next = this.peek();
-          if (next.kind !== TokenKind.Identifier && next.kind !== TokenKind.QuotedIdentifier) {
-            throw new ParseError('Expected identifier after dot in subtype path', next.start);
-          }
-          this.advance();
-          n += `.${next.kind === TokenKind.QuotedIdentifier ? (next.value ?? '') : next.text}`;
-        }
+        const n = this.parseQualifiedName('subtype entity name');
         const memberSettings = this.maybeSettingsBlock();
         members.push({
           kind: 'SupertypeGroupMember',
@@ -2327,17 +2278,7 @@ export class Parser {
           t.start,
         );
       }
-      this.advance();
-      let n = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
-      while (this.check(TokenKind.Dot)) {
-        this.advance();
-        const next = this.peek();
-        if (next.kind !== TokenKind.Identifier && next.kind !== TokenKind.QuotedIdentifier) {
-          throw new ParseError(`Expected identifier after '.' in ${keywordTok.text} { }`, next.start);
-        }
-        this.advance();
-        n += `.${next.kind === TokenKind.QuotedIdentifier ? (next.value ?? '') : next.text}`;
-      }
+      const n = this.parseQualifiedName(`name in ${keywordTok.text} { }`);
       items.push({ kind: 'DiagramViewItem', name: n, span: this.spanFrom(t.start) });
     }
     this.expect(TokenKind.RBrace, `Expected '}' closing ${keywordTok.text}`);
@@ -2746,15 +2687,17 @@ export class Parser {
           break;
         }
       }
-      // Dotted identifier continuation: `Oracle`, `core.users`
+      // Dotted identifier continuation: `Oracle`, `core.users`,
+      // `"sales"."Legal Party"`. The value is held in the form of names.ts,
+      // so a quoted segment that holds a dot keeps its quotes (spec §3.2).
+      const segments = [value];
       while (this.check(TokenKind.Dot)) {
         this.advance();
-        const next = this.expect(TokenKind.Identifier, 'Expected identifier after dot');
-        value += `.${next.text}`;
+        segments.push(this.parseIdentLikeName('identifier after dot'));
       }
       const v: IdentifierValue = {
         kind: 'IdentifierValue',
-        value,
+        value: joinName(segments),
         span: this.spanFrom(start),
       };
       return v;
@@ -2775,6 +2718,31 @@ export class Parser {
       return t.value ?? '';
     }
     throw new ParseError(`Expected ${what}, got ${t.kind} ${JSON.stringify(t.text)}`, t.start);
+  }
+
+  /**
+   * The name of a declaration that other declarations reference: a
+   * Container, a Type, an Edge, a View, a TablePartial, a TableGroup, a
+   * SupertypeGroup, or an entity alias. Held in the form of names.ts: a
+   * quoted name that holds a dot keeps its quotes, so it stays one segment
+   * wherever it joins a qualified name (spec §3.2).
+   */
+  private parseDeclaredName (what: string): string {
+    return quoteNameSegment(this.parseIdentLikeName(what));
+  }
+
+  /**
+   * A qualified name, `core.users` or `"sales"."Work Order"`: segments
+   * separated by dots, each bare or quoted. A dot inside quotes belongs to
+   * the segment (spec §3.2, §20.1). Held in the form of names.ts.
+   */
+  private parseQualifiedName (what: string): string {
+    const segments = [this.parseIdentLikeName(what)];
+    while (this.check(TokenKind.Dot)) {
+      this.advance();
+      segments.push(this.parseIdentLikeName(`${what} after '.'`));
+    }
+    return joinName(segments);
   }
 }
 
@@ -2824,8 +2792,8 @@ function applyEntityAliases (doc: XDbmlDocument): void {
   const taken = new Set<string>();
   const visit = (decl: TopLevelStatement, container?: string): void => {
     if (decl.kind !== 'EntityDeclaration') return;
-    const segments = [...(container ? [container] : []), ...decl.name.split('.')];
-    taken.add(segments[segments.length - 1]);
+    const segments = [...(container ? splitName(container) : []), ...splitName(decl.name)];
+    taken.add(quoteNameSegment(segments[segments.length - 1]));
     if (!decl.alias) return;
     aliases.set(decl.alias, aliases.has(decl.alias) ? null : segments);
   };
@@ -2849,7 +2817,7 @@ function applyEntityAliases (doc: XDbmlDocument): void {
     const obj = node as Record<string, unknown>;
     if (obj.kind === 'RefEndpoint' && Array.isArray(obj.path)) {
       const first = obj.path[0] as { kind?: string; name?: string } | undefined;
-      const segments = first?.kind === 'PathField' && first.name ? aliases.get(first.name) : undefined;
+      const segments = first?.kind === 'PathField' && first.name ? aliases.get(quoteNameSegment(first.name)) : undefined;
       if (segments) {
         obj.path = [...segments.map((name) => ({ ...first, name })), ...obj.path.slice(1)];
       }

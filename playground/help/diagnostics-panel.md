@@ -1,6 +1,6 @@
 ---
 title: Diagnostics panel
-description: The bottom strip that lists errors and warnings, with click-to-jump.
+description: The bottom strip that lists errors and warnings, with click-to-jump and copy.
 ---
 
 # Diagnostics panel
@@ -22,7 +22,7 @@ The header stays visible, about 32 pixels tall, so the layout doesn't shift when
 - **An error count**, in red with a small × icon: "1 error", "3 errors".
 - **A warning count**, in amber with a small ! icon: "1 warning", "2 warnings".
 
-Errors and warnings are counted separately, so a schema with both shows the two counts side by side. When there is something to list, a caret (▸ or ▾) shows whether the body is collapsed or expanded, and the right end of the header reads "Click to expand" or "Click to collapse".
+Errors and warnings are counted separately, so a schema with both shows the two counts side by side. When there is something to list, a caret (▸ or ▾) shows whether the body is collapsed or expanded, the header reads "Click to expand" or "Click to collapse", and a **Copy** button sits at its right end (see [Copying diagnostics](#copying-diagnostics)).
 
 ## Errors and warnings
 
@@ -95,6 +95,15 @@ Rows are sorted by line, then column, matching the order you'd read them in the 
 ## Click to jump
 
 Clicking anywhere on a row moves your editor cursor to that line and column, scrolls the editor to bring it into view, and gives the editor focus. Useful when you have many diagnostics, or when one is on a line that's scrolled off-screen.
+
+A click that ends a text selection doesn't jump, so a selection you drag across a row stays in place for copying.
+
+## Copying diagnostics
+
+There are two ways to take diagnostics out of the playground, for a bug report or a message to a colleague:
+
+- **Select and copy.** Drag across the text of one or more rows to select it, then press Ctrl+C (Cmd+C on a Mac).
+- **Copy everything.** Click **Copy** at the right end of the header. Every diagnostic goes to the clipboard, one per line, in the order of the list: the severity, the line and column, the code when there is one, and the message, as in `Error at line 12, column 5 [unresolved-entity]: Relationship endpoint references unknown entity 'custmers'.` The button reads "Copied" for two seconds.
 
 ## How it relates to editor squiggles
 

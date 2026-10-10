@@ -36,6 +36,7 @@ import type {
 } from './ast.ts';
 import { versionAtLeast } from './relationships.ts';
 import { effectiveFields } from './partials.ts';
+import { isQualifiedName } from './names.ts';
 
 /* -------------------------------------------------------------------------
  * Values and aliases (spec §12.2)
@@ -215,7 +216,7 @@ type Resolution =
 
 function resolveEntityPath (path: string, index: EntityIndex): Resolution {
   if (index.byId.has(path)) return { ok: true, id: path };
-  if (!path.includes('.')) {
+  if (!isQualifiedName(path)) {
     const ids = index.byBare.get(path) ?? [];
     if (ids.length === 1) return { ok: true, id: ids[0] };
     if (ids.length > 1) return { ok: false, reason: 'ambiguous', candidates: ids };

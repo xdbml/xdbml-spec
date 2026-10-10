@@ -45,7 +45,7 @@ import type {
 // runner, which resolves relative paths but not the Vite alias. The
 // layout module only type-imports @xdbml/parse, so nothing else follows.
 import { collectRefDeclarations } from '../../../../renderer/src/layout/layout.ts';
-import { effectiveFieldList, effectiveFields, entityDefinitions, resolveSupertypeGroups, tablePartials, type ResolvedSupertypeGroup } from '@xdbml/parse';
+import { effectiveFieldList, effectiveFields, entityDefinitions, lastNameSegment, nameQualifier, quoteNameSegment, resolveSupertypeGroups, splitName, tablePartials, type ResolvedSupertypeGroup } from '@xdbml/parse';
 
 import type { Selection } from './selection';
 
@@ -164,7 +164,9 @@ function resolveField (doc: XDbmlDocument, entityId: string, path: string): Reso
   const local = entityDefinitions(found.entity.body as EntityDeclaration['body']);
   const entityTable: ReadonlyMap<string, TypeDeclaration> =
     local.size > 0 ? new Map([...typeTable, ...local]) : typeTable;
-  const segments = path.split('.');
+  // A row path is in the form of names.ts: a field name that holds a dot
+  // is quoted there, and splitName returns it whole.
+  const segments = splitName(path);
   const traversal = traverseFieldPath(
     found.entity, segments,
     { entity: entityTable, project: typeTable, local: new Set(local.values()), partials: tablePartials(doc) },
@@ -209,10 +211,9 @@ function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null
   // inspector shows the edge's properties.
   if (entityId.startsWith('edge:')) {
     const rest = entityId.slice('edge:'.length);
-    const dot = rest.lastIndexOf('.');
-    if (dot > 0) {
-      const cname = rest.slice(0, dot);
-      const ename = rest.slice(dot + 1);
+    const cname = nameQualifier(rest);
+    if (cname) {
+      const ename = quoteNameSegment(lastNameSegment(rest));
       for (const stmt of doc.statements) {
         if (stmt.kind !== 'ContainerDeclaration' || stmt.name !== cname) continue;
         for (const item of stmt.body) {
@@ -231,17 +232,17 @@ function findEntity (doc: XDbmlDocument, entityId: string): EntityFinding | null
   }
 
   // entityId is either "containerName.entityName" (when in a container)
-  // or just "entityName" (for top-level orphan entities). Split on the
-  // last dot since neither name contains dots.
+  // or just "entityName" (for top-level orphan entities). Split before
+  // the last segment; a dot inside a quoted name belongs to the name
+  // (names.ts, spec §3.2).
   //
   // Both EntityDeclaration and ViewDeclaration are matched -- they're
   // treated as the same kind of thing for inspector navigation; the
   // EntityInspector renders both, with a Source-query section gated
   // on whether the node kind is ViewDeclaration.
-  const dotIdx = entityId.lastIndexOf('.');
-  if (dotIdx > 0) {
-    const cname = entityId.slice(0, dotIdx);
-    const ename = entityId.slice(dotIdx + 1);
+  const cname = nameQualifier(entityId);
+  if (cname) {
+    const ename = quoteNameSegment(lastNameSegment(entityId));
     for (const stmt of doc.statements) {
       if (stmt.kind !== 'ContainerDeclaration' || stmt.name !== cname) continue;
       for (const item of stmt.body) {

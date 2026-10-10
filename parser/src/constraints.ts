@@ -47,6 +47,7 @@ import type { LocalTypes } from './definitions.ts';
 import { canonicalTarget, effectiveTarget, isRelationalTarget, projectTarget, projectTargets, settingValues } from './targets.ts';
 import { hasForeignMasterFlag, isForeignMaster, versionAtLeast } from './relationships.ts';
 import { effectiveFieldList, effectiveFields, effectiveIndexes, tablePartials } from './partials.ts';
+import { joinName, lastNameSegment, quoteNameSegment, splitName } from './names.ts';
 
 export { isRelationalTarget } from './targets.ts';
 
@@ -60,7 +61,7 @@ export type ConstraintSource = 'constraints' | 'checks' | 'inline' | 'indexes' |
 export interface KeyConstraint {
   kind: 'key';
   keyKind: 'primary' | 'unique';
-  /** Dotted field paths, in key order. */
+  /** Dotted field paths, in key order, in the form of names.ts (see keyPathString). */
   fields: string[];
   name?: string;
   note?: string;
@@ -94,9 +95,13 @@ const stringSetting = (settings: ReadonlyArray<Setting>, name: string): string |
 
 const isPk = (settings: ReadonlyArray<Setting>): boolean => hasFlag(settings, 'pk', 'primary key');
 
-/** Dotted form of a key or index path; only field segments carry names. */
+/**
+ * Dotted form of a key or index path; only field segments carry names. A
+ * field name that holds a dot keeps its quotes (names.ts), so
+ * `splitName()` returns the field names of the path.
+ */
 export function keyPathString (path: ReadonlyArray<PathSegment>): string {
-  return path.map((seg) => (seg.kind === 'PathField' ? seg.name : '[]')).join('.');
+  return joinName(path.map((seg) => (seg.kind === 'PathField' ? seg.name : '[]')));
 }
 
 const checkFromEntry = (e: CheckEntry, source: ConstraintSource): CheckConstraint => ({
@@ -121,7 +126,7 @@ export function bodyConstraints (body: Body, quotedFieldChecks = true): Constrai
     if (item.kind === 'FieldDeclaration') {
       if (isPk(item.settings)) inlinePk.push(item);
       if (hasFlag(item.settings, 'unique')) {
-        out.push({ kind: 'key', keyKind: 'unique', fields: [item.name], source: 'inline', span: item.span });
+        out.push({ kind: 'key', keyKind: 'unique', fields: [quoteNameSegment(item.name)], source: 'inline', span: item.span });
       }
       for (const s of item.settings) {
         if (s.name !== 'check' || !s.value) continue;
@@ -173,7 +178,7 @@ export function bodyConstraints (body: Body, quotedFieldChecks = true): Constrai
     out.unshift({
       kind: 'key',
       keyKind: 'primary',
-      fields: inlinePk.map((f) => f.name),
+      fields: inlinePk.map((f) => quoteNameSegment(f.name)),
       source: 'inline',
       span: inlinePk[0].span,
     });
@@ -304,16 +309,16 @@ function walkKeyPath (
   const walked: string[] = [];
   for (let i = 0; i < path.length; i++) {
     const seg = path[i];
-    if (seg.kind !== 'PathField') return { kind: 'collection', at: walked.join('.') || '(start)' };
+    if (seg.kind !== 'PathField') return { kind: 'collection', at: joinName(walked) || '(start)' };
     walked.push(seg.name);
     const f = current.find((x) => x.name === seg.name);
-    if (!f) return { kind: 'missing', at: walked.join('.') };
+    if (!f) return { kind: 'missing', at: joinName(walked) };
     if (i === path.length - 1) return undefined;
-    if (COLLECTION_KINDS.has(f.type.kind)) return { kind: 'collection', at: walked.join('.') };
+    if (COLLECTION_KINDS.has(f.type.kind)) return { kind: 'collection', at: joinName(walked) };
     if (i === 0) scope = definitions?.own.has(f) ? definitions.local : undefined;
     else if (injected.has(f)) scope = undefined;
     const next = objectFields(f.type, types, scope);
-    if (!next) return { kind: 'missing', at: `${walked.join('.')}.${(path[i + 1] as { name?: string }).name ?? ''}` };
+    if (!next) return { kind: 'missing', at: joinName([...walked, (path[i + 1] as { name?: string }).name ?? '']) };
     const effective = effectiveFieldList(next.fields, partials);
     current = effective.map((e) => e.field);
     injected = new Set(effective.filter((e) => e.partial).map((e) => e.field));
@@ -341,7 +346,7 @@ export function markPrimaryKeyNotNull (doc: XDbmlDocument): void {
     const pk = bodyConstraints(decl.body).find((c): c is KeyConstraint => c.kind === 'key' && c.keyKind === 'primary');
     if (!pk) continue;
     for (const dotted of pk.fields) {
-      const field = findField(decl.body, dotted.split('.'));
+      const field = findField(decl.body, splitName(dotted));
       if (!field || field.settings.some((s) => NULLABILITY.includes(s.name))) continue;
       field.settings.push({ kind: 'Setting', name: 'not null', nameSource: 'not null', value: null, implied: true, span: field.span });
     }
@@ -548,7 +553,7 @@ export function checkConstraints (doc: XDbmlDocument): Diagnostic[] {
     // `null` on a primary key field (§10.4).
     for (const pk of pks.slice(0, 1)) {
       for (const dotted of pk.fields) {
-        const f = findField(decl.body, dotted.split('.'));
+        const f = findField(decl.body, splitName(dotted));
         const nullSetting = f?.settings.find((s) => s.name === 'null' && !s.implied);
         if (nullSetting) {
           diagnostics.push({
@@ -606,7 +611,7 @@ function entityIndex (doc: XDbmlDocument): Map<string, EntityEntry> {
     const e: EntityEntry = { placed: p, decl: p.decl };
     const q = p.container ? `${p.container.name}.${p.decl.name}` : p.decl.name;
     m.set(q, e);
-    const b = p.decl.name.split('.').pop() ?? p.decl.name;
+    const b = quoteNameSegment(lastNameSegment(p.decl.name));
     bare.set(b, [...(bare.get(b) ?? []), e]);
   }
   for (const [b, list] of bare) if (list.length === 1 && !m.has(b)) m.set(b, list[0]);
@@ -622,10 +627,10 @@ interface ResolvedEnd {
 function resolveEnd (ep: RefEndpoint, index: Map<string, EntityEntry>): ResolvedEnd | 'entity-level' | undefined {
   const names = ep.path.map((s) => (s.kind === 'PathField' ? s.name : '[]'));
   for (let i = names.length; i >= 1; i--) {
-    const entity = index.get(names.slice(0, i).join('.'));
+    const entity = index.get(joinName(names.slice(0, i)));
     if (!entity) continue;
-    if (ep.compositeFields && ep.compositeFields.length > 0) return { entity, fields: [...ep.compositeFields] };
-    const rest = names.slice(i).join('.');
+    if (ep.compositeFields && ep.compositeFields.length > 0) return { entity, fields: ep.compositeFields.map(quoteNameSegment) };
+    const rest = joinName(names.slice(i));
     return rest ? { entity, fields: [rest] } : 'entity-level';
   }
   return undefined;
@@ -712,7 +717,7 @@ function checkReferencedKeys (doc: XDbmlDocument, severity: Diagnostic['severity
         if (st.name !== 'ref' || st.value?.kind !== 'RefValue') continue;
         const source: RefEndpoint = {
           kind: 'RefEndpoint',
-          path: [...owner.split('.'), item.name].map((name) => ({ kind: 'PathField', name, span: item.span })),
+          path: [...splitName(owner), item.name].map((name) => ({ kind: 'PathField', name, span: item.span })),
           span: item.span,
         };
         const before = diagnostics.length;
