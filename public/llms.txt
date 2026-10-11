@@ -9,7 +9,7 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 - The first line of every document is `xdbml: 0.6`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
 - Comments are `//` to the end of the line, or `/* ... */`. `#` and `--` are errors.
 - Keywords match any casing, and names are case-sensitive. Write construct keywords capitalized (`Entity`, `Table`, `View`, `Ref`), settings and type keywords in lowercase.
-- A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks.
+- A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks, and so do `records (` and `records [`.
 - Entities, Views, Edges, Types, Enums and TablePartials share one namespace: two of them never have the same name.
 - Declare every entity, Enum and Type that the document names.
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Schema`, `Database`, `Keyspace`, `Namespace`, `Dataset` or `Bucket`.
@@ -56,7 +56,7 @@ Ref customer_vehicles: vehicles.customer_id > customers.customer_id [
 ]
 ```
 
-Other lists keep their own rules. In `indexes { }` a comma between two entries is an error, and a composite index is written `(a, b)`. A `records { }` row puts a comma between its values, one row per line. `union [T1, T2]` and `map [K, V]` need their commas.
+Other lists keep their own rules. In `indexes { }` a comma between two entries is an error, and a composite index is written `(a, b)`. A `records { }` row puts a comma between its values, one row per line; an empty field, `1, , 'x'`, reads as null. An entity takes one records block, in its body or at the top level as `records users (id, name) { ... }`, and `[example]` after the column list marks rows that illustrate the data. `union [T1, T2]` and `map [K, V]` need their commas.
 
 ## What goes where
 

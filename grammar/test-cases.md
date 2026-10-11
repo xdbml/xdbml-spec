@@ -1,6 +1,6 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.6.5. Every case runs in the reference parser's test suite.
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.7. Every case runs in the reference parser's test suite.
 ---
 
 
@@ -1389,6 +1389,152 @@ line string'''
 
 ---
 
+## §26 Records -- DBML 10.3.1 forms (v0.7)
+
+### VALID -- example flag on a top-level declaration, after the column list (DBML)
+
+```
+Table users {
+  id   int [pk]
+  name varchar
+}
+
+records users (id, name) [example] {
+  1, 'Alice'
+  2, 'Bob'
+}
+```
+
+### VALID -- example flag inside a table, with and without a column list (DBML)
+
+```
+Table users {
+  id   int [pk]
+  name varchar
+  records [example] {
+    1, 'Alice'
+  }
+}
+
+Table orders {
+  id      int [pk]
+  user_id int
+  total   decimal
+  records (id, user_id) [example] {
+    10, 1
+  }
+}
+```
+
+### VALID -- column list on records inside an entity
+
+```
+xdbml: 0.7
+
+Entity users {
+  id    int [pk]
+  name  varchar
+  email varchar
+  records (id, email) {
+    1, 'alice@example.com'
+    2, 'bob@example.com'
+  }
+}
+```
+
+### VALID -- empty fields read as null (DBML)
+
+```
+Table events {
+  id      int [pk]
+  kind    varchar
+  payload varchar
+}
+
+records events (id, kind, payload) {
+  1, , 'no kind'
+  , 'orphan', 'no id'
+  3, 'last payload empty',
+}
+```
+
+### INVALID -- a second records block inside an entity
+
+```
+Table users {
+  id int [pk]
+  records {
+    1
+  }
+  records {
+    2
+  }
+}
+```
+
+### INVALID -- a records block inside an entity and a top-level declaration for it
+
+```
+xdbml: 0.7
+
+Entity users {
+  id   int [pk]
+  name varchar
+  records {
+    1, 'Alice'
+  }
+}
+
+records users (id, name) [example] {
+  2, 'Bob'
+}
+```
+
+### VALID with a warning -- a second records block in a document declaring 0.6
+
+```
+xdbml: 0.6
+
+Entity users {
+  id   int [pk]
+  name varchar
+}
+
+records users (id) {
+  1
+}
+
+records users (name) {
+  'Alice'
+}
+```
+
+### INVALID -- the brackets before the column list
+
+```
+Table users {
+  id int [pk]
+  records [example] (id) {
+    1
+  }
+}
+```
+
+### INVALID -- a column of the list that is not a field of the entity
+
+```
+xdbml: 0.7
+
+Entity users {
+  id int [pk]
+  records (id, nickname) {
+    1, 'Al'
+  }
+}
+```
+
+---
+
 ## §12 SupertypeGroup (v0.5)
 
 ### VALID -- one group with completeness and exclusivity
@@ -1553,7 +1699,7 @@ SupertypeGroup business_role [supertype: Party, exclusivity: overlapping, discri
 ### INVALID -- a newer version than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.7
+xdbml: 0.8
 
 Entity A { id int [pk] }
 ```
@@ -1834,7 +1980,7 @@ Entity A { id int [pk] }
 ### INVALID -- a patch release newer than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.6.99
+xdbml: 0.7.99
 
 Entity A { id int [pk] }
 ```

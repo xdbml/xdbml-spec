@@ -262,6 +262,7 @@ export const SETTING_FLAGS = [
   'increment',
   'inactive',          // v0.2 §11.9: Ref flag for visualization-only deactivation
   'foreign_master',    // v0.4 §11.10: Ref flag for denormalized replication
+  'example',           // v0.7 §26.5: records flag for illustrative rows
 ] as const;
 
 export const SETTING_KEYS = [

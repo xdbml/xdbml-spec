@@ -4,9 +4,42 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.6.7 -- 2026
+## v0.7 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+Moves the DBML baseline toward DBML 10.3.1, one subject at a time. This first increment covers records: Holistics extended them after the 3.13.6 baseline with a column list on records inside a table, an `example` flag and empty fields, and xDBML reads all three in every document, including one without a version declaration. An entity holds one records block, as in DBML. Every v0.6 document remains valid: in a document declaring v0.6 or an earlier version, a second records block draws a warning rather than an error. Documents using the new rule declare `xdbml: 0.7`.
+
+### Added
+
+#### Spec
+
+- **Column list inside an entity (§26.1)**: `records (id, email) { ... }` populates the listed columns, as the top-level form does. Each column names a field of the entity, an injected field included. `records` starts a block before `{`, `(` or `[` (§3.10), so a field may still be named `records`.
+- **Empty fields (§26.4)**: no value between two commas, or before the first comma of a row, reads as null. A row that holds fewer values than its column list leaves the remaining columns null, so DBML's `1,` keeps its meaning while a comma after the last value stays ignored (§3.9).
+- **Example records (§26.5)**: an `[example]` flag after the column list, or after `records` in a block without one, marks rows that illustrate the data rather than load it. A generator that emits data leaves them out (§26.7).
+- **One records block per entity (§26.6)**: a second block for an entity, inside its body or at the top level, is an error, as in DBML; in a document declaring `xdbml: 0.6` or an earlier version it is a warning.
+- **Validation summary (§26.8)** for records.
+
+### Changed
+
+#### Spec
+
+- **§26.2**: the top-level form no longer suggests one declaration per disjoint set of records.
+- **§26.4**: booleans and `null` are case-insensitive, and the readings of DBML apply by column type: a quoted number for a numeric column, `'Y'`/`'N'`, `'T'`/`'F'`, `1`/`0` for a boolean column, `''` as null for a column whose type is not a string type.
+- **§3.9, §3.10, §4, §31, Appendices A and D**: aligned with §26. Conformance gains item 21. Appendix D gains item 8, on the v0.7 feature set, and item 12, on the records forms DBML added after 3.13.6; items 8 to 15 become 9 to 17.
+- **Grammar (`grammar/xDBML.g4`)**: `recordsBlock` and `topLevelRecords` are defined in the grammar rather than inherited from DBML, with the column list, the settings brackets and empty fields.
+
+#### Tooling
+
+- **`@xdbml/parse`** accepts documents declaring `xdbml: 0.7`. A records block inside an entity carries `columns` when it has a column list; both records forms carry `settings` and `example`; an empty field is a `NullValue` with `empty: true`. The brackets before a column list draw a syntax error naming the order. New diagnostic: `duplicate-records-block`. A column list inside an entity is checked like the top-level one (`unresolved-records-column`).
+- **Editors**: `records` takes the block color before `(` and `[` as well as `{`, and `example` the color of a setting flag.
+
+---
+
+## v0.6.7 -- 2026
+
+**Status**: Draft -- superseded by v0.7
 **Released**: 2026-10-10
 
 A point release of the v0.6 draft on quoted names. §3.2 defines quoted identifiers, and Appendix D makes every DBML 3.13.6 document valid xDBML, but `@xdbml/parse` read a quoted identifier only as the name of a declaration and after a dot in a path. A key, an index or a relationship on quoted names did not parse, nor did a DBML 3.13.6 document that used them, as `@dbml/core` writes relationships: `Ref:"users"."id" < "posts"."user_id"`. The tools now read a quoted name in every place a name stands, and keep a dot inside quotes in the name. Every document that parsed before still parses, and documents continue to declare `xdbml: 0.6`.

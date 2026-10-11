@@ -53,6 +53,7 @@ import type {
   NamedTypeReference,
   NoteBlock,
   NoteDeclaration,
+  NullValue,
   NumberValue,
   ObjectType,
   OneOfType,
@@ -121,7 +122,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6.7';
+export const SUPPORTED_XDBML_VERSION = '0.7';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -194,6 +195,15 @@ function kw (token: Token | undefined): string | null {
 
 function isKw (token: Token | undefined, expected: string): boolean {
   return kw(token) === expected;
+}
+
+/**
+ * True when the settings of a records block carry the `example` flag
+ * (spec §26.5): `[example]`, or `[example: true]`.
+ */
+function hasExampleFlag (settings: ReadonlyArray<Setting>): boolean {
+  return settings.some((s) => s.name === 'example'
+    && (s.value === null || (s.value.kind === 'BooleanValue' && s.value.value)));
 }
 
 /** Canonical capitalization for container keywords */
@@ -321,6 +331,18 @@ export class Parser {
    */
   private atBlockKeyword (word: string): boolean {
     return isKw(this.peek(), word) && this.peek(1).kind === TokenKind.LBrace;
+  }
+
+  /**
+   * `records` starts a records block before `{`, before the column list of
+   * `records (a, b) { }` and before the brackets of `records [example] { }`
+   * (spec §3.10, §26.1). A field's type never starts with `(` or `[`, so a
+   * field may still be named `records`.
+   */
+  private atRecordsBlock (): boolean {
+    if (!isKw(this.peek(), 'records')) return false;
+    const next = this.peek(1).kind;
+    return next === TokenKind.LBrace || next === TokenKind.LParen || next === TokenKind.LBracket;
   }
 
   /**
@@ -682,7 +704,7 @@ export class Parser {
         body.push(this.parseChecks());
       } else if (this.atBlockKeyword('constraints')) {
         body.push(this.parseConstraints());
-      } else if (this.atBlockKeyword('records')) {
+      } else if (this.atRecordsBlock()) {
         body.push(this.parseRecordsBlock());
       } else if (this.atBlockKeyword('definitions')) {
         // Spec §15.8 (v0.6.5): read here for every body this method reads;
@@ -710,45 +732,53 @@ export class Parser {
   }
 
   /**
-   * Parse a `records { ... }` block inside an entity body (§26.1, implicit
-   * column list). Values are stored as SettingValue cells; row boundaries
-   * are determined by source line (see `parseRecordRow`).
+   * Parse a records block inside an entity body (spec §26.1):
+   *
+   *     records { ... }                     the entity's columns, in order
+   *     records (id, email) { ... }         a column list (v0.7)
+   *     records [example] { ... }           the example flag (§26.5, v0.7)
+   *     records (id, email) [example] { ... }
+   *
+   * The brackets follow the column list, as in DBML. Values are stored as
+   * SettingValue cells; row boundaries are determined by source line (see
+   * `parseRecordRow`).
    */
   private parseRecordsBlock (): RecordsBlock {
     const start = this.peek().start;
     this.advance(); // records
-    this.expect(TokenKind.LBrace, "Expected '{' after 'records'");
+    const columns = this.check(TokenKind.LParen) ? this.parseRecordsColumnList() : undefined;
+    const settings = this.maybeSettingsBlock();
+    if (!columns && settings.length > 0 && this.check(TokenKind.LParen)) {
+      throw new ParseError(
+        'The column list of a records block comes before its brackets, as in DBML: ' +
+        '`records (id, name) [example] { ... }` (spec §26.5).',
+        this.peek().start,
+      );
+    }
+    this.expect(TokenKind.LBrace, columns
+      ? "Expected '{' after the records column list"
+      : "Expected '{' after 'records'");
     const rows: RecordRow[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
       rows.push(this.parseRecordRow());
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing records");
-    return {
+    const block: RecordsBlock = {
       kind: 'RecordsBlock',
+      settings,
+      example: hasExampleFlag(settings),
       rows,
       span: this.spanFrom(start),
     };
+    if (columns) block.columns = columns;
+    return block;
   }
 
   /**
-   * Top-level records declaration (§26.2, new in v0.2):
-   *
-   *     records users (id, name, email) { ... }
-   *     records core.users (id, name, email) { ... }
-   *
-   * The entity reference can be a bare name or a dotted path for cross-
-   * container references. The column list is required; it tells the
-   * generator which columns each row's values are populating.
+   * A records column list, `(id, name, email)`. A column is a field name,
+   * bare or quoted, held as written; a comma after the last one is ignored.
    */
-  private parseTopLevelRecords (): TopLevelRecordsDeclaration {
-    const start = this.peek().start;
-    this.advance(); // records
-    // Entity reference: a name or a dotted path (`core.users`), each
-    // segment bare or quoted (spec §3.2).
-    const refStart = this.peek().start;
-    const entityRef = this.parseQualifiedName("entity name after 'records'");
-    // Explicit column list -- required for top-level form. A column is a
-    // field name, bare or quoted, held as written.
+  private parseRecordsColumnList (): string[] {
     this.expect(TokenKind.LParen, "Expected '(' starting column list after entity reference");
     const columns: string[] = [];
     if (!this.check(TokenKind.RParen)) {
@@ -759,6 +789,36 @@ export class Parser {
       }
     }
     this.expect(TokenKind.RParen, "Expected ')' closing column list");
+    return columns;
+  }
+
+  /**
+   * Top-level records declaration (§26.2, new in v0.2):
+   *
+   *     records users (id, name, email) { ... }
+   *     records core.users (id, name, email) { ... }
+   *     records users (id, name) [example] { ... }     (§26.5, v0.7)
+   *
+   * The entity reference can be a bare name or a dotted path for cross-
+   * container references. The column list is required; it tells the
+   * generator which columns each row's values are populating.
+   */
+  private parseTopLevelRecords (): TopLevelRecordsDeclaration {
+    const start = this.peek().start;
+    this.advance(); // records
+    // Entity reference: a name or a dotted path (`core.users`), each
+    // segment bare or quoted (spec §3.2).
+    const entityRef = this.parseQualifiedName("entity name after 'records'");
+    // Explicit column list -- required for top-level form.
+    if (this.check(TokenKind.LBracket)) {
+      throw new ParseError(
+        'The column list of a top-level records declaration comes before its brackets, as in DBML: ' +
+        '`records users (id, name) [example] { ... }` (spec §26.2, §26.5).',
+        this.peek().start,
+      );
+    }
+    const columns = this.parseRecordsColumnList();
+    const settings = this.maybeSettingsBlock();
     // Row body.
     this.expect(TokenKind.LBrace, "Expected '{' starting records body");
     const rows: RecordRow[] = [];
@@ -766,11 +826,12 @@ export class Parser {
       rows.push(this.parseRecordRow());
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing records body");
-    void refStart; // currently unused but reserved for future improved error reporting
     return {
       kind: 'TopLevelRecordsDeclaration',
       entityRef,
       columns,
+      settings,
+      example: hasExampleFlag(settings),
       rows,
       span: this.spanFrom(start),
     };
@@ -793,7 +854,11 @@ export class Parser {
    */
   private parseRecordRow (): RecordRow {
     const start = this.peek().start;
-    const values: SettingValue[] = [this.parseSettingValue()];
+    // An empty field, before the first comma or between two commas on the
+    // same line, reads as null (§26.4, v0.7): `, 'a'` and `1, , 'a'`.
+    const values: SettingValue[] = [
+      this.check(TokenKind.Comma) ? this.emptyRecordValue() : this.parseSettingValue(),
+    ];
     while (this.check(TokenKind.Comma)) {
       const commaLine = this.peek().start.line;
       this.advance(); // consume comma
@@ -807,13 +872,19 @@ export class Parser {
         // trailing comma at end of row (next value is on a later line)
         break;
       }
-      values.push(this.parseSettingValue());
+      values.push(nextTok.kind === TokenKind.Comma ? this.emptyRecordValue() : this.parseSettingValue());
     }
     return {
       kind: 'RecordRow',
       values,
       span: this.spanFrom(start),
     };
+  }
+
+  /** An empty field of a records row: null, with an empty span at the comma after it. */
+  private emptyRecordValue (): NullValue {
+    const at = this.peek().start;
+    return { kind: 'NullValue', empty: true, span: { start: at, end: at } };
   }
 
   /* ----- Module-system directives (spec §27, new in v0.2) ----- */

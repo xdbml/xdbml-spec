@@ -698,12 +698,15 @@ export interface PartialInjection {
  *
  * Records declare sample data inline in the schema. Two forms:
  *
- *   - Inside an entity body, implicit column list (§26.1):
+ *   - Inside an entity body (§26.1), with the entity's columns in
+ *     declaration order, or with a column list (v0.7):
  *       records {
  *         1, 'Alice', 'alice@example.com'
  *         2, 'Bob',   'bob@example.com'
  *       }
- *     Values are assigned to fields in declaration order.
+ *       records (id, email) {
+ *         1, 'alice@example.com'
+ *       }
  *
  *   - Top-level, explicit column list (§26.2, new in v0.2):
  *       records users (id, name, email) {
@@ -711,11 +714,16 @@ export interface PartialInjection {
  *       }
  *     Columns not in the list default to null or the field's declared default.
  *
+ * Either form takes an `[example]` flag after its column list, or after
+ * `records` when an entity's block has none (§26.5, v0.7). An entity holds
+ * one records block (§26.6).
+ *
  * Each row is a comma-separated list of values on a single source line; rows
  * are separated by newlines. Trailing commas at end-of-row are tolerated.
  * Multi-line values are supported via triple-quoted strings (the line check
  * uses the comma's line vs the next-value's line, so a triple-quoted value
- * doesn't break row continuation).
+ * doesn't break row continuation). An empty field, between two commas or
+ * before the first one, is a NullValue with `empty: true` (§26.4, v0.7).
  *
  * Value forms (§26.4): strings, multi-line strings, numbers, booleans, null,
  * ISO 8601 dates (lexed as strings), enum values (dotted identifiers like
@@ -726,6 +734,16 @@ export interface PartialInjection {
 
 export interface RecordsBlock {
   kind: 'RecordsBlock';
+  /**
+   * The column list of `records (a, b) { ... }` (v0.7), each column bare or
+   * quoted and held as written. Absent when the block names no columns, in
+   * which case the rows populate the entity's columns in declaration order.
+   */
+  columns?: string[];
+  /** The settings in brackets, `[example]` among them (§26.5). */
+  settings: Setting[];
+  /** True when the block carries the `example` flag (§26.5). */
+  example: boolean;
   rows: RecordRow[];
   span: Span;
 }
@@ -746,6 +764,10 @@ export interface TopLevelRecordsDeclaration {
   entityRef: string;
   /** The explicit column list. Required for the top-level form. */
   columns: string[];
+  /** The settings in brackets, `[example]` among them (§26.5). */
+  settings: Setting[];
+  /** True when the declaration carries the `example` flag (§26.5). */
+  example: boolean;
   rows: RecordRow[];
   span: Span;
 }
@@ -952,6 +974,12 @@ export interface BooleanValue {
 
 export interface NullValue {
   kind: 'NullValue';
+  /**
+   * True for an empty field of a records row, `1, , 'x'` or `, 'x'`, which
+   * reads as null (§26.4, v0.7). Its span is empty, at the comma that
+   * follows it.
+   */
+  empty?: true;
   span: Span;
 }
 

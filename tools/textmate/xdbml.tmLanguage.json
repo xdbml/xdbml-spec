@@ -137,9 +137,9 @@
       "match": "\\b((?i:decimal128|objectid|bindata|minkey|maxkey|symbol|double|regex|long))\\b"
     },
     "block-keywords": {
-      "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names.",
+      "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names; records also before the '(' of a column list or the '[' of its settings (spec 26.1, v0.7), which no field type starts with.",
       "name": "keyword.other.block.xdbml",
-      "match": "\\b((?i:constraints|definitions|indexes|records|checks))\\b(?=\\s*\\{)"
+      "match": "\\b((?i:constraints|definitions|indexes|records|checks))\\b(?=\\s*\\{)|\\b((?i:records))\\b(?=\\s*[(\\[])"
     },
     "diagram-view-categories": {
       "comment": "The categories of a DiagramView body (Tables, Views, Containers or Schemas, TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",
@@ -215,7 +215,7 @@
     },
     "setting-flags": {
       "name": "support.constant.flag.xdbml",
-      "match": "\\b((?i:foreign_master|increment|required|inactive|primary|unique|null|key|not|pk))\\b"
+      "match": "\\b((?i:foreign_master|increment|required|inactive|primary|example|unique|null|key|not|pk))\\b"
     },
     "setting-keys": {
       "comment": "Setting keys appear before a colon. Matched only here inside the settings block.",

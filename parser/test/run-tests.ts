@@ -24,7 +24,7 @@ import {
   diagramViewMembers, diagramViews, diagramViewNote,
   entityDefinitions, isDefinitionsExcludedTarget,
 } from '../src/index.ts';
-import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
+import type { EntityDeclaration, ParseOptions, RecordRow, RecordsBlock, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
 import {
   BSON_TYPES,
   CONTAINER_KEYWORDS,
@@ -3673,12 +3673,12 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
       };
     })(),
     {
-      name: 'Version: xdbml 0.6 is accepted; a newer version is refused with unsupported-version',
-      source: `xdbml: 0.6
+      name: 'Version: xdbml 0.7 is accepted; a newer version is refused with unsupported-version',
+      source: `xdbml: 0.7
 Entity A { }`,
       assert: (doc) => {
-        if (doc.version?.version !== '0.6') return 'version 0.6 not parsed';
-        for (const v of ['0.7', '1.0', '0.10']) {
+        if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
+        for (const v of ['0.8', '0.7.1', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -4329,8 +4329,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.8 is newer than this parser supports',
-      source: `xdbml: 0.6.8
+      name: 'v0.7 §4: xdbml: 0.7.1 is newer than this parser supports',
+      source: `xdbml: 0.7.1
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -4934,8 +4934,8 @@ DiagramView reports { Tables { orders } }`,
   });
   check('v0.6.3 §4.1: the parser reads xdbml: 0.6.3 and refuses a later patch it does not know', () => {
     parse('xdbml: 0.6.3\nTable a { id int [pk] }');
-    try { parse('xdbml: 0.6.99\nTable a { id int [pk] }'); } catch { return undefined; }
-    return '0.6.99 accepted';
+    try { parse('xdbml: 0.7.99\nTable a { id int [pk] }'); } catch { return undefined; }
+    return '0.7.99 accepted';
   });
   check('v0.6.3: Monarch colors a category keyword before { only', () => {
     const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
@@ -5963,6 +5963,152 @@ function report (title: string, results: TestResult[]): { passed: number; failed
   };
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7: records in the forms of DBML 10.3.1 (spec §26)
+ *
+ * The cases without a version declaration are valid DBML 10.3.1, checked
+ * against @dbml/core 10.3.1: the example flag on both forms, a column list
+ * on records inside a table, empty fields. A second records block for an
+ * entity is an error, as in DBML, and a warning in a document declaring
+ * 0.6 or an earlier version, which accepted it (§26.6).
+ * ----------------------------------------------------------------------- */
+
+function runV07RecordsTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string): string | undefined => {
+    const got = codes(src);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  /** Every records node of a document, inside entities and at the top level, in source order. */
+  const records = (src: string): Array<RecordsBlock | TopLevelRecordsDeclaration> => {
+    const out: Array<RecordsBlock | TopLevelRecordsDeclaration> = [];
+    const walk = (e: EntityDeclaration) => {
+      for (const item of e.body) if (item.kind === 'RecordsBlock') out.push(item);
+    };
+    for (const s of parse(src).statements) {
+      if (s.kind === 'EntityDeclaration') walk(s);
+      if (s.kind === 'ContainerDeclaration') for (const b of s.body) if (b.kind === 'EntityDeclaration') walk(b);
+      if (s.kind === 'TopLevelRecordsDeclaration') out.push(s);
+    }
+    return out;
+  };
+  /** A row's values in a compact form: `∅` for an empty field. */
+  const cells = (row: RecordRow): string[] => row.values.map((v) => {
+    if (v.kind === 'NullValue') return v.empty ? '∅' : 'null';
+    if (v.kind === 'StringValue' || v.kind === 'NumberValue' || v.kind === 'IdentifierValue') return String(v.value);
+    if (v.kind === 'BooleanValue') return String(v.value);
+    if (v.kind === 'ExpressionValue') return `\`${v.expression}\``;
+    return v.kind;
+  });
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const T = 'Table t {\n  id int [pk]\n  name varchar\n}\n';
+
+  /* ---- §26.5 example records ---- */
+
+  check('§26.5 DBML: [example] on a top-level declaration, after the column list', () => {
+    const src = `${T}records t (id, name) [example] {\n  1, 'Alice'\n}`;
+    const [r] = records(src);
+    return expectCodes(src, '') ?? same([r.kind, r.example, (r as TopLevelRecordsDeclaration).columns], ['TopLevelRecordsDeclaration', true, ['id', 'name']]);
+  });
+  check('§26.5 DBML: [example] inside a table, without a column list', () => {
+    const src = 'Table t {\n  id int [pk]\n  records [example] {\n    1\n  }\n}';
+    const [r] = records(src);
+    return expectCodes(src, '') ?? same([r.example, (r as RecordsBlock).columns], [true, undefined]);
+  });
+  check('§26.5 DBML: [example] inside a table, after a column list', () => {
+    const src = "Table t {\n  id int [pk]\n  name varchar\n  records (name) [example] {\n    'x'\n  }\n}";
+    const [r] = records(src);
+    return expectCodes(src, '') ?? same([r.example, (r as RecordsBlock).columns], [true, ['name']]);
+  });
+  check('§26.5: a records block without the flag is not an example; [example: true] is', () => {
+    const src = `${T}records t (id) {\n  1\n}\nTable u {\n  id int\n  records [example: true] {\n    1\n  }\n}`;
+    return same(records(src).map((r) => r.example), [false, true]);
+  });
+  check('§26.5 DBML: the brackets before the column list are a parse error, inside a table', () =>
+    parseFails('Table t {\n  id int\n  records [example] (id) {\n    1\n  }\n}', 'comes before its brackets'));
+  check('§26.5 DBML: the brackets before the column list are a parse error, at the top level', () =>
+    parseFails(`${T}records t [example] (id) {\n  1\n}`, 'comes before its brackets'));
+
+  /* ---- §26.1 a column list inside an entity ---- */
+
+  check('§26.1 DBML: records inside a table with a column list populate those columns', () => {
+    const src = "Table t {\n  id int [pk]\n  name varchar\n  email varchar\n  records (id, email) {\n    1, 'a@x.org'\n  }\n}";
+    const [r] = records(src) as RecordsBlock[];
+    return expectCodes(src, '') ?? same([r.columns, cells(r.rows[0])], [['id', 'email'], ['1', 'a@x.org']]);
+  });
+  check('§26.1: a column of the list that is not a field of the entity is an error', () =>
+    expectCodes('Table t {\n  id int\n  records (id, nope) {\n    1, 2\n  }\n}', 'error:unresolved-records-column'));
+  check('§26.1: a column injected by a TablePartial is a field of the entity', () =>
+    expectCodes('TablePartial stamps {\n  created_at timestamp\n}\nTable t {\n  id int\n  ~stamps\n  records (id, created_at) {\n    1, \'2026-01-01\'\n  }\n}', ''));
+  check('§3.10: records followed by ( or [ starts a block; a field may still be named records', () =>
+    same(parse('Table t {\n  id int\n  records int\n}').statements.map((s) => s.kind === 'EntityDeclaration' ? s.body.map((b) => b.kind) : []), [['FieldDeclaration', 'FieldDeclaration']]));
+
+  /* ---- §26.4 empty fields ---- */
+
+  check('§26.4 DBML: an empty field between two commas reads as null', () => {
+    const src = 'Table t {\n  a int\n  b int\n  c int\n}\nrecords t (a, b, c) {\n  1, , 3\n}';
+    return expectCodes(src, '') ?? same(cells(records(src)[0].rows[0]), ['1', '∅', '3']);
+  });
+  check('§26.4 DBML: an empty field before the first comma reads as null', () => {
+    const src = `${T}records t (id, name) {\n  , 'Alice'\n}`;
+    return expectCodes(src, '') ?? same(cells(records(src)[0].rows[0]), ['∅', 'Alice']);
+  });
+  check('§26.4: a comma at the end of a row is ignored, as in v0.6; DBML reads `1,` with the same meaning', () => {
+    const src = `${T}records t (id, name) {\n  1,\n  2, 'Bob',\n}`;
+    return expectCodes(src, '') ?? same(records(src)[0].rows.map(cells), [['1'], ['2', 'Bob']]);
+  });
+  check('§26.4: an empty field has an empty span at the comma after it', () => {
+    const [r] = records(`${T}records t (id, name) {\n  , 'x'\n}`);
+    const v = r.rows[0].values[0];
+    return same([v.span.start.line, v.span.start.column, v.span.end.column], [6, 3, 3]);
+  });
+  check('§26.4 DBML: an empty field inside a table, in each position', () => {
+    const src = 'Table t {\n  a int\n  b int\n  c int\n  records {\n    , 2, 3\n    1, , 3\n    1, 2,\n  }\n}';
+    return expectCodes(src, '') ?? same(records(src)[0].rows.map(cells), [['∅', '2', '3'], ['1', '∅', '3'], ['1', '2']]);
+  });
+
+  /* ---- §26.6 one records block per entity ---- */
+
+  check('§26.6 DBML: a second records block inside a table is an error', () =>
+    expectCodes('Table t {\n  id int\n  records {\n    1\n  }\n  records {\n    2\n  }\n}', 'error:duplicate-records-block'));
+  check('§26.6 DBML: a second top-level declaration for a table is an error, example or not', () =>
+    expectCodes(`${T}records t (id) {\n  1\n}\nrecords t (name) [example] {\n  'x'\n}`, 'error:duplicate-records-block'));
+  check('§26.6 DBML: a block inside a table and a top-level declaration for it are an error', () =>
+    expectCodes(`Table t {\n  id int\n  records {\n    1\n  }\n}\nrecords t (id) {\n  2\n}`, 'error:duplicate-records-block'));
+  check('§26.6: a container-qualified declaration and the block inside the entity are an error', () =>
+    expectCodes('xdbml: 0.7\nContainer core [type: schema] {\n  Entity u {\n    id int\n    records {\n      1\n    }\n  }\n}\nrecords core.u (id) {\n  2\n}', 'error:duplicate-records-block'));
+  check('§26.6: the error falls on each block after the first', () =>
+    expectCodes(`${T}records t (id) {\n  1\n}\nrecords t (id) {\n  2\n}\nrecords t (id) {\n  3\n}`, 'error:duplicate-records-block error:duplicate-records-block'));
+  check('§26.6: a document declaring xdbml: 0.7 draws an error', () =>
+    expectCodes(`xdbml: 0.7\n${T}records t (id) {\n  1\n}\nrecords t (name) {\n  'x'\n}`, 'error:duplicate-records-block'));
+  check('§26.6: a document declaring xdbml: 0.6 draws a warning and stays valid', () =>
+    expectCodes(`xdbml: 0.6\n${T}records t (id) {\n  1\n}\nrecords t (name) {\n  'x'\n}`, 'warning:duplicate-records-block'));
+  check('§26.6: one block for each of two entities is clean', () =>
+    expectCodes('Table a {\n  id int\n  records {\n    1\n  }\n}\nTable b {\n  id int\n  records {\n    1\n  }\n}', ''));
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -5974,6 +6120,7 @@ function main (): void {
   const v065 = runV065Tests();
   const partialTests = runPartialInjectionTests();
   const quotedTests = runQuotedNameTests();
+  const recordsTests = runV07RecordsTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -5983,9 +6130,10 @@ function main (): void {
   const fr = report('v0.6.5 internal definitions', v065);
   const pr = report('TablePartial injection (spec §17.1)', partialTests);
   const qr = report('v0.6.7 quoted names (spec §3.2, §20.1)', quotedTests);
+  const rr = report('v0.7 records in the forms of DBML 10.3.1 (spec §26)', recordsTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

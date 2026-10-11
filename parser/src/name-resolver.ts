@@ -47,6 +47,7 @@ import type {
   PartialInjection,
   PathSegment,
   Position,
+  RecordsBlock,
   RefEndpoint,
   Span,
   TablePartialDeclaration,
@@ -139,6 +140,7 @@ export type DiagnosticCode =
   | 'unresolved-tablegroup-member'
   | 'unresolved-records-entity'
   | 'unresolved-records-column'
+  | 'duplicate-records-block'
   | 'empty-import'
   | 'invalid-nested-path'
   | 'foreign-master-composite'
@@ -407,6 +409,9 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 2: resolve references.
   resolveReferences(flat, symbols, diagnostics);
+
+  // Pass 2b: one records block per entity (spec §26.6).
+  diagnostics.push(...checkRecordsBlocks(flat, symbols));
 
   // Pass 3: relationship rules that the grammar cannot express (spec 11.11).
   diagnostics.push(...checkRelationships(flat));
@@ -751,9 +756,13 @@ function resolveEntityBody (
         }
         break;
       }
-      // ChecksBlock, IndexesBlock, RecordsBlock, NoteBlock: contain
-      // opaque expressions or content that the resolver doesn't try to
-      // type-check. Skip.
+      case 'RecordsBlock':
+        // Spec §26.1 (v0.7): each column of a column list is a field of
+        // the entity. The values themselves are not type-checked here.
+        if (item.columns) reportUnknownRecordsColumns(item, entity, symbols, diagnostics);
+        break;
+      // ChecksBlock, IndexesBlock, NoteBlock: contain opaque expressions
+      // or content that the resolver doesn't try to type-check. Skip.
       default:
         break;
     }
@@ -1167,6 +1176,72 @@ function reportUnresolvedPartial (item: PartialInjection, symbols: SymbolTable, 
 }
 
 /** The TablePartials of the document, read from the symbol table. */
+function reportUnknownRecordsColumns (
+  block: RecordsBlock,
+  entity: EntityDeclaration,
+  symbols: SymbolTable,
+  diagnostics: Diagnostic[],
+): void {
+  const fieldNames = collectFieldNames(entity, partialLookup(symbols));
+  for (const col of block.columns ?? []) {
+    if (!fieldNames.has(col)) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'unresolved-records-column',
+        message: `Records column '${col}' is not a field of entity '${entity.name}'.`,
+        span: block.span,
+      });
+    }
+  }
+}
+
+/**
+ * Spec §26.6 (v0.7): an entity holds at most one records block, inside its
+ * body or at the top level, example or not, as in DBML. A second block is an
+ * error, except in a document declaring 0.6 or an earlier version, which
+ * accepted several: there it is a warning, so the document stays valid. A
+ * document without a version declaration reads as DBML, which rejects it.
+ */
+function checkRecordsBlocks (doc: XDbmlDocument, symbols: SymbolTable): Diagnostic[] {
+  const blocks = new Map<EntityDeclaration, Span[]>();
+  const add = (entity: EntityDeclaration, span: Span) => {
+    const spans = blocks.get(entity);
+    if (spans) spans.push(span);
+    else blocks.set(entity, [span]);
+  };
+  const walkEntity = (entity: EntityDeclaration) => {
+    for (const item of entity.body) {
+      if (item.kind === 'RecordsBlock') add(entity, item.span);
+    }
+  };
+  for (const stmt of doc.statements) {
+    if (stmt.kind === 'EntityDeclaration') {
+      walkEntity(stmt);
+    } else if (stmt.kind === 'ContainerDeclaration') {
+      for (const item of stmt.body) {
+        if (item.kind === 'EntityDeclaration') walkEntity(item);
+      }
+    } else if (stmt.kind === 'TopLevelRecordsDeclaration') {
+      const entry = resolveEntityRef(stmt.entityRef, symbols);
+      if (entry && entry.declaration.kind === 'EntityDeclaration') add(entry.declaration, stmt.span);
+    }
+  }
+  const severity: 'error' | 'warning' = doc.version && !versionAtLeast(doc, '0.7') ? 'warning' : 'error';
+  const diagnostics: Diagnostic[] = [];
+  for (const [entity, spans] of blocks) {
+    for (const span of spans.slice(1)) {
+      diagnostics.push({
+        severity,
+        code: 'duplicate-records-block',
+        message: `Entity '${entity.name}' has a second records block. An entity holds one records block, ` +
+          'inside its body or at the top level, as in DBML (spec §26.6).',
+        span,
+      });
+    }
+  }
+  return diagnostics;
+}
+
 function partialLookup (symbols: SymbolTable): PartialLookup {
   return {
     get: (name) => {

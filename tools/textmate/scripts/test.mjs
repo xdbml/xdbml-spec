@@ -169,6 +169,9 @@ async function main () {
   for (const [line, word, expected] of [
     ['  constraints {', 'constraints', true], ['  indexes {', 'indexes', true], ['  checks {', 'checks', true],
     ['  records {', 'records', true], ['  constraints varchar', 'constraints', false],
+    // v0.7 (spec 26.1, 26.5): a column list or the example flag after records.
+    ['  records (id, name) {', 'records', true], ['  records [example] {', 'records', true],
+    ['  records int', 'records', false],
     // v0.6.5 (spec 15.8): the internal definitions of an entity.
     ['  definitions {', 'definitions', true], ['  Definitions{', 'Definitions', true],
     ['  definitions varchar', 'definitions', false], ['  definitions object {', 'definitions', false],

@@ -104,9 +104,9 @@
     },
 
     "block-keywords": {
-      "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names.",
+      "comment": "Keywords that open a block in an entity body (indexes, checks, constraints, records). Matched only before '{', so a field may still carry one of these names; records also before the '(' of a column list or the '[' of its settings (spec 26.1, v0.7), which no field type starts with.",
       "name": "keyword.other.block.xdbml",
-      "match": "\\b((?i:__BLOCK_KEYWORDS__))\\b(?=\\s*\\{)"
+      "match": "\\b((?i:__BLOCK_KEYWORDS__))\\b(?=\\s*\\{)|\\b((?i:records))\\b(?=\\s*[(\\[])"
     },
 
     "diagram-view-categories": {
