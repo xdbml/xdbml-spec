@@ -353,6 +353,37 @@ export function markPrimaryKeyNotNull (doc: XDbmlDocument): void {
   }
 }
 
+/**
+ * Whether the child end of a referential relationship may hold null (spec
+ * §11.8). True when one of its fields is nullable: neither `not null`
+ * (`required` reads as `not null`) nor part of its entity's primary key.
+ * False when none is. Undefined when the end does not resolve to fields of
+ * an entity, through an array for instance, so no inference applies.
+ */
+export function refChildNullable (doc: XDbmlDocument, child: RefEndpoint): boolean | undefined {
+  const end = resolveEnd(child, entityIndex(doc));
+  if (!end || end === 'entity-level') return undefined;
+  const partials = tablePartials(doc);
+  const pk = primaryKey(end.entity.decl, doc)?.fields ?? [];
+  let nullable = false;
+  for (const dotted of end.fields) {
+    const names = splitName(dotted);
+    let fields: ReadonlyArray<FieldDeclaration> = topFields(end.entity.decl.body, partials);
+    let field: FieldDeclaration | undefined;
+    for (const n of names) {
+      field = fields.find((f) => f.name === n);
+      if (!field) return undefined;
+      fields = field.type.kind === 'ObjectType'
+        ? field.type.fields.filter((f): f is FieldDeclaration => f.kind === 'FieldDeclaration')
+        : [];
+    }
+    if (!field) return undefined;
+    const notNull = field.settings.some((x) => x.name === 'not null') || pk.includes(dotted);
+    if (!notNull) nullable = true;
+  }
+  return nullable;
+}
+
 function findField (body: Body, names: string[]): FieldDeclaration | undefined {
   let current: ReadonlyArray<FieldDeclaration | NoteBlock | PartialInjection | EntityBodyItem> = body;
   let found: FieldDeclaration | undefined;

@@ -9,7 +9,12 @@
 
 export interface Cardinality {
   min: 0 | 1;
-  max: 1 | '*';
+  /**
+   * Undefined when the maximum is unstated: an end of a relationship between
+   * entities that a `?` marks optional and nothing else qualifies (spec
+   * §11.16.1, v0.7). The glyph then shows the ring alone.
+   */
+  max?: 1 | '*';
 }
 
 export const DEFAULT_CARDINALITY: Cardinality = { min: 1, max: 1 };
@@ -27,6 +32,20 @@ export function parseCardinality (s: string | undefined): Cardinality {
   const min: 0 | 1 = minRaw === '0' ? 0 : 1;
   const max: 1 | '*' = (maxRaw === '*' || (Number(maxRaw) > 1)) ? '*' : 1;
   return { min, max };
+}
+
+/**
+ * The glyph for one end from the cardinality @xdbml/parse states for it
+ * (`refCardinality`, spec §11.7, §11.8): a minimum of 0 draws the ring, a
+ * maximum of 1 the bar, and any larger maximum the crow's foot. Undefined
+ * when the end shows nothing: no bound stated, or a minimum of 1 without a
+ * maximum.
+ */
+export function cardinalityFromEnd (end: { min?: number; max?: number | '*' } | undefined): Cardinality | undefined {
+  if (!end) return undefined;
+  const max = end.max === undefined ? undefined : (end.max === '*' || end.max > 1 ? '*' : 1);
+  if (end.min === 0) return max === undefined ? { min: 0 } : { min: 0, max };
+  return max === undefined ? undefined : { min: 1, max };
 }
 
 /**

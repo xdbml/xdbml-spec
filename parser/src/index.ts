@@ -49,6 +49,7 @@ export {
   keyPathString,
   markPrimaryKeyNotNull,
   primaryKey,
+  refChildNullable,
 } from './constraints.ts';
 export type { CheckConstraint, Constraint, ConstraintSource, KeyConstraint } from './constraints.ts';
 export { checkDefinitions, entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
@@ -83,6 +84,8 @@ export {
   isUndirected,
 } from './relationships.ts';
 export type { RelationshipType, ConstraintType } from './relationships.ts';
+export { checkOptionalMarks, refCardinality, refCardinalityIn } from './cardinality.ts';
+export type { CardinalityOrigin, EndCardinality, RefCardinality, RefCardinalityContext } from './cardinality.ts';
 export {
   SUPERTYPE_GROUP_VALUES,
   canonicalSupertypeGroupValue,

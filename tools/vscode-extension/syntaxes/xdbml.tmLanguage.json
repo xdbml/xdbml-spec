@@ -236,11 +236,11 @@
     },
     "cardinality-operators": {
       "name": "keyword.operator.cardinality.xdbml",
-      "match": "(<>|>|<|-)"
+      "match": "(\\??(?:<>|>|<|-)\\??)"
     },
     "ref-cardinality-operators": {
-      "comment": "Cardinality operators (>, <, -, <>) in Ref declarations. Recognized between two qualified identifiers (foo.bar > baz.qux). The pattern requires word characters or dots on each side to avoid matching `>` in comments or other contexts.",
-      "match": "(?<=[A-Za-z_][A-Za-z0-9_.]*\\s)(<>|>|<|-)(?=\\s[A-Za-z_])",
+      "comment": "Cardinality operators (>, <, -, <>) in Ref declarations, with the '?' that marks an end optional (>?, ?<, ?-?; spec 11.1, v0.7). Recognized between two qualified identifiers (foo.bar >? baz.qux). The pattern requires word characters or dots on each side to avoid matching `>` in comments or other contexts.",
+      "match": "(?<=[A-Za-z_][A-Za-z0-9_.]*\\s)(\\??(?:<>|>|<|-)\\??)(?=\\s[A-Za-z_])",
       "name": "keyword.operator.cardinality.xdbml"
     },
     "strings": {

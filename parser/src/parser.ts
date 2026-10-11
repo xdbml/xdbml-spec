@@ -1956,15 +1956,61 @@ export class Parser {
   private parseRefSpec (): RefSpec {
     const start = this.peek().start;
     const source = this.parseRefEndpoint();
-    const op = this.parseCardinalityOperator();
+    const op = this.parseMarkedOperator();
     const target = this.parseRefEndpoint();
-    return {
+    const spec: RefSpec = {
       kind: 'RefSpec',
       source,
-      operator: op,
+      operator: op.operator,
       target,
       span: this.spanFrom(start),
     };
+    if (op.sourceOptional) spec.sourceOptional = true;
+    if (op.targetOptional) spec.targetOptional = true;
+    return spec;
+  }
+
+  /**
+   * A relationship operator with its optional `?` marks (spec §11.1, v0.7):
+   * `?` against the left of the operator marks the source end optional,
+   * against its right the target end, as in DBML: `>?`, `?<`, `?-?`,
+   * `?<>?`. A mark separated from the operator by whitespace is an error,
+   * as in DBML.
+   */
+  private parseMarkedOperator (): { operator: CardinalityOperator; sourceOptional: boolean; targetOptional: boolean } {
+    let sourceOptional = false;
+    if (this.check(TokenKind.Question)) {
+      const q = this.advance();
+      if (this.check(TokenKind.Question)) this.doubledQuestion(this.peek());
+      if (this.peek().start.offset !== q.end.offset) this.misplacedQuestion(q);
+      sourceOptional = true;
+    }
+    const opTok = this.peek();
+    const operator = this.parseCardinalityOperator();
+    let targetOptional = false;
+    if (this.check(TokenKind.Question)) {
+      const q = this.peek();
+      if (q.start.offset !== opTok.end.offset) this.misplacedQuestion(q);
+      this.advance();
+      targetOptional = true;
+    }
+    if (this.check(TokenKind.Question)) {
+      if (targetOptional) this.doubledQuestion(this.peek());
+      this.misplacedQuestion(this.peek());
+    }
+    return { operator, sourceOptional, targetOptional };
+  }
+
+  private doubledQuestion (q: Token): never {
+    throw new ParseError("Each end of a relationship takes one '?' at most: `?>?` (spec §11.1).", q.start);
+  }
+
+  private misplacedQuestion (q: Token): never {
+    throw new ParseError(
+      "A '?' marks one end of a relationship optional and is written against the operator, with no space: " +
+      '`>?`, `?>`, `?-?` (spec §11.1).',
+      q.start,
+    );
   }
 
   private parseCardinalityOperator (): CardinalityOperator {
@@ -2626,14 +2672,16 @@ export class Parser {
     }
     // `ref: > target` form
     if (lower === 'ref') {
-      const op = this.parseCardinalityOperator();
+      const op = this.parseMarkedOperator();
       const target = this.parseRefEndpoint();
       const v: RefValue = {
         kind: 'RefValue',
-        operator: op,
+        operator: op.operator,
         target,
         span: this.spanFrom(start),
       };
+      if (op.sourceOptional) v.sourceOptional = true;
+      if (op.targetOptional) v.targetOptional = true;
       return {
         kind: 'Setting',
         name: 'ref',

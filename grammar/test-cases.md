@@ -662,6 +662,70 @@ Ref: pets.owner_id > people.id [
 ]
 ```
 
+### VALID -- optional marks on the operator, short, long and inline (DBML, v0.7)
+
+```
+Table users {
+  id int [pk]
+}
+
+Table posts {
+  id          int [pk]
+  author_id   int
+  owner_id    int
+  reviewer_id int
+  editor_id   int [ref: ?>? users.id]
+}
+
+Ref: posts.author_id >? users.id
+Ref: users.id ?< posts.owner_id
+Ref pair {
+  posts.reviewer_id -? users.id [delete: cascade]
+}
+```
+
+### VALID with a warning -- a ? and a setting that disagree on an end (v0.7)
+
+```
+xdbml: 0.7
+
+Entity customers {
+  id int [pk]
+}
+
+Entity orders {
+  id          int [pk]
+  customer_id int [not null]
+}
+
+Ref: orders.customer_id >? customers.id [target: '1..1']
+```
+
+### INVALID -- a ? apart from the operator (DBML, v0.7)
+
+```
+Table users {
+  id int [pk]
+}
+
+Table posts {
+  author_id int
+}
+
+Ref: posts.author_id > ? users.id
+```
+
+### VALID -- a ? on a relationship between entities (v0.7)
+
+```
+xdbml: 0.7
+
+Entity Customer { }
+Entity Order { }
+
+Ref: Customer >? Order
+```
+
 ---
 
 ## §17.11 Edge

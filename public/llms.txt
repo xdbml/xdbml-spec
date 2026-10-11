@@ -151,7 +151,7 @@ Operators: `>` many-to-one, `<` one-to-many, `-` one-to-one, `<>` many-to-many. 
 
 The referenced side names the parent's primary key or one of its unique keys: all the fields of that key, and no other field. When the field on the referenced side is the child's own foreign key, the operator points the wrong way. Declare the referenced field `unique` when it is not the key.
 
-Cardinality: `source` describes the left endpoint and `target` the right one, each as a quoted `'min..max'` string: `'0..1'`, `'1..1'`, `'0..*'`, `'1..*'`, or `'N..M'`. With `>`, the source maximum is `*` and the target maximum is `1`; with `<`, the reverse. Never `'many'`, `'*'` or `'1'`. Without these settings, the cardinality follows from the operator and from whether the foreign key is `not null`.
+Cardinality: `source` describes the left endpoint and `target` the right one, each as a quoted `'min..max'` string: `'0..1'`, `'1..1'`, `'0..*'`, `'1..*'`, or `'N..M'`. With `>`, the source maximum is `*` and the target maximum is `1`; with `<`, the reverse. Never `'many'`, `'*'` or `'1'`. Without these settings, the cardinality follows from the operator, and a foreign key without `not null` makes the parent end optional: `customer_id int` under `>` gives the target `'0..1'`. State cardinality with `source` and `target`, not with DBML's `?` marks (`>?`, `?<`), which a parser reads but tools do not write.
 
 All relationship settings go in the brackets of the `Ref`. An inline `ref:` takes none but `foreign_master`: other settings beside it belong to the field, not to the relationship.
 

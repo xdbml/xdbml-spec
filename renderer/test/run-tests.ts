@@ -592,6 +592,64 @@ Ref: other.b > "my.table"."user.id"`);
     dends === 'my.table.id "my.table"."user.id"', dends);
 }
 
+/* ---- v0.7: cardinality from the operator, its ? marks, the settings and a nullable FK (spec §11.7, §11.8) ---- */
+{
+  const build = (src: string): DiagramModel => buildDiagram(flatten(parse(src)));
+  const ends = (m: DiagramModel): string =>
+    m.refs.map((r) => `${r.sourceEnd?.text ?? '-'}:${r.sourceEnd?.origin}/${r.targetEnd?.text ?? '-'}:${r.targetEnd?.origin}`).join(' | ');
+  const base = `Table a {
+  id int [pk]
+}
+Table b {
+  id    int [pk]
+  a_n   int
+  a_nn  int [not null]
+}
+`;
+  const m1 = build(`${base}Ref: b.a_nn > a.id
+Ref: b.a_n > a.id
+Ref: b.a_nn >? a.id
+Ref: b.a_nn ?> a.id
+Ref: a.id < b.a_n
+Ref: b.a_nn <> a.id`);
+  check('cardinality §11.8: >, nullable >, >?, ?>, nullable <, <>',
+    ends(m1) === [
+      '1..*:operator/1..1:operator',
+      '1..*:operator/0..1:nullable-foreign-key',
+      '1..*:operator/0..1:optional-mark',
+      '0..*:optional-mark/1..1:operator',
+      '0..1:nullable-foreign-key/1..*:operator',
+      '0..*:operator/0..*:operator',
+    ].join(' | '), ends(m1));
+
+  const m2 = build(`${base}Table c {
+  x int [ref: >? a.id]
+}`);
+  check('cardinality §11.1: the ? of an inline ref reaches the diagram',
+    m2.refs[0]?.targetEnd?.text === '0..1' && m2.refs[0]?.targetEnd?.origin === 'optional-mark', ends(m2));
+
+  const m3 = build(`xdbml: 0.7
+${base}Ref: b.a_n > a.id [target: '1..1']`);
+  check('cardinality §11.7: a setting states the end, and its label is drawn',
+    m3.refs[0]?.targetEnd?.origin === 'setting' && m3.refs[0]?.targetCardinality === '1..1', ends(m3));
+  check('cardinality §11.7: an end stated by the operator carries no label',
+    m1.refs.every((r) => r.sourceCardinality === undefined && r.targetCardinality === undefined));
+
+  const m4 = build(`xdbml: 0.7
+Entity Customer { }
+Entity Order { }
+Ref: Customer > Order
+Ref: Customer >? Order`);
+  check('cardinality §11.16: an entity-level end is unstated until a ? states its minimum',
+    ends(m4) === '-:unstated/-:unstated | -:unstated/-:optional-mark', ends(m4));
+  const svg4 = renderToSVG(flatten(parse(`xdbml: 0.7
+Entity Customer { }
+Entity Order { }
+Ref: Customer >? Order`)));
+  check('cardinality §11.16: the open ring alone at an end a ? marks on an entity-level Ref',
+    (svg4.match(/<circle[^>]*r="2\.5"/g) ?? []).length === 1);
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

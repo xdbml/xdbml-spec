@@ -126,7 +126,7 @@ export const xdbmlLanguageConfig: XDbmlLanguageConfiguration = {
  *   string.quoted-ident        -- double-quoted identifiers
  *   number                     -- numeric literals
  *   comment / comment.block    -- comments
- *   operators                  -- cardinality operators (< > - <>)
+ *   operators                  -- cardinality operators (< > - <>), with their `?` marks
  *   keyword.wildcard           -- [*]
  *   keyword.partial            -- ~ in partial injection
  *   delimiter / @bracket       -- punctuation
@@ -210,8 +210,9 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       [/[,.:;]/, 'delimiter'],
 
       // Cardinality operators
-      [/<>/, 'operators.cardinality'],
-      [/[<>-](?![A-Za-z_])/, 'operators.cardinality'],
+      // Spec §11.1 (v0.7): a `?` against the operator marks an end optional.
+      [/\??<>\??/, 'operators.cardinality'],
+      [/\??[<>-](?![A-Za-z_])\??/, 'operators.cardinality'],
 
       // Comments
       [/\/\/.*$/, 'comment'],

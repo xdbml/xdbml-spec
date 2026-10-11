@@ -63,6 +63,7 @@
         v-else-if="resolved.kind === 'ref'"
         :ref-decl="resolved.node"
         :index="resolved.index"
+        :doc="parser.flatAst"
         @edit-source="onEditSource"
       />
       <SupertypeGroupInspector

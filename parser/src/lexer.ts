@@ -45,6 +45,12 @@ export const TokenKind = {
   RAngle: 'RAngle', // >
   Minus: 'Minus',   // -
   ManyToMany: 'ManyToMany', // <>
+  /**
+   * `?` written against a relationship operator, `>?`, `?<`, `?-?` (spec
+   * §11.1, v0.7): the end on that side may have no counterpart. The parser
+   * checks that it touches the operator.
+   */
+  Question: 'Question',
 
   ArrayWildcard: 'ArrayWildcard', // [*]
 
@@ -499,6 +505,15 @@ export class Lexer {
       return {
         kind: TokenKind.RAngle,
         text: '>',
+        start,
+        end: this.pos(),
+      };
+    }
+    if (c === '?') {
+      this.advance();
+      return {
+        kind: TokenKind.Question,
+        text: '?',
         start,
         end: this.pos(),
       };

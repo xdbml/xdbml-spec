@@ -60,6 +60,7 @@ import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment } from './names.ts';
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
+import { checkOptionalMarks } from './cardinality.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
 import { checkConstraints, checkTargets } from './constraints.ts';
 import { effectiveFieldList, effectiveFields } from './partials.ts';
@@ -141,6 +142,7 @@ export type DiagnosticCode =
   | 'unresolved-records-entity'
   | 'unresolved-records-column'
   | 'duplicate-records-block'
+  | 'cardinality-conflict'
   | 'empty-import'
   | 'invalid-nested-path'
   | 'foreign-master-composite'
@@ -413,8 +415,10 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
   // Pass 2b: one records block per entity (spec §26.6).
   diagnostics.push(...checkRecordsBlocks(flat, symbols));
 
-  // Pass 3: relationship rules that the grammar cannot express (spec 11.11).
+  // Pass 3: relationship rules that the grammar cannot express (spec 11.11),
+  // and a `?` that disagrees with a cardinality setting (spec §11.7).
   diagnostics.push(...checkRelationships(flat));
+  diagnostics.push(...checkOptionalMarks(flat));
 
   // Pass 4: supertype group rules (spec 12.8).
   diagnostics.push(...checkSupertypeGroups(flat));

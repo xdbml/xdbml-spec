@@ -424,7 +424,15 @@ export interface RefDeclaration {
 export interface RefSpec {
   kind: 'RefSpec';
   source: RefEndpoint;
+  /** The operator without its `?` marks, which `sourceOptional` and `targetOptional` carry. */
   operator: CardinalityOperator;
+  /**
+   * A `?` before the operator, `?>` (spec §11.1, v0.7): the source end may
+   * have no counterpart, so its minimum cardinality is 0.
+   */
+  sourceOptional?: true;
+  /** A `?` after the operator, `>?`: the target end's minimum cardinality is 0. */
+  targetOptional?: true;
   target: RefEndpoint;
   span: Span;
 }
@@ -1006,7 +1014,12 @@ export interface ListValue {
 /** An inline `ref: > target.field` setting carries a small ref spec. */
 export interface RefValue {
   kind: 'RefValue';
+  /** The operator without its `?` marks. The field carrying the setting is the source end. */
   operator: CardinalityOperator;
+  /** A `?` before the operator, `[ref: ?> users.id]` (spec §11.1, v0.7). */
+  sourceOptional?: true;
+  /** A `?` after the operator, `[ref: >? users.id]`. */
+  targetOptional?: true;
   target: RefEndpoint;
   span: Span;
 }

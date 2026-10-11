@@ -187,6 +187,22 @@ async function main () {
       totalFailed++;
     }
   }
+  // Spec 11.1 (v0.7): a `?` against the operator is part of it.
+  console.log(`\n${CYAN}Optional marks on cardinality operators${RESET}`);
+  for (const [line, op] of [
+    ['Ref: b.a_id >? a.id', '>?'], ['Ref: b.a_id ?> a.id', '?>'], ['Ref: a.id ?<? b.a_id', '?<?'],
+    ['Ref: b.a_id ?-? a.id', '?-?'], ['  x int [ref: >? a.id]', '>?'],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(op);
+    const tok = toks.find((t) => t.startIndex === at && t.endIndex === at + op.length);
+    if (tok && tok.scopes.includes('keyword.operator.cardinality.xdbml')) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${op} is one cardinality operator`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': expected ${op} as one keyword.operator.cardinality.xdbml token`);
+      totalFailed++;
+    }
+  }
   // Spec 3.10 (v0.6.1): `Note` is a declaration keyword before ':' or '{',
   // or before a name and '{'; a field named `note` is not, and the type
   // after it is not taken for a declared name.

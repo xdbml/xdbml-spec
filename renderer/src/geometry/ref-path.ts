@@ -13,6 +13,7 @@ import type { Side } from './placement.ts';
 import { isQualifiedName, joinName, quoteNameSegment, splitName } from '@xdbml/parse';
 import {
   type Cardinality,
+  cardinalityFromEnd,
   cardinalityFromOperator,
   parseCardinality,
 } from './cardinality.ts';
@@ -89,13 +90,21 @@ export function resolveRef (
     };
   }
 
+  // The layout carries the cardinality @xdbml/parse states for each end,
+  // from the operator, its `?` marks, the settings and a nullable foreign
+  // key (spec §11.7, §11.8). A layout built without it falls back to the
+  // settings strings and the bare operator.
   const inferCard = !ref.entityLevel;
-  const sourceCard = ref.sourceCardinality
-    ? parseCardinality(ref.sourceCardinality)
-    : (inferCard ? cardinalityFromOperator(ref.operator, 'source') : undefined);
-  const targetCard = ref.targetCardinality
-    ? parseCardinality(ref.targetCardinality)
-    : (inferCard ? cardinalityFromOperator(ref.operator, 'target') : undefined);
+  const sourceCard = ref.sourceEnd
+    ? cardinalityFromEnd(ref.sourceEnd)
+    : ref.sourceCardinality
+      ? parseCardinality(ref.sourceCardinality)
+      : (inferCard ? cardinalityFromOperator(ref.operator, 'source') : undefined);
+  const targetCard = ref.targetEnd
+    ? cardinalityFromEnd(ref.targetEnd)
+    : ref.targetCardinality
+      ? parseCardinality(ref.targetCardinality)
+      : (inferCard ? cardinalityFromOperator(ref.operator, 'target') : undefined);
 
   return {
     path,

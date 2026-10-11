@@ -9,7 +9,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 **Status**: Draft -- current
 **Released**: unreleased
 
-Moves the DBML baseline toward DBML 10.3.1, one subject at a time. This first increment covers records: Holistics extended them after the 3.13.6 baseline with a column list on records inside a table, an `example` flag and empty fields, and xDBML reads all three in every document, including one without a version declaration. An entity holds one records block, as in DBML. Every v0.6 document remains valid: in a document declaring v0.6 or an earlier version, a second records block draws a warning rather than an error. Documents using the new rule declare `xdbml: 0.7`.
+Moves the DBML baseline toward DBML 10.3.1, one subject at a time. Records: Holistics extended them after the 3.13.6 baseline with a column list on records inside a table, an `example` flag and empty fields, and xDBML reads all three in every document, including one without a version declaration; an entity holds one records block, as in DBML. Relationships: the `?` marks DBML added to its operators make an end optional, and the default inference of §11.8 now makes the parent end optional for a nullable foreign key, where its table had put the zero at the child end. Every v0.6 document remains valid: in a document declaring v0.6 or an earlier version, a second records block draws a warning rather than an error. Documents using the new rule declare `xdbml: 0.7`.
 
 ### Added
 
@@ -20,6 +20,9 @@ Moves the DBML baseline toward DBML 10.3.1, one subject at a time. This first in
 - **Example records (§26.5)**: an `[example]` flag after the column list, or after `records` in a block without one, marks rows that illustrate the data rather than load it. A generator that emits data leaves them out (§26.7).
 - **One records block per entity (§26.6)**: a second block for an entity, inside its body or at the top level, is an error, as in DBML; in a document declaring `xdbml: 0.6` or an earlier version it is a warning.
 - **Validation summary (§26.8)** for records.
+- **Optional marks (§11.1)**: a `?` written against a relationship operator, `>?`, `?<`, `?-?`, `?<>?`, makes the end on its side optional, in the short, long and inline forms, as in DBML 9.0 and later. The mark touches the operator; a mark apart from it, or a second one on a side, is a syntax error.
+- **Settings and marks (§11.7)**: a setting states its end and the other end keeps the inference; a `?` and a setting that disagree on an end draw a warning, and the setting applies in a document declaring a version, the `?` in one without. Tools that write xDBML state cardinality with `source:` and `target:` and write no marks.
+- **Marks on entity-level relationships (§11.16.1)**: a `?` states the minimum of its end, 0, and leaves the maximum unstated.
 
 ### Changed
 
@@ -28,12 +31,19 @@ Moves the DBML baseline toward DBML 10.3.1, one subject at a time. This first in
 - **§26.2**: the top-level form no longer suggests one declaration per disjoint set of records.
 - **§26.4**: booleans and `null` are case-insensitive, and the readings of DBML apply by column type: a quoted number for a numeric column, `'Y'`/`'N'`, `'T'`/`'F'`, `1`/`0` for a boolean column, `''` as null for a column whose type is not a string type.
 - **§3.9, §3.10, §4, §31, Appendices A and D**: aligned with §26. Conformance gains item 21. Appendix D gains item 8, on the v0.7 feature set, and item 12, on the records forms DBML added after 3.13.6; items 8 to 15 become 9 to 17.
+- **§11.8**: the default inference makes the parent end optional for a nullable foreign key, `>` giving `'1..*'` and `'0..1'`, `<` giving `'0..1'` and `'1..*'`; through v0.6 the table put the zero at the child end, which contradicted §11.7. A foreign key is nullable when one of its attributes lacks `not null` and belongs to no primary key. `<>` keeps `'0..*'` at both ends.
+- **§11.2, §31, Appendices A and D** for the marks: conformance item 9 cites the marks and the precedence; Appendix D gains item 13, on the marks and the two points where xDBML reads cardinality differently from DBML 10.3.1; items 13 to 17 become 14 to 18.
 - **Grammar (`grammar/xDBML.g4`)**: `recordsBlock` and `topLevelRecords` are defined in the grammar rather than inherited from DBML, with the column list, the settings brackets and empty fields.
+- **Grammar (`grammar/xDBML.g4`)**: an `OPTIONAL_OPERATOR` token, an operator with its `?` marks, lexed as one so the mark touches it.
 
 #### Tooling
 
 - **`@xdbml/parse`** accepts documents declaring `xdbml: 0.7`. A records block inside an entity carries `columns` when it has a column list; both records forms carry `settings` and `example`; an empty field is a `NullValue` with `empty: true`. The brackets before a column list draw a syntax error naming the order. New diagnostic: `duplicate-records-block`. A column list inside an entity is checked like the top-level one (`unresolved-records-column`).
 - **Editors**: `records` takes the block color before `(` and `[` as well as `{`, and `example` the color of a setting flag.
+- **`@xdbml/parse`, relationships**: `RefSpec` and `RefValue` carry `sourceOptional` and `targetOptional` beside the operator, which keeps its four values. `refCardinality()` and `refCardinalityIn()` return the cardinality of each end with its origin (`setting`, `operator`, `optional-mark`, `nullable-foreign-key`, `unstated`), and `refChildNullable()` whether a child end may hold null. New diagnostic: `cardinality-conflict`.
+- **Diagram**: each end draws the cardinality `@xdbml/parse` states for it, so a nullable foreign key shows the optional ring at the parent end, `<>` shows it at both ends, and a `?` on a relationship between entities shows the ring alone. A label shows only a range that a setting states and that applies. The foreign master lines of examples 12 and 13 gain rings, their copied fields being nullable.
+- **Playground inspector**: a relationship shows its operator with its marks, and a Cardinality section gives each end's range and what states it, with a note when a mark and a setting disagree.
+- **Editors**: an operator and its `?` marks color as one operator.
 
 ---
 

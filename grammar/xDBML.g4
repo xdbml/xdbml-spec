@@ -35,6 +35,11 @@
  *     categories are Tables, Views, Containers (DBML name Schemas),
  *     TableGroups, SupertypeGroups and Notes; Edges is not one.
  *
+ * v0.7 changes (spec §11.1):
+ *   - OPTIONAL_OPERATOR: a relationship operator with a `?` against it on
+ *     one side or both, the form DBML added in 9.0. Lexed as one token so
+ *     the mark touches the operator.
+ *
  * v0.7 changes (spec §26):
  *   - recordsBlock and topLevelRecords are defined here. DBML added a
  *     column list on records inside a table, the `example` flag and empty
@@ -217,6 +222,14 @@ AS                  : 'as' ;
 // the parser would see it as '<' followed by '>'.
 
 MANY_TO_MANY        : '<>' ;
+
+// A `?` against an operator marks the end on its side optional (§11.1, v0.7,
+// the DBML form). Lexed with the operator as one token, so the mark touches
+// it: `>?`, `?<`, `?-?`, `?<>?`. A `?` apart from the operator matches no
+// token rule and fails the lex, as in DBML.
+OPTIONAL_OPERATOR   : '?' ('<>' | '<' | '>' | '-') '?'?
+                    | ('<>' | '<' | '>' | '-') '?'
+                    ;
 
 // ---- §17.10/17.11 Cardinality settings keys -------------------------------
 // These are identifier-shaped and could be matched by the upstream IDENTIFIER
@@ -1036,6 +1049,7 @@ cardinalityOperator
     | RANGLE             // '>'  many-to-one
     | MINUS              // '-'  one-to-one
     | MANY_TO_MANY       // '<>' many-to-many
+    | OPTIONAL_OPERATOR  // any of the four with '?' on one side or both (§11.1, v0.7)
     ;
 
 // ---- §17.10 Cardinality settings (on Ref and via edgeSetting on Edge) -----
@@ -1301,6 +1315,12 @@ quotedIdentifier options { caseInsensitive=false; }
 //      - relationship settings (§11.9):
 //          * `inactive` is a flag (no value); a visualization hint, not
 //            a structural change. Parser preserves the flag in the AST.
+//      - optional marks (§11.1, v0.7):
+//          * an inline `ref:` setting takes the operators of
+//            cardinalityOperator, OPTIONAL_OPERATOR included: `[ref: >? t.id]`.
+//          * a `?` and a `source:` or `target:` setting that disagree on an
+//            end draw a warning; the setting applies in a document that
+//            declares a version, the `?` in one that does not (§11.7).
 //      - foreign master relationships (§11.10, new in v0.4):
 //          * `foreign_master` is a flag (no value) on a Ref. Its absence
 //            marks the relationship referential.

@@ -23,8 +23,9 @@ import {
   viewSourceQuery,
   diagramViewMembers, diagramViews, diagramViewNote,
   entityDefinitions, isDefinitionsExcludedTarget,
+  refCardinality, refCardinalityIn,
 } from '../src/index.ts';
-import type { EntityDeclaration, ParseOptions, RecordRow, RecordsBlock, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
+import type { EndCardinality, EntityDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
 import {
   BSON_TYPES,
   CONTAINER_KEYWORDS,
@@ -6109,6 +6110,174 @@ function runV07RecordsTests (): TestResult[] {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7: optional marks on relationship operators, and cardinality (spec
+ * §11.1, §11.7, §11.8, §11.16)
+ *
+ * The DBML cases are valid DBML 10.3.1, checked against @dbml/core 10.3.1,
+ * which gives the same cardinality for every operator on a not-null foreign
+ * key, `<>` aside: §11.8 keeps '0..*' at both ends of a many-to-many.
+ * ----------------------------------------------------------------------- */
+
+function runV07OptionalRefTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const firstRef = (src: string): { doc: XDbmlDocument; ref: RefDeclaration } => {
+    const doc = flatten(parse(src));
+    const ref = doc.statements.find((s): s is RefDeclaration => s.kind === 'RefDeclaration');
+    if (!ref) throw new Error('no Ref');
+    return { doc, ref };
+  };
+  const ends = (src: string): string => {
+    const { doc, ref } = firstRef(src);
+    const c = refCardinalityIn(doc, ref);
+    const one = (e: EndCardinality) => `${e.text ?? (e.min !== undefined ? `${e.min}..?` : '-')}:${e.origin}`;
+    return `${one(c.source)} ${one(c.target)}`;
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  const B = 'Table a {\n  id int [pk]\n}\nTable b {\n  id   int [pk]\n  n    int\n  nn   int [not null]\n}\n';
+
+  /* ---- §11.1 the marks ---- */
+
+  check('§11.1 DBML: every operator with and without ? parses, and the AST keeps the marks', () => {
+    const ops = ['>', '<', '-', '<>', '>?', '?>', '?>?', '<?', '?<', '?<?', '-?', '?-', '?-?', '<>?', '?<>', '?<>?'];
+    const got = ops.map((op) => {
+      const { ref } = firstRef(`${B}Ref: b.nn ${op} a.id`);
+      return `${ref.spec.sourceOptional ? '?' : ''}${ref.spec.operator}${ref.spec.targetOptional ? '?' : ''}`;
+    });
+    return same(got, ops);
+  });
+  check('§11.1 DBML: the ? marks of an inline ref', () => {
+    const doc = parse(`${B}Table c {\n  x int [ref: ?> a.id]\n  y int [ref: >? a.id]\n}`);
+    const c = doc.statements.find((s): s is EntityDeclaration => s.kind === 'EntityDeclaration' && s.name === 'c');
+    const vals = (c?.body ?? []).flatMap((f) => (f.kind === 'FieldDeclaration' ? f.settings : []))
+      .map((st) => st.value)
+      .filter((v): v is RefValue => !!v && v.kind === 'RefValue')
+      .map((v) => `${v.sourceOptional ? '?' : ''}${v.operator}${v.targetOptional ? '?' : ''}`);
+    return same(vals, ['?>', '>?']);
+  });
+  check('§11.1 DBML: the long form takes a marked operator and settings', () => {
+    const { ref } = firstRef(`${B}Ref r {\n  b.nn >? a.id [delete: cascade]\n}`);
+    return same([ref.spec.targetOptional, ref.settings.map((x) => x.name)], [true, ['delete']]);
+  });
+  check('§11.1 DBML: a ? apart from the operator is a syntax error', () =>
+    parseFails(`${B}Ref: b.nn > ? a.id`, 'written against the operator'));
+  check('§11.1 DBML: two ? on one side are a syntax error', () =>
+    parseFails(`${B}Ref: b.nn ??> a.id`, "one '?' at most") ?? parseFails(`${B}Ref: b.nn >?? a.id`, "one '?' at most"));
+  check('§11.1: marked operators draw no diagnostic in a document without a version (DBML)', () => {
+    const got = codes(`${B}Ref: b.nn >? a.id\nRef: a.id ?< b.nn\nRef: b.nn ?-? a.id`);
+    return got === '' ? undefined : got;
+  });
+
+  /* ---- §11.8 the operator, the marks and nullability ---- */
+
+  check('§11.8 DBML: on a not-null foreign key, every operator gives the cardinality of DBML 10, <> aside', () => {
+    const want: Record<string, string> = {
+      '>': '1..*/1..1', '<': '1..1/1..*', '-': '1..1/1..1', '<>': '0..*/0..*',
+      '>?': '1..*/0..1', '?>': '0..*/1..1', '?>?': '0..*/0..1',
+      '<?': '1..1/0..*', '?<': '0..1/1..*', '?<?': '0..1/0..*',
+      '-?': '1..1/0..1', '?-': '0..1/1..1', '?-?': '0..1/0..1',
+    };
+    const bad: string[] = [];
+    for (const [op, w] of Object.entries(want)) {
+      const bare = op.replace(/\?/g, '');
+      const src = bare === '<' ? `${B}Ref: a.id ${op} b.nn` : `${B}Ref: b.nn ${op} a.id`;
+      const { doc, ref } = firstRef(src);
+      const c = refCardinalityIn(doc, ref);
+      const got = `${c.source.text}/${c.target.text}`;
+      if (got !== w) bad.push(`${op}: ${got}, want ${w}`);
+    }
+    return bad.length ? bad.join('; ') : undefined;
+  });
+  check('§11.8: a nullable foreign key makes the parent end optional, for > and for <', () =>
+    same([ends(`${B}Ref: b.n > a.id`), ends(`${B}Ref: a.id < b.n`)],
+      ['1..*:operator 0..1:nullable-foreign-key', '0..1:nullable-foreign-key 1..*:operator']));
+  check('§11.8: a nullable foreign key under - makes the target end optional', () =>
+    same(ends(`${B}Ref: b.n - a.id`), '1..1:operator 0..1:nullable-foreign-key'));
+  check('§11.8: a field of the primary key is not nullable', () =>
+    same(ends('Table p {\n  id int [pk]\n}\nTable c {\n  pid int [pk]\n}\nRef: c.pid - p.id'), '1..1:operator 1..1:operator'));
+  check('§11.8: required reads as not null', () =>
+    same(ends('Table p {\n  id int [pk]\n}\nTable c {\n  pid int [required]\n}\nRef: c.pid > p.id'), '1..*:operator 1..1:operator'));
+  check('§11.8: a composite foreign key with one nullable field is nullable', () =>
+    same(ends('Table p {\n  x int\n  y int\n  indexes {\n    (x, y) [pk]\n  }\n}\nTable q {\n  x int [not null]\n  y int\n}\nRef: q.(x, y) > p.(x, y)'),
+      '1..*:operator 0..1:nullable-foreign-key'));
+  check('§11.8: a nullable field of an injected TablePartial counts', () =>
+    same(ends('TablePartial fk {\n  pid int\n}\nTable p {\n  id int [pk]\n}\nTable c {\n  id int [pk]\n  ~fk\n}\nRef: c.pid > p.id'),
+      '1..*:operator 0..1:nullable-foreign-key'));
+  check('§11.8: a nested foreign key field reads its own nullability', () =>
+    same(ends('xdbml: 0.7\nTable p {\n  id int [pk]\n}\nTable c {\n  id int [pk]\n  info object {\n    pid int\n  }\n}\nRef: c.info.pid > p.id'),
+      '1..*:operator 0..1:nullable-foreign-key'));
+  check('§11.8: the ? and the nullable foreign key combine end by end', () =>
+    same(ends(`${B}Ref: b.n ?> a.id`), '0..*:optional-mark 0..1:nullable-foreign-key'));
+  check('§11.8: <> keeps 0..* at both ends, nullable or not', () =>
+    same([ends(`${B}Ref: b.nn <> a.id`), ends(`${B}Ref: b.n <> a.id`)], ['0..*:operator 0..*:operator', '0..*:operator 0..*:operator']));
+
+  /* ---- §11.7 settings and the marks ---- */
+
+  check('§11.7: a setting states its end; the other end keeps the operator', () =>
+    same(ends(`xdbml: 0.7\n${B}Ref: b.n > a.id [target: '1..1']`), '1..*:operator 1..1:setting'));
+  check('§11.7: the four-key form states its end too', () =>
+    same(ends(`xdbml: 0.7\n${B}Ref: b.nn > a.id [min_target: 0, max_target: 1]`), '1..*:operator 0..1:setting'));
+  check('§11.7: a ? and a setting that agree draw nothing', () => {
+    const src = `xdbml: 0.7\n${B}Ref: b.nn >? a.id [target: '0..1', source: '0..*']`;
+    return same([ends(src), codes(src)], ['0..*:setting 0..1:setting', '']);
+  });
+  check('§11.7: with an xdbml: version, a setting that disagrees with a ? applies, with a warning', () => {
+    const src = `xdbml: 0.7\n${B}Ref: b.nn >? a.id [target: '1..1']`;
+    return same([ends(src), codes(src)], ['1..*:operator 1..1:setting', 'warning:cardinality-conflict']);
+  });
+  check('§11.7: without a version (DBML), the ? applies over a setting that disagrees, with a warning', () => {
+    const src = `${B}Ref: b.nn >? a.id [target: '1..1']`;
+    return same([ends(src), codes(src)], ['1..*:operator 0..1:optional-mark', 'warning:cardinality-conflict']);
+  });
+  check('§11.7: a disagreement on the source end names it', () => {
+    const d = resolveNames(parse(`xdbml: 0.7\n${B}Ref: b.nn ?> a.id [source: '1..*']`)).diagnostics;
+    return d.length === 1 && d[0].message.includes('source end') ? undefined : d.map((x) => x.message).join(' | ');
+  });
+
+  /* ---- §11.16 entity-level relationships ---- */
+
+  const E = 'xdbml: 0.7\nEntity Customer { }\nEntity Order { }\n';
+  check('§11.16: an entity-level Ref states no cardinality from its operator', () =>
+    same(ends(`${E}Ref: Customer > Order`), '-:unstated -:unstated'));
+  check('§11.16: a ? on an entity-level Ref states the minimum of its end only', () =>
+    same(ends(`${E}Ref: Customer >? Order`), '-:unstated 0..?:optional-mark'));
+  check('§11.16: a setting completes an end that a ? marks', () =>
+    same(ends(`${E}Ref: Customer >? Order [target: '0..*']`), '-:unstated 0..*:setting'));
+  check('§11.16: a ? on an entity-level Ref draws no diagnostic', () => {
+    const got = codes(`${E}Ref: Customer ?>? Order`);
+    return got === '' ? undefined : got;
+  });
+
+  /* ---- refCardinality without a document ---- */
+
+  check('refCardinality: an unknown nullability infers nothing', () => {
+    const c = refCardinality({ operator: '>' }, [], {});
+    return same([c.source.text, c.target.text, c.target.origin], ['1..*', '1..1', 'operator']);
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -6121,6 +6290,7 @@ function main (): void {
   const partialTests = runPartialInjectionTests();
   const quotedTests = runQuotedNameTests();
   const recordsTests = runV07RecordsTests();
+  const optionalRefTests = runV07OptionalRefTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -6131,9 +6301,10 @@ function main (): void {
   const pr = report('TablePartial injection (spec §17.1)', partialTests);
   const qr = report('v0.6.7 quoted names (spec §3.2, §20.1)', quotedTests);
   const rr = report('v0.7 records in the forms of DBML 10.3.1 (spec §26)', recordsTests);
+  const or = report('v0.7 optional marks and cardinality (spec §11.1, §11.7, §11.8, §11.16)', optionalRefTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

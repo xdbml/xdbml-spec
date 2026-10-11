@@ -43,12 +43,14 @@ import {
   joinName,
   primaryKey,
   quoteNameSegment,
+  refCardinalityIn,
   resolveSupertypeGroups,
   splitName,
   tablePartials,
 } from '@xdbml/parse';
 import type {
   ContainerDeclaration,
+  EndCardinality,
   EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
@@ -304,9 +306,19 @@ export interface RefLayout {
   /** Resolved entity+field locator. May be undefined if resolution failed. */
   source?: FieldLocator;
   target?: FieldLocator;
-  /** Cardinality endpoint strings, '1..1' / '0..*' etc., if provided in settings. */
+  /**
+   * Cardinality endpoint strings, '1..1' / '0..*' etc., when a `source:` or
+   * `target:` setting states the end's cardinality. Drawn as labels.
+   */
   sourceCardinality?: string;
   targetCardinality?: string;
+  /**
+   * The cardinality of each end as @xdbml/parse states it (spec §11.7,
+   * §11.8, v0.7): from the operator and its `?` marks, the settings, and a
+   * nullable foreign key at the child end. Drawn as crow's-foot glyphs.
+   */
+  sourceEnd?: EndCardinality;
+  targetEnd?: EndCardinality;
   /** True when either endpoint couldn't be resolved against current entities. */
   unresolved: boolean;
 }
@@ -670,7 +682,7 @@ export function buildDiagram (
   // declaration use. Keeping one definition of the order is what stops the
   // two from drifting apart.
   const refLayouts: RefLayout[] = collectRefDeclarations(doc)
-    .map((decl, index) => buildRefLayout(decl, entityByName, index));
+    .map((decl, index) => buildRefLayout(decl, entityByName, index, doc));
 
 
   // Mark the four relationship role markers of spec 11.12 on the fields
@@ -1680,11 +1692,17 @@ function buildRefLayout (
   ref: RefDeclaration,
   entityByName: Map<string, EntityLayout>,
   index: number,
+  doc?: XDbmlDocument,
 ): RefLayout {
   const source = locateRefEndpoint(ref.spec.source, entityByName);
   const target = locateRefEndpoint(ref.spec.target, entityByName);
-  const sourceCardinality = settingValueAsString(ref.settings, 'source');
-  const targetCardinality = settingValueAsString(ref.settings, 'target');
+  // Spec §11.7, §11.8 (v0.7): each end's cardinality, with its origin. A
+  // label shows only a range that a setting states and that applies.
+  const card = doc ? refCardinalityIn(doc, ref) : undefined;
+  const labelOf = (end: 'source' | 'target'): string | undefined =>
+    !card || card[end].origin === 'setting' ? settingValueAsString(ref.settings, end) : undefined;
+  const sourceCardinality = labelOf('source');
+  const targetCardinality = labelOf('target');
   return {
     id: `ref:${index}`,
     operator: ref.spec.operator,
@@ -1697,6 +1715,7 @@ function buildRefLayout (
     target,
     sourceCardinality,
     targetCardinality,
+    ...(card ? { sourceEnd: card.source, targetEnd: card.target } : {}),
     unresolved: !source || !target,
   };
 }
@@ -1721,7 +1740,7 @@ function buildRefLayout (
  * block has it, and nothing else. Spec 11.9 allows no setting beside an
  * inline `ref:` except that flag (11.10.2), so the rest of the field's
  * settings describe the field rather than the relationship and would be
- * wrong to copy here. Cardinality still comes from the operator alone.
+ * wrong to copy here. The `?` marks of the operator come along (v0.7).
  *
  * Span borrows the RefValue's span. The layout doesn't read it but
  * future inspector navigation might.
@@ -1866,6 +1885,9 @@ function synthesizeRefFromInline (
         span: refValue.span,
       },
       operator: refValue.operator,
+      // The `?` marks of the inline form (spec §11.1, v0.7).
+      ...(refValue.sourceOptional ? { sourceOptional: true as const } : {}),
+      ...(refValue.targetOptional ? { targetOptional: true as const } : {}),
       target: refValue.target,
       span: refValue.span,
     },
