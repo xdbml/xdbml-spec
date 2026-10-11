@@ -32,6 +32,7 @@ import {
   SETTING_KEYS,
   GRANULARITY_VALUES,
   DIAGRAM_VIEW_CATEGORIES,
+  METADATA_TARGET_KINDS,
 } from './keywords.ts';
 
 /** Subset of Monaco's LanguageConfiguration -- only the fields we set. */
@@ -247,6 +248,11 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       // Spec §18.1 (v0.6.3): a DiagramView category keyword opens its list
       // only before '{'. Elsewhere the same word names an entity or a field.
       [new RegExp(`(?:${DIAGRAM_VIEW_CATEGORIES.join('|')})(?![\\w$])(?=\\s*\\{)`), 'keyword.declaration'],
+
+      // Spec §24.7 (v0.7): `Metadata` and the kind after it start a block
+      // only at the head of a Metadata declaration. Elsewhere `metadata`
+      // names an entity or a field.
+      [new RegExp(`(metadata)(\\s+)(${METADATA_TARGET_KINDS.join('|')})(?![\\w$])`), ['keyword.declaration', '', 'keyword.declaration']],
 
       // Spec §15.8 (v0.6.5): `definitions` opens the internal definitions of
       // an entity only before '{', and takes the color of the other body

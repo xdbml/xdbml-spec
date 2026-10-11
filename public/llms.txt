@@ -476,6 +476,26 @@ Entity customers [x_owner: 'data-team@acme.com', x_retention_days: 2555] {
 }
 ```
 
+Write settings in the brackets of the element they describe. A `Metadata` block sets a note, a color and custom properties on an element declared elsewhere, in the same file or, where it helps most, in an imported file you do not edit. It goes at the top level and names the kind of element and the element:
+
+```xdbml
+Table customers {
+  id    int [pk]
+  email varchar
+}
+
+Metadata Table customers {
+  note: 'Customers of record'
+  x_owner: 'data-team@acme.com'
+}
+
+Metadata Column customers.email {
+  x_classification: 'confidential'
+}
+```
+
+The kinds are `Table`, `Column`, `TableGroup` and `Note`, and with `xdbml: 0.7` also `Container`, `View` and `DiagramView`. A block takes `note`, the element's color (`headercolor` on a Table or a View, `color` on a TableGroup, a sticky note or a Container), and custom properties. It does not take `synonyms`, `business_term`, `tags`, `granularity`, or a field setting such as `pk`: those read as custom properties there, with a warning.
+
 ## Common mistakes
 
 A missing comma between settings on separate lines.

@@ -9,7 +9,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 **Status**: Draft -- current
 **Released**: unreleased
 
-Moves the DBML baseline toward DBML 10.3.1, one subject at a time. Records: Holistics extended them after the 3.13.6 baseline with a column list on records inside a table, an `example` flag and empty fields, and xDBML reads all three in every document, including one without a version declaration; an entity holds one records block, as in DBML. Relationships: the `?` marks DBML added to its operators make an end optional, and the default inference of §11.8 now makes the parent end optional for a nullable foreign key, where its table had put the zero at the child end. Every v0.6 document remains valid: in a document declaring v0.6 or an earlier version, a second records block draws a warning rather than an error. Documents using the new rule declare `xdbml: 0.7`.
+Moves the DBML baseline toward DBML 10.3.1, one subject at a time. Records: Holistics extended them after the 3.13.6 baseline with a column list on records inside a table, an `example` flag and empty fields, and xDBML reads all three in every document, including one without a version declaration; an entity holds one records block, as in DBML. Relationships: the `?` marks DBML added to its operators make an end optional, and the default inference of §11.8 now makes the parent end optional for a nullable foreign key, where its table had put the zero at the child end. Custom properties and `Metadata` blocks: xDBML reads DBML's custom properties in every document, and a `Metadata` block sets a note, a color and custom properties on an element declared elsewhere, in the same file or an imported one. Every v0.6 document remains valid: in a document declaring v0.6 or an earlier version, a second records block draws a warning rather than an error. Documents using the new rule declare `xdbml: 0.7`.
 
 ### Added
 
@@ -23,6 +23,11 @@ Moves the DBML baseline toward DBML 10.3.1, one subject at a time. Records: Holi
 - **Optional marks (§11.1)**: a `?` written against a relationship operator, `>?`, `?<`, `?-?`, `?<>?`, makes the end on its side optional, in the short, long and inline forms, as in DBML 9.0 and later. The mark touches the operator; a mark apart from it, or a second one on a side, is a syntax error.
 - **Settings and marks (§11.7)**: a setting states its end and the other end keeps the inference; a `?` and a setting that disagree on an end draw a warning, and the setting applies in a document declaring a version, the `?` in one without. Tools that write xDBML state cardinality with `source:` and `target:` and write no marks.
 - **Marks on entity-level relationships (§11.16.1)**: a `?` states the minimum of its end, 0, and leaves the maximum unstated.
+- **Metadata blocks (§24.7)**: `Metadata <kind> <target> { key: value ... }` at the top level sets settings on an element declared elsewhere. DBML's kinds `Table`, `Column`, `TableGroup` and `Note` are read in every document; `Entity`, `Collection`, `Record`, `Field`, `Container` and its synonyms, `View` and `DiagramView` need `xdbml: 0.7` or later. A Column target names a field by its path under its entity or View, nested and injected fields included.
+- **Metadata settings (§24.7.3)**: a block sets `note`, the color of an element drawn as a shape (`headercolor` on a Table or a View, `color` on a TableGroup, a sticky note or a Container), and custom properties; a diagram view takes `note` and `x_` properties. A setting xDBML defines elsewhere (`synonyms`, `business_term`, `granularity`, `tags`, a field setting on a Column, a color on the wrong kind) reads as a custom property, as in DBML, with a warning, beside the element's own setting.
+- **Precedence (§24.7.4)**: the element's own declaration, then the blocks of imported files in import order, then the document's own blocks in source order, whatever their position relative to the imports. A block of the document that changes a value an earlier source set draws a warning; DBML applies it silently.
+- **Imports (§24.7.5)**: blocks travel with the elements they target, renamed with an alias or when an entity leaves its Container; there is no `metadata` element type.
+- **Validation summary (§24.7.6)** for Metadata blocks.
 
 ### Changed
 
@@ -35,6 +40,10 @@ Moves the DBML baseline toward DBML 10.3.1, one subject at a time. Records: Holi
 - **§11.2, §31, Appendices A and D** for the marks: conformance item 9 cites the marks and the precedence; Appendix D gains item 13, on the marks and the two points where xDBML reads cardinality differently from DBML 10.3.1; items 13 to 17 become 14 to 18.
 - **Grammar (`grammar/xDBML.g4`)**: `recordsBlock` and `topLevelRecords` are defined in the grammar rather than inherited from DBML, with the column list, the settings brackets and empty fields.
 - **Grammar (`grammar/xDBML.g4`)**: an `OPTIONAL_OPERATOR` token, an operator with its `?` marks, lexed as one so the mark touches it.
+- **§24.5**: DBML custom properties are read in every document, where a key without `x_` is an ordinary DBML custom property; a setting written twice in one settings list draws a warning, the first applying, except `check` and `ref`, which repeat by design. DBML rejects a repeated setting.
+- **§6.4, §14.5**: `color` on a Container and `headercolor` on a View, which renderers already drew, are listed.
+- **§24, §27.3, §28, §31, Appendices A and D** for Metadata blocks: conformance gains item 22; Appendix D gains item 14, on DBML's custom properties and Metadata blocks and the three points where xDBML reads them differently; items 14 to 18 become 15 to 19.
+- **Grammar (`grammar/xDBML.g4`)**: `metadataDefinition`, top-level only.
 
 #### Tooling
 
@@ -44,6 +53,11 @@ Moves the DBML baseline toward DBML 10.3.1, one subject at a time. Records: Holi
 - **Diagram**: each end draws the cardinality `@xdbml/parse` states for it, so a nullable foreign key shows the optional ring at the parent end, `<>` shows it at both ends, and a `?` on a relationship between entities shows the ring alone. A label shows only a range that a setting states and that applies. The foreign master lines of examples 12 and 13 gain rings, their copied fields being nullable.
 - **Playground inspector**: a relationship shows its operator with its marks, and a Cardinality section gives each end's range and what states it, with a note when a mark and a setting disagree.
 - **Editors**: an operator and its `?` marks color as one operator.
+- **`@xdbml/parse`, Metadata**: a `MetadataDeclaration` node (`targetKind`, `targetKindSource`, `target`, `targetSource`, `settings`, `bracketSettings`, `file`, `imported`). `flatten()` lists Metadata blocks after every other statement, in their order of precedence, those an import brings marked `imported`. `metadataIndex()` returns the settings blocks apply to each element, `withMetadata()` merges them with an element's own, `metadataNote()` and `metadataColor()` read a note and a color, and `resolveMetadataTarget()` resolves a target. A selective import brings the blocks of its elements. New diagnostics: `unknown-metadata-kind`, `unresolved-metadata-target`, `duplicate-metadata-setting`, `invalid-metadata-value`, `metadata-custom-property`, `metadata-brackets-ignored`, `metadata-override`, `duplicate-setting`; diagnostics concern the document's own blocks.
+- **Diagram**: a header color, a TableGroup color and a Container color that a Metadata block sets apply over the element's own.
+- **Playground inspector**: the settings and the note of an entity, a View, a field, a Container and a diagram view include those Metadata blocks set, each such setting marked "Metadata".
+- **Editors**: `Metadata` and its kind color as declaration keywords, only together, so an entity or a field may still be named `metadata`.
+- **Renderer goldens 12 and 13**: restored without the C2PA manifest that the delivery of topic 2 had written into them, which made the renderer test suite fail.
 
 ---
 

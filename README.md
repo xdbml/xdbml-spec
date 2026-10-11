@@ -90,7 +90,7 @@ It exposes two tools: `render_xdbml` (renders a schema to SVG, plus a PNG the mo
 - [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
-- [`spec/v0.7.md`](./spec/v0.7.md) -- the current v0.7 language specification (reads DBML 10.3.1: records, and the `?` marks of relationship operators). Published at [xdbml.org/spec/current](https://xdbml.org/spec/current), which always serves the newest draft, and at its own permanent URL [xdbml.org/spec/v0.7](https://xdbml.org/spec/v0.7)
+- [`spec/v0.7.md`](./spec/v0.7.md) -- the current v0.7 language specification (reads DBML 10.3.1: records, the `?` marks of relationship operators, custom properties and `Metadata` blocks). Published at [xdbml.org/spec/current](https://xdbml.org/spec/current), which always serves the newest draft, and at its own permanent URL [xdbml.org/spec/v0.7](https://xdbml.org/spec/v0.7)
 - [`spec/v0.6.md`](./spec/v0.6.md) -- the previous v0.6 specification, still supported (constraints: named, composite and nested keys, and checks in one block)
 - [`spec/v0.5.md`](./spec/v0.5.md) -- the v0.5 specification, still supported (supertype groups)
 - [`spec/v0.4.md`](./spec/v0.4.md) -- the v0.4 specification, still supported (foreign master relationship type, conceptual relationship properties)

@@ -65,7 +65,7 @@
         </dl>
       </InspectorSection>
       <InspectorSection v-if="customSettings.length > 0" title="Settings">
-        <SettingsTable :settings="customSettings" />
+        <SettingsTable :settings="customSettings" :from-metadata="mergedViewSettings.fromMetadata" />
       </InspectorSection>
       <InspectorSection title="Note">
         <NoteDisplay :body="viewNote" />
@@ -94,7 +94,8 @@ import type {
   Span,
   XDbmlDocument,
 } from '@xdbml/parse';
-import { diagramViewMembers, diagramViewNote } from '@xdbml/parse';
+import { diagramViewMembers, diagramViewNote, metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
+import type { AppliedSetting } from '@xdbml/parse';
 import { collectRefDeclarations } from '@xdbml/render';
 
 import InspectorSection   from './InspectorSection.vue';
@@ -185,7 +186,17 @@ const memberCounts = computed(() => {
   ].filter((r, i) => i === 0 || r.count > 0);
 });
 
-const customSettings = computed<Setting[]>(() => (view.value?.settings ?? []).filter((s) => s.name !== 'note'));
+// The settings the Metadata blocks of the document set on this diagram
+// view (spec §24.7): a note and x_ properties.
+const metadataSettings = computed<readonly AppliedSetting[]>(() =>
+  (view.value ? metadataIndex(props.doc).diagramView(view.value.name) : []));
 
-const viewNote = computed(() => (view.value ? diagramViewNote(view.value) ?? '' : ''));
+const mergedViewSettings = computed(() =>
+  withMetadata((view.value?.settings ?? []).filter((s) => s.name !== 'note'),
+    metadataSettings.value.filter((a) => a.setting.name !== 'note')));
+
+const customSettings = computed<Setting[]>(() => mergedViewSettings.value.settings);
+
+const viewNote = computed(() =>
+  metadataNote(metadataSettings.value) ?? (view.value ? diagramViewNote(view.value) ?? '' : ''));
 </script>

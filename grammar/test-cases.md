@@ -1453,6 +1453,175 @@ line string'''
 
 ---
 
+## §24.7 Metadata blocks (v0.7)
+
+### VALID -- Table, Column, TableGroup and Note blocks (DBML)
+
+```
+Table users [owner: 'jane'] {
+  id    int [pk]
+  email varchar
+}
+
+TableGroup accounts {
+  users
+}
+
+Note reminder {
+  'Review the owners'
+}
+
+Metadata Table users {
+  owner: 'data-team'
+  note: 'Accounts of the web shop'
+  headercolor: #3498DB
+}
+
+Metadata Column users.email {
+  classification: 'confidential'
+}
+
+Metadata TableGroup accounts {
+  color: #2ECC71
+}
+
+Metadata Note reminder {
+  color: none
+}
+```
+
+### VALID -- Container, View, DiagramView and the entity and field synonyms (v0.7)
+
+```
+xdbml: 0.7
+
+Container sales [type: schema] {
+  Entity orders {
+    id   int [pk]
+    addr object {
+      city varchar
+    }
+  }
+  View open_orders {
+    id int
+  }
+}
+
+DiagramView order_flow {
+  Tables {
+    sales.orders
+  }
+}
+
+Metadata Container sales {
+  note: 'Sales schema'
+  color: #E67E22
+}
+
+Metadata Entity sales.orders {
+  x_owner: 'sales-ops'
+}
+
+Metadata Field orders.addr.city {
+  note: 'City of delivery'
+}
+
+Metadata View open_orders {
+  headercolor: #95A5A6
+}
+
+Metadata DiagramView order_flow {
+  note: 'Order lifecycle'
+}
+```
+
+### INVALID -- an xDBML kind without a version declaration
+
+```
+Table users {
+  id int [pk]
+}
+
+Metadata Entity users {
+  owner: 'x'
+}
+```
+
+### INVALID -- a target that names nothing (DBML)
+
+```
+Table users {
+  id int [pk]
+}
+
+Metadata Column users.nickname {
+  owner: 'x'
+}
+```
+
+### INVALID -- a flag in the body (DBML)
+
+```
+Table users {
+  id int
+}
+
+Metadata Column users.id {
+  pk
+}
+```
+
+### INVALID -- a Metadata block inside a Container
+
+```
+xdbml: 0.7
+
+Container core [type: schema] {
+  Table users {
+    id int
+  }
+  Metadata Table users {
+    owner: 'x'
+  }
+}
+```
+
+### VALID with a warning -- a block that changes the entity's own value (DBML)
+
+```
+Table users [owner: 'jane'] {
+  id int [pk]
+}
+
+Metadata Table users {
+  owner: 'scott'
+}
+```
+
+### VALID with a warning -- synonyms in a Metadata block read as a custom property
+
+```
+xdbml: 0.7
+
+Entity customers {
+  id int [pk]
+}
+
+Metadata Entity customers {
+  synonyms: 'clients'
+}
+```
+
+### VALID with a warning -- a setting written twice in one list
+
+```
+Table users [owner: 'a', owner: 'b'] {
+  id int [pk]
+}
+```
+
+---
+
 ## §26 Records -- DBML 10.3.1 forms (v0.7)
 
 ### VALID -- example flag on a top-level declaration, after the column list (DBML)

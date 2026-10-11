@@ -650,6 +650,52 @@ Ref: Customer >? Order`)));
     (svg4.match(/<circle[^>]*r="2\.5"/g) ?? []).length === 1);
 }
 
+/* ---- v0.7: colors that Metadata blocks set (spec §24.7) ---- */
+{
+  const build = (src: string): DiagramModel => buildDiagram(flatten(parse(src)));
+  const m = build(`xdbml: 0.7
+Container sales [type: schema, color: '#111111'] {
+  Table orders [headercolor: '#222222'] {
+    id int
+  }
+  View open_orders {
+    id int
+  }
+}
+Table users {
+  id int
+}
+Table audit {
+  id int
+}
+TableGroup people [color: '#333333'] {
+  users
+  audit
+}
+Metadata Container sales {
+  color: #AA0000
+}
+Metadata Table sales.orders {
+  headercolor: #00AA00
+}
+Metadata View open_orders {
+  headercolor: #0000AA
+}
+Metadata TableGroup people {
+  color: #ABCDEF
+}
+Metadata Table audit {
+  headercolor: #FEDCBA
+}`);
+  const header = (id: string): string | undefined => m.entities.find((e) => e.id === id)?.headerColor;
+  check('metadata §24.7.4: a block sets an entity\'s header color over its own', header('sales.orders') === '#00AA00', String(header('sales.orders')));
+  check('metadata §24.7.4: a block sets a View\'s header color', header('sales.open_orders') === '#0000AA', String(header('sales.open_orders')));
+  check('metadata §24.7.4: a block sets a TableGroup\'s color, which its members take', header('users') === '#ABCDEF', String(header('users')));
+  check('metadata §24.7.4: an entity\'s header color from a block applies over its group\'s', header('audit') === '#FEDCBA', String(header('audit')));
+  const sales = m.containers.find((c) => c.name === 'sales');
+  check('metadata §24.7.4: a block sets a Container\'s color over its own', sales?.accentColor === '#AA0000', String(sales?.accentColor));
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

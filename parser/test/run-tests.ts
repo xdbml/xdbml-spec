@@ -24,8 +24,9 @@ import {
   diagramViewMembers, diagramViews, diagramViewNote,
   entityDefinitions, isDefinitionsExcludedTarget,
   refCardinality, refCardinalityIn,
+  metadataIndex, settingValueText, withMetadata,
 } from '../src/index.ts';
-import type { EndCardinality, EntityDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
+import type { AppliedSetting, EndCardinality, EntityDeclaration, FieldDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
 import {
   BSON_TYPES,
   CONTAINER_KEYWORDS,
@@ -6278,6 +6279,248 @@ function runV07OptionalRefTests (): TestResult[] {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7: custom properties and Metadata blocks (spec §24.5, §24.7)
+ *
+ * The cases marked DBML are valid DBML 10.3.1, checked against
+ * @dbml/core 10.3.1, or rejected by it where the case expects an error.
+ * ----------------------------------------------------------------------- */
+
+function runV07MetadataTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string): string | undefined => {
+    const got = codes(src);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  /** Applied settings as name=value text, in index order. */
+  const shown = (list: ReadonlyArray<AppliedSetting>): string[] =>
+    list.map((a) => `${a.setting.name}=${settingValueText(a.setting.value)}`);
+  const index = (src: string, options?: ParseOptions) => metadataIndex(flatten(parse(src, options)));
+  const Q = "'''";
+
+  const T = "Table users [owner: 'jane'] {\n  id    int [pk]\n  email varchar\n  Note: 'own note'\n}\n";
+
+  /* ---- §24.5 custom properties ---- */
+
+  check('§24.5 DBML: custom properties on a table, a column and a TableGroup draw nothing', () =>
+    expectCodes("Table users [owner: 'data-team', sla_hours: '24'] {\n  id int [pk, masking: 'partial']\n}\nTableGroup g [team: 'growth'] {\n  users\n}", ''));
+  check('§24.5 DBML: a setting written twice in one list draws a warning on the second', () =>
+    expectCodes("Table t [owner: 'a', Owner: 'b'] {\n  id int\n}", 'warning:duplicate-setting'));
+  check('§24.5 DBML: check and ref repeat by design', () =>
+    expectCodes('Table a {\n  id int [pk]\n}\nTable b {\n  id int [pk]\n}\nTable t {\n  x int [ref: > a.id, ref: > b.id, check: `x > 0`, check: `x < 9`]\n}', ''));
+
+  /* ---- §24.7.1 kinds ---- */
+
+  check('§24.7.1 DBML: Table, Column, TableGroup and Note in a document without a version', () => {
+    const src = `${T}TableGroup g {\n  users\n}\nNote n {\n  'sticky'\n}\nMetadata Table users {\n  team: 'web'\n}\nMetadata Column users.email {\n  pii: 'yes'\n}\nMetadata TableGroup g {\n  color: #123456\n}\nMetadata Note n {\n  color: none\n}`;
+    const i = index(src);
+    return expectCodes(src, '') ?? same([shown(i.entity('users')), shown(i.field('users', undefined, 'email')), shown(i.tableGroup('g')), shown(i.note('n'))],
+      [['team=web'], ['pii=yes'], ['color=#123456'], ['color=none']]);
+  });
+  check('§24.7.1 DBML: kind words are case-insensitive', () => {
+    const src = `${T}metadata TABLE users {\n  team: 'web'\n}`;
+    return expectCodes(src, '') ?? same(shown(index(src).entity('users')), ['team=web']);
+  });
+  check('§24.7.1 DBML: a word that names no kind is an error', () =>
+    expectCodes(`${T}enum E {\n  a\n}\nMetadata Enum E {\n  owner: 'x'\n}`, 'error:unknown-metadata-kind'));
+  check('§24.7.1: an xDBML kind requires xdbml: 0.7 or later', () =>
+    same([codes(`${T}Metadata Entity users {\n  team: 'x'\n}`), codes(`xdbml: 0.6\n${T}Metadata Field users.id {\n  note: 'x'\n}`)],
+      ['error:construct-requires-version', 'error:construct-requires-version']));
+  check('§24.7.1: Entity, Field, Container and its synonyms, View and DiagramView with xdbml: 0.7', () => {
+    const src = "xdbml: 0.7\nSchema sales [type: schema] {\n  Entity orders {\n    id int\n    addr object {\n      city varchar\n    }\n  }\n  View open_orders {\n    id int\n  }\n}\nDiagramView dv {\n  Tables {\n    sales.orders\n  }\n}\nMetadata Entity sales.orders {\n  team: 'x'\n}\nMetadata Field orders.addr.city {\n  note: 'City'\n}\nMetadata Schema sales {\n  color: #abcdef\n}\nMetadata View open_orders {\n  headercolor: #fedcba\n}\nMetadata DiagramView dv {\n  note: 'Orders', x_owner: 'ops'\n}";
+    const i = index(src);
+    return expectCodes(src, '') ?? same([
+      shown(i.entity('orders', 'sales')), shown(i.field('orders', 'sales', 'addr.city')), shown(i.container('sales')),
+      shown(i.view('open_orders', 'sales')), shown(i.diagramView('dv')),
+    ], [['team=x'], ['note=City'], ['color=#abcdef'], ['headercolor=#fedcba'], ['note=Orders', 'x_owner=ops']]);
+  });
+  check('§24.7.1: a Metadata block inside a Container is a syntax error', () =>
+    parseFails("xdbml: 0.7\nContainer c {\n  Metadata Table t {\n    owner: 'x'\n  }\n}", 'never appears in a Container'));
+  check('§24.7.1: a field and an entity may be named Metadata', () =>
+    expectCodes("Table Metadata {\n  metadata json\n}\nMetadata Table Metadata {\n  owner: 'x'\n}", ''));
+
+  /* ---- §24.7.2 targets ---- */
+
+  check('§24.7.2 DBML: a schema-qualified table and column', () => {
+    const src = "Table core.orders {\n  id int\n}\nMetadata Table core.orders {\n  owner: 'o'\n}\nMetadata Column core.orders.id {\n  pii: 'no'\n}";
+    const i = index(src);
+    return expectCodes(src, '') ?? same([shown(i.entity('core.orders')), shown(i.field('core.orders', undefined, 'id'))], [['owner=o'], ['pii=no']]);
+  });
+  check('§24.7.2 DBML: an alias names the entity', () => {
+    const src = "Table users as U {\n  id int\n}\nMetadata Table U {\n  owner: 'x'\n}\nMetadata Column U.id {\n  pii: 'no'\n}";
+    const i = index(src);
+    return expectCodes(src, '') ?? same([shown(i.entity('users')), shown(i.field('users', undefined, 'id'))], [['owner=x'], ['pii=no']]);
+  });
+  check('§24.7.2 DBML: quoted names', () => {
+    const src = 'Table "my table" {\n  "my col" int\n}\nMetadata Column "my table"."my col" {\n  owner: \'x\'\n}';
+    return expectCodes(src, '') ?? same(shown(index(src).field('my table', undefined, 'my col')), ['owner=x']);
+  });
+  check('§24.7.2: a bare name finds an entity in a Container when only one carries it', () => {
+    const src = "xdbml: 0.7\nContainer core [type: schema] {\n  Table users {\n    id int\n  }\n}\nMetadata Table users {\n  owner: 'x'\n}";
+    return expectCodes(src, '') ?? same(shown(index(src).entity('users', 'core')), ['owner=x']);
+  });
+  check('§24.7.2 DBML: a field a TablePartial injects is a field of the entity', () => {
+    const src = "TablePartial stamps {\n  created_at timestamp\n}\nTable t {\n  id int\n  ~stamps\n}\nMetadata Column t.created_at {\n  owner: 'x'\n}";
+    return expectCodes(src, '') ?? same(shown(index(src).field('t', undefined, 'created_at')), ['owner=x']);
+  });
+  check('§24.7.2 DBML: a target that names nothing is an error', () =>
+    same([codes(`${T}Metadata Table nobody {\n  owner: 'x'\n}`), codes(`${T}Metadata Column users.nothing {\n  owner: 'x'\n}`)],
+      ['error:unresolved-metadata-target', 'error:unresolved-metadata-target']));
+  check('§24.7.2: Metadata Table on a View is an error naming the View', () => {
+    const d = resolveNames(parse("xdbml: 0.7\nView v {\n  id int\n}\nMetadata Table v {\n  owner: 'x'\n}")).diagnostics;
+    return d.length === 1 && d[0].code === 'unresolved-metadata-target' && d[0].message.includes('Metadata View v') ? undefined : d.map((x) => x.message).join(' | ');
+  });
+
+  /* ---- §24.7.3 settings ---- */
+
+  check('§24.7.3 DBML: note, headercolor and custom properties on a table, a multi-line note included', () => {
+    const src = `${T}Metadata Table users {\n  note: ${Q}\n  Accounts\n  ${Q}\n  headercolor: #3498DB\n  x_team: 'web'\n}`;
+    return same(shown(index(src).entity('users')), ['note=Accounts\n', 'headercolor=#3498DB', 'x_team=web']);
+  });
+  check('§24.7.3: the body is a list body: commas and semicolons separate lines', () => {
+    const src = `${T}Metadata Table users { a: '1', b: '2'; c: '3' }`;
+    return same(shown(index(src).entity('users')), ['a=1', 'b=2', 'c=3']);
+  });
+  check('§24.7.3 DBML: a flag in the body is a syntax error', () =>
+    parseFails(`${T}Metadata Column users.id {\n  pk\n}`, "'key: value' lines only"));
+  check('§24.7.3 DBML: a block in the body is a syntax error', () =>
+    parseFails(`${T}Metadata Table users {\n  Note { 'x' }\n}`, "'key: value' lines only"));
+  check('§24.7.3 DBML: a key written twice in one block is an error', () =>
+    expectCodes(`${T}Metadata Table users {\n  team: 'a'\n  team: 'b'\n}`, 'error:duplicate-metadata-setting'));
+  check('§24.7.3 DBML: a note that is not a string, a color that is not a color', () =>
+    expectCodes(`${T}Metadata Table users {\n  note: 42\n  headercolor: red\n}`, 'error:invalid-metadata-value error:invalid-metadata-value'));
+  check('§24.7.3 DBML: note on a sticky note is a custom property', () => {
+    const src = "Note n {\n  'text'\n}\nMetadata Note n {\n  note: 'x'\n}";
+    return expectCodes(src, '') ?? same(shown(index(src).note('n')), ['note=x']);
+  });
+  check('§24.7.3 DBML: synonyms, a field setting and a color on a Column draw warnings and read as custom properties', () => {
+    const src = `${T}Metadata Table users {\n  synonyms: 'clients'\n}\nMetadata Column users.id {\n  pk: 'true'\n  headercolor: #111111\n}`;
+    const i = index(src);
+    return expectCodes(src, 'warning:metadata-custom-property warning:metadata-custom-property warning:metadata-custom-property')
+      ?? same([shown(i.entity('users')), shown(i.field('users', undefined, 'id'))], [['synonyms=clients'], ['pk=true', 'headercolor=#111111']]);
+  });
+  check('§24.7.3: a custom property of a reserved name stands beside the element\'s own setting', () => {
+    const doc = flatten(parse(`${T}Metadata Column users.id {\n  pk: 'true'\n}`));
+    const users = doc.statements.find((s): s is EntityDeclaration => s.kind === 'EntityDeclaration')!;
+    const id = users.body.find((b): b is FieldDeclaration => b.kind === 'FieldDeclaration' && b.name === 'id')!;
+    const merged = withMetadata(id.settings, metadataIndex(doc).field('users', undefined, 'id'));
+    return same(merged.settings.map((x) => `${x.name}=${settingValueText(x.value)}`), ['pk=(flag)', 'pk=true']);
+  });
+  check('§24.7.3: a diagram view takes note and x_ properties only', () =>
+    expectCodes("xdbml: 0.7\nTable t {\n  id int\n}\nDiagramView dv {\n  Tables {\n    t\n  }\n}\nMetadata DiagramView dv {\n  owner: 'x'\n}", 'error:unknown-diagram-view-setting'));
+  check('§24.7.3 DBML: settings in brackets after the target apply nothing, with a warning', () => {
+    const src = `${T}Metadata Table users [team: 'y'] {\n  x_a: 'b'\n}`;
+    return expectCodes(src, 'warning:metadata-brackets-ignored') ?? same(shown(index(src).entity('users')), ['x_a=b']);
+  });
+
+  /* ---- §24.7.4 precedence ---- */
+
+  check('§24.7.4 DBML: a block replaces the element\'s own setting, with a warning naming both values', () => {
+    const src = `${T}Metadata Table users {\n  owner: 'scott'\n}`;
+    const d = resolveNames(parse(src)).diagnostics;
+    return same(shown(index(src).entity('users')), ['owner=scott'])
+      ?? (d.length === 1 && d[0].code === 'metadata-override' && d[0].message.includes("'jane'") && d[0].message.includes("'scott'") ? undefined : d.map((x) => x.message).join(' | '));
+  });
+  check('§24.7.4: the note of a Note element is the element\'s own', () =>
+    expectCodes(`${T}Metadata Table users {\n  note: 'block note'\n}`, 'warning:metadata-override'));
+  check('§24.7.4 DBML: of two blocks, the later applies', () => {
+    const src = `${T}Metadata Table users {\n  team: 'a'\n}\nMetadata Table users {\n  team: 'b'\n}`;
+    return expectCodes(src, 'warning:metadata-override') ?? same(shown(index(src).entity('users')), ['team=b']);
+  });
+  check('§24.7.4: a value set again unchanged draws nothing', () =>
+    expectCodes(`${T}Metadata Table users {\n  owner: 'jane'\n}`, ''));
+
+  /* ---- §24.7.5 imports ---- */
+
+  const files: Record<string, string> = {
+    '/m/schema.xdbml': "xdbml: 0.7\nTable users [owner: 'jane'] {\n  id int [pk]\n}\nContainer core [type: schema] {\n  Table orders {\n    id int\n  }\n}\nNote n {\n  'x'\n}\nMetadata Table users {\n  owner: 'david'\n}\nMetadata Column users.id {\n  pii: 'yes'\n}\nMetadata Table core.orders {\n  owner: 'o'\n}\nMetadata Container core {\n  note: 'Core'\n}\nMetadata Note n {\n  color: #abcdef\n}\n",
+    '/m/team.xdbml': "xdbml: 0.7\nreuse * from './schema'\nMetadata Table users {\n  owner: 'alice'\n}\n",
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  const importing = (main: string) => {
+    files['/m/main.xdbml'] = main;
+    return index(main, opts('/m/main.xdbml'));
+  };
+
+  check('§24.7.5 DBML: importing everything brings every block, and the importing file reports nothing about them', () => {
+    const main = "xdbml: 0.7\nuse * from './schema'\n";
+    const i = importing(main);
+    const d = resolveNames(parse(main, opts('/m/main.xdbml'))).diagnostics.map((x) => x.code).join(' ');
+    return same([shown(i.entity('users')), shown(i.field('users', undefined, 'id')), shown(i.entity('orders', 'core')), shown(i.container('core')), shown(i.note('n')), d],
+      [['owner=david'], ['pii=yes'], ['owner=o'], ['note=Core'], ['color=#abcdef'], '']);
+  });
+  check('§24.7.5 DBML: a file\'s own blocks come after those of its imports', () =>
+    same(shown(importing("xdbml: 0.7\nuse * from './team'\n").entity('users')), ['owner=alice']));
+  check('§24.7.5 DBML: a selective import brings the blocks of the element and its fields', () => {
+    const i = importing("xdbml: 0.7\nuse {\n  table users\n} from './schema'\n");
+    return same([shown(i.entity('users')), shown(i.field('users', undefined, 'id')), shown(i.note('n'))], [['owner=david'], ['pii=yes'], []]);
+  });
+  check('§24.7.5 DBML: an alias carries the blocks to the new name', () => {
+    const i = importing("xdbml: 0.7\nuse {\n  table users as u\n} from './schema'\nMetadata Table u {\n  team: 'x'\n}\n");
+    return same([shown(i.entity('u')), shown(i.field('u', undefined, 'id'))], [['owner=david', 'team=x'], ['pii=yes']]);
+  });
+  check('§24.7.5: an entity imported out of its Container takes its blocks along', () =>
+    same(shown(importing("xdbml: 0.7\nuse {\n  table core.orders\n} from './schema'\n").entity('orders')), ['owner=o']));
+  check('§24.7.5: an imported Container brings the blocks of its elements, renamed', () => {
+    const i = importing("xdbml: 0.7\nuse {\n  container core as c\n} from './schema'\n");
+    return same([shown(i.container('c')), shown(i.entity('orders', 'c'))], [['note=Core'], ['owner=o']]);
+  });
+  check('§24.7.4 DBML: the document\'s block applies after the imported ones, even written before the import', () => {
+    const main = "xdbml: 0.7\nMetadata Table users {\n  owner: 'main'\n}\nuse * from './schema'\n";
+    const i = importing(main);
+    const d = resolveNames(parse(main, opts('/m/main.xdbml'))).diagnostics;
+    return same(shown(i.entity('users')), ['owner=main'])
+      ?? (d.length === 1 && d[0].code === 'metadata-override' && d[0].message.includes('/m/schema.xdbml') ? undefined : d.map((x) => x.message).join(' | '));
+  });
+  check('§24.7.4: flatten() lists the blocks last, those an import brings first and marked', () => {
+    files['/m/main.xdbml'] = "xdbml: 0.7\nMetadata Table users {\n  owner: 'main'\n}\nuse * from './schema'\nTable z {\n  id int\n}\n";
+    const flat = flatten(parse(files['/m/main.xdbml'], opts('/m/main.xdbml')));
+    const tail = flat.statements.slice(-7).map((x) => (x.kind === 'MetadataDeclaration' ? `${x.target}${x.imported ? '*' : ''}` : x.kind));
+    return same(tail, ['EntityDeclaration', 'users*', 'users.id*', 'core.orders*', 'core*', 'n*', 'users']);
+  });
+
+  check('§24.7: Monarch colors Metadata and its kind, and leaves a field named metadata alone', () => {
+    const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('(metadata)'));
+    if (!rule) return 'rule missing';
+    const re = new RegExp(`^(?:${rule[0].source})`, 'i');
+    const yes = ['Metadata Table users', 'metadata column users.id', 'Metadata TableGroup g', 'Metadata Schema s'];
+    const no = ['metadata json', 'Metadata Tables x', 'metadata varchar'];
+    const bad = [...yes.filter((t) => !re.test(t)), ...no.filter((t) => re.test(t))];
+    return bad.length ? bad.join('; ') : undefined;
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -6291,6 +6534,7 @@ function main (): void {
   const quotedTests = runQuotedNameTests();
   const recordsTests = runV07RecordsTests();
   const optionalRefTests = runV07OptionalRefTests();
+  const metadataTests = runV07MetadataTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -6302,9 +6546,10 @@ function main (): void {
   const qr = report('v0.6.7 quoted names (spec §3.2, §20.1)', quotedTests);
   const rr = report('v0.7 records in the forms of DBML 10.3.1 (spec §26)', recordsTests);
   const or = report('v0.7 optional marks and cardinality (spec §11.1, §11.7, §11.8, §11.16)', optionalRefTests);
+  const mr = report('v0.7 custom properties and Metadata blocks (spec §24.5, §24.7)', metadataTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

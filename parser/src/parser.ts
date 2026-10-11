@@ -52,6 +52,8 @@ import type {
   ModuleImportDirective,
   NamedTypeReference,
   NoteBlock,
+  MetadataDeclaration,
+  MetadataTargetKind,
   NoteDeclaration,
   NullValue,
   NumberValue,
@@ -195,6 +197,22 @@ function kw (token: Token | undefined): string | null {
 
 function isKw (token: Token | undefined, expected: string): boolean {
   return kw(token) === expected;
+}
+
+/**
+ * The canonical kind a word names after `Metadata` (spec §24.7), or
+ * undefined. Case-insensitive, like every keyword (§3.8).
+ */
+function metadataKind (word: string): MetadataTargetKind | undefined {
+  const w = word.toLowerCase();
+  if (w === 'table' || ENTITY_KEYWORDS.has(w)) return 'Table';
+  if (w === 'column' || w === 'field') return 'Column';
+  if (w === 'tablegroup') return 'TableGroup';
+  if (w === 'note') return 'Note';
+  if (w === 'view') return 'View';
+  if (w === 'diagramview') return 'DiagramView';
+  if (CONTAINER_KEYWORDS.has(w)) return 'Container';
+  return undefined;
 }
 
 /**
@@ -479,6 +497,7 @@ export class Parser {
     if (k === 'diagramview') return this.parseDiagramView();
     if (k === 'note') return this.parseNoteDeclaration();
     if (k === 'records') return this.parseTopLevelRecords();
+    if (k === 'metadata') return this.parseMetadata();
     if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
     throw new ParseError(`Unknown top-level construct: ${t.text}`, t.start);
   }
@@ -629,6 +648,12 @@ export class Parser {
         throw new ParseError(
           `A DiagramView is a top-level declaration and never appears in a Container (spec §18.1). ` +
           `Move it out of Container '${name}'.`,
+          t.start,
+        );
+      } else if (k === 'metadata') {
+        throw new ParseError(
+          `A Metadata block is a top-level declaration and never appears in a Container (spec §24.7). ` +
+          `Move it out of Container '${name}', and qualify its target with the Container's name.`,
           t.start,
         );
       } else {
@@ -885,6 +910,59 @@ export class Parser {
   private emptyRecordValue (): NullValue {
     const at = this.peek().start;
     return { kind: 'NullValue', empty: true, span: { start: at, end: at } };
+  }
+
+  /* ----- Metadata blocks (spec §24.7, v0.7) ----- */
+
+  /**
+   * `Metadata <kind> <target> { key: value ... }`. The kind word is read as
+   * written and canonicalized here; a word that names no kind is reported
+   * by the resolver, which knows the document's version. The body is a list
+   * body (§3.9) of `key: value` lines; a flag or a block in it is a syntax
+   * error, as in DBML.
+   */
+  private parseMetadata (): MetadataDeclaration {
+    const start = this.peek().start;
+    this.advance(); // Metadata
+    const kindTok = this.peek();
+    if (kindTok.kind !== TokenKind.Identifier) {
+      throw new ParseError(
+        'Expected the kind of element after Metadata: Table, Column, TableGroup or Note, ' +
+        'and in a document that declares a version Container, View or DiagramView (spec §24.7).',
+        kindTok.start,
+      );
+    }
+    this.advance();
+    const target = this.parseQualifiedName("the name of the element after 'Metadata " + kindTok.text + "'");
+    const bracketSettings = this.maybeSettingsBlock();
+    this.expect(TokenKind.LBrace, "Expected '{' starting the Metadata body");
+    const settings: Setting[] = [];
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
+      const t = this.peek();
+      if ((t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) && this.peek(1).kind !== TokenKind.Colon) {
+        throw new ParseError(
+          `A Metadata body holds 'key: value' lines only; '${t.text}' has no ':' and value after it (spec §24.7).`,
+          t.start,
+        );
+      }
+      settings.push(this.parseLineSetting());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing the Metadata body");
+    const decl: MetadataDeclaration = {
+      kind: 'MetadataDeclaration',
+      targetKindSource: kindTok.text,
+      target,
+      targetSource: target,
+      settings,
+      bracketSettings,
+      span: this.spanFrom(start),
+    };
+    const canonical = metadataKind(kindTok.text);
+    if (canonical) decl.targetKind = canonical;
+    if (this.options.filePath) decl.file = toForwardSlashes(this.options.filePath);
+    return decl;
   }
 
   /* ----- Module-system directives (spec §27, new in v0.2) ----- */
@@ -1207,6 +1285,7 @@ export class Parser {
     if (k === 'tablegroup') return true;
     if (k === 'note') return true;
     if (k === 'records') return true;
+    if (k === 'metadata') return true;
     if (k === 'use' || k === 'reuse') return true;
     return false;
   }
@@ -2940,6 +3019,14 @@ function applyEntityAliases (doc: XDbmlDocument): void {
       if (segments) {
         obj.path = [...segments.map((name) => ({ ...first, name })), ...obj.path.slice(1)];
       }
+    }
+    // Spec §24.7: the target of a Metadata Table or Column block may start
+    // with an entity's alias, as in DBML.
+    if (obj.kind === 'MetadataDeclaration' && (obj.targetKind === 'Table' || obj.targetKind === 'Column')
+      && typeof obj.target === 'string') {
+      const parts = splitName(obj.target);
+      const segments = aliases.get(quoteNameSegment(parts[0]));
+      if (segments) obj.target = joinName([...segments, ...parts.slice(1)]);
     }
     for (const [key, value] of Object.entries(obj)) {
       if (key !== 'span' && value && typeof value === 'object') walk(value);

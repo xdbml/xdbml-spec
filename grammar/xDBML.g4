@@ -46,6 +46,11 @@
  *     fields after the 3.13.6 baseline, so the upstream rule no longer
  *     covers them. `records` starts a block before '{', '(' or '['.
  *
+ * v0.7 changes (spec §24.7):
+ *   - metadataDefinition is defined here. DBML added Metadata blocks in
+ *     9.1, after the 3.13.6 baseline, so there is no upstream rule to
+ *     inherit. A block is top-level only.
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -177,6 +182,10 @@ SUPERTYPE_GROUP     : 'SupertypeGroup' ;
 
 DIAGRAM_VIEW        : 'DiagramView' ;
 
+// ---- §24.7 Metadata (v0.7) ----------------------------------------------------
+
+METADATA            : 'Metadata' ;     // top-level only; also names an entity or a field elsewhere
+
 // ---- §17.2 Structural type keywords ---------------------------------------
 
 OBJECT              : 'object' ;
@@ -303,6 +312,7 @@ topLevelStatement
     | tableGroupDefinition         // upstream DBML
     | supertypeGroupDefinition     // spec §12 (new in v0.5)
     | diagramViewDefinition        // spec §18 (defined in v0.6.3)
+    | metadataDefinition           // spec §24.7 (defined in v0.7)
     | noteDefinition               // upstream DBML
     | topLevelRecords              // §26.2 (defined in v0.7)
     | useDirective                 //§25  (new in v0.2)
@@ -679,6 +689,39 @@ diagramViewItem
 
 diagramViewName
     : nameSegment (DOT nameSegment)*
+    ;
+
+// ---- §24.7 Metadata blocks (defined in v0.7) ------------------------------
+//
+// Settings for an element declared elsewhere. The kind and the target are
+// read here; which kind words a document may use (the DBML four in every
+// document, the xDBML ones from v0.7), whether the target resolves, which
+// settings each kind takes and the precedence between sources are checked
+// after parsing (§24.7.1 to §24.7.4). The body holds `key: value` lines
+// only. Settings in brackets after the target, which DBML accepts, apply
+// nothing (§24.7.3).
+
+metadataDefinition
+    : METADATA metadataKind entityReference settingsBlock? LBRACE
+        (metadataSetting | listSeparator)*
+      RBRACE
+    ;
+
+// Case-insensitive, like every keyword (§3.8). An identifier that names no
+// kind parses and is reported after parsing (unknown-metadata-kind).
+metadataKind
+    : TABLE | ENTITY | COLLECTION | RECORD
+    | 'Column' | 'Field'
+    | 'TableGroup'
+    | NOTE
+    | containerKeyword
+    | VIEW
+    | DIAGRAM_VIEW
+    | IDENTIFIER
+    ;
+
+metadataSetting
+    : (IDENTIFIER | quotedIdentifier) COLON settingValue
     ;
 
 // ---- §26 Records (defined in v0.7) -----------------------------------------

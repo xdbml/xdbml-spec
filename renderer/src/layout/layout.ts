@@ -40,6 +40,8 @@ import {
   hasPartialInjection,
   injectedPartials,
   isQualifiedName,
+  metadataColor,
+  metadataIndex,
   joinName,
   primaryKey,
   quoteNameSegment,
@@ -51,6 +53,7 @@ import {
 import type {
   ContainerDeclaration,
   EndCardinality,
+  MetadataIndex,
   EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
@@ -524,8 +527,9 @@ export function buildDiagram (
   }
 
   // TablePartials by name (spec §17.1). An entity or an Edge that writes
-  // `~name` holds the partial's fields, so its box lists them.
-  const partialScope: PartialScope = { doc, partials: tablePartials(doc) };
+  // `~name` holds the partial's fields, so its box lists them. The
+  // Metadata blocks of the document (spec §24.7) set colors too.
+  const partialScope: PartialScope = { doc, partials: tablePartials(doc), metadata: metadataIndex(doc) };
 
   // Build a map from entity-id -> color from TableGroup membership.
   //
@@ -558,7 +562,9 @@ export function buildDiagram (
     }
     for (const stmt of doc.statements) {
       if (stmt.kind !== 'TableGroupDeclaration') continue;
-      const color = settingValueAsString(stmt.settings, 'color');
+      // A Metadata block's color applies over the group's own (spec §24.7.4).
+      const color = metadataColor(partialScope.metadata.tableGroup(stmt.name), 'color')
+        ?? settingValueAsString(stmt.settings, 'color');
       if (!color) continue;
       for (const member of stmt.members) {
         // Member can be `entity` or `container.entity`. Try qualified
@@ -600,7 +606,8 @@ export function buildDiagram (
     //   2. Color derived from the `target:` setting via TARGET_COLORS.
     //   3. Neutral slate when neither applies.
     // This mirrors the entity headerColor / TableGroup color pattern.
-    const ownColor = settingValueAsString(container.settings, 'color');
+    const ownColor = metadataColor(partialScope.metadata.container(container.name), 'color')
+      ?? settingValueAsString(container.settings, 'color');
     const accentColor = ownColor ?? colorForTarget(target);
 
     const innerLeft = cursorX + CONTAINER_PADDING;
@@ -613,7 +620,7 @@ export function buildDiagram (
       // that of the last TablePartial it injects (spec §17.1) >
       // TableGroup membership color > undefined (renderer uses its
       // default keyword-based tinting).
-      const ownColor = headerColorOf(entity, partialScope);
+      const ownColor = headerColorOf(entity, partialScope, container.name);
       const headerColor = ownColor ?? tableGroupColors.get(entityId);
       const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable, headerColor, partialScope);
       entityLayouts.push(layout);
@@ -1095,11 +1102,18 @@ function edgeAsEntityLike (edge: EdgeDeclaration): EntityLike {
 }
 
 /**
- * The header color an entity declares, or receives from a TablePartial it
- * injects (spec §17.1): its own `headercolor`, otherwise that of the last
- * partial injected that declares one.
+ * The header color of an entity or a View: the one a Metadata block sets
+ * (spec §24.7.4), otherwise its own `headercolor`, otherwise that of the
+ * last TablePartial injected that declares one (spec §17.1).
  */
-function headerColorOf (entity: EntityLike, scope: PartialScope): string | undefined {
+function headerColorOf (entity: EntityLike, scope: PartialScope, containerName?: string): string | undefined {
+  const fromBlock = entity.keyword === 'Edge'
+    ? undefined
+    : metadataColor(
+      entity.isView ? scope.metadata.view(entity.name, containerName) : scope.metadata.entity(entity.name, containerName),
+      'headercolor',
+    );
+  if (fromBlock) return fromBlock;
   const setting = effectiveHeaderColor(entity, scope.partials);
   return setting ? settingValueAsString([setting], 'headercolor') : undefined;
 }
@@ -1108,6 +1122,8 @@ function headerColorOf (entity: EntityLike, scope: PartialScope): string | undef
 interface PartialScope {
   doc: XDbmlDocument;
   partials: ReadonlyMap<string, TablePartialDeclaration>;
+  /** The settings Metadata blocks apply (spec §24.7). */
+  metadata: MetadataIndex;
 }
 
 function buildEntityLayout (

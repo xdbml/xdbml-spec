@@ -61,6 +61,7 @@ import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSeg
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkOptionalMarks } from './cardinality.ts';
+import { checkMetadata } from './metadata.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
 import { checkConstraints, checkTargets } from './constraints.ts';
 import { effectiveFieldList, effectiveFields } from './partials.ts';
@@ -143,6 +144,14 @@ export type DiagnosticCode =
   | 'unresolved-records-column'
   | 'duplicate-records-block'
   | 'cardinality-conflict'
+  | 'unknown-metadata-kind'
+  | 'metadata-brackets-ignored'
+  | 'unresolved-metadata-target'
+  | 'duplicate-metadata-setting'
+  | 'invalid-metadata-value'
+  | 'metadata-custom-property'
+  | 'metadata-override'
+  | 'duplicate-setting'
   | 'empty-import'
   | 'invalid-nested-path'
   | 'foreign-master-composite'
@@ -414,6 +423,9 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 2b: one records block per entity (spec §26.6).
   diagnostics.push(...checkRecordsBlocks(flat, symbols));
+
+  // Pass 2c: Metadata blocks, and settings written twice (spec §24.5, §24.7).
+  diagnostics.push(...checkMetadata(flat));
 
   // Pass 3: relationship rules that the grammar cannot express (spec 11.11),
   // and a `?` that disagrees with a cardinality setting (spec §11.7).

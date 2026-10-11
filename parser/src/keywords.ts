@@ -55,6 +55,26 @@ export const ENTITY_KEYWORDS = [
 ] as const;
 
 /**
+ * The words that name the kind of element a `Metadata` block targets
+ * (spec §24.7, v0.7). DBML defines `table`, `column`, `tablegroup` and
+ * `note`; xDBML adds the entity synonyms, `field`, `view`, `diagramview`,
+ * and `container` with its synonyms, in documents that declare a version.
+ */
+export const METADATA_TARGET_KINDS = [
+  'table',
+  'column',
+  'tablegroup',
+  'note',
+  'entity',
+  'collection',
+  'record',
+  'field',
+  'view',
+  'diagramview',
+  ...CONTAINER_KEYWORDS,
+] as const;
+
+/**
  * The full set of declaration keywords. Includes containers,
  * entities, and other top-level constructs.
  */

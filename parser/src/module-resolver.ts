@@ -28,6 +28,7 @@ import type {
   FieldDeclaration,
   ImportItem,
   ImportSpec,
+  MetadataDeclaration,
   ModuleImportDirective,
   ObjectType,
   ParseOptions,
@@ -39,6 +40,7 @@ import type {
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { joinName, quoteNameSegment, splitName } from './names.ts';
 import { entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
+import { metadataForImport } from './metadata.ts';
 import type { LocalTypes } from './definitions.ts';
 
 /**
@@ -63,25 +65,58 @@ import type { LocalTypes } from './definitions.ts';
  * a normal Named Type and can use it as a field type without learning
  * about the field-import construct.
  *
+ * Metadata blocks (spec §24.7) are the exception to "same position": the
+ * flattened document lists them after every other statement, in their
+ * order of precedence, those an import brings marked `imported`.
+ *
  * Provenance information is lost in the flattened view. Consumers that
  * want to know where each declaration came from should walk the original
  * (non-flattened) AST instead.
  */
 export function flatten (doc: XDbmlDocument): XDbmlDocument {
   const statements: TopLevelStatement[] = [];
-  for (const stmt of doc.statements) {
-    flattenTopLevel(stmt, statements);
-  }
+  const metadata: MetadataDeclaration[] = [];
+  flattenInto(doc.statements, statements, metadata);
   return {
     ...doc,
-    statements,
+    statements: [...statements, ...metadata],
   };
+}
+
+/**
+ * Flatten a list of statements into `out`, and append its Metadata blocks
+ * to `metadata` in their order of precedence (spec §24.7.4): those its
+ * imports bring, a later import after an earlier one and each import's own
+ * imports before its own blocks, then its own blocks in source order. A
+ * Metadata block declares nothing and holds no position of its own, so the
+ * flattened document lists every block after the other statements, where
+ * "a later block wins" reads the precedence directly.
+ */
+function flattenInto (
+  stmts: ReadonlyArray<TopLevelStatement | FieldDeclaration>,
+  out: TopLevelStatement[],
+  metadata: MetadataDeclaration[],
+): void {
+  const own: MetadataDeclaration[] = [];
+  for (const stmt of stmts) flattenTopLevel(stmt, out, metadata, own);
+  metadata.push(...own);
+}
+
+/** A Metadata block an import brought, marked so (§24.7.4). */
+function importedBlock (block: MetadataDeclaration): MetadataDeclaration {
+  return block.imported ? block : { ...block, imported: true };
 }
 
 function flattenTopLevel (
   stmt: TopLevelStatement | FieldDeclaration,
   out: TopLevelStatement[],
+  importedMetadata: MetadataDeclaration[],
+  ownMetadata: MetadataDeclaration[],
 ): void {
+  if (stmt.kind === 'MetadataDeclaration') {
+    ownMetadata.push(stmt);
+    return;
+  }
   if (stmt.kind === 'FieldDeclaration') {
     // A bare FieldDeclaration only appears at the top level via the field-
     // import path -- the parser only accepts it inside a clone block. Lift
@@ -96,9 +131,9 @@ function flattenTopLevel (
     // with nested directives, although the spec doesn't currently expect
     // multi-level nesting in v0.2 phase 1).
     if (stmt.clone) {
-      for (const inner of stmt.clone.statements) {
-        flattenTopLevel(inner, out);
-      }
+      const brought: MetadataDeclaration[] = [];
+      flattenInto(stmt.clone.statements, out, brought);
+      importedMetadata.push(...brought.map(importedBlock));
     }
     return;
   }
@@ -107,12 +142,16 @@ function flattenTopLevel (
     // A DiagramView is top-level only (spec §18.1), so it moves out to the
     // top level, after its Container.
     const flat = flattenContainer(stmt);
+    // A Metadata block is top-level only too (spec §24.7); one that a
+    // Container-scoped import brings joins the imported blocks.
+    const blocks = flat.body.filter((b) => (b as { kind: string }).kind === 'MetadataDeclaration') as unknown as MetadataDeclaration[];
+    importedMetadata.push(...blocks.map(importedBlock));
     const hoisted = flat.body.filter((b) => (b as { kind: string }).kind === 'DiagramViewDeclaration');
-    if (hoisted.length === 0) {
+    if (hoisted.length === 0 && blocks.length === 0) {
       out.push(flat);
       return;
     }
-    out.push({ ...flat, body: flat.body.filter((b) => !hoisted.includes(b)) });
+    out.push({ ...flat, body: flat.body.filter((b) => !hoisted.includes(b) && !(blocks as unknown[]).includes(b)) });
     for (const view of hoisted) out.push(view as unknown as TopLevelStatement);
     return;
   }
@@ -348,15 +387,26 @@ function extractImports (
   }
   // ImportList: process each item.
   const out: (TopLevelStatement | FieldDeclaration)[] = [];
+  const landed: { decl: object; name: string }[] = [];
   for (const item of spec.items) {
     const found = findImportTarget(item, sourceDoc);
     if (found) {
-      out.push(applyAlias(found, item));
+      const placed = applyAlias(found, item);
+      out.push(placed);
+      if (placed.kind !== 'FieldDeclaration' && 'name' in placed && typeof placed.name === 'string') {
+        // The name the element takes here, in the form of names.ts: a Note
+        // and a DiagramView keep theirs as written.
+        const raw = placed.kind === 'NoteDeclaration' || placed.kind === 'DiagramViewDeclaration';
+        landed.push({ decl: found, name: raw ? quoteNameSegment(placed.name) : placed.name });
+      }
     }
     // Silent skip on not-found. The spec leaves diagnostics to name
     // resolution (§27.13). In practice, users notice missing entities
     // because their references downstream become unresolved.
   }
+  // Spec §24.7.5: the Metadata blocks of the source file that target an
+  // imported element come with it, renamed to the name it takes here.
+  out.push(...metadataForImport(flatten(sourceDoc), landed));
   return out;
 }
 

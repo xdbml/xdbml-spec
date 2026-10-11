@@ -15,7 +15,7 @@
     </InspectorSection>
 
     <InspectorSection title="Settings">
-      <SettingsTable :settings="standardSettings" />
+      <SettingsTable :settings="standardSettings" :from-metadata="mergedSettings.fromMetadata" />
     </InspectorSection>
 
     <InspectorSection title="Note">
@@ -30,7 +30,9 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { ContainerDeclaration, NoteBlock, Span } from '@xdbml/parse';
+import { metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
+import type { AppliedSetting, ContainerDeclaration, NoteBlock, Span } from '@xdbml/parse';
+import { useParserStore } from '@/stores/parserStore';
 
 import InspectorSection   from './InspectorSection.vue';
 import SettingsTable      from './SettingsTable.vue';
@@ -75,15 +77,24 @@ const memberBreakdown = computed(() => {
 // Settings table excludes the `note` setting because notes render
 // below in their own Note section; showing them twice would be
 // redundant. (Field- and entity-level Inspectors apply the same filter.)
-const standardSettings = computed(() =>
-  props.container.settings.filter((s) => s.name !== 'note'),
-);
+// The settings the Metadata blocks of the document set on this Container
+// (spec §24.7). A block's setting replaces the Container's own and is
+// marked in the table; a block's note shows in the Note section.
+const parser = useParserStore();
+const metadataSettings = computed<readonly AppliedSetting[]>(() =>
+  (parser.flatAst ? metadataIndex(parser.flatAst).container(props.container.name) : []));
+const mergedSettings = computed(() =>
+  withMetadata(props.container.settings.filter((s) => s.name !== 'note'),
+    metadataSettings.value.filter((a) => a.setting.name !== 'note')));
+const standardSettings = computed(() => mergedSettings.value.settings);
 
 // Container-level notes can come from two sources: a `Note: '...'`
 // block inside the container body (the canonical syntax) or a
 // `[note: '...']` setting on the container declaration line. Prefer
 // the body block when both exist; fall back to the setting otherwise.
 const noteBody = computed(() => {
+  const fromBlock = metadataNote(metadataSettings.value);
+  if (fromBlock !== undefined) return fromBlock;
   for (const item of props.container.body) {
     if (item.kind === 'NoteBlock') return (item as NoteBlock).body;
   }

@@ -15,6 +15,7 @@
     { "include": "#strings" },
     { "include": "#numbers" },
     { "include": "#constants" },
+    { "include": "#metadata-declaration" },
     { "include": "#declarations" },
     { "include": "#block-keywords" },
     { "include": "#diagram-view-categories" },
@@ -64,6 +65,16 @@
           "match": "\\b((?i:__MODULE_KEYWORDS__))\\b"
         }
       ]
+    },
+
+    "metadata-declaration": {
+      "comment": "A Metadata block (spec 24.7, v0.7): the keyword, the kind of element, and the target. Matched only as a whole, so an entity or a field may still be named metadata.",
+      "match": "\\b((?i:metadata))\\s+((?i:__METADATA_TARGET_KINDS__))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_.]*)|(?:\"[^\"]*\")))?",
+      "captures": {
+        "1": { "name": "keyword.declaration.xdbml" },
+        "2": { "name": "keyword.declaration.xdbml" },
+        "3": { "name": "entity.name.type.xdbml" }
+      }
     },
 
     "declarations": {

@@ -50,11 +50,11 @@
     </InspectorSection>
 
     <InspectorSection v-if="standardSettings.length > 0" title="Settings">
-      <SettingsTable :settings="standardSettings" />
+      <SettingsTable :settings="standardSettings" :from-metadata="mergedSettings.fromMetadata" />
     </InspectorSection>
 
     <InspectorSection v-if="customSettings.length > 0" title="Custom properties (x_*)">
-      <SettingsTable :settings="customSettings" />
+      <SettingsTable :settings="customSettings" :from-metadata="mergedSettings.fromMetadata" />
     </InspectorSection>
 
     <InspectorSection title="Note">
@@ -69,7 +69,9 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { joinName } from '@xdbml/parse';
+import { joinName, metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
+import type { AppliedSetting } from '@xdbml/parse';
+import { useParserStore } from '@/stores/parserStore';
 import type {
   ContainerDeclaration,
   EdgeDeclaration,
@@ -99,6 +101,8 @@ const props = defineProps<{
 defineEmits<{
   'edit-source': [span: Span];
 }>();
+
+const parser = useParserStore();
 
 const showFullType = ref(false);
 
@@ -151,21 +155,41 @@ const flagBadges = computed(() => {
 // Settings table would surface the same content twice.
 const FLAG_SETTING_NAMES = new Set(['pk', 'primary key', 'unique', 'not null', 'increment', 'null']);
 
+// The settings the Metadata blocks of the document set on this field
+// (spec §24.7), found by the field's path under its entity or View. A
+// field of an Edge or of a TablePartial shown on its own is no target.
+const metadataSettings = computed<readonly AppliedSetting[]>(() => {
+  const doc = parser.flatAst;
+  if (!doc || props.entity.kind === 'EdgeDeclaration') return [];
+  const path = joinName([...props.ancestors.map((a) => a.name), props.field.name]);
+  return metadataIndex(doc).field(props.entity.name, props.container?.name, path);
+});
+
+// A block's setting replaces the field's own and is marked in the table;
+// a block's note shows in the Note section.
+const mergedSettings = computed(() =>
+  withMetadata(props.field.settings, metadataSettings.value.filter((a) => a.setting.name !== 'note')));
+
+// A flag shows as a badge above. A custom property that a Metadata block
+// sets under a flag's name, `pk: 'true'`, carries a value and shows here.
 const standardSettings = computed(() =>
-  props.field.settings.filter(
+  mergedSettings.value.settings.filter(
     (s) => s.name !== 'note'
-      && !FLAG_SETTING_NAMES.has(s.name)
+      && !(FLAG_SETTING_NAMES.has(s.name) && s.value === null)
       && !s.name.startsWith('x_'),
   ),
 );
 
 const customSettings = computed(() =>
-  props.field.settings.filter((s) => s.name.startsWith('x_')),
+  mergedSettings.value.settings.filter((s) => s.name.startsWith('x_')),
 );
 
 // Field-level note can be a Note: '...' setting OR a separate NoteBlock
-// (the grammar accepts both). Surface the first non-empty source.
+// (the grammar accepts both). Surface the first non-empty source. A
+// Metadata block's note applies over the field's own (spec §24.7.4).
 const noteBody = computed(() => {
+  const fromBlock = metadataNote(metadataSettings.value);
+  if (fromBlock !== undefined) return fromBlock;
   const noteSetting = props.field.settings.find((s) => s.name === 'note');
   if (noteSetting && noteSetting.value && noteSetting.value.kind === 'StringValue') {
     return noteSetting.value.value;

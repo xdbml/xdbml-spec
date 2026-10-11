@@ -30,6 +30,9 @@
       "include": "#constants"
     },
     {
+      "include": "#metadata-declaration"
+    },
+    {
       "include": "#declarations"
     },
     {
@@ -98,6 +101,21 @@
           "match": "\\b((?i:reuse|from|use|as))\\b"
         }
       ]
+    },
+    "metadata-declaration": {
+      "comment": "A Metadata block (spec 24.7, v0.7): the keyword, the kind of element, and the target. Matched only as a whole, so an entity or a field may still be named metadata.",
+      "match": "\\b((?i:metadata))\\s+((?i:diagramview|tablegroup|collection|container|namespace|database|keyspace|dataset|column|entity|record|schema|bucket|table|field|note|view))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_.]*)|(?:\"[^\"]*\")))?",
+      "captures": {
+        "1": {
+          "name": "keyword.declaration.xdbml"
+        },
+        "2": {
+          "name": "keyword.declaration.xdbml"
+        },
+        "3": {
+          "name": "entity.name.type.xdbml"
+        }
+      }
     },
     "declarations": {
       "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name). `Note` is skipped where it names a field (spec 3.10): it counts as a keyword only before ':' or '{', or before a name and '{' on the same line.",

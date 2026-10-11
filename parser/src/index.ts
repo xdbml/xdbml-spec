@@ -85,6 +85,17 @@ export {
 } from './relationships.ts';
 export type { RelationshipType, ConstraintType } from './relationships.ts';
 export { checkOptionalMarks, refCardinality, refCardinalityIn } from './cardinality.ts';
+export {
+  METADATA_SETTINGS,
+  checkMetadata,
+  metadataColor,
+  metadataIndex,
+  metadataNote,
+  resolveMetadataTarget,
+  settingValueText,
+  withMetadata,
+} from './metadata.ts';
+export type { AppliedSetting, MetadataIndex, ResolvedMetadataTarget } from './metadata.ts';
 export type { CardinalityOrigin, EndCardinality, RefCardinality, RefCardinalityContext } from './cardinality.ts';
 export {
   SUPERTYPE_GROUP_VALUES,

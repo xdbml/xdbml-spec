@@ -187,6 +187,26 @@ async function main () {
       totalFailed++;
     }
   }
+  // Spec 24.7 (v0.7): Metadata and its kind, and metadata as a name.
+  console.log(`\n${CYAN}Metadata blocks${RESET}`);
+  for (const [line, word, scope] of [
+    ['Metadata Table users {', 'Metadata', 'keyword.declaration.xdbml'],
+    ['Metadata Table users {', 'Table', 'keyword.declaration.xdbml'],
+    ['metadata column users.email {', 'column', 'keyword.declaration.xdbml'],
+    ['Metadata Schema sales {', 'Schema', 'keyword.declaration.xdbml'],
+    ['  metadata json', 'metadata', null],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const has = (tok?.scopes ?? []).includes('keyword.declaration.xdbml');
+    if (scope ? has : !has) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${scope ? 'is' : 'is not'} a declaration keyword`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': ${word} expected ${scope ? '' : 'no '}keyword.declaration.xdbml, got ${(tok?.scopes ?? []).join(' ')}`);
+      totalFailed++;
+    }
+  }
   // Spec 11.1 (v0.7): a `?` against the operator is part of it.
   console.log(`\n${CYAN}Optional marks on cardinality operators${RESET}`);
   for (const [line, op] of [

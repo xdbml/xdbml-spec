@@ -63,6 +63,7 @@ export type TopLevelStatement =
   | DiagramViewDeclaration
   | NoteDeclaration
   | TopLevelRecordsDeclaration
+  | MetadataDeclaration
   | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
@@ -799,6 +800,66 @@ export interface NoteDeclaration {
 export interface NoteBlock {
   kind: 'NoteBlock';
   body: string;
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Metadata blocks (spec §24.7, v0.7; DBML 9.1)
+ *
+ *   Metadata Table users {
+ *     owner: 'scott'
+ *     note: 'Accounts of the web shop'
+ *   }
+ *
+ * Settings for an element declared elsewhere, in this file or an imported
+ * one. A block adds no element: a tool reads the element's settings with
+ * its Metadata blocks applied (`metadataIndex`, metadata.ts).
+ * ----------------------------------------------------------------------- */
+
+/** The canonical kinds a Metadata block targets. */
+export type MetadataTargetKind =
+  | 'Table'
+  | 'Column'
+  | 'TableGroup'
+  | 'Note'
+  | 'Container'
+  | 'View'
+  | 'DiagramView';
+
+export interface MetadataDeclaration {
+  kind: 'MetadataDeclaration';
+  /** The kind word as written: `Table`, `column`, `Schema`, `Field`. */
+  targetKindSource: string;
+  /**
+   * The canonical kind, or undefined when the word names none. `Entity`,
+   * `Collection` and `Record` read as `Table`, `Field` as `Column`, and a
+   * container keyword as `Container`.
+   */
+  targetKind?: MetadataTargetKind;
+  /**
+   * The target's name in the form of names.ts: `users`, `core.users`,
+   * `users.id`. An entity alias at its head is replaced by the entity's
+   * name, as in a relationship endpoint (§7.4).
+   */
+  target: string;
+  /** The target as written, before an alias is replaced. */
+  targetSource: string;
+  /** One setting per `key: value` line of the body. */
+  settings: Setting[];
+  /** Settings in brackets after the target, which DBML accepts and ignores. */
+  bracketSettings: Setting[];
+  /**
+   * The file the block was read from, when the parser knew it
+   * (`ParseOptions.filePath`). Diagnostics name it for a block that an
+   * import brought.
+   */
+  file?: string;
+  /**
+   * Set by `flatten()` on a block that an import brought rather than one
+   * the document writes itself. Imported blocks apply before the
+   * document's own (§24.7.4).
+   */
+  imported?: true;
   span: Span;
 }
 
