@@ -64,6 +64,11 @@ export interface RelationshipVisibility {
    * relationship type, so it is off by default.
    */
   relationshipNames: boolean;
+  /**
+   * Sticky notes (spec §19). Optional for callers written before v0.7;
+   * notes are drawn unless it is false.
+   */
+  stickyNotes?: boolean;
 }
 
 export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
@@ -73,6 +78,7 @@ export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
   conceptual: true,
   supertypeGroups: true,
   relationshipNames: false,
+  stickyNotes: true,
 };
 
 export interface LayoutState {
@@ -134,6 +140,8 @@ export interface DiagramHandle {
   zoomIn (): void;
   zoomOut (): void;
   zoomToFit (): void;
+  /** The canvas point at the center of the visible part of the viewport, in diagram units. */
+  viewportCenter (): { x: number; y: number };
   destroy (): void;
 }
 
@@ -209,8 +217,14 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
   function visibleModel (): DiagramModel {
     const refs = model.refs.filter(refVisible);
     const groupsHidden = !refVisibility.supertypeGroups && model.supertypeGroups.length > 0;
-    if (refs.length === model.refs.length && !groupsHidden) return model;
-    return { ...model, refs, supertypeGroups: groupsHidden ? [] : model.supertypeGroups };
+    const notesHidden = refVisibility.stickyNotes === false && (model.notes ?? []).length > 0;
+    if (refs.length === model.refs.length && !groupsHidden && !notesHidden) return model;
+    return {
+      ...model,
+      refs,
+      supertypeGroups: groupsHidden ? [] : model.supertypeGroups,
+      notes: notesHidden ? [] : model.notes,
+    };
   }
 
   function render (): void {
@@ -305,7 +319,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
   }
 
   function zoomToFit (): void {
-    const box = contentBox(model.containers, model.entities);
+    const box = contentBox(model.containers, [...model.entities, ...(visibleModel().notes ?? [])]);
     if (!box) return;
     const rect = viewport.getBoundingClientRect();
     const fit = computeFit(box, rect.width, rect.height);
@@ -321,6 +335,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
 
   type Drag =
     | { kind: 'entity'; id: string; sx: number; sy: number; cx: number; cy: number; z: number; moved: boolean }
+    | { kind: 'note'; id: string; sx: number; sy: number; cx: number; cy: number; z: number; moved: boolean }
     | { kind: 'edge'; id: string; sx: number; sy: number; cx: number; cy: number; z: number; moved: boolean }
     | { kind: 'container'; name: string; starts: Map<string, { x: number; y: number }>; cx: number; cy: number; z: number; moved: boolean };
   let drag: Drag | null = null;
@@ -334,7 +349,8 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     if (handle === 'container') {
       const name = el.getAttribute('data-name') ?? '';
       const starts = new Map<string, { x: number; y: number }>();
-      for (const ent of model.entities) {
+      // The Container carries its entities and its sticky notes (spec §19.4).
+      for (const ent of [...model.entities, ...(model.notes ?? [])]) {
         if (ent.containerName === name) starts.set(ent.id, { x: ent.bounds.x, y: ent.bounds.y });
       }
       drag = { kind: 'container', name, starts, cx: e.clientX, cy: e.clientY, z: zoom, moved: false };
@@ -343,6 +359,10 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
       if (handle === 'edge') {
         const cur = offsets.get(id) ?? { dx: 0, dy: 0 };
         drag = { kind: 'edge', id, sx: cur.dx, sy: cur.dy, cx: e.clientX, cy: e.clientY, z: zoom, moved: false };
+      } else if (handle === 'note') {
+        const note = (model.notes ?? []).find((n) => n.id === id);
+        if (!note) return;
+        drag = { kind: 'note', id, sx: note.bounds.x, sy: note.bounds.y, cx: e.clientX, cy: e.clientY, z: zoom, moved: false };
       } else {
         const ent = model.entities.find((x) => x.id === id) ?? model.edges.map((m) => m.box).find((b) => b.id === id);
         if (!ent) return;
@@ -365,7 +385,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     const dxSvg = dxPx / drag.z;
     const dySvg = dyPx / drag.z;
 
-    if (drag.kind === 'entity') {
+    if (drag.kind === 'entity' || drag.kind === 'note') {
       const next = new Map(positions);
       next.set(drag.id, { x: Math.max(0, drag.sx + dxSvg), y: Math.max(0, drag.sy + dySvg) });
       positions = next;
@@ -394,7 +414,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     if (!d) return;
 
     if (d.moved) {
-      if (d.kind === 'entity') {
+      if (d.kind === 'entity' || d.kind === 'note') {
         const cur = positions.get(d.id);
         if (cur) {
           const next = new Map(positions);
@@ -422,6 +442,7 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     } else {
       // No movement: a press on a handle selects.
       if (d.kind === 'container') setSelection({ kind: 'container', name: d.name });
+      else if (d.kind === 'note') setSelection({ kind: 'note', id: d.id });
       else setSelection({ kind: 'entity', id: d.id });
     }
   }
@@ -532,6 +553,12 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     zoomIn (): void { const n = nextZoomLevel(zoom); if (n !== null) setZoom(n); },
     zoomOut (): void { const p = prevZoomLevel(zoom); if (p !== null) setZoom(p); },
     zoomToFit,
+    viewportCenter (): { x: number; y: number } {
+      return {
+        x: (viewport.scrollLeft + viewport.clientWidth / 2) / zoom,
+        y: (viewport.scrollTop + viewport.clientHeight / 2) / zoom,
+      };
+    },
     destroy (): void {
       viewport.removeEventListener('mousedown', onMouseDown);
       viewport.removeEventListener('click', onClick);

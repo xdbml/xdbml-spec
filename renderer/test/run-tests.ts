@@ -23,6 +23,12 @@ import {
   autoArrange,
   serializeDiagram,
   layoutSupertypeGroups,
+  parseMarkdown,
+  parseInline,
+  layoutNoteText,
+  sizeNote,
+  NOTE_WIDTHS,
+  defaultTheme,
   type DiagramModel,
 } from '../src/index.ts';
 
@@ -694,6 +700,88 @@ Metadata Table audit {
   check('metadata §24.7.4: an entity\'s header color from a block applies over its group\'s', header('audit') === '#FEDCBA', String(header('audit')));
   const sales = m.containers.find((c) => c.name === 'sales');
   check('metadata §24.7.4: a block sets a Container\'s color over its own', sales?.accentColor === '#AA0000', String(sales?.accentColor));
+}
+
+/* ---- Sticky notes (spec §19, v0.7) --------------------------------- */
+{
+  const md = (t: string) => JSON.stringify(parseMarkdown(t));
+  check('markdown: a heading, a paragraph joined with a space, and a list',
+    md('# Title\nline one\nline two\n\n- a\n- **b**') === JSON.stringify([
+      { kind: 'heading', level: 1, inlines: [{ text: 'Title' }] },
+      { kind: 'paragraph', inlines: [{ text: 'line one line two' }] },
+      { kind: 'list', ordered: false, start: 1, items: [
+        [{ kind: 'paragraph', inlines: [{ text: 'a' }] }],
+        [{ kind: 'paragraph', inlines: [{ text: 'b', strong: true }] }],
+      ] },
+    ]), md('# Title\nline one\nline two\n\n- a\n- **b**'));
+  check('markdown: emphasis, code, links, strikethrough and an escape',
+    JSON.stringify(parseInline('*a* __b__ `c` [d](https://x.org) ~~e~~ \\*f')) === JSON.stringify([
+      { text: 'a', em: true }, { text: ' ' }, { text: 'b', strong: true }, { text: ' ' }, { text: 'c', code: true }, { text: ' ' },
+      { text: 'd', href: 'https://x.org' }, { text: ' ' }, { text: 'e', strike: true }, { text: ' *f' },
+    ]), JSON.stringify(parseInline('*a* __b__ `c` [d](https://x.org) ~~e~~ \\*f')));
+  check('markdown: an underscore inside a word stays (snake_case)',
+    JSON.stringify(parseInline('order_line_id and _x_')) === JSON.stringify([{ text: 'order_line_id and ' }, { text: 'x', em: true }]));
+  check('markdown: a nested list, a quote, a fenced code block and a rule',
+    parseMarkdown('1. one\n   - sub\n2. two\n\n> quoted\n\n```\nSELECT 1;\n```\n\n---').map((b) => b.kind).join(',') === 'list,quote,code,rule');
+  check('markdown: a table stays as written',
+    JSON.stringify(parseMarkdown('| a | b |\n|---|---|')) === JSON.stringify([{ kind: 'verbatim', lines: ['| a | b |', '|---|---|'] }]));
+
+  const short = sizeNote('Short');
+  check('note size: a short note takes the narrowest width and the minimum height', short.width === NOTE_WIDTHS[0] && short.height === NOTE_WIDTHS[0] / 2,
+    `${short.width}x${short.height}`);
+  const long = sizeNote(Array.from({ length: 40 }, (_, i) => `Sentence number ${i} about the model.`).join(' '));
+  check('note size: a long note widens before it grows', long.width === NOTE_WIDTHS[NOTE_WIDTHS.length - 1] && long.height > long.width,
+    `${long.width}x${long.height}`);
+  const mid = sizeNote(Array.from({ length: 12 }, (_, i) => `Sentence ${i} here.`).join(' '));
+  check('note size: a box is no taller than wide when a width allows it', mid.height <= mid.width, `${mid.width}x${mid.height}`);
+  const lines = layoutNoteText('A **bold** word and [a link](https://xdbml.org).', 120).lines;
+  check('note text: lines fit the width', lines.length > 1 && lines.every((l) => l.runs.length > 0));
+  check('note text: a style change inside a word is no place to break',
+    layoutNoteText('[guide](https://x.org).', 40).lines.every((l) => l.runs.map((r) => r.text).join('') !== '.'));
+
+  const src = `xdbml: 0.7
+Container sales [type: schema] {
+  Entity orders { id int [pk] }
+  Note states [color: #FBCFE8, owner: 'ops'] { 'placed, shipped' }
+}
+Note legend { 'Legend' }
+Note plain [color: none] { 'Plain' }
+Note odd [color: red] { 'Odd' }
+Note meta [color: #111111] { 'Meta' }
+Metadata Note meta { color: #222222 }
+DiagramView sales_only { Containers { sales } }
+DiagramView legend_only { Notes { legend } }`;
+  const m = buildDiagram(flatten(parse(src)));
+  const note = (id: string) => m.notes.find((n) => n.id === `note:${id}`);
+  check('notes: one layout per sticky note, in declaration order',
+    m.notes.map((n) => n.name).join(',') === 'sales.states,legend,plain,odd,meta', m.notes.map((n) => n.name).join(','));
+  check('notes: a note in a Container stacks below its entities, inside the frame', (() => {
+    const c = m.containers[0].bounds; const n = note('sales.states')!.bounds; const e = m.entities[0].bounds;
+    return note('sales.states')!.containerName === 'sales' && n.y > e.y + e.height && c.y + c.height >= n.y + n.height && c.x < n.x;
+  })());
+  check('notes: the colors of the brackets, none, and the default for a value that is no color',
+    note('sales.states')?.color === '#FBCFE8' && note('plain')?.transparent === true && note('plain')?.color === undefined
+      && note('odd')?.color === undefined && note('legend')?.color === undefined);
+  check('notes: a Metadata color applies over the brackets (§24.7.4)', note('meta')?.color === '#222222', String(note('meta')?.color));
+  const svg = serializeDiagram(m);
+  check('notes: drawn with a title, the default fill and the folded corner',
+    svg.includes('<title>legend</title>') && svg.includes(`fill="${defaultTheme.note.fill}"`) && svg.includes('fill-opacity="0.14"'));
+  check('notes: a note with color none draws no box', (() => {
+    const at = svg.indexOf('<title>plain</title>');
+    const end = svg.indexOf('</g>', at);
+    return at > 0 && !svg.slice(at, end).includes('<path');
+  })());
+  const dv = buildDiagram(flatten(parse(src)), new Set(), { diagramView: 'sales_only' });
+  check('notes: a diagram view draws the notes of a listed Container (§18.2)', dv.notes.map((n) => n.name).join(',') === 'sales.states');
+  const lv = buildDiagram(flatten(parse(src)), new Set(), { diagramView: 'legend_only' });
+  check('notes: a diagram view of a note alone draws it and no entity', lv.notes.map((n) => n.name).join(',') === 'legend' && lv.entities.length === 0);
+  const arranged = autoArrange(m, 'relational');
+  check('notes: the arrangement positions every note', m.notes.every((n) => arranged.has(n.id)));
+  const placed = applyUserPositions(m, new Map([['note:legend', { x: 900, y: 700 }]]));
+  check('notes: a user position moves a note and grows the canvas',
+    placed.notes.find((n) => n.id === 'note:legend')?.bounds.x === 900 && placed.width >= 900 + NOTE_WIDTHS[0]);
+  const onlyNotes = buildDiagram(flatten(parse("Note a { 'x' }\nNote b { 'y' }")));
+  check('notes: a document of notes alone is arranged', autoArrange(onlyNotes, 'relational').size === 2);
 }
 
 /* ---- Report -------------------------------------------------------- */

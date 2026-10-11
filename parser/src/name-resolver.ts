@@ -61,6 +61,7 @@ import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSeg
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkOptionalMarks } from './cardinality.ts';
+import { checkNotes } from './notes.ts';
 import { checkMetadata } from './metadata.ts';
 import { checkSupertypeGroups } from './supertypes.ts';
 import { checkConstraints, checkTargets } from './constraints.ts';
@@ -152,6 +153,9 @@ export type DiagnosticCode =
   | 'metadata-custom-property'
   | 'metadata-override'
   | 'duplicate-setting'
+  // Sticky notes and the note of the project (spec §19, v0.7)
+  | 'invalid-note-color'
+  | 'duplicate-project-note'
   | 'empty-import'
   | 'invalid-nested-path'
   | 'foreign-master-composite'
@@ -427,6 +431,10 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
   // Pass 2c: Metadata blocks, and settings written twice (spec §24.5, §24.7).
   diagnostics.push(...checkMetadata(flat));
 
+  // Pass 2d: sticky notes and the note of the project (spec §19.7), in the
+  // document's own declarations; an imported note is checked in its file.
+  diagnostics.push(...checkNotes(doc));
+
   // Pass 3: relationship rules that the grammar cannot express (spec 11.11),
   // and a `?` that disagrees with a cardinality setting (spec §11.7).
   diagnostics.push(...checkRelationships(flat));
@@ -548,6 +556,10 @@ function addTopLevelDeclaration (
           case 'EnumDeclaration':
             addEntry(body.name, stmt.name, 'enum', body, body.span, entries, diagnostics, seen);
             break;
+          case 'NoteDeclaration':
+            // A sticky note attached to the Container (spec §19.4).
+            if (body.name !== undefined) addEntry(body.name, stmt.name, 'note', body, body.span, entries, diagnostics, seen);
+            break;
           // NoteBlock and ModuleImportDirective contribute no symbols.
           default:
             break;
@@ -561,11 +573,20 @@ function addTopLevelDeclaration (
     case 'TablePartialDeclaration':
       addEntry(stmt.name, undefined, 'tablepartial', stmt, stmt.span, entries, diagnostics, seen);
       return;
-    case 'NoteDeclaration':
-      if (stmt.name) {
+    case 'NoteDeclaration': {
+      // A sticky note (spec §19.2). `Note core.legend`, the DBML form, files
+      // the note under the implicit Container `core`, so a note of that name
+      // in `Container core` is a duplicate. A Note without a name is the note
+      // of the project (§19.5) and contributes no symbol.
+      if (stmt.name === undefined) return;
+      const qualifier = nameQualifier(stmt.name);
+      if (qualifier) {
+        addEntry(quoteNameSegment(lastNameSegment(stmt.name)), qualifier, 'note', stmt, stmt.span, entries, diagnostics, seen);
+      } else {
         addEntry(stmt.name, undefined, 'note', stmt, stmt.span, entries, diagnostics, seen);
       }
       return;
+    }
     // No symbols contributed by Project, Ref, top-level Records, ModuleImportDirective.
     default:
       return;
@@ -609,11 +630,12 @@ function addEntry (
     }
   }
   if (seen.has(key)) {
+    const label = kind === 'note' ? 'sticky note' : kind;
     diagnostics.push({
       severity: 'error',
       code: 'duplicate-declaration',
-      message: `Duplicate ${kind} declaration '${qualifiedName}'. ` +
-        `Each ${kind} must have a unique qualified name within its scope.`,
+      message: `Duplicate ${label} declaration '${qualifiedName}'. ` +
+        `Each ${label} must have a unique qualified name within its scope.`,
       span,
     });
     return;

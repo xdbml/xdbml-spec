@@ -18,8 +18,12 @@
  * as one block and the blocks are packed in rows sized for a landscape view,
  * so the auto-derived container boxes stay tight and non-overlapping. Output is snapped to the canvas
  * grid pitch so orthogonal edges run in clean channels.
+ *
+ * Sticky notes (spec §19) join no graph: a Container's notes sit in rows
+ * below its entities, inside its frame, and the notes outside any Container
+ * form a block of their own, packed with the others.
  */
-import type { DiagramModel, EntityLayout, UserPositions } from './layout.ts';
+import type { DiagramModel, EntityLayout, NoteLayout, UserPositions } from './layout.ts';
 import { CANVAS_MARGIN, CONTAINER_HEADER_HEIGHT, CONTAINER_PADDING } from './layout.ts';
 
 export type ArrangeStrategy = 'relational' | 'star';
@@ -36,6 +40,13 @@ const ASPECT = 1.6;
 // between a supertype and its subtypes for the stem, the symbol and the
 // buses of several groups (spec 12.9).
 const HIERARCHY_GAP = 36;
+// Gap between two sticky notes, and between the entities of a block and the
+// notes below them.
+const NOTE_GAP = 40;
+// A row of notes outside any Container wraps past this width.
+const NOTE_ROW_WIDTH = 820;
+// Key of the block of notes outside any Container; no Container is named so.
+const FREE_NOTES = '\u0000notes';
 
 interface XY { x: number; y: number; }
 interface Cell { col: number; row: number; }
@@ -51,7 +62,8 @@ export function autoArrange (
   diagram: DiagramModel,
   strategy: ArrangeStrategy,
 ): UserPositions {
-  if (diagram.entities.length === 0) return new Map();
+  const notes: NoteLayout[] = diagram.notes ?? [];
+  if (diagram.entities.length === 0 && notes.length === 0) return new Map();
 
   const sizeOf = new Map<string, { w: number; h: number }>();
   let laneW = 0;
@@ -63,6 +75,7 @@ export function autoArrange (
   }
   laneW += GUTTER_X;
   laneH += GUTTER_Y;
+  for (const n of notes) sizeOf.set(n.id, { w: n.bounds.width, h: n.bounds.height });
 
   // Group by container so each container's members stay contiguous.
   const groups = new Map<string, EntityLayout[]>();
@@ -72,18 +85,30 @@ export function autoArrange (
     arr.push(e);
     groups.set(key, arr);
   }
+  const noteGroups = new Map<string, NoteLayout[]>();
+  for (const n of notes) {
+    const key = n.containerName ?? FREE_NOTES;
+    noteGroups.set(key, [...(noteGroups.get(key) ?? []), n]);
+    // A Container that holds notes only still gets a block.
+    if (n.containerName && !groups.has(n.containerName)) groups.set(n.containerName, []);
+  }
+  if (noteGroups.has(FREE_NOTES)) groups.set(FREE_NOTES, []);
 
   const blocks: Block[] = [];
   for (const [containerName, members] of groups) {
-    const pos = strategy === 'star'
-      ? layoutStar(members, diagram, sizeOf, laneW, laneH)
-      : layoutRelational(members, diagram, sizeOf, laneW, laneH);
+    let pos = members.length === 0
+      ? new Map<string, XY>()
+      : strategy === 'star'
+        ? layoutStar(members, diagram, sizeOf, laneW, laneH)
+        : layoutRelational(members, diagram, sizeOf, laneW, laneH);
+    const groupNotes = noteGroups.get(containerName) ?? [];
+    if (groupNotes.length > 0) pos = placeNotesBelow(pos, groupNotes, sizeOf, containerName === FREE_NOTES ? NOTE_ROW_WIDTH : 0);
     // Reserve the container chrome (header band on top, inset on all
     // sides) for grouped entities so the box applyUserPositions derives
     // upward from these members never extends above or left of the canvas
     // origin -- which would put the title bar out of scroll reach -- and
     // so adjacent containers don't overlap.
-    blocks.push(groupBlock(pos, sizeOf, containerName !== ''));
+    blocks.push(groupBlock(pos, sizeOf, containerName !== '' && containerName !== FREE_NOTES));
   }
 
   const out = new Map<string, XY>();
@@ -537,6 +562,44 @@ function bfsOrder (comp: string[], adj: Map<string, Map<string, number>>): strin
   // any stragglers (shouldn't happen within a component)
   for (const n of comp) if (!seen.has(n)) order.push(n);
   return order;
+}
+
+/**
+ * Place notes in rows below the positioned entities of a block, from its
+ * left edge. A row wraps past the block's width, or past `minRow` when that
+ * is wider, and holds at least one note.
+ */
+function placeNotesBelow (
+  pos: Map<string, XY>,
+  notes: NoteLayout[],
+  sizeOf: Map<string, { w: number; h: number }>,
+  minRow: number,
+): Map<string, XY> {
+  const out = new Map(pos);
+  let minX = Infinity; let maxX = -Infinity; let maxY = -Infinity;
+  for (const [id, p] of pos) {
+    const s = sizeOf.get(id) ?? { w: 0, h: 0 };
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x + s.w);
+    maxY = Math.max(maxY, p.y + s.h);
+  }
+  const left = Number.isFinite(minX) ? minX : 0;
+  const rowWidth = Math.max(minRow, Number.isFinite(maxX) ? maxX - left : 0);
+  let x = left;
+  let y = Number.isFinite(maxY) ? maxY + NOTE_GAP : 0;
+  let rowH = 0;
+  for (const n of notes) {
+    const w = n.bounds.width;
+    if (x > left && x + w - left > rowWidth) {
+      x = left;
+      y += rowH + NOTE_GAP;
+      rowH = 0;
+    }
+    out.set(n.id, { x, y });
+    x += w + NOTE_GAP;
+    rowH = Math.max(rowH, n.bounds.height);
+  }
+  return out;
 }
 
 function cellsToPixels (cells: Map<string, Cell>, laneW: number, laneH: number): Map<string, XY> {

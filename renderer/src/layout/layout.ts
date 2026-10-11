@@ -48,6 +48,7 @@ import {
   refCardinalityIn,
   resolveSupertypeGroups,
   splitName,
+  stickyNotes,
   tablePartials,
 } from '@xdbml/parse';
 import type {
@@ -58,6 +59,7 @@ import type {
   EntityDeclaration,
   FieldDeclaration,
   IndexesBlock,
+  NoteDeclaration,
   RefDeclaration,
   RefValue,
   ScalarType,
@@ -69,6 +71,7 @@ import type {
   ViewDeclaration,
   XDbmlDocument,
 } from '@xdbml/parse';
+import { layoutNoteText, type NoteText } from './note-text.ts';
 
 /* -------------------------------------------------------------------------
  * Output shape
@@ -82,6 +85,8 @@ export interface DiagramModel {
   edges: EdgeLayout[];
   /** Supertype groups (spec §12), drawn as a half-circle below the supertype. */
   supertypeGroups: SupertypeGroupLayout[];
+  /** Sticky notes (spec §19), drawn as boxes holding their Markdown text. */
+  notes: NoteLayout[];
   /** Overall canvas size needed to hold the laid-out content. */
   width: number;
   height: number;
@@ -107,6 +112,27 @@ export interface SupertypeGroupLayout {
   unresolved: boolean;
   /** The declaration this group was built from. */
   decl: SupertypeGroupDeclaration;
+}
+
+/**
+ * A sticky note (spec §19.2), sized to its text (§19.6). Positioned like an
+ * entity: by the column layout, an arrangement, or a user's drag.
+ */
+export interface NoteLayout {
+  /** `note:<name>`: kept apart from entity ids in the positions map. */
+  id: string;
+  /** The note's id in the model: `sales.order_states` in a Container (§19.4), the name as declared at the top level. */
+  name: string;
+  /** The Container whose frame holds the note and carries it (§19.4). */
+  containerName?: string;
+  /** The color from the note's brackets or a Metadata block (§19.3, §24.7.4); undefined for the default. */
+  color?: string;
+  /** `color: none`: the text alone, with no box (§19.3). */
+  transparent: boolean;
+  /** The text, in lines that fit the box. */
+  text: NoteText;
+  bounds: Rect;
+  decl: NoteDeclaration;
 }
 
 export interface ContainerLayout {
@@ -371,6 +397,16 @@ export const EDGE_COLLAPSED_WIDTH = 168;
 const EDGE_SELF_GAP = 64;          // horizontal gap from a node to its self-edge box
 const EDGE_PARALLEL_SPREAD = 104;  // perpendicular spread between parallel edges
 const EDGE_SELF_SPREAD = 16;       // vertical gap between stacked self-edge boxes
+/** Inner padding of a sticky note, around its text (spec §19.6). */
+export const NOTE_PADDING = 12;
+/**
+ * The widths a sticky note takes, narrowest first. A note takes the first
+ * width at which its box is no taller than wide, so a long text widens the
+ * note before it grows into a column; the widest takes any height.
+ */
+export const NOTE_WIDTHS = [220, 280, 340] as const;
+/** A note is at least half as tall as it is wide, so a line of text still reads as a note. */
+const NOTE_MIN_RATIO = 0.5;
 
 /* -------------------------------------------------------------------------
  * Target -> accent color
@@ -589,6 +625,13 @@ export function buildDiagram (
     }
   }
 
+  // Sticky notes (spec §19), sized to their text. A note in a Container
+  // stacks below the Container's entities; the others take a column of
+  // their own after every other column.
+  const noteLayouts: NoteLayout[] = buildNotes(doc, partialScope.metadata);
+  const notesOf = (containerName: string | undefined): NoteLayout[] =>
+    noteLayouts.filter((n) => n.containerName === containerName);
+
   // Place each container's entities in a vertical column.
   const entityLayouts: EntityLayout[] = [];
   const containerLayouts: ContainerLayout[] = [];
@@ -626,6 +669,11 @@ export function buildDiagram (
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
     }
+    const containerNotes = notesOf(container.name);
+    for (const note of containerNotes) {
+      note.bounds = { ...note.bounds, x: innerLeft, y: entityCursorY };
+      entityCursorY += note.bounds.height + ENTITY_GAP_Y;
+    }
 
     // Container height = header band + top padding + entity content +
     // bottom padding. After the entity loop, `entityCursorY` points
@@ -639,7 +687,8 @@ export function buildDiagram (
     // than the equivalent bounds produced by `applyUserPositions`.
     // Now both paths agree.
     const containerHeight = (entityCursorY - innerTop) + CONTAINER_PADDING * 2 + CONTAINER_HEADER_HEIGHT
-      - (containerEntities.length > 0 ? ENTITY_GAP_Y : 0);
+      - (containerEntities.length + containerNotes.length > 0 ? ENTITY_GAP_Y : 0);
+    const innerWidth = Math.max(ENTITY_WIDTH, ...containerNotes.map((n) => n.bounds.width));
 
     const containerLayout: ContainerLayout = {
       id: `container:${container.name}`,
@@ -651,7 +700,7 @@ export function buildDiagram (
       bounds: {
         x: cursorX,
         y: CANVAS_MARGIN,
-        width: ENTITY_WIDTH + CONTAINER_PADDING * 2,
+        width: innerWidth + CONTAINER_PADDING * 2,
         height: Math.max(containerHeight, CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING * 2),
       },
     };
@@ -673,6 +722,16 @@ export function buildDiagram (
     }
     maxBottom = Math.max(maxBottom, entityCursorY);
     cursorX += ENTITY_WIDTH + CONTAINER_GAP_X;
+  }
+
+  // Sticky notes outside any Container, in a column of their own.
+  {
+    const free = notesOf(undefined);
+    const placed = placeNoteColumn(free, cursorX);
+    if (free.length > 0) {
+      maxBottom = Math.max(maxBottom, placed.bottom);
+      cursorX = placed.right + CONTAINER_GAP_X;
+    }
   }
 
   // Resolve refs against the entities we just placed.
@@ -778,11 +837,14 @@ export function buildDiagram (
   let shownEntities = entityLayouts;
   let shownRefs = refLayouts;
   let shownContainers = containerLayouts;
+  let shownNotes = noteLayouts;
   if (boxIds) {
     shownEntities = entityLayouts.filter((e) => boxIds.has(e.id));
     shownRefs = refLayouts.filter((r) =>
       !!r.source && !!r.target && boxIds.has(r.source.entityId) && boxIds.has(r.target.entityId));
-    const restacked = restackColumns(shownEntities, containerLayouts);
+    const noteIds = new Set(members?.notes ?? []);
+    shownNotes = noteLayouts.filter((n) => noteIds.has(n.name));
+    const restacked = restackColumns(shownEntities, containerLayouts, shownNotes);
     shownContainers = restacked.containers;
     cursorX = restacked.width;
     maxBottom = restacked.bottom;
@@ -849,6 +911,10 @@ export function buildDiagram (
     width = Math.max(width, e.box.bounds.x + e.box.bounds.width + CANVAS_MARGIN);
     height = Math.max(height, e.box.bounds.y + e.box.bounds.height + CANVAS_MARGIN);
   }
+  for (const n of shownNotes) {
+    width = Math.max(width, n.bounds.x + n.bounds.width + CANVAS_MARGIN);
+    height = Math.max(height, n.bounds.y + n.bounds.height + CANVAS_MARGIN);
+  }
 
   return {
     containers: shownContainers,
@@ -856,38 +922,106 @@ export function buildDiagram (
     refs: shownRefs,
     edges,
     supertypeGroups,
+    notes: shownNotes,
     width,
     height,
   };
 }
 
+/* -------------------------------------------------------------------------
+ * Sticky notes (spec §19)
+ * ----------------------------------------------------------------------- */
+
+const NOTE_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/**
+ * The sticky notes of a document, sized to their text and placed at the
+ * origin. The color comes from a Metadata block, then from the note's own
+ * brackets (spec §24.7.4); a value that is no color leaves the default.
+ */
+function buildNotes (doc: XDbmlDocument, metadata: MetadataIndex): NoteLayout[] {
+  return stickyNotes(doc).map((p) => {
+    const raw = metadataColor(metadata.note(p.id), 'color') ?? settingValueAsString(p.decl.settings, 'color');
+    const transparent = raw?.toLowerCase() === 'none';
+    const color = raw && !transparent && NOTE_COLOR.test(raw) ? raw : undefined;
+    const size = sizeNote(p.decl.body);
+    return {
+      id: `note:${p.id}`,
+      name: p.id,
+      containerName: p.container?.name,
+      color,
+      transparent,
+      text: size.text,
+      bounds: { x: 0, y: 0, width: size.width, height: size.height },
+      decl: p.decl,
+    };
+  });
+}
+
+/**
+ * The size of a sticky note: the first width of NOTE_WIDTHS at which the
+ * box is no taller than wide, and a height that holds the text, at least
+ * NOTE_MIN_RATIO of the width.
+ */
+export function sizeNote (body: string): { width: number; height: number; text: NoteText } {
+  let last: { width: number; height: number; text: NoteText } | undefined;
+  for (const width of NOTE_WIDTHS) {
+    const text = layoutNoteText(body, width - NOTE_PADDING * 2);
+    const height = Math.max(Math.ceil(width * NOTE_MIN_RATIO), text.height + NOTE_PADDING * 2);
+    last = { width, height, text };
+    if (height <= width) break;
+  }
+  return last as { width: number; height: number; text: NoteText };
+}
+
+/** Stack notes in a column whose left edge is `x`, from the top margin. */
+function placeNoteColumn (notes: NoteLayout[], x: number): { right: number; bottom: number } {
+  let y = CANVAS_MARGIN;
+  let right = x;
+  for (const n of notes) {
+    n.bounds = { ...n.bounds, x, y };
+    y += n.bounds.height + ENTITY_GAP_Y;
+    right = Math.max(right, x + n.bounds.width);
+  }
+  return { right, bottom: y };
+}
+
 /**
  * Stack the entities shown in a diagram view again, one column per
- * Container in declaration order and a last column for entities outside
- * any Container, as `buildDiagram` lays out the full diagram. Moves the
- * entity bounds in place and returns the Containers that hold one, with
- * new bounds. Field rows are relative to their entity, so they follow.
+ * Container in declaration order, a column for entities outside any
+ * Container and a last one for sticky notes outside any Container, as
+ * `buildDiagram` lays out the full diagram; a Container's notes stack below
+ * its entities. Moves the bounds in place and returns the Containers that
+ * hold an entity or a note, with new bounds. Field rows are relative to
+ * their entity, so they follow.
  */
 function restackColumns (
   entities: EntityLayout[],
   containers: ContainerLayout[],
+  notes: NoteLayout[] = [],
 ): { containers: ContainerLayout[]; width: number; bottom: number } {
   const out: ContainerLayout[] = [];
   let cursorX = CANVAS_MARGIN;
   let bottom = CANVAS_MARGIN;
   for (const container of containers) {
     const own = entities.filter((e) => e.containerName === container.name);
-    if (own.length === 0) continue;
+    const ownNotes = notes.filter((n) => n.containerName === container.name);
+    if (own.length === 0 && ownNotes.length === 0) continue;
     const innerTop = CANVAS_MARGIN + CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING;
     let y = innerTop;
     for (const e of own) {
       e.bounds = { ...e.bounds, x: cursorX + CONTAINER_PADDING, y };
       y += e.bounds.height + ENTITY_GAP_Y;
     }
+    for (const n of ownNotes) {
+      n.bounds = { ...n.bounds, x: cursorX + CONTAINER_PADDING, y };
+      y += n.bounds.height + ENTITY_GAP_Y;
+    }
     const height = (y - innerTop) - ENTITY_GAP_Y + CONTAINER_PADDING * 2 + CONTAINER_HEADER_HEIGHT;
+    const innerWidth = Math.max(ENTITY_WIDTH, ...ownNotes.map((n) => n.bounds.width));
     const placed: ContainerLayout = {
       ...container,
-      bounds: { x: cursorX, y: CANVAS_MARGIN, width: ENTITY_WIDTH + CONTAINER_PADDING * 2, height },
+      bounds: { x: cursorX, y: CANVAS_MARGIN, width: innerWidth + CONTAINER_PADDING * 2, height },
     };
     out.push(placed);
     bottom = Math.max(bottom, placed.bounds.y + placed.bounds.height);
@@ -902,6 +1036,12 @@ function restackColumns (
     }
     bottom = Math.max(bottom, y);
     cursorX += ENTITY_WIDTH + CONTAINER_GAP_X;
+  }
+  const free = notes.filter((n) => !n.containerName);
+  if (free.length > 0) {
+    const placed = placeNoteColumn(free, cursorX);
+    bottom = Math.max(bottom, placed.bottom);
+    cursorX = placed.right + CONTAINER_GAP_X;
   }
   return { containers: out, width: cursorX, bottom };
 }
@@ -1038,6 +1178,7 @@ function emptyDiagram (): DiagramModel {
     refs: [],
     edges: [],
     supertypeGroups: [],
+    notes: [],
     width: 400,
     height: 200,
   };
@@ -2000,7 +2141,8 @@ function settingValueAsString (settings: ReadonlyArray<Setting>, name: string): 
 
 /**
  * Per-entity position override. Keyed by `EntityLayout.id` (which is
- * `containerName.entityName` or just `entityName` for orphans).
+ * `containerName.entityName` or just `entityName` for orphans), and by
+ * `NoteLayout.id` (`note:<name>`) for a sticky note.
  *
  * Positions are in SVG coordinates -- same coordinate system the layout
  * function produces. Storing in SVG units rather than viewport pixels
@@ -2090,9 +2232,17 @@ export function applyUserPositions (
     };
   });
 
-  // Index entities by their containerName for the container-recomputation pass.
-  const byContainer = new Map<string, EntityLayout[]>();
-  for (const e of newEntities) {
+  // Sticky notes move like entities (spec §19.6), under ids of their own.
+  const newNotes: NoteLayout[] = (diagram.notes ?? []).map((note) => {
+    const override = userPositions.get(note.id);
+    if (!override) return note;
+    return { ...note, bounds: { ...note.bounds, x: override.x, y: override.y } };
+  });
+
+  // Index entities and attached notes by their containerName for the
+  // container-recomputation pass.
+  const byContainer = new Map<string, Array<{ bounds: Rect }>>();
+  for (const e of [...newEntities, ...newNotes]) {
     if (!e.containerName) continue;
     const list = byContainer.get(e.containerName) ?? [];
     list.push(e);
@@ -2142,7 +2292,7 @@ export function applyUserPositions (
     if (c.bounds.x + c.bounds.width > canvasMaxX) canvasMaxX = c.bounds.x + c.bounds.width;
     if (c.bounds.y + c.bounds.height > canvasMaxY) canvasMaxY = c.bounds.y + c.bounds.height;
   }
-  for (const e of newEntities) {
+  for (const e of [...newEntities, ...newNotes]) {
     if (e.bounds.x + e.bounds.width > canvasMaxX) canvasMaxX = e.bounds.x + e.bounds.width;
     if (e.bounds.y + e.bounds.height > canvasMaxY) canvasMaxY = e.bounds.y + e.bounds.height;
   }
@@ -2166,6 +2316,7 @@ export function applyUserPositions (
     refs: diagram.refs,
     edges: newEdges,
     supertypeGroups: diagram.supertypeGroups,
+    notes: newNotes,
     width: Math.max(diagram.width, canvasMaxX + CANVAS_MARGIN),
     height: Math.max(diagram.height, canvasMaxY + CANVAS_MARGIN),
   };

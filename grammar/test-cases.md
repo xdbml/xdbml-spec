@@ -1453,6 +1453,137 @@ line string'''
 
 ---
 
+## §19 Sticky notes (v0.7)
+
+### VALID -- a sticky note with a color and custom properties (DBML)
+
+```
+Table orders {
+  id int [pk]
+}
+
+Note design_decision [color: #F4D03F, author: "docs"] {
+  '''
+  ## Line items stay in orders
+
+  Reads outnumber writes **100 to 1**.
+  '''
+}
+```
+
+### VALID -- color none, a quoted name, and a qualified name in the implicit Container (DBML)
+
+```
+Table core.users {
+  id int [pk]
+}
+
+Note "Release plan" [color: none] {
+  'Deprecated fields leave in release 4.2.'
+}
+
+Note core.legend {
+  'Every table of core belongs to the web shop.'
+}
+```
+
+### VALID -- a sticky note in a Container, beside the Container's own note (v0.7)
+
+```
+xdbml: 0.7
+
+Container sales [type: schema] {
+  Note: 'Order management'
+
+  Entity orders {
+    id     int [pk]
+    status varchar
+  }
+
+  Note order_states [color: #FBCFE8] {
+    'An order moves from placed to shipped to delivered.'
+  }
+}
+
+DiagramView order_flow {
+  Tables {
+    sales.orders
+  }
+  Notes {
+    sales.order_states
+  }
+}
+
+Metadata Note sales.order_states {
+  owner: 'ops'
+}
+```
+
+### VALID -- a top-level Note without a name is the note of the project
+
+```
+Table orders {
+  id int [pk]
+}
+
+Note: 'Reference model of the web shop'
+```
+
+### VALID with a warning -- a second note of the project (duplicate-project-note, §19.5)
+
+```
+Project shop {
+  Note: 'Reference model'
+}
+
+Note: 'Maintained by the data team'
+```
+
+### INVALID -- a sticky note in a Container, without xdbml: 0.7 (§19.4)
+
+```
+Container sales [type: schema] {
+  Note order_states {
+    'placed, shipped, delivered'
+  }
+}
+```
+
+### INVALID -- a color of another form (invalid-note-color, §19.3)
+
+```
+Note reminder [color: red] {
+  'Review the owners'
+}
+```
+
+### INVALID -- settings on a Note without a name (§19.5)
+
+```
+Note [color: #F4D03F] {
+  'Reference model'
+}
+```
+
+### INVALID -- a sticky note with an empty body (§19.2)
+
+```
+Note reminder {
+}
+```
+
+### INVALID -- two sticky notes of one name (duplicate-declaration, §19.2)
+
+```
+Note reminder {
+  'one'
+}
+
+Note reminder {
+  'two'
+}
+```
+
 ## §24.7 Metadata blocks (v0.7)
 
 ### VALID -- Table, Column, TableGroup and Note blocks (DBML)

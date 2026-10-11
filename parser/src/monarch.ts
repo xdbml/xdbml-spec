@@ -241,9 +241,10 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       [/\bx_[a-zA-Z0-9_]+/, 'identifier.custom-property'],
 
       // Spec §3.10 (v0.6.1): `Note` starts a note only before ':' or '{',
-      // or at the top level before a name and '{'. Anywhere else it names a
+      // or before the name of a sticky note, qualified or not, its settings
+      // brackets, and '{' or ':' (§19.2, v0.7). Anywhere else it names a
       // field, so it takes the identifier color like any other field name.
-      [/note(?![\w$])(?!\s*[:{])(?!\s+(?:[A-Za-z_][\w$]*|"[^"]*")\s*\{)/, 'identifier'],
+      [/note(?![\w$])(?!\s*[:{])(?!\s+(?:[A-Za-z_][\w$]*|"[^"]*")(?:\.(?:[A-Za-z_][\w$]*|"[^"]*"))*\s*(?:\[[^\]]*\]\s*)?[{:])/, 'identifier'],
 
       // Spec §18.1 (v0.6.3): a DiagramView category keyword opens its list
       // only before '{'. Elsewhere the same word names an entity or a field.

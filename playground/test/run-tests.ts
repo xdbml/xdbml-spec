@@ -28,7 +28,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parse, flatten } from '../../parser/src/index.ts';
+import { parse, flatten, diagramViewMembers } from '../../parser/src/index.ts';
 import type { XDbmlDocument } from '../../parser/src/index.ts';
 // Import the pure layout modules directly (not the package index): they
 // only type-import @xdbml/parse, which is erased at runtime, so the test
@@ -44,6 +44,7 @@ import {
   canUndo as histCanUndo, canRedo as histCanRedo, currentSnapshot,
 } from '../src/components/diagram/layout-history.ts';
 import type { LayoutSnapshot } from '../src/components/diagram/layout-history.ts';
+import { applyTextEdits, planStickyNote } from '../src/components/diagram/add-note.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const examplesDir = join(__dirname, '..', '..', 'examples');
@@ -1243,7 +1244,8 @@ tests.push({
     for (const name of ['order_to_cash', 'parties', 'catalog_usage']) {
       const base = buildDiagram(ast, new Set(), { diagramView: name });
       const positions = autoArrange(base, 'relational');
-      assertEq([...positions.keys()].sort().join(','), base.entities.map((e) => e.id).sort().join(','), `${name} positions`);
+      // The members, entities and sticky notes (spec §19), and nothing else.
+      assertEq([...positions.keys()].sort().join(','), [...base.entities, ...base.notes].map((e) => e.id).sort().join(','), `${name} positions`);
       const placed = applyUserPositions(base, positions);
       for (const e of placed.entities) {
         if (!e.containerName) continue;
@@ -1275,6 +1277,58 @@ tests.push({
     assertTrue(note.includes('thread.replies') && !note.some((p) => p.startsWith('thread.replies.')), 'recursive Comment stops');
     const resolved = resolveSelection(ast, { kind: 'field', entityId: 'intake.claim_submission', path: 'claimant.address.country' });
     assertTrue(resolved !== null && resolved.kind === 'field' && resolved.node.name === 'country', 'inspector resolves claimant.address.country');
+  },
+});
+
+tests.push({
+  name: 'v0.7: a sticky note resolves in the inspector by its id, and selections compare by name',
+  source: `xdbml: 0.7
+Container sales [type: schema] {
+  Entity orders { id int [pk] }
+  Note states { 'placed, shipped' }
+}
+Note legend { 'Legend' }`,
+  check: ({ ast, diagram }) => {
+    assertEq(diagram.notes.map((n) => n.id).join(','), 'note:sales.states,note:legend', 'notes in the diagram model');
+    const r = resolveSelection(ast, { kind: 'note', noteName: 'sales.states' });
+    assertTrue(r !== null && r.kind === 'note' && r.note.container?.name === 'sales' && r.note.decl.body === 'placed, shipped', 'note in a Container resolves');
+    assertTrue(resolveSelection(ast, { kind: 'note', noteName: 'states' }) === null, 'the inspector selects by id');
+    assertTrue(selectionEquals({ kind: 'note', noteName: 'a' }, { kind: 'note', noteName: 'a' }), 'equal note selections');
+    assertTrue(!selectionEquals({ kind: 'note', noteName: 'a' }, { kind: 'note', noteName: 'b' }), 'different note selections');
+  },
+});
+
+tests.push({
+  name: 'v0.7: Add sticky note writes a note at the end, in a Container, and into the diagram view shown',
+  source: 'xdbml: 0.7\nEntity a { id int }\n',
+  check: () => {
+    const reparse = (src: string) => flatten(parse(src));
+    const top = 'xdbml: 0.7\nEntity a { id int }\nNote note_1 { \'x\' }\n';
+    const p1 = planStickyNote(top, parse(top));
+    const out1 = applyTextEdits(top, p1.edits);
+    assertEq(p1.noteName, 'note_2', 'the first free name');
+    assertTrue(out1.endsWith("\n\nNote note_2 {\n  'Write something...'\n}\n"), `appended after a blank line: ${JSON.stringify(out1)}`);
+    assertEq(out1.slice(p1.revealOffset, p1.revealOffset + 11), 'Note note_2', 'reveal offset points at the keyword');
+
+    const inC = 'xdbml: 0.7\nContainer sales {\n  Entity o { id int }\n}\n';
+    const p2 = planStickyNote(inC, parse(inC), { container: 'sales' });
+    const out2 = applyTextEdits(inC, p2.edits);
+    assertEq(p2.noteName, 'sales.note_1', 'a note in the selected Container');
+    assertTrue(reparse(out2).statements.some((s) => s.kind === 'ContainerDeclaration' && s.body.some((b) => b.kind === 'NoteDeclaration' && b.name === 'note_1')), `the Container holds it: ${out2}`);
+    assertEq(out2.slice(p2.revealOffset, p2.revealOffset + 11), 'Note note_1', 'reveal offset inside the Container');
+
+    const old = 'xdbml: 0.6\nContainer sales {\n  Entity o { id int }\n}\n';
+    assertEq(planStickyNote(old, parse(old), { container: 'sales' }).noteName, 'note_1', 'before v0.7 the note goes to the top level');
+
+    const dv = "xdbml: 0.7\nEntity a { id int }\nNote n { 'x' }\nDiagramView v {\n  Tables {\n    a\n  }\n  Notes {\n    n\n  }\n}\nDiagramView w {\n  Tables { a }\n}\nDiagramView all { * }\nDiagramView e {\n  Notes { }\n}\n";
+    for (const [view, want] of [['v', ['n', 'note_1']], ['w', ['note_1']], ['all', ['n', 'note_1']], ['e', ['note_1']]] as const) {
+      const plan = planStickyNote(dv, parse(dv), { diagramView: view });
+      const doc = reparse(applyTextEdits(dv, plan.edits));
+      const members = diagramViewMembers(doc, view);
+      assertEq(members?.notes.join(','), want.join(','), `diagram view ${view} shows the new note`);
+      const reveal = applyTextEdits(dv, plan.edits).slice(plan.revealOffset, plan.revealOffset + 11);
+      assertEq(reveal, 'Note note_1', `reveal offset with the edit to ${view}`);
+    }
   },
 });
 

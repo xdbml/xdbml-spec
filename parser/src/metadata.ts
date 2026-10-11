@@ -35,6 +35,7 @@ import type {
 } from './ast.ts';
 import type { Diagnostic } from './name-resolver.ts';
 import { joinName, lastNameSegment, quoteNameSegment, splitName } from './names.ts';
+import { resolveStickyNote, stickyNotes } from './notes.ts';
 import { effectiveFieldList, effectiveFields, effectiveHeaderColor, effectiveNote, tablePartials } from './partials.ts';
 import type { PartialLookup } from './partials.ts';
 import { versionAtLeast } from './relationships.ts';
@@ -141,7 +142,7 @@ function findFieldPath (
   return found;
 }
 
-/** A Note or a DiagramView keeps its name as written; compare an unqualified target unquoted. */
+/** A DiagramView keeps its name as written; compare an unqualified target unquoted. */
 function plainName (target: string): string {
   const parts = splitName(target);
   return parts.length === 1 ? parts[0] : target;
@@ -190,8 +191,11 @@ export function resolveMetadataTarget (
       return g ? { kind, key: `TableGroup:${g.name}`, decl: g } : { problem: 'unresolved' };
     }
     case 'Note': {
-      const n = doc.statements.find((s): s is NoteDeclaration => s.kind === 'NoteDeclaration' && s.name === plainName(target));
-      return n && n.name !== undefined ? { kind, key: `Note:${n.name}`, decl: n } : { problem: 'unresolved' };
+      // A sticky note, named with its Container when it sits in one (§19.4).
+      const r = resolveStickyNote(stickyNotes(doc), target);
+      return r.ok
+        ? { kind, key: `Note:${r.note.id}`, decl: r.note.decl, container: r.note.container }
+        : { problem: 'unresolved' };
     }
     case 'DiagramView': {
       const v = doc.statements.find((s): s is DiagramViewDeclaration => s.kind === 'DiagramViewDeclaration' && s.name === plainName(target));
@@ -259,7 +263,8 @@ export interface MetadataIndex {
   /** A field's settings, the field named by its path under the entity or View (`address.city`). */
   field (shapeName: string, container: string | undefined, fieldPath: string): ReadonlyArray<AppliedSetting>;
   tableGroup (name: string): ReadonlyArray<AppliedSetting>;
-  note (name: string): ReadonlyArray<AppliedSetting>;
+  /** A sticky note's settings, the note named by its id: `sales.order_states` in a Container (§19.4). */
+  note (id: string): ReadonlyArray<AppliedSetting>;
   container (name: string): ReadonlyArray<AppliedSetting>;
   diagramView (name: string): ReadonlyArray<AppliedSetting>;
 }
@@ -429,7 +434,7 @@ function ownValues (r: ResolvedMetadataTarget, partials: PartialLookup): Map<str
       put((r.decl as TableGroupDeclaration).settings);
       break;
     case 'Note':
-      put((r.decl as NoteDeclaration & { settings?: Setting[] }).settings ?? []);
+      put((r.decl as NoteDeclaration).settings);
       break;
   }
   return out;
@@ -441,7 +446,7 @@ function describeTarget (r: ResolvedMetadataTarget): string {
     case 'Table': return `entity '${(r.decl as EntityDeclaration).name}'`;
     case 'View': return `View '${(r.decl as ViewDeclaration).name}'`;
     case 'TableGroup': return `TableGroup '${(r.decl as TableGroupDeclaration).name}'`;
-    case 'Note': return `sticky note '${(r.decl as NoteDeclaration).name}'`;
+    case 'Note': return `sticky note '${r.key.slice('Note:'.length)}'`;
     case 'Container': return `Container '${(r.decl as ContainerDeclaration).name}'`;
     case 'DiagramView': return `diagram view '${(r.decl as DiagramViewDeclaration).name}'`;
   }
@@ -454,6 +459,7 @@ function describeTarget (r: ResolvedMetadataTarget): string {
  * of it.
  */
 export function isMetadataCustomProperty (kind: MetadataTargetKind, name: string): boolean {
+  if (METADATA_SETTINGS[kind].includes(name)) return false;
   return notSetReason(kind, name) !== undefined;
 }
 
@@ -641,7 +647,7 @@ function checkDuplicateSettings (doc: XDbmlDocument): Diagnostic[] {
             diagnostics.push({
               severity: 'warning',
               code: 'duplicate-setting',
-              message: `'${s.nameSource}' is written twice in one settings list; the last one applies. DBML rejects it (spec §24.5).`,
+              message: `'${s.nameSource}' is written twice in one settings list; the first one applies. DBML rejects it (spec §24.5).`,
               span: s.span,
             });
           }

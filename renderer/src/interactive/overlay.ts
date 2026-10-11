@@ -8,13 +8,13 @@
  * the two layers cannot drift, and no shape geometry is duplicated.
  *
  * Elements carry `data-*` attributes the mount reads via event delegation:
- *   data-handle="entity|edge|container"  a drag handle (+ data-id/data-name)
+ *   data-handle="entity|edge|container|note"  a drag handle (+ data-id/data-name)
  *   data-field + data-id                 a field row (selection)
  *   data-caret + data-id + data-path     a collapse/expand caret
  *   data-ref                             a relationship line
  *   data-select-entity / -container      a bare selection target
  */
-import type { DiagramModel, EntityLayout } from '../layout/layout.ts';
+import type { DiagramModel, EntityLayout, NoteLayout } from '../layout/layout.ts';
 import { CONTAINER_HEADER_HEIGHT, ENTITY_HEADER_HEIGHT } from '../layout/layout.ts';
 import type { Theme } from '../style/theme.ts';
 import { resolveRef } from '../geometry/ref-path.ts';
@@ -29,6 +29,8 @@ export type Selection =
   | { kind: 'container'; name: string }
   /** A supertype group (spec §12), selected by clicking its symbol. `id` is the group layout id. */
   | { kind: 'supertypeGroup'; id: string }
+  /** A sticky note (spec §19). `id` is the note layout id, `note:<name>`. */
+  | { kind: 'note'; id: string }
   | null;
 
 export function buildOverlay (model: DiagramModel, selection: Selection, theme: Theme): string {
@@ -39,6 +41,7 @@ export function buildOverlay (model: DiagramModel, selection: Selection, theme: 
   for (const g of layoutSupertypeGroups(model)) parts.push(supertypeGroupOverlay(g, selection, theme));
   for (const e of model.entities) parts.push(entityOverlay(e, 'entity', selection, theme));
   for (const e of model.edges) parts.push(entityOverlay(e.box, 'edge', selection, theme));
+  for (const n of model.notes ?? []) parts.push(noteOverlay(n, selection, theme));
 
   parts.push('</g>');
   return parts.join('');
@@ -80,6 +83,25 @@ function entityOverlay (entity: EntityLayout, handle: 'entity' | 'edge', sel: Se
     }
   }
 
+  parts.push('</g>');
+  return parts.join('');
+}
+
+/** A sticky note is a drag handle over its whole box; a press without a move selects it. */
+function noteOverlay (note: NoteLayout, sel: Selection, theme: Theme): string {
+  const { x, y, width, height } = note.bounds;
+  const id = attr(note.id);
+  const parts: string[] = [`<g data-xdbml="note" data-id="${id}">`];
+  if (sel && sel.kind === 'note' && sel.id === note.id) {
+    parts.push(
+      `<rect x="${x - 3}" y="${y - 3}" width="${width + 6}" height="${height + 6}" rx="6" fill="none" ` +
+      `stroke="${theme.row.selectStrip}" stroke-width="2"${note.transparent ? ' stroke-dasharray="4 3"' : ''} pointer-events="none"/>`,
+    );
+  }
+  parts.push(
+    `<rect x="${x}" y="${y}" width="${width}" height="${height}" ` +
+    `fill="transparent" data-handle="note" data-id="${id}" style="cursor:move"/>`,
+  );
   parts.push('</g>');
   return parts.join('');
 }

@@ -51,6 +51,14 @@
  *     9.1, after the 3.13.6 baseline, so there is no upstream rule to
  *     inherit. A block is top-level only.
  *
+ * v0.7 changes (spec §19):
+ *   - stickyNoteDefinition is defined here. DBML added settings brackets
+ *     to sticky notes in 8.3 and 9.1, after the 3.13.6 baseline. A sticky
+ *     note stands at the top level, where its name may be qualified, and
+ *     in a Container body, where the Container qualifies it (§19.4). An
+ *     unnamed top-level note stays noteDefinition: the note of the
+ *     project (§19.5).
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -313,7 +321,8 @@ topLevelStatement
     | supertypeGroupDefinition     // spec §12 (new in v0.5)
     | diagramViewDefinition        // spec §18 (defined in v0.6.3)
     | metadataDefinition           // spec §24.7 (defined in v0.7)
-    | noteDefinition               // upstream DBML
+    | stickyNoteDefinition         // spec §19.2 (defined in v0.7)
+    | noteDefinition               // upstream DBML; unnamed: the note of the project, §19.5
     | topLevelRecords              // §26.2 (defined in v0.7)
     | useDirective                 //§25  (new in v0.2)
     ;
@@ -399,7 +408,8 @@ containerBody
     | edgeDefinition
     | viewDefinition
     | enumDefinition               // enums may be container-scoped
-    | noteDefinition
+    | stickyNoteDefinition         // spec §19.4 (defined in v0.7): a named Note, attached to the Container
+    | noteDefinition               // the Container's own note
     | useDirective                 //§25  (new in v0.2; field imports are semantically rejected here)
     | containerSetting             // e.g. replication, location, default_charset
     ;
@@ -689,6 +699,21 @@ diagramViewItem
 
 diagramViewName
     : nameSegment (DOT nameSegment)*
+    ;
+
+// ---- §19 Sticky notes (defined in v0.7) -----------------------------------
+//
+// A named Note. The settings brackets take `color` and custom properties
+// (§19.3); the value of `color` and, in a Container body, the version the
+// document declares are checked after parsing (§19.7). In a Container body
+// the name is one segment (§19.4). The colon form after a name, which DBML
+// rejects, reads the same (§19.2).
+
+stickyNoteDefinition
+    : NOTE entityReference settingsBlock?
+        ( LBRACE (STRING_LITERAL | multilineString) RBRACE
+        | COLON (STRING_LITERAL | multilineString)
+        )
     ;
 
 // ---- §24.7 Metadata blocks (defined in v0.7) ------------------------------

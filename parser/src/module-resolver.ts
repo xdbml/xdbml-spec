@@ -40,6 +40,7 @@ import type {
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { joinName, quoteNameSegment, splitName } from './names.ts';
 import { entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
+import { resolveStickyNote, stickyNotes } from './notes.ts';
 import { metadataForImport } from './metadata.ts';
 import type { LocalTypes } from './definitions.ts';
 
@@ -381,8 +382,10 @@ function extractImports (
     // ImportAll never matches field imports (the `*` form is for top-level
     // declarations only per spec §27.2). Return the source's top-level
     // statements minus Project.
+    // A Note without a name is the note of the source's project and stays
+    // there with its Project block (spec §19.5, §27.1).
     return sourceDoc.statements
-      .filter((s) => s.kind !== 'ProjectDeclaration')
+      .filter((s) => s.kind !== 'ProjectDeclaration' && !(s.kind === 'NoteDeclaration' && s.name === undefined))
       .map((s) => s); // shallow-clone-able; we don't mutate them
   }
   // ImportList: process each item.
@@ -394,9 +397,9 @@ function extractImports (
       const placed = applyAlias(found, item);
       out.push(placed);
       if (placed.kind !== 'FieldDeclaration' && 'name' in placed && typeof placed.name === 'string') {
-        // The name the element takes here, in the form of names.ts: a Note
-        // and a DiagramView keep theirs as written.
-        const raw = placed.kind === 'NoteDeclaration' || placed.kind === 'DiagramViewDeclaration';
+        // The name the element takes here, in the form of names.ts: a
+        // DiagramView keeps its own as written.
+        const raw = placed.kind === 'DiagramViewDeclaration';
         landed.push({ decl: found, name: raw ? quoteNameSegment(placed.name) : placed.name });
       }
     }
@@ -438,7 +441,10 @@ function extractImports (
  *   - 'tablepartial':
  *       TablePartialDeclaration with matching name (top-level only).
  *   - 'note':
- *       NoteDeclaration with matching name (top-level only).
+ *       Sticky note with matching name; supports the dotted path
+ *       'sales.order_states' for a note in a Container (spec §19.4), and a
+ *       bare name for a top-level note or the one note of that name in a
+ *       Container. A Note without a name is never imported (§19.5).
  *   - 'field':
  *       FieldDeclaration found by walking a dotted path through
  *       containers, entities, and nested type expressions (object types,
@@ -536,9 +542,11 @@ function findImportTarget (
     );
   }
   if (item.elementType === 'note') {
-    return doc.statements.find(
-      (s) => s.kind === 'NoteDeclaration' && s.name === path,
-    );
+    // Sticky notes (spec §19.2, §19.4) resolve as in a diagram view: the
+    // id first, then a bare name at the top level, then the one note of
+    // that name in a Container. The note lands at the top level.
+    const r = resolveStickyNote(stickyNotes(doc), names.join('.'));
+    return r.ok ? r.note.decl : undefined;
   }
   // Container / Schema: top-level, bare name.
   if (item.elementType === 'container' || item.elementType === 'schema') {
@@ -853,8 +861,8 @@ function applyAlias (
 ): TopLevelStatement | FieldDeclaration {
   if (!item.alias) return stmt;
   // Declarations that other declarations reference hold their names in
-  // the form of names.ts; a Note, a DiagramView and a field keep the
-  // alias as written.
+  // the form of names.ts; a DiagramView and a field keep the alias as
+  // written.
   const declared = quoteNameSegment(item.alias);
   switch (stmt.kind) {
     case 'EntityDeclaration':
@@ -878,7 +886,7 @@ function applyAlias (
     case 'TablePartialDeclaration':
       return { ...stmt, name: declared };
     case 'NoteDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'FieldDeclaration':
       return { ...stmt, name: item.alias };
     default:

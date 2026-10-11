@@ -29,8 +29,8 @@
       <InspectorSection title="Note">
         <NoteDisplay :body="projectNote" />
       </InspectorSection>
-      <div v-if="project" class="px-3 pb-3">
-        <EditInSourceButton @click="$emit('edit-source', project.span)" />
+      <div v-if="projectSpan" class="px-3 pb-3">
+        <EditInSourceButton @click="$emit('edit-source', projectSpan)" />
       </div>
     </template>
 
@@ -94,7 +94,7 @@ import type {
   Span,
   XDbmlDocument,
 } from '@xdbml/parse';
-import { diagramViewMembers, diagramViewNote, metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
+import { diagramViewMembers, diagramViewNote, metadataIndex, metadataNote, projectNote as projectNoteOf, stickyNotes, withMetadata } from '@xdbml/parse';
 import type { AppliedSetting } from '@xdbml/parse';
 import { collectRefDeclarations } from '@xdbml/render';
 
@@ -114,12 +114,12 @@ defineEmits<{ 'edit-source': [span: Span] }>();
 const project = computed<ProjectDeclaration | undefined>(() =>
   props.doc.statements.find((s): s is ProjectDeclaration => s.kind === 'ProjectDeclaration'));
 
-const projectNote = computed(() => {
-  for (const item of project.value?.body ?? []) {
-    if (item.kind === 'NoteBlock') return item.body;
-  }
-  return '';
-});
+// The note of the project: the Project block's, or a top-level Note
+// without a name (spec §19.5).
+const projectNote = computed(() => projectNoteOf(props.doc)?.body ?? '');
+
+/** Where the project is written: its Project block, or else the Note that is its note. */
+const projectSpan = computed<Span | undefined>(() => project.value?.span ?? projectNoteOf(props.doc)?.source.span);
 
 const targets = computed<string[]>(() => {
   const setting = project.value?.body.find((b): b is Setting => b.kind === 'Setting' && b.name === 'targets');
@@ -163,6 +163,7 @@ const modelCounts = computed(() => {
     { label: 'Containers', count: containers },
     { label: 'Relationships', count: collectRefDeclarations(props.doc).length },
     { label: 'Edges', count: edges },
+    { label: 'Sticky notes', count: stickyNotes(props.doc).length },
   ];
   return rows.filter((r, i) => i === 0 || r.count > 0);
 });

@@ -42,6 +42,7 @@
         v-if="resolved.kind === 'container'"
         :container="resolved.node"
         @edit-source="onEditSource"
+        @select="onSelect"
       />
       <EntityInspector
         v-else-if="resolved.kind === 'entity'"
@@ -69,6 +70,12 @@
       <SupertypeGroupInspector
         v-else-if="resolved.kind === 'supertypeGroup'"
         :group="resolved.group"
+        @edit-source="onEditSource"
+        @select="onSelect"
+      />
+      <NoteInspector
+        v-else-if="resolved.kind === 'note'"
+        :note="resolved.note"
         @edit-source="onEditSource"
         @select="onSelect"
       />
@@ -121,6 +128,7 @@ import EntityInspector    from './EntityInspector.vue';
 import FieldInspector     from './FieldInspector.vue';
 import RefInspector       from './RefInspector.vue';
 import SupertypeGroupInspector from './SupertypeGroupInspector.vue';
+import NoteInspector      from './NoteInspector.vue';
 import DiagramInspector   from './DiagramInspector.vue';
 
 const props = defineProps<{
@@ -158,6 +166,7 @@ const kindLabel = computed(() => {
     case 'field':     return 'Field';
     case 'ref':       return 'Ref';
     case 'supertypeGroup': return 'Supertype group';
+    case 'note':      return 'Sticky note';
   }
 });
 
@@ -174,6 +183,7 @@ const kindBadgeClass = computed(() => {
     case 'field':     return 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300';
     case 'ref':       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
     case 'supertypeGroup': return 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300';
+    case 'note':      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
   }
 });
 
@@ -186,6 +196,7 @@ const titleLabel = computed(() => {
     case 'field':     return resolved.value.node.name;
     case 'ref':       return `Ref #${resolved.value.index + 1}`;
     case 'supertypeGroup': return resolved.value.group.declaration.name;
+    case 'note':      return resolved.value.note.id;
   }
 });
 

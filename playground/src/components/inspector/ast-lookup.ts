@@ -45,7 +45,7 @@ import type {
 // runner, which resolves relative paths but not the Vite alias. The
 // layout module only type-imports @xdbml/parse, so nothing else follows.
 import { collectRefDeclarations } from '../../../../renderer/src/layout/layout.ts';
-import { effectiveFieldList, effectiveFields, entityDefinitions, lastNameSegment, nameQualifier, quoteNameSegment, resolveSupertypeGroups, splitName, tablePartials, type ResolvedSupertypeGroup } from '@xdbml/parse';
+import { effectiveFieldList, effectiveFields, entityDefinitions, lastNameSegment, nameQualifier, quoteNameSegment, resolveSupertypeGroups, splitName, stickyNotes, tablePartials, type PlacedStickyNote, type ResolvedSupertypeGroup } from '@xdbml/parse';
 
 import type { Selection } from './selection';
 
@@ -80,6 +80,8 @@ export type ResolvedSelection =
     }
   | { kind: 'ref'; node: RefDeclaration; index: number }
   | { kind: 'supertypeGroup'; group: ResolvedSupertypeGroup }
+  /** A sticky note (spec §19), with the Container that holds it, if any. */
+  | { kind: 'note'; note: PlacedStickyNote }
   | null;
 
 export function resolveSelection (doc: XDbmlDocument | undefined, sel: Selection): ResolvedSelection {
@@ -92,6 +94,10 @@ export function resolveSelection (doc: XDbmlDocument | undefined, sel: Selection
     case 'supertypeGroup': {
       const group = resolveSupertypeGroups(doc).find((g) => g.declaration.name === sel.groupName);
       return group ? { kind: 'supertypeGroup', group } : null;
+    }
+    case 'note': {
+      const note = stickyNotes(doc).find((n) => n.id === sel.noteName);
+      return note ? { kind: 'note', note } : null;
     }
     // The diagram on display is not an AST node: Inspector.vue shows it
     // with DiagramInspector, from the Project or the diagram view.

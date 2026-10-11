@@ -189,7 +189,7 @@ check('visibility: inactive flag is carried',
 
 check('visibility: defaults to all types shown',
   JSON.stringify(visHandle.getRelationshipVisibility())
-    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false }));
+    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true }));
 
 const beforeHide = visHost.innerHTML;
 visHandle.setRelationshipVisibility({ foreignMaster: false });
@@ -198,7 +198,7 @@ check('visibility: getter reflects the change',
   visHandle.getRelationshipVisibility().foreignMaster === false);
 check('visibility: change callback fires',
   JSON.stringify(lastVisibility)
-    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false }));
+    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true }));
 check('visibility: the model keeps every relationship',
   visHandle.getModel().refs.length === 3);
 
@@ -313,6 +313,64 @@ DiagramView ordering { Tables { crm.customers sales.orders } }`;
   check('diagram view: null returns to the full diagram with the positions handed back',
     dvHandle.getDiagramView() === null && ids() === 'crm.customers,crm.leads,sales.orders' && cust?.bounds.x === 500, ids());
   dvHandle.destroy();
+}
+
+{
+  // v0.7: sticky notes (spec §19). A note is a drag handle under the id
+  // `note:<name>`; a press without a move selects it; a Container carries its
+  // notes; the stickyNotes toggle hides them.
+  const nHost = dom.window.document.createElement('div');
+  dom.window.document.body.appendChild(nHost);
+  let nSelect: unknown = 'unset';
+  const nSource = `xdbml: 0.7
+Container sales [type: schema] {
+  Entity orders { id int [pk] }
+  Note states [color: #FBCFE8] { 'placed, **shipped**' }
+}
+Note legend [color: none] { 'A legend' }`;
+  const nHandle = mount(nHost, nSource, { onSelect: (s) => { nSelect = s; } });
+  const nq = (sel: string) => nHost.querySelector('svg')!.querySelectorAll(sel);
+  const ids = nHandle.getModel().notes.map((n) => n.id).join(',');
+  check('sticky notes: in the model under note ids', ids === 'note:sales.states,note:legend', ids);
+  check('sticky notes: one drag handle each', nq('[data-handle="note"]').length === 2);
+  check('sticky notes: the arrangement positions them', !!nHandle.getState().positions['note:legend']);
+  check('sticky notes: the text is drawn with its Markdown', nHost.innerHTML.includes('font-weight="600">shipped</tspan>'));
+
+  const handleOf = (id: string) => [...nq('[data-handle="note"]')].find((el) => el.getAttribute('data-id') === id)!;
+  fire(handleOf('note:legend'), 'mousedown', { clientX: 10, clientY: 10 });
+  fireDoc('mouseup', { clientX: 10, clientY: 10 });
+  check('sticky notes: a press without a move selects the note',
+    JSON.stringify(nSelect) === JSON.stringify({ kind: 'note', id: 'note:legend' }), JSON.stringify(nSelect));
+
+  const before = nHandle.getState().positions['note:legend'];
+  fire(handleOf('note:legend'), 'mousedown', { clientX: 10, clientY: 10 });
+  fireDoc('mousemove', { clientX: 70, clientY: 50 });
+  fireDoc('mouseup', { clientX: 70, clientY: 50 });
+  const after = nHandle.getState().positions['note:legend'];
+  check('sticky notes: a drag moves the note and snaps it to the grid',
+    !!before && !!after && after.x === Math.round((before.x + 60) / 20) * 20 && after.y === Math.round((before.y + 40) / 20) * 20,
+    `${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+
+  const stBefore = nHandle.getState().positions['note:sales.states'];
+  const frame = [...nq('[data-handle="container"]')].find((el) => el.getAttribute('data-name') === 'sales')!;
+  fire(frame, 'mousedown', { clientX: 0, clientY: 0 });
+  fireDoc('mousemove', { clientX: 100, clientY: 0 });
+  fireDoc('mouseup', { clientX: 100, clientY: 0 });
+  const stAfter = nHandle.getState().positions['note:sales.states'];
+  check('sticky notes: dragging the Container carries its note',
+    !!stBefore && !!stAfter && stAfter.x === stBefore.x + 100 && stAfter.y === stBefore.y,
+    `${JSON.stringify(stBefore)} -> ${JSON.stringify(stAfter)}`);
+  const c = nHandle.getModel().containers[0].bounds;
+  const n = nHandle.getModel().notes[0].bounds;
+  check('sticky notes: the frame holds its note', c.x <= n.x && c.y <= n.y && c.x + c.width >= n.x + n.width && c.y + c.height >= n.y + n.height);
+
+  nHandle.setRelationshipVisibility({ stickyNotes: false });
+  check('sticky notes: hidden by their toggle', nq('[data-handle="note"]').length === 0 && !nHost.innerHTML.includes('A legend'));
+  nHandle.setRelationshipVisibility({ stickyNotes: true });
+  check('sticky notes: shown again', nq('[data-handle="note"]').length === 2);
+  const center = nHandle.viewportCenter();
+  check('sticky notes: viewportCenter returns a canvas point', Number.isFinite(center.x) && Number.isFinite(center.y));
+  nHandle.destroy();
 }
 
 console.log(`\n${passed} passed, ${failed} failed\n`);

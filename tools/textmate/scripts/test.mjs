@@ -230,6 +230,8 @@ async function main () {
   for (const [line, expected] of [
     ["  Note: 'One row per order'", true], ["  Note { 'text' }", true], ['Note schema_notes {', true],
     ["NOTE: 'x'", true], ['  note varchar', false], ['  Note varchar [not null]', false], ['  notes varchar', false],
+    ['Note legend [color: #F4D03F] {', true], ['Note core.legend {', true], ['Note "Release plan" [color: none] {', true],
+    ["Note legend: 'x'", true], ["  note varchar [note: 'x']", false],
   ]) {
     const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
     const at = line.search(/\S/);

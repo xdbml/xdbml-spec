@@ -108,6 +108,19 @@ export interface Theme {
   };
 
   /**
+   * Sticky notes (spec §19.6). `fill` is the default color of a note that
+   * states none; the ink on a colored note follows `readableInk`, and
+   * `plainInk` colors the text of a note with `color: none`, drawn on the
+   * canvas. `link` colors a link on a light note.
+   */
+  note: {
+    fill: string;
+    stroke: string;
+    plainInk: string;
+    link: string;
+  };
+
+  /**
    * Backdrop behind the diagram. The static serializer leaves the SVG
    * background transparent (the consumer paints behind it), so these
    * tokens are consumed by the interactive mount, which paints the
@@ -197,6 +210,13 @@ export const defaultTheme: Theme = {
     fill: '#fef3c7',
     stroke: '#f59e0b',
     text: '#92400e',
+  },
+
+  note: {
+    fill: '#fde68a',
+    stroke: 'rgba(15, 23, 42, 0.16)',
+    plainInk: '#334155',
+    link: '#1d4ed8',
   },
 
   canvas: {
@@ -293,6 +313,13 @@ export const darkTheme: Theme = {
     fill: '#422006',
     stroke: '#f59e0b',
     text: '#fcd34d',
+  },
+
+  note: {
+    fill: '#fde68a',
+    stroke: 'rgba(0, 0, 0, 0.35)',
+    plainInk: '#cbd5e1',
+    link: '#1d4ed8',
   },
 
   canvas: {

@@ -11,6 +11,19 @@
           {{ entityCount }} {{ entityCount === 1 ? 'member' : 'members' }}
           <span v-if="memberBreakdown" class="text-gray-500 dark:text-slate-400">({{ memberBreakdown }})</span>
         </dd>
+        <template v-if="stickyNoteNames.length > 0">
+          <dt class="font-medium text-gray-500 dark:text-slate-400">Sticky notes</dt>
+          <dd class="font-mono break-all">
+            <template v-for="(n, i) in stickyNoteNames" :key="n">
+              <span v-if="i > 0" class="text-gray-400 dark:text-slate-500">, </span>
+              <button
+                type="button"
+                class="text-blue-700 dark:text-blue-300 hover:underline text-left"
+                @click="$emit('select', { kind: 'note', noteName: `${container.name}.${n}` })"
+              >{{ n }}</button>
+            </template>
+          </dd>
+        </template>
       </dl>
     </InspectorSection>
 
@@ -33,6 +46,7 @@ import { computed } from 'vue';
 import { metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
 import type { AppliedSetting, ContainerDeclaration, NoteBlock, Span } from '@xdbml/parse';
 import { useParserStore } from '@/stores/parserStore';
+import type { Selection } from './selection';
 
 import InspectorSection   from './InspectorSection.vue';
 import SettingsTable      from './SettingsTable.vue';
@@ -45,7 +59,13 @@ const props = defineProps<{
 
 defineEmits<{
   'edit-source': [span: Span];
+  /** A sticky note the Container carries (spec §19.4). */
+  select: [selection: Selection];
 }>();
+
+/** The sticky notes attached to the Container (spec §19.4), by name. */
+const stickyNoteNames = computed(() =>
+  props.container.body.flatMap((b) => (b.kind === 'NoteDeclaration' && b.name !== undefined ? [b.name] : [])));
 
 const entityCount = computed(() =>
   props.container.body.filter(

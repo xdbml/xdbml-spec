@@ -113,6 +113,8 @@ export type ContainerBodyItem =
   | ViewDeclaration
   | EnumDeclaration
   | NoteBlock
+  /** A sticky note attached to the Container (spec §19.4, v0.7). */
+  | NoteDeclaration
   | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
@@ -784,14 +786,25 @@ export interface TopLevelRecordsDeclaration {
 /* -------------------------------------------------------------------------
  * Notes
  *
- * Notes appear in two places:
- *   - As a top-level standalone declaration: `Note name { '''...''' }`
+ * Notes appear in three places (spec §19):
+ *   - As a sticky note, a named declaration at the top level or in a
+ *     Container body: `Note name [color: #abc] { '''...''' }`
+ *   - As the note of the project, a top-level declaration without a
+ *     name: `Note: '...'` (§19.5)
  *   - As an inline block inside an entity, container, etc.: `Note: '...'`
  * ----------------------------------------------------------------------- */
 
 export interface NoteDeclaration {
   kind: 'NoteDeclaration';
+  /**
+   * The name of a sticky note, in the form of names.ts. A top-level name may
+   * be qualified, `core.legend`, which places the note in the implicit
+   * Container `core` (§19.2). Undefined for the note of the project (§19.5).
+   */
   name?: string;
+  /** Settings in brackets: `color` and custom properties (§19.3, v0.7). */
+  settings: Setting[];
+  /** The text, Markdown (§19.6). */
   body: string;
   span: Span;
 }

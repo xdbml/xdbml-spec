@@ -25,6 +25,7 @@ import {
   entityDefinitions, isDefinitionsExcludedTarget,
   refCardinality, refCardinalityIn,
   metadataIndex, settingValueText, withMetadata,
+  projectNote, resolveStickyNote, stickyNotes,
 } from '../src/index.ts';
 import type { AppliedSetting, EndCardinality, EntityDeclaration, FieldDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
 import {
@@ -4605,8 +4606,9 @@ Ref: sites.region.country > countries.code
     const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
       .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('note(?!'));
     const re = rule ? new RegExp(rule[0].source, 'i') : null;
-    const asField = ['note varchar', 'Note varchar [not null]', 'note    int'];
-    const asKeyword = ['Note: \'x\'', 'Note { \'x\' }', 'note:', 'Note schema_notes {', 'notes varchar'];
+    const asField = ['note varchar', 'Note varchar [not null]', 'note    int', "note varchar [note: 'x']"];
+    const asKeyword = ['Note: \'x\'', 'Note { \'x\' }', 'note:', 'Note schema_notes {', 'notes varchar',
+      'Note legend [color: #F4D03F] {', 'Note core.legend {', 'Note "Release plan" [color: none] {', "Note legend: 'x'"];
     const bad = re === null
       ? ['rule missing']
       : [
@@ -6521,6 +6523,187 @@ function runV07MetadataTests (): TestResult[] {
   return results;
 }
 
+function runV07StickyNoteTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const diags = (src: string, options?: ParseOptions) => resolveNames(parse(src, options)).diagnostics;
+  const codes = (src: string, options?: ParseOptions): string =>
+    diags(src, options).map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string): string | undefined => {
+    const got = codes(src);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const placed = (src: string) => stickyNotes(flatten(parse(src))).map((n) => `${n.id}|${n.name}|${n.containerName ?? ''}|${n.topLevel ? 'top' : 'in'}`);
+  const settingsOf = (src: string) => stickyNotes(flatten(parse(src))).map((n) => n.decl.settings.map((s) => `${s.name}=${settingValueText(s.value)}`).join(','));
+  const V = 'xdbml: 0.7\n';
+  const SALES = "Container sales [type: schema] {\n  Note: 'Order management'\n  Entity orders {\n    id int [pk]\n  }\n  Note states [color: #FBCFE8] {\n    'placed, shipped, delivered'\n  }\n}\n";
+
+  /* ---- §19.2 sticky notes ---- */
+
+  check('§19.2 DBML: a named top-level Note is a sticky note, its text the body', () => {
+    const doc = parse("Table a {\n  id int\n}\nNote design {\n  '''\n  ## Title\n  - **one**\n  '''\n}\n");
+    const n = stickyNotes(doc);
+    return same(n.map((x) => [x.id, x.decl.body]), [['design', '## Title\n- **one**\n']]);
+  });
+  check('§19.2 DBML: a quoted name keeps its text', () => same(placed("Note \"Design decision\" {\n  'x'\n}"), ['Design decision|Design decision||top']));
+  check('§19.2 DBML: a qualified name places the note in the implicit Container', () =>
+    same(placed("Table core.users {\n  id int\n}\nNote core.legend {\n  'x'\n}"), ['core.legend|legend|core|in']));
+  check('§19.2: the colon form after a name reads the same', () => same(placed("Note n: 'x'"), ['n||top'.replace('||', '|n||')]));
+  check('§19.2 DBML: an empty body is a syntax error', () => parseFails('Note n {\n}', 'Expected string inside Note block'));
+  check('§19.2 DBML: two strings in a body are a syntax error', () => parseFails("Note n {\n  'a'\n  'b'\n}", "Expected '}' closing Note"));
+  check('§19.2 DBML: two sticky notes of one name are an error naming a sticky note', () => {
+    const d = diags("Note n {\n  'a'\n}\nNote n {\n  'b'\n}");
+    return d.length === 1 && d[0].code === 'duplicate-declaration' && d[0].message.includes('sticky note') ? undefined : d.map((x) => x.message).join(' | ');
+  });
+  check('§19.2: a sticky note may share its name with an entity', () => expectCodes("Table a {\n  id int\n}\nNote a {\n  'x'\n}", ''));
+
+  /* ---- §19.3 settings ---- */
+
+  check('§19.3 DBML: color and custom properties in the brackets, in a document without a version', () => {
+    const src = "Note n [color: #F4D03F, author: \"docs\"] {\n  'x'\n}";
+    return same(settingsOf(src), ['color=#F4D03F,author=docs']) ?? expectCodes(src, '');
+  });
+  check("§19.3: color none is valid bare or quoted, as a color is (§3.3)", () =>
+    expectCodes("Note a [color: none] {\n  'x'\n}\nNote b [color: 'NONE'] {\n  'y'\n}\nNote c [color: #abc] {\n  'z'\n}", ''));
+  check('§19.3 DBML: a color of another form is an error', () => {
+    const d = diags("Note n [color: red] {\n  'x'\n}");
+    return d.length === 1 && d[0].code === 'invalid-note-color' && d[0].severity === 'error' && d[0].message.includes("'red'") ? undefined : d.map((x) => x.message).join(' | ');
+  });
+  check('§19.3: a flag in the brackets is a custom property, with nothing reported', () => expectCodes("Note n [pinned] {\n  'x'\n}", ''));
+  check('§19.3: a setting written twice draws a warning', () => expectCodes("Note n [author: 'a', author: 'b'] {\n  'x'\n}", 'warning:duplicate-setting'));
+
+  /* ---- §19.4 sticky notes in a Container ---- */
+
+  check('§19.4: a named Note in a Container is a sticky note, the unnamed one the Container note', () => {
+    const doc = parse(V + SALES);
+    const c = doc.statements.find((s) => s.kind === 'ContainerDeclaration');
+    const kinds = c && c.kind === 'ContainerDeclaration' ? c.body.map((b) => b.kind) : [];
+    return same(kinds, ['NoteBlock', 'EntityDeclaration', 'NoteDeclaration'])
+      ?? same(placed(V + SALES), ['sales.states|states|sales|in'])
+      ?? expectCodes(V + SALES, '');
+  });
+  check('§19.4: a sticky note in a Container needs xdbml: 0.7', () =>
+    expectCodes(SALES, 'error:construct-requires-version') ?? expectCodes('xdbml: 0.6\n' + SALES, 'error:construct-requires-version'));
+  check('§19.4: a sticky note in a Container takes a name of one segment', () =>
+    parseFails(V + "Container s {\n  Note a.b {\n    'x'\n  }\n}", 'takes a name of one segment'));
+  check('§19.4: notes of one name in two Containers are distinct', () =>
+    expectCodes(V + "Container a {\n  Note n {\n    'x'\n  }\n}\nContainer b {\n  Note n {\n    'y'\n  }\n}", ''));
+  check('§19.4: Note core.n and a note n in Container core are duplicates', () =>
+    expectCodes(V + "Note core.n {\n  'x'\n}\nContainer core {\n  Note n {\n    'y'\n  }\n}", 'error:duplicate-declaration'));
+  check('§19.4: an unqualified name resolves at the top level first, then to the one note in a Container', () => {
+    const notes = stickyNotes(flatten(parse(V + SALES + "Note other {\n  'o'\n}")));
+    const a = resolveStickyNote(notes, 'states');
+    const b = resolveStickyNote(notes, 'sales.states');
+    const c = resolveStickyNote(notes, 'nothing');
+    return same([a.ok && a.note.id, b.ok && b.note.id, c.ok], ['sales.states', 'sales.states', false]);
+  });
+  check('§19.4: an unqualified name two Containers hold is ambiguous', () => {
+    const notes = stickyNotes(parse(V + "Container a {\n  Note n {\n    'x'\n  }\n}\nContainer b {\n  Note n {\n    'y'\n  }\n}"));
+    const r = resolveStickyNote(notes, 'n');
+    return !r.ok && r.reason === 'ambiguous' ? undefined : JSON.stringify(r);
+  });
+
+  /* ---- §19.5 the note of the project ---- */
+
+  check('§19.5: a top-level Note without a name is the note of the project', () => {
+    const doc = parse("Table a {\n  id int\n}\nNote: 'Reference model'\n");
+    return same(projectNote(doc)?.body, 'Reference model') ?? same(stickyNotes(doc).length, 0) ?? expectCodes("Note { 'x' }", '');
+  });
+  check("§19.5: the Project block's note applies, and an unnamed Note draws a warning", () => {
+    const src = "Project p {\n  Note: 'own'\n}\nNote: 'other'\n";
+    return same(projectNote(parse(src))?.body, 'own') ?? expectCodes(src, 'warning:duplicate-project-note');
+  });
+  check('§19.5: without a Project note, the first unnamed Note applies and the second draws a warning', () => {
+    const src = "Note: 'first'\nNote: 'second'\n";
+    return same(projectNote(parse(src))?.body, 'first') ?? expectCodes(src, 'warning:duplicate-project-note');
+  });
+  check('§19.5: an unnamed Note takes no settings', () => parseFails("Note [color: #abc] {\n  'x'\n}", 'Settings belong to a sticky note'));
+
+  /* ---- §27 imports ---- */
+
+  const files: Record<string, string> = {
+    '/n/lib.xdbml': V + "Note: 'Project note of lib'\nNote legend [color: #abc] {\n  'Legend'\n}\n" + SALES + 'Metadata Note sales.states {\n  owner: \'ops\'\n}\n',
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  check('§19.5, §27.2: importing everything brings the sticky notes and leaves the note of the project behind', () => {
+    const flat = flatten(parse(V + "use * from './lib'\n", opts('/n/main.xdbml')));
+    return same(stickyNotes(flat).map((n) => n.id), ['legend', 'sales.states']) ?? same(projectNote(flat), undefined);
+  });
+  check('§27.3: a sticky note in a Container imports by its qualified name, lands at the top level, and brings its Metadata block', () => {
+    const main = V + "use { note sales.states as order_states } from './lib'\n";
+    files['/n/main.xdbml'] = main;
+    const flat = flatten(parse(main, opts('/n/main.xdbml')));
+    const ids = stickyNotes(flat).map((n) => n.id);
+    const applied = metadataIndex(flat).note('order_states').map((a) => `${a.setting.name}=${settingValueText(a.setting.value)}`);
+    return same(ids, ['order_states']) ?? same(applied, ['owner=ops']);
+  });
+  check('§27.3: a bare name imports the one note of that name in a Container', () => {
+    const flat = flatten(parse(V + "use { note states } from './lib'\n", opts('/n/main.xdbml')));
+    return same(stickyNotes(flat).map((n) => [n.id, n.decl.body]), [['states', 'placed, shipped, delivered']]);
+  });
+
+  /* ---- §24.7 Metadata ---- */
+
+  check('§24.7.2: Metadata Note names a note in a Container, qualified or not', () => {
+    const src = V + SALES + "Metadata Note sales.states {\n  owner: 'a'\n}\nMetadata Note states {\n  reviewer: 'b'\n}\n";
+    const applied = metadataIndex(flatten(parse(src))).note('sales.states').map((a) => a.setting.name);
+    return same(applied, ['owner', 'reviewer']) ?? expectCodes(src, '');
+  });
+  check("§24.7.4: a Metadata headercolor over a table's own draws the override warning and replaces it", () => {
+    const src = "Table t [headercolor: #111111] {\n  id int\n}\nMetadata Table t {\n  headercolor: #222222\n}\n";
+    const doc = flatten(parse(src));
+    const t = doc.statements[0] as EntityDeclaration;
+    const merged = withMetadata(t.settings, metadataIndex(doc).entity('t')).settings.map((x) => `${x.name}=${settingValueText(x.value)}`);
+    return expectCodes(src, 'warning:metadata-override') ?? same(merged, ['headercolor=#222222']);
+  });
+  check("§24.7.4: a Metadata color over a note's own color draws the override warning", () =>
+    expectCodes(V + SALES + 'Metadata Note sales.states {\n  color: #000000\n}\n', 'warning:metadata-override'));
+
+  /* ---- §18 diagram views ---- */
+
+  const DV = V + SALES + "Note other {\n  'o'\n}\n";
+  const members = (src: string, view: string) => {
+    const m = diagramViewMembers(parse(src), view);
+    return m ? { notes: m.notes, containers: m.containers, entities: m.entities } : undefined;
+  };
+  check('§18.2: a listed Container contributes its sticky notes', () =>
+    same(members(DV + 'DiagramView v {\n  Containers {\n    sales\n  }\n}', 'v'), { notes: ['sales.states'], containers: ['sales'], entities: ['sales.orders'] }));
+  check('§18.2: Notes naming a note of the Container narrows what the Container contributes', () =>
+    same(members(V + SALES.replace("  Note states", "  Note extra {\n    'e'\n  }\n  Note states") + 'DiagramView v {\n  Containers {\n    sales\n  }\n  Notes {\n    sales.states\n  }\n}', 'v')?.notes, ['sales.states']));
+  check('§18.2: a top-level note under Notes leaves the Container contributing all of its notes', () =>
+    same(members(DV + 'DiagramView v {\n  Containers {\n    sales\n  }\n  Notes {\n    other\n  }\n}', 'v')?.notes, ['sales.states', 'other']));
+  check('§18.3: an unqualified note name resolves into a Container, and its frame is drawn', () =>
+    same(members(DV + 'DiagramView v {\n  Notes {\n    states\n  }\n}', 'v'), { notes: ['sales.states'], containers: ['sales'], entities: [] })
+      ?? expectCodes(DV + 'DiagramView v {\n  Notes {\n    states\n  }\n}', ''));
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -6535,6 +6718,7 @@ function main (): void {
   const recordsTests = runV07RecordsTests();
   const optionalRefTests = runV07OptionalRefTests();
   const metadataTests = runV07MetadataTests();
+  const noteTests = runV07StickyNoteTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -6547,9 +6731,10 @@ function main (): void {
   const rr = report('v0.7 records in the forms of DBML 10.3.1 (spec §26)', recordsTests);
   const or = report('v0.7 optional marks and cardinality (spec §11.1, §11.7, §11.8, §11.16)', optionalRefTests);
   const mr = report('v0.7 custom properties and Metadata blocks (spec §24.5, §24.7)', metadataTests);
+  const nr = report('v0.7 sticky notes and the note of the project (spec §19)', noteTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

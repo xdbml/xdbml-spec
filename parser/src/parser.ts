@@ -566,22 +566,46 @@ export class Parser {
   }
 
   /**
-   * Top-level `Note name { '''...''' }` standalone declaration.
+   * A `Note` declaration (spec §19): a sticky note when it has a name,
+   * `Note name [settings] { '...' }`, and the note of the project when it
+   * has none, `Note: '...'` or `Note { '...' }` (§19.5). At the top level a
+   * name may be qualified, `Note core.legend`, the DBML form of a sticky
+   * note in a schema (§19.2); in a Container body (`inContainer`) the name
+   * is one segment, since the Container qualifies it (§19.4). The colon
+   * form also reads after a name, which DBML rejects.
    */
-  private parseNoteDeclaration (): NoteDeclaration {
+  private parseNoteDeclaration (inContainer?: string): NoteDeclaration {
     const start = this.peek().start;
     this.advance(); // Note
-    // Could be: `Note: '...'`, `Note name { '''...''' }`, or `Note { ... }`
     let name: string | undefined;
     if (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier)) {
-      const tok = this.advance();
-      name = tok.kind === TokenKind.QuotedIdentifier ? (tok.value ?? '') : tok.text;
+      if (inContainer !== undefined) {
+        name = this.parseDeclaredName('sticky note name');
+        if (this.check(TokenKind.Dot)) {
+          throw new ParseError(
+            `A sticky note in Container '${inContainer}' takes a name of one segment: the Container ` +
+            'qualifies it (spec §19.4).',
+            this.peek().start,
+          );
+        }
+      } else {
+        name = this.parseQualifiedName('sticky note name');
+      }
     }
+    if (name === undefined && this.check(TokenKind.LBracket)) {
+      throw new ParseError(
+        'Settings belong to a sticky note, which has a name: write `Note name [ ... ] { ... }`. ' +
+        'A Note without a name is the note of the project and takes no settings (spec §19.5).',
+        this.peek().start,
+      );
+    }
+    const settings = this.maybeSettingsBlock();
     if (this.match(TokenKind.Colon)) {
       const body = this.parseSettingValueExpectingString('Expected string after Note:');
       return {
         kind: 'NoteDeclaration',
         name,
+        settings,
         body,
         span: this.spanFrom(start),
       };
@@ -592,6 +616,7 @@ export class Parser {
     return {
       kind: 'NoteDeclaration',
       name,
+      settings,
       body,
       span: this.spanFrom(start),
     };
@@ -633,7 +658,14 @@ export class Parser {
       const t = this.peek();
       const k = kw(t);
       if (k === 'note') {
-        body.push(this.parseNoteBlockOrSetting());
+        // `Note:` and `Note { }` are the Container's own note; a named
+        // `Note` is a sticky note attached to the Container (spec §19.4).
+        const next = this.peek(1);
+        if (next.kind === TokenKind.Identifier || next.kind === TokenKind.QuotedIdentifier) {
+          body.push(this.parseNoteDeclaration(name));
+        } else {
+          body.push(this.parseNoteBlockOrSetting());
+        }
       } else if (k && ENTITY_KEYWORDS.has(k)) {
         body.push(this.parseEntity());
       } else if (k === 'edge') {

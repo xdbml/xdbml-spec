@@ -65,7 +65,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | Construct | Brackets after the name | Body holds | Declared |
 |---|---|---|---|
 | `Project` | none | `targets:`, `Note:` | top level, at most once |
-| `Container`, `Schema`, `Database`, ... | `type`, `target`, `note`, custom | entities, Views, Edges, Enums, `Note:` | top level |
+| `Container`, `Schema`, `Database`, ... | `type`, `target`, `color`, `note`, custom | entities, Views, Edges, Enums, `Note:`, sticky notes (`xdbml: 0.7`) | top level |
 | `Entity`, `Table`, `Collection`, `Record` | `note`, `headercolor`, `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }`, `definitions { }` | top level or in a Container |
 | `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
 | `Edge` | `source`, `target` (entities), `source_cardinality`, `target_cardinality`, `undirected`, roles and verbs, `note` | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }` | top level or in a Container |
@@ -76,6 +76,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | `SupertypeGroup` | `supertype` (required), `completeness`, `exclusivity`, `strategy`, `merge`, `discriminator`, `note` | subtype names, each with an optional `[strategy: ...]` | top level |
 | `TableGroup` | `color`, `note` | entity names | top level |
 | `DiagramView` | `note`, custom | `Note:`, and categories: `Tables`, `Views`, `Containers`, `TableGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
+| `Note name` (a sticky note) | `color` (`#rgb`, `#rrggbb` or `none`), custom | one string, Markdown | top level, or in a Container with `xdbml: 0.7` |
 
 A note goes either in the brackets as `note: '...'` or in the body as `Note: '...'`.
 
@@ -345,7 +346,48 @@ DiagramView order_flow {
 }
 ```
 
-A listed Container brings all of its entities, unless `Tables` names some of them: then it brings only those. Here `sales` brings `orders` and `order_lines` and leaves `returns` out, `billing` brings every entity, and `crm`, not listed, contributes `customers` alone. `Views` narrows the database views of a listed Container the same way, separately. A listed TableGroup or supertype group brings all of its members, whichever Container holds them. Each category appears once, and a diagram view has a unique name.
+A listed Container brings all of its entities, unless `Tables` names some of them: then it brings only those. Here `sales` brings `orders` and `order_lines` and leaves `returns` out, `billing` brings every entity, and `crm`, not listed, contributes `customers` alone. `Views` narrows the database views of a listed Container the same way, separately, and `Notes` its sticky notes. A listed TableGroup or supertype group brings all of its members, whichever Container holds them. Each category appears once, and a diagram view has a unique name.
+
+## Sticky notes
+
+A top-level `Note` with a name is a sticky note: an annotation drawn on the diagram, in the color of its `color` setting (`#rgb`, `#rrggbb`, or `none` for the text alone), or light yellow by default. Its text is Markdown: headings, `**bold**`, `*italic*`, `` `code` ``, links and lists render on the canvas. With `xdbml: 0.7`, a named `Note` in a Container body is a sticky note attached to it: it is drawn inside the Container's frame and moves with it, and the rest of the document names it with its Container, as in `sales.order_states`. The unnamed `Note:` of a Container body stays the Container's own note, and a top-level `Note:` without a name is the note of the project.
+
+```xdbml
+xdbml: 0.7
+
+Container sales [type: schema] {
+  Note: 'Order management'
+
+  Table orders {
+    id     int [pk]
+    status varchar
+  }
+
+  Note order_states [color: #FBCFE8] {
+    '''
+    An order moves from **placed** to **shipped** to **delivered**.
+
+    - a cancelled order keeps its lines
+    - a return points at one order line
+    '''
+  }
+}
+
+Note release_plan [color: none, author: 'data-team'] {
+  'Fields marked deprecated leave the model in release 4.2.'
+}
+
+DiagramView ordering {
+  Tables {
+    sales.orders
+  }
+  Notes {
+    sales.order_states
+  }
+}
+```
+
+A sticky note takes no position and no size: the diagram places it and sizes it to its text. Settings other than `color` are custom properties.
 
 ## Nesting and polymorphism
 
@@ -521,6 +563,20 @@ Ref customer_vehicles: vehicles.customer_id > customers.customer_id [
   source: '0..*',
   target: '1..1'
 ]
+```
+
+A sticky note without a name. A top-level `Note` without a name is the note of the project, and takes no settings.
+
+```xdbml
+// Wrong (parse-error): settings belong to a sticky note, which has a name
+Note [color: #FDE68A] {
+  'Orders are archived after two years'
+}
+
+// Right
+Note archiving [color: #FDE68A] {
+  'Orders are archived after two years'
+}
 ```
 
 A reversed relationship. The right side names the child's foreign key instead of the parent's key.

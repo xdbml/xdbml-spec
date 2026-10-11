@@ -78,10 +78,10 @@
     },
 
     "declarations": {
-      "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name). `Note` is skipped where it names a field (spec 3.10): it counts as a keyword only before ':' or '{', or before a name and '{' on the same line.",
+      "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name). `Note` is skipped where it names a field (spec 3.10): it counts as a keyword only before ':' or '{', or before the name of a sticky note, qualified or not, its settings brackets, and '{' or ':' on the same line (spec 19.2).",
       "patterns": [
         {
-          "match": "\\b(?!(?i:note)\\b(?!\\s*[:{])(?!\\s+(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")\\s*\\{))((?i:__DECLARATION_KEYWORDS__))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
+          "match": "\\b(?!(?i:note)\\b(?!\\s*[:{])(?!\\s+(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\"))*\\s*(?:\\[[^\\]]*\\]\\s*)?[{:]))((?i:__DECLARATION_KEYWORDS__))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
           "captures": {
             "1": { "name": "keyword.declaration.xdbml" },
             "2": { "name": "entity.name.type.xdbml" }

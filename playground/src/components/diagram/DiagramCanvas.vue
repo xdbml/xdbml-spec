@@ -113,6 +113,18 @@
 
       <div class="w-px h-5 bg-gray-200 dark:bg-slate-700 mx-0.5" />
 
+      <!-- Add a sticky note (spec §19): written into the source, placed at
+           the center of the view, in the selected Container when there is
+           one. -->
+      <button
+        type="button"
+        class="w-7 h-7 flex items-center justify-center text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
+        @click="addNote"
+        :title="selection && selection.kind === 'container' ? `Add a sticky note to ${selection.containerName}` : 'Add a sticky note'"
+      >
+        <svg viewBox="0 0 16 16" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"><path d="M3 2.5h10a.5.5 0 0 1 .5.5v6.7L9.7 13.5H3a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5Z"/><path d="M13.5 9.7h-3.3a.5.5 0 0 0-.5.5v3.3"/><path d="M5 6h6M5 8.5h3.5"/></svg>
+      </button>
+
       <div ref="arrangeWrap" class="relative">
         <button
           type="button"
@@ -138,7 +150,7 @@
           class="h-7 px-2 flex items-center gap-1 text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
           :class="{ 'text-blue-600 dark:text-blue-400': !allRelationshipsShown }"
           @click="displayMenuOpen = !displayMenuOpen"
-          title="Choose which relationships and labels the diagram draws"
+          title="Choose which relationships, annotations and labels the diagram draws"
         >
           Display
           <svg viewBox="0 0 16 16" class="w-2.5 h-2.5"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.75" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -157,6 +169,21 @@
               type="checkbox"
               class="w-3 h-3 accent-blue-600"
               :checked="relationshipVisibility[opt.key]"
+              @change="toggleRelationship(opt.key)"
+            >
+            <span class="flex-1">{{ opt.label }}</span>
+            <span class="text-gray-400 dark:text-slate-500">{{ opt.hint }}</span>
+          </label>
+          <p class="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Annotations</p>
+          <label
+            v-for="opt in annotationOptions"
+            :key="opt.key"
+            class="w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              class="w-3 h-3 accent-blue-600"
+              :checked="relationshipVisibility[opt.key] !== false"
               @change="toggleRelationship(opt.key)"
             >
             <span class="flex-1">{{ opt.label }}</span>
@@ -245,6 +272,12 @@ const emit = defineEmits<{
   select: [selection: Selection];
   /** The diagram on display changed: a diagram view name, or null for Main ERD. */
   'diagram-view-change': [name: string | null];
+  /**
+   * The toolbar asks for a sticky note (spec §19), to go into the selected
+   * Container, if any, with its top left corner at `at`, in diagram units.
+   * The shell writes it into the source and calls `placeNote` with its id.
+   */
+  'add-note': [request: { container?: string; at: { x: number; y: number } }];
 }>();
 
 const hasAst = computed(() => parser.hasAst);
@@ -543,7 +576,7 @@ function redoLayout (): void {
   const snap = currentSnapshot(history.value);
   if (snap) restoreSnapshot(snap as LayoutSnapshotMaps);
 }
-defineExpose({ undo: undoLayout, redo: redoLayout, canUndo, canRedo });
+defineExpose({ undo: undoLayout, redo: redoLayout, canUndo, canRedo, placeNote });
 
 /* ------------------------------------------ relationship visibility */
 //
@@ -562,6 +595,12 @@ const relationshipOptions = [
   { key: 'supertypeGroups' as const, label: 'Supertype groups', hint: 'half-circle' },
 ];
 
+// Sticky notes (spec §19) under a heading of their own. Hiding them hides
+// content, so they count toward the Display button's highlight.
+const annotationOptions = [
+  { key: 'stickyNotes' as const, label: 'Sticky notes', hint: 'Markdown' },
+];
+
 // Label options sit under their own heading: turning names off hides no
 // relationship, so they do not count toward the Display button's
 // "something is hidden" highlight.
@@ -575,7 +614,7 @@ function loadRelationshipVisibility (): RelationshipVisibility {
   // from these defaults (spec §18.4).
   const all: RelationshipVisibility = {
     referential: true, foreignMaster: true, inactive: true, conceptual: true,
-    supertypeGroups: true, relationshipNames: false,
+    supertypeGroups: true, relationshipNames: false, stickyNotes: true,
   };
   try {
     const parsed = activeView.value
@@ -583,7 +622,7 @@ function loadRelationshipVisibility (): RelationshipVisibility {
       : JSON.parse(localStorage.getItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY) ?? 'null');
     if (parsed && typeof parsed === 'object') {
       const stored = parsed as Record<string, unknown>;
-      for (const opt of [...relationshipOptions, ...labelOptions]) {
+      for (const opt of [...relationshipOptions, ...annotationOptions, ...labelOptions]) {
         const v = stored[opt.key];
         if (typeof v === 'boolean') all[opt.key] = v;
       }
@@ -594,7 +633,8 @@ function loadRelationshipVisibility (): RelationshipVisibility {
 
 const relationshipVisibility = ref<RelationshipVisibility>(loadRelationshipVisibility());
 const allRelationshipsShown = computed(
-  () => relationshipOptions.every((o) => relationshipVisibility.value[o.key]),
+  () => relationshipOptions.every((o) => relationshipVisibility.value[o.key])
+    && annotationOptions.every((o) => relationshipVisibility.value[o.key] !== false),
 );
 const displayMenuOpen = ref(false);
 const displayWrap = ref<HTMLElement | null>(null);
@@ -613,7 +653,8 @@ function persistRelationshipVisibility (): void {
 function toggleRelationship (key: keyof RelationshipVisibility): void {
   relationshipVisibility.value = {
     ...relationshipVisibility.value,
-    [key]: !relationshipVisibility.value[key],
+    // stickyNotes is optional in the mount's type, and absent means shown.
+    [key]: key === 'stickyNotes' ? relationshipVisibility.value[key] === false : !relationshipVisibility.value[key],
   };
   persistRelationshipVisibility();
   handle?.setRelationshipVisibility(relationshipVisibility.value);
@@ -647,6 +688,39 @@ function onArrangeOutside (e: MouseEvent): void {
   if (!arrangeMenuOpen.value) return;
   const el = arrangeWrap.value;
   if (el && !el.contains(e.target as Node)) arrangeMenuOpen.value = false;
+}
+
+/* --------------------------------------------------------- sticky notes */
+
+/** The size of a new sticky note, its text being one line (spec §19.6). */
+const NEW_NOTE_SIZE = { width: 220, height: 110 };
+
+function addNote (): void {
+  const c = handle?.viewportCenter() ?? { x: 0, y: 0 };
+  const sel = props.selection;
+  emit('add-note', {
+    container: sel && sel.kind === 'container' ? sel.containerName : undefined,
+    at: {
+      x: Math.max(0, snapTo20(c.x - NEW_NOTE_SIZE.width / 2)),
+      y: Math.max(0, snapTo20(c.y - NEW_NOTE_SIZE.height / 2)),
+    },
+  });
+}
+
+function snapTo20 (v: number): number { return Math.round(v / 20) * 20; }
+
+/**
+ * Give the sticky note `name` a position in the diagram on display, before
+ * its declaration reaches the parser: the mount draws it there when the
+ * source parses again.
+ */
+function placeNote (name: string, at: { x: number; y: number }): void {
+  const next = new Map(userPositions.value);
+  next.set(`note:${name}`, { x: at.x, y: at.y });
+  userPositions.value = next;
+  persistUserPositions();
+  pushLayout();
+  commitHistory();
 }
 
 /* ------------------------------------------------- mount + state bridge */
@@ -686,6 +760,8 @@ function toInspector (s: MountSelection): Selection {
   if (s.kind === 'supertypeGroup') {
     return { kind: 'supertypeGroup', groupName: s.id.replace(/^supertype-group:/, '').replace(/#\d+$/, '') };
   }
+  // Renderer ids of sticky notes are `note:<name>` (spec §19).
+  if (s.kind === 'note') return { kind: 'note', noteName: s.id.replace(/^note:/, '') };
   return { kind: 'container', containerName: s.name };
 }
 function toMount (s: Selection): MountSelection {
@@ -694,6 +770,7 @@ function toMount (s: Selection): MountSelection {
   if (s.kind === 'field') return { kind: 'field', id: s.entityId, path: s.path };
   if (s.kind === 'ref') return { kind: 'ref', id: s.refId };
   if (s.kind === 'supertypeGroup') return { kind: 'supertypeGroup', id: `supertype-group:${s.groupName}` };
+  if (s.kind === 'note') return { kind: 'note', id: `note:${s.noteName}` };
   return { kind: 'container', name: s.containerName };
 }
 
