@@ -2,6 +2,43 @@ xDBML 0.7.0 -- merge dev/0.7 into main, release, publish the extension
 Base: origin/dev/0.7 9c5deaf ("Topic 6 -- Import specifiers and Topic 7 --
 Closing"). Built 2026-10-12.
 
+UPDATE, AFTER THE MERGE (main at 4552029, "Dev/0.7 (#3)")
+---------------------------------------------------------
+The preflight failed in npm test: 212 cases of the grammar corpus found
+"no code block under the heading". The cause is line endings. Git for
+Windows, with core.autocrlf=true, checked out every file that changed
+between 0.6.7 and 0.7 with CRLF when main moved to the merge. The corpus
+runner looks for a line "```" followed by LF, so a CRLF file has no code
+block for it; other checks read files byte for byte too. Until now the
+deliveries were written straight into the working tree with LF, and no
+checkout had rewritten them.
+
+The fix, in this update:
+  .gitattributes   "* text=auto eol=lf": text files are checked out with
+                   LF on every platform, whatever core.autocrlf says;
+                   *.cmd and *.bat keep CRLF. The index changes for no
+                   file: every text file in it is LF already.
+  apply.cmd        "apply.cmd release" finds the pull request with
+                   gh pr list, which works once GitHub has deleted the
+                   branch, no longer requires the commits of dev/0.7 in
+                   main (a squash merge has none), and checks the text
+                   files out again with LF when it finds CRLF, on a clean
+                   tree only. It no longer deletes PR-0.7.md, which the
+                   squash merge put in main.
+  APPLY.txt        this section.
+
+To finish the release, from cmd.exe at the repo root, on main:
+
+    git add .gitattributes apply.cmd APPLY.txt
+    git commit -m "Check out text files with LF; apply.cmd release after a squash merge"
+    git push
+    apply.cmd release
+
+apply.cmd release sees the merged pull request, checks the files out again
+with LF (git rm -r --cached . and git reset --hard, which rewrites line
+endings only), then runs the preflight, dates the CHANGELOG and runs
+tools\release.cmd 0.7.0, as step 2 below describes. Then apply.cmd vscode.
+
 This delivery writes five files into the clone, on dev/0.7:
   PR-0.7.md            the description of the pull request
   apply.cmd            the three steps below
@@ -54,7 +91,8 @@ STEP 2 -- apply.cmd release
      stops if one fails.
   2. Merges the pull request with a merge commit, which keeps the topic
      commits in the history of main.
-  3. Checks out main and pulls it.
+  3. Checks out main and pulls it, then checks the text files out again
+     with LF if git wrote them with CRLF.
   4. tools\release-preflight.cmd 0.7.0: npm login, 0.7.0 free on npm,
      wrangler, MCP reference in sync with llms.txt, every test suite.
   5. Sets "**Released**: unreleased" in the v0.7 section of CHANGELOG.md

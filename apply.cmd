@@ -124,8 +124,9 @@ echo ============================================================
 echo.
 echo [1/6] Checks: GitHub CLI, pull request
 call :needgh || exit /b 1
+REM gh pr list finds the pull request even once GitHub has deleted its branch.
 set "PRSTATE="
-for /f %%s in ('gh pr view %BRANCH% --json state --jq .state 2^>nul') do set "PRSTATE=%%s"
+for /f %%s in ('gh pr list --head %BRANCH% --state all --json state --jq ".[0].state" 2^>nul') do set "PRSTATE=%%s"
 if "%PRSTATE%"=="MERGED" (
   echo   the pull request is merged already.
   goto :merged
@@ -143,16 +144,34 @@ call gh pr merge %BRANCH% --merge || goto :fail
 :merged
 
 echo.
-echo [3/6] Switch to main and pull
+echo [3/6] Switch to main, pull, check the line endings
+REM A squash merge leaves no commit of %BRANCH% in main, so the merge is
+REM checked through the pull request above, not through the history.
 call git fetch origin --quiet || goto :fail
 call git checkout main || goto :fail
 call git pull --ff-only origin main || goto :fail
-call git merge-base --is-ancestor origin/%BRANCH% HEAD
-if errorlevel 1 (
-  echo ERROR: main does not contain %BRANCH%. Check the merge on GitHub.
+REM The tests read text files byte for byte and need LF line endings, which
+REM .gitattributes asks for. Files that git checked out with CRLF before that
+REM rule existed are checked out again, which changes nothing in the index.
+call :crlf
+if not errorlevel 1 goto :lfok
+set "DIRTY=0"
+for /f %%s in ('git status --porcelain ^| find /c /v ""') do set "DIRTY=%%s"
+if not "%DIRTY%"=="0" (
+  echo ERROR: the text files have CRLF line endings, and %DIRTY% changes are
+  echo        uncommitted. Commit or stash them, then rerun apply.cmd release.
   exit /b 1
 )
-if exist "%PRBODY%" del "%PRBODY%"
+echo   the text files have CRLF line endings: checking them out again with LF
+call git rm -r --cached -q . || goto :fail
+call git reset --hard -q || goto :fail
+call :crlf
+if not errorlevel 1 goto :lfok
+echo ERROR: the text files still have CRLF line endings. .gitattributes needs
+echo        the line   * text=auto eol=lf   before the rules for *.cmd.
+exit /b 1
+:lfok
+echo   ok
 
 echo.
 echo [4/6] Preflight
@@ -204,6 +223,11 @@ exit /b 0
 REM ===========================================================================
 REM  Subroutines and failure messages
 REM ===========================================================================
+:crlf
+REM Errorlevel 1 when the grammar test corpus has CRLF line endings.
+node -e "process.exit(require('fs').readFileSync('grammar/test-cases.md','utf8').includes('\r')?1:0)"
+exit /b
+
 :needgh
 where gh >nul 2>&1
 if errorlevel 1 (

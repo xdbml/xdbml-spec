@@ -1,3 +1,10 @@
+# Text files are checked out with LF line endings on every platform, whatever
+# core.autocrlf says. The tests read sources, fixtures and goldens byte for
+# byte: with CRLF, the grammar corpus finds no code block under its headings,
+# and generated files no longer match what they are generated from. Binary
+# files (PNG, TTF, VSIX) are detected and left alone.
+* text=auto eol=lf
+
 # Windows batch files need CRLF line endings: with LF only, cmd.exe can
 # fail to find a GOTO or CALL label, and tools/release.cmd uses several.
 *.cmd text eol=crlf
