@@ -29,8 +29,12 @@ import {
   sizeNote,
   NOTE_WIDTHS,
   defaultTheme,
+  layoutDeps,
   type DiagramModel,
 } from '../src/index.ts';
+import { ENTITY_NAME_FONT_SIZE, FIELD_FONT_SIZE } from '../src/svg/metrics.ts';
+import { buildOverlay } from '../src/interactive/overlay.ts';
+import { depEnds, depExtent } from '../src/geometry/dep-path.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const examplesDir = join(here, '..', '..', 'examples');
@@ -734,6 +738,11 @@ Metadata Table audit {
     `${long.width}x${long.height}`);
   const mid = sizeNote(Array.from({ length: 12 }, (_, i) => `Sentence ${i} here.`).join(' '));
   check('note size: a box is no taller than wide when a width allows it', mid.height <= mid.width, `${mid.width}x${mid.height}`);
+  const sized = layoutNoteText('# Title\n## Sub\nBody text\n\n- item', 200).lines;
+  check('note text: the body is the size of a field name, and no heading is larger than an entity name',
+    sized.filter((l) => l.weight === 400).every((l) => l.size === FIELD_FONT_SIZE)
+      && sized.every((l) => l.size <= ENTITY_NAME_FONT_SIZE),
+    sized.map((l) => `${l.size}/${l.weight}`).join(','));
   const lines = layoutNoteText('A **bold** word and [a link](https://xdbml.org).', 120).lines;
   check('note text: lines fit the width', lines.length > 1 && lines.every((l) => l.runs.length > 0));
   check('note text: a style change inside a word is no place to break',
@@ -782,6 +791,99 @@ DiagramView legend_only { Notes { legend } }`;
     placed.notes.find((n) => n.id === 'note:legend')?.bounds.x === 900 && placed.width >= 900 + NOTE_WIDTHS[0]);
   const onlyNotes = buildDiagram(flatten(parse("Note a { 'x' }\nNote b { 'y' }")));
   check('notes: a document of notes alone is arranged', autoArrange(onlyNotes, 'relational').size === 2);
+}
+
+/* ---- Data lineage (spec §27, v0.7) -------------------------------- */
+{
+  const src = [
+    'xdbml: 0.7',
+    'Table raw {', '  id int [pk]', '  amount int', '}',
+    'Table customers {', '  first varchar', '  last varchar', '}',
+    'Table dim {', '  full varchar', '}',
+    'Table stg [dep: <- raw] {', '  revenue int [dep: <- raw.amount]', '}',
+    'View kpis {', '  n int', '}',
+    'Dep: stg -> kpis.n [color: #123456]',
+    'Dep full_name {', '  customers.first -> dim.full', '  customers.last -> dim.full [color: #abcdef]', '}',
+    'Dep: dim -> dim',
+    'DiagramView raw_side {', '  Tables {', '    raw', '    stg', '  }', '}',
+  ].join('\n');
+  const m = buildDiagram(flatten(parse(src)));
+  check('lineage: one layout per Dep, under the ids of collectLineage',
+    m.deps.map((d) => d.id).join(',') === 'dep:0,dep:1,dep:2,dep:3,dep:4', m.deps.map((d) => d.id).join(','));
+  check('lineage: a field end and a View end resolve',
+    m.deps[0].dependencies[0].downstream?.entityId === 'kpis' && m.deps[0].dependencies[0].downstream?.fieldName === 'n'
+      && m.deps[0].dependencies[0].upstream?.fieldName === undefined);
+  check('lineage: the color of a Dep and of one dependency', m.deps[0].color === '#123456' && m.deps[1].dependencies[1].color === '#abcdef' && m.deps[1].color === undefined);
+  const placed = applyUserPositions(m, autoArrange(m, 'relational'));
+  const geo = layoutDeps(placed.deps, placed.entities);
+  const full = geo.find((g) => g.dep.id === 'dep:1');
+  check('lineage: two dependencies into one field meet at one junction with one arrowhead',
+    !!full && full.curves.length === 2 && full.junctions.length === 1 && full.arrows.length === 1 && full.trunks.length === 1);
+  check('lineage: a dependency draws as a curve', geo.every((g) => g.curves.every((c) => / C /.test(c.d))));
+  const self = geo.find((g) => g.dep.id === 'dep:2');
+  check('lineage: an entity that depends on itself draws a loop', !!self && self.curves.length === 1 && self.arrows.length === 1);
+  check('lineage: the name of a Dep goes at its junction', !!full?.label && Math.abs(full.label.x - full.junctions[0].x) < 0.01);
+  const svg = serializeDiagram(placed, { showRelationshipNames: true });
+  check('lineage: drawn in the default lineage color, the Dep color and the dependency color',
+    svg.includes(`stroke="${defaultTheme.lineage.line}"`) && svg.includes('stroke="#123456"') && svg.includes('stroke="#abcdef"'));
+  check('lineage: the name of a Dep shows with the names', svg.includes('>full_name</text>'));
+  check('lineage: no name without the names option', !serializeDiagram(placed).includes('>full_name</text>'));
+  check('lineage: a Dep counts as a link when arranging', (() => {
+    const lonely = buildDiagram(flatten(parse('Table a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a -> b')));
+    const pos = autoArrange(lonely, 'relational');
+    const a = pos.get('a');
+    const b = pos.get('b');
+    return !!a && !!b && Math.abs(a.y - b.y) < 1;
+  })());
+  const dv = buildDiagram(flatten(parse(src)), new Set(), { diagramView: 'raw_side' });
+  check('lineage: a diagram view draws the dependencies between its members only (§18.4)',
+    dv.deps.map((d) => d.id).join(',') === 'dep:3,dep:4', dv.deps.map((d) => d.id).join(','));
+  check('lineage: a prebuilt model without deps still renders', serializeDiagram({ ...placed, deps: undefined as unknown as DiagramModel['deps'] }).includes('<svg'));
+
+  // Selection (spec §27.7): the rows of the fields at the ends tinted, the
+  // boxes named with no field outlined, the curves and arrowheads in blue.
+  const ends0 = depEnds(placed.deps[0], placed.entities);
+  check('lineage: the ends of a Dep, a field row and a box', JSON.stringify(ends0) === JSON.stringify({ fields: [{ entityId: 'kpis', path: 'n' }], entities: ['stg'] }), JSON.stringify(ends0));
+  const tinted = serializeDiagram(placed, { highlightedFields: depEnds(placed.deps[1], placed.entities).fields });
+  check('lineage: the field rows at the ends of a selected Dep take the selection tint',
+    (tinted.match(new RegExp(`fill="${defaultTheme.row.selectFill}"`, 'g')) ?? []).length === 3);
+  const overlay = buildOverlay(placed, { kind: 'dep', id: 'dep:0' }, defaultTheme);
+  check('lineage: a selected Dep draws its arrowhead in the selection color and outlines the box it names',
+    overlay.includes(`<polygon points=`) && /<polygon[^>]*fill="#2563eb"/.test(overlay)
+      && overlay.includes(`stroke="${defaultTheme.row.selectStrip}" stroke-width="2" pointer-events="none"`));
+
+  // A loop between two boxes of one column stays on the canvas.
+  const stacked = applyUserPositions(m, new Map([['raw', { x: 40, y: 40 }], ['stg', { x: 40, y: 300 }]]));
+  const reach = depExtent(layoutDeps(stacked.deps, stacked.entities));
+  check('lineage: the canvas holds a loop that bows out past the boxes',
+    reach.right > 40 + 280 && stacked.width >= reach.right, `${reach.right} / ${stacked.width}`);
+
+  // Arrangement: sources on the left, targets on the right.
+  const chain = buildDiagram(flatten(parse('Table c {\n  x int\n}\nTable b {\n  x int\n}\nTable a {\n  x int\n}\nDep: a -> b\nDep: b.x -> c.x')));
+  const cp = autoArrange(chain, 'relational');
+  check('lineage: a chain arranges left to right, source first',
+    (cp.get('a')?.x ?? 0) < (cp.get('b')?.x ?? 0) && (cp.get('b')?.x ?? 0) < (cp.get('c')?.x ?? 0),
+    JSON.stringify([...cp]));
+  const blocks = buildDiagram(flatten(parse([
+    'xdbml: 0.7',
+    'Container marts {', '  Table m {', '    x int', '  }', '}',
+    'Container raw {', '  Table r {', '    x int', '  }', '}',
+    'Container other {', '  Table o {', '    x int', '  }', '}',
+    'Dep: raw.r -> marts.m',
+  ].join('\n'))));
+  const bp = autoArrange(blocks, 'relational');
+  check('lineage: the Container of a source stands left of the Container it feeds, and an unlinked one below',
+    (bp.get('raw.r')?.x ?? 0) < (bp.get('marts.m')?.x ?? 0) && (bp.get('other.o')?.y ?? 0) > (bp.get('marts.m')?.y ?? 0),
+    JSON.stringify([...bp]));
+  const web = buildDiagram(flatten(parse([
+    'Table a {', '  id int [pk]', '}', 'Table b {', '  id int [pk]', '  a_id int [ref: > a.id]', '}',
+    'Table c {', '  id int [pk]', '  b_id int [ref: > b.id]', '}', 'Table d {', '  id int [pk]', '  c_id int [ref: > c.id]', '}',
+    'Table e {', '  id int [pk]', '  d_id int [ref: > d.id]', '}',
+    'Dep: d -> a',
+  ].join('\n'))));
+  const wp = autoArrange(web, 'relational');
+  check('lineage: in a relational web that lineage does not lead, the source of a Dep stands left of its target',
+    (wp.get('d')?.x ?? 0) < (wp.get('a')?.x ?? 0), JSON.stringify([...wp]));
 }
 
 /* ---- Report -------------------------------------------------------- */

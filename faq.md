@@ -79,7 +79,7 @@ DBML's `database_type:` setting is preserved as an alias for single-target schem
 
 ## How do I split a large xDBML schema across multiple files?
 
-Use the **module system** (spec §27). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
+Use the **module system** (spec §28). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
 
 Two import modes are supported. Import in full brings every top-level declaration from the source file: `reuse * from './library'`. Selective import names what you want: `reuse { entity products, type Email } from './library'`. Use `as` to rename for clarity or to avoid conflicts.
 
@@ -121,9 +121,15 @@ These are adjacent standards that layer above and below xDBML:
 - **ODCS** (Open Data Contract Standard) wraps an xDBML schema with contractual metadata: quality rules, SLAs, ownership, pricing, lifecycle.
 - **[Apache Ossie](https://ossie.apache.org/)** (incubating, formerly Open Semantic Interchange, OSI) and **dbt MetricFlow** describe measures, metrics, dimensions, and aggregations -- the computational meaning that xDBML deliberately leaves to the semantic layer. An Ossie dataset points at a physical table and lists its keys, fields, and join relationships; an xDBML entity supplies those, together with the synonyms of spec §24.1 for Ossie's `ai_context`.
 - **OWL** and RDF-star handle inferential reasoning and knowledge-graph semantics.
-- **OpenLineage** tracks data flow and lineage at runtime.
+- **OpenLineage** tracks data flow and lineage at runtime: the jobs that ran and the datasets they read and wrote. xDBML records the lineage a model declares, with `Dep` (spec §27).
 
 xDBML generates the schemas these standards reference and consumes nothing they own. The same xDBML document can feed an ODCS contract's schema section, an Apache Ossie semantic model's datasets, a SHACL validator's target shapes, and the SQL DDL that creates them.
+
+## Does xDBML record data lineage?
+
+Yes, as of v0.7, with the `Dep` construct that DBML added in version 10.0 (spec §27). A `Dep` states that an entity, a View or a field is computed from another, at the level of entities, of fields, or one of each: `Dep: raw_orders.amount_usd -> stg_orders.revenue`. A block gathers the dependencies of one transformation step and may describe it, a query included, in its note. xDBML reads DBML's short, block and inline forms in every document, and adds Views and nested fields as endpoints, so a model can state that a relational table is the flattened form of a MongoDB array.
+
+A `Dep` is declared lineage: what the model intends to feed what. The lineage observed at runtime, which jobs ran, when, and on which datasets, belongs in OpenLineage. A `Dep` records which element feeds which, not the transformation itself; typed source-to-target mapping rules, with expressions and lookups, are planned for a later version.
 
 ## How does xDBML compare with LinkML?
 

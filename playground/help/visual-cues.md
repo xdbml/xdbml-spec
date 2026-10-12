@@ -99,6 +99,22 @@ Cardinality text labels (`0..*`, `1..1`, etc.) appear next to the glyphs as the 
 
 With **Display > Relationship names** on, a named `Ref` shows its name in italics at the middle of its line.
 
+## Data lineage
+
+A curve with an arrowhead is a `Dep`: the element at the arrowhead is computed from the element at the other end, by a job or a query outside the model (spec §27). It carries no cardinality symbol, so it never reads as a relationship, whose lines turn at right angles.
+
+| What you see | What it means |
+|---|---|
+| Amber curve, arrowhead at one end | A dependency, from upstream to downstream |
+| Curve ending at a field row | The dependency names that field |
+| Curve ending at a card's header | The dependency names the entity or the View |
+| Several curves meeting at a dot before one arrowhead | Fields of one Dep combined into one, such as a first and a last name into a full name |
+| A curve in another color | The `color` of the Dep, or of that one dependency |
+
+With **Display > Relationship names** on, a named Dep shows its name at its junction, or along its curve. Clicking a curve selects the Dep: its curves and arrowheads turn blue, the rows of the fields at its ends take the selection tint, and an entity or a View it names with no field is outlined. The inspector reads its dependencies back as sentences that name the elements, such as "`fct_orders.revenue` is computed from `stg_orders.revenue`", and shows its note and its settings.
+
+An automatic arrangement places each entity to the right of the entities it is computed from, where the layout allows.
+
 ## Supertype groups
 
 | What you see | What it means |

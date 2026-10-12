@@ -189,7 +189,7 @@ A named relationship (`Ref places: ...`) can show its name at the middle of its 
 
 ## Showing and hiding relationships
 
-The **Display** menu in the diagram toolbar has a checkbox per kind: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**, plus **Relationship names** under Labels. The choices are remembered between sessions. When a relationship kind is hidden, the Display button is highlighted so you know something is off screen.
+The **Display** menu in the diagram toolbar has a checkbox per kind: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**, **Sticky notes** under Annotations, **Dependencies** under Lineage for the curves of data lineage (see [Visual cues](./visual-cues)), and **Relationship names** under Labels. The choices are remembered between sessions. When a relationship kind is hidden, the Display button is highlighted so you know something is off screen.
 
 ## Selection
 

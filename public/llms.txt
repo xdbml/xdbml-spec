@@ -77,6 +77,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | `TableGroup` | `color`, `note` | entity names | top level |
 | `DiagramView` | `note`, custom | `Note:`, and categories: `Tables`, `Views`, `Containers`, `TableGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
 | `Note name` (a sticky note) | `color` (`#rgb`, `#rrggbb` or `none`), custom | one string, Markdown | top level, or in a Container with `xdbml: 0.7` |
+| `Dep` (data lineage) | `note`, `color` (`#rgb` or `#rrggbb`), custom | dependencies `a -> b`, one per line, each with optional brackets; `key: value` lines; `Note:` | top level, never in a Container |
 
 A note goes either in the brackets as `note: '...'` or in the body as `Note: '...'`.
 
@@ -389,6 +390,43 @@ DiagramView ordering {
 
 A sticky note takes no position and no size: the diagram places it and sizes it to its text. Settings other than `color` are custom properties.
 
+## Data lineage
+
+A `Dep` records that data is computed from other data: an entity, a View or a field is produced from another by a job, a dbt model or a query that runs outside the model. The arrow points from upstream to downstream, `a -> b`, and `b <- a` states the same dependency. An end names an entity, a View, or a field of either, with its Container where it sits in one, and a nested field with its path, as in a `Ref`: `events.payload.customer.id`, `orders.line_items.[*].sku`. A dependency states no cardinality and constrains no value: it never replaces a `Ref`, which records how rows connect.
+
+```xdbml
+Table raw_customers {
+  id         int [pk]
+  first_name varchar
+  last_name  varchar
+  signed_up  date
+}
+
+Table stg_customers [dep: <- raw_customers] {
+  customer_id int [pk, dep: <- raw_customers.id]
+  full_name   varchar
+}
+
+Table daily_signups {
+  day       date [pk, dep: <- raw_customers.signed_up]
+  customers int
+}
+
+Dep: raw_customers -> daily_signups.customers [note: 'COUNT(*) per day']
+
+Dep build_full_name [owner: 'analytics'] {
+  raw_customers.first_name -> stg_customers.full_name
+  raw_customers.last_name  -> stg_customers.full_name
+  Note: '''
+    ~~~sql
+    SELECT first_name || ' ' || last_name AS full_name FROM raw_customers
+    ~~~
+  '''
+}
+```
+
+The short form, `Dep name: a -> b [settings]`, states one dependency; its name is optional. A block gathers dependencies into one downstream entity or View, all between entities or all naming a field at one end at least; a `key: value` line or a `Note:` in its body is a setting of the Dep, and brackets after a dependency hold settings of that dependency alone. Inline, `dep: <- source` or `dep: -> target` on an entity or a View names an entity or a View, and on a field names a field, qualified with its entity. A field never depends on itself, and a dependency is stated once in the document. A `Dep` stands at the top level; `use *` brings the Deps of a file, and a selective import brings none. Write the transformation in the note: xDBML 0.7 records which element feeds which, not the expression that computes it.
+
 ## Nesting and polymorphism
 
 ```xdbml
@@ -563,6 +601,42 @@ Ref customer_vehicles: vehicles.customer_id > customers.customer_id [
   source: '0..*',
   target: '1..1'
 ]
+```
+
+A dependency written with a relationship operator. A `Dep` takes an arrow, `->` or `<-`, with no space inside.
+
+```xdbml
+Table raw_orders {
+  id int [pk]
+}
+
+Table stg_orders {
+  order_id int [pk]
+}
+
+// Wrong (parse-error): '>' is the operator of a relationship
+Dep: raw_orders > stg_orders
+
+// Right
+Dep: raw_orders -> stg_orders
+```
+
+An inline `dep` on a field that names an entity. On a field, `dep` names a field; a dependency between entities goes in the entity's brackets.
+
+```xdbml
+Table raw_orders {
+  id int [pk]
+}
+
+// Wrong (dep-wrong-kind): a field depends on a field
+Table stg_orders {
+  order_id int [pk, dep: <- raw_orders]
+}
+
+// Right
+Table stg_orders [dep: <- raw_orders] {
+  order_id int [pk, dep: <- raw_orders.id]
+}
 ```
 
 A sticky note without a name. A top-level `Note` without a name is the note of the project, and takes no settings.
@@ -1037,7 +1111,7 @@ Entity suppliers {
 3. No comma or semicolon follows an item in `{ }`.
 4. In every relationship between attributes, the referenced side -- the right side of `>`, the left side of `<` -- names all the fields of the parent's primary key or of one of its unique keys, and no other field.
 5. Relationship settings sit in a `Ref`, not beside an inline `ref:`. Cardinalities are quoted `'min..max'` strings: `source` for the left end, `target` for the right end.
-6. `Ref`, `Type`, `SupertypeGroup`, `TableGroup`, `TablePartial` and `DiagramView` declarations sit at the top level.
+6. `Ref`, `Dep`, `Type`, `SupertypeGroup`, `TableGroup`, `TablePartial` and `DiagramView` declarations sit at the top level.
 7. A View body holds `source_query:`, fields and `Note:`, and nothing else.
 8. A key sits inline only on one unnamed field, and otherwise in `constraints`; each key is declared once, and primary key fields carry `not null`.
 9. Strings use single quotes, with each `'` inside escaped or the string in `'''...'''`; database expressions use backticks; multi-word types use double quotes.

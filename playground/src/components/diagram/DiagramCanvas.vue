@@ -157,7 +157,7 @@
         </button>
         <div
           v-if="displayMenuOpen"
-          class="absolute bottom-full right-0 mb-1 w-56 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg"
+          class="absolute bottom-full right-0 mb-1 w-64 py-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg"
         >
           <p class="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Relationships</p>
           <label
@@ -177,6 +177,21 @@
           <p class="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Annotations</p>
           <label
             v-for="opt in annotationOptions"
+            :key="opt.key"
+            class="w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              class="w-3 h-3 accent-blue-600"
+              :checked="relationshipVisibility[opt.key] !== false"
+              @change="toggleRelationship(opt.key)"
+            >
+            <span class="flex-1">{{ opt.label }}</span>
+            <span class="text-gray-400 dark:text-slate-500">{{ opt.hint }}</span>
+          </label>
+          <p class="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500">Lineage</p>
+          <label
+            v-for="opt in lineageOptions"
             :key="opt.key"
             class="w-full px-3 py-1.5 flex items-center gap-2 text-left text-xs text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer"
           >
@@ -601,11 +616,18 @@ const annotationOptions = [
   { key: 'stickyNotes' as const, label: 'Sticky notes', hint: 'Markdown' },
 ];
 
+// Data lineage (spec §27.7) under a heading of its own: a dependency is no
+// relationship between rows. Hiding it hides content, so it counts toward
+// the Display button's highlight.
+const lineageOptions = [
+  { key: 'lineage' as const, label: 'Dependencies', hint: 'curves' },
+];
+
 // Label options sit under their own heading: turning names off hides no
 // relationship, so they do not count toward the Display button's
 // "something is hidden" highlight.
 const labelOptions = [
-  { key: 'relationshipNames' as const, label: 'Relationship names', hint: 'Refs and groups' },
+  { key: 'relationshipNames' as const, label: 'Relationship names', hint: 'Refs, groups, Deps' },
 ];
 
 function loadRelationshipVisibility (): RelationshipVisibility {
@@ -614,7 +636,7 @@ function loadRelationshipVisibility (): RelationshipVisibility {
   // from these defaults (spec §18.4).
   const all: RelationshipVisibility = {
     referential: true, foreignMaster: true, inactive: true, conceptual: true,
-    supertypeGroups: true, relationshipNames: false, stickyNotes: true,
+    supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true,
   };
   try {
     const parsed = activeView.value
@@ -622,7 +644,7 @@ function loadRelationshipVisibility (): RelationshipVisibility {
       : JSON.parse(localStorage.getItem(RELATIONSHIP_VISIBILITY_STORAGE_KEY) ?? 'null');
     if (parsed && typeof parsed === 'object') {
       const stored = parsed as Record<string, unknown>;
-      for (const opt of [...relationshipOptions, ...annotationOptions, ...labelOptions]) {
+      for (const opt of [...relationshipOptions, ...annotationOptions, ...lineageOptions, ...labelOptions]) {
         const v = stored[opt.key];
         if (typeof v === 'boolean') all[opt.key] = v;
       }
@@ -634,7 +656,7 @@ function loadRelationshipVisibility (): RelationshipVisibility {
 const relationshipVisibility = ref<RelationshipVisibility>(loadRelationshipVisibility());
 const allRelationshipsShown = computed(
   () => relationshipOptions.every((o) => relationshipVisibility.value[o.key])
-    && annotationOptions.every((o) => relationshipVisibility.value[o.key] !== false),
+    && [...annotationOptions, ...lineageOptions].every((o) => relationshipVisibility.value[o.key] !== false),
 );
 const displayMenuOpen = ref(false);
 const displayWrap = ref<HTMLElement | null>(null);
@@ -653,8 +675,10 @@ function persistRelationshipVisibility (): void {
 function toggleRelationship (key: keyof RelationshipVisibility): void {
   relationshipVisibility.value = {
     ...relationshipVisibility.value,
-    // stickyNotes is optional in the mount's type, and absent means shown.
-    [key]: key === 'stickyNotes' ? relationshipVisibility.value[key] === false : !relationshipVisibility.value[key],
+    // stickyNotes and lineage are optional in the mount's type, and absent means shown.
+    [key]: key === 'stickyNotes' || key === 'lineage'
+      ? relationshipVisibility.value[key] === false
+      : !relationshipVisibility.value[key],
   };
   persistRelationshipVisibility();
   handle?.setRelationshipVisibility(relationshipVisibility.value);
@@ -762,6 +786,7 @@ function toInspector (s: MountSelection): Selection {
   }
   // Renderer ids of sticky notes are `note:<name>` (spec §19).
   if (s.kind === 'note') return { kind: 'note', noteName: s.id.replace(/^note:/, '') };
+  if (s.kind === 'dep') return { kind: 'dep', depId: s.id };
   return { kind: 'container', containerName: s.name };
 }
 function toMount (s: Selection): MountSelection {
@@ -771,6 +796,7 @@ function toMount (s: Selection): MountSelection {
   if (s.kind === 'ref') return { kind: 'ref', id: s.refId };
   if (s.kind === 'supertypeGroup') return { kind: 'supertypeGroup', id: `supertype-group:${s.groupName}` };
   if (s.kind === 'note') return { kind: 'note', id: `note:${s.noteName}` };
+  if (s.kind === 'dep') return { kind: 'dep', id: s.depId };
   return { kind: 'container', name: s.containerName };
 }
 

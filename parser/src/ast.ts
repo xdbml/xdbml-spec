@@ -64,6 +64,7 @@ export type TopLevelStatement =
   | NoteDeclaration
   | TopLevelRecordsDeclaration
   | MetadataDeclaration
+  | DepDeclaration
   | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
@@ -650,7 +651,7 @@ export interface SupertypeGroupMember {
  * `{ * }` as the whole body lists every element of every category. The AST
  * keeps the category keyword as written (`Schemas`, `tables`) next to its
  * canonical name (`Containers`, `Tables`); names stay unresolved strings,
- * and `diagramViewMembers()` resolves them (spec §18.2, §18.3, §28.8).
+ * and `diagramViewMembers()` resolves them (spec §18.2, §18.3, §29.8).
  * ----------------------------------------------------------------------- */
 
 export type DiagramViewCategoryName =
@@ -877,15 +878,75 @@ export interface MetadataDeclaration {
 }
 
 /* -------------------------------------------------------------------------
- * Module system (spec §27, new in v0.2)
+ * Data lineage (spec §27, v0.7; DBML 10.0)
+ *
+ *   Dep: raw_orders -> stg_orders
+ *   Dep order_revenue: stg_orders.revenue -> fct_orders.revenue [note: '...']
+ *   Dep build_fct_orders [owner: 'analytics'] {
+ *     stg_orders.revenue    -> fct_orders.revenue
+ *     stg_customers.segment -> fct_orders.customer_segment
+ *     Note: 'Joins each order to its customer.'
+ *   }
+ *
+ * A Dep records that an entity, a View or a field is computed from another.
+ * The inline form, `[dep: <- stg_orders]`, is a `DepValue` in the settings
+ * of the element that carries it. `collectLineage()` (lineage.ts) gathers
+ * both forms.
+ * ----------------------------------------------------------------------- */
+
+export interface DepDeclaration {
+  kind: 'DepDeclaration';
+  /** The optional name, bare or quoted, as written (§27.4). */
+  name?: string;
+  /** `short`: `Dep: a -> b`; `block`: `Dep name { ... }`. */
+  form: 'short' | 'block';
+  /**
+   * The settings in brackets: after the dependency in the short form, after
+   * the name in the block form.
+   */
+  settings: Setting[];
+  /**
+   * The `key: value` lines and the `Note` of a block's body, the note as a
+   * `note` setting. A setting here takes precedence over the brackets
+   * (§27.2).
+   */
+  bodySettings?: Setting[];
+  /**
+   * Brackets between the name and the colon of the short form,
+   * `Dep n [note: 'x']: a -> b`, which DBML accepts. The brackets after
+   * the dependency take precedence.
+   */
+  headerSettings?: Setting[];
+  /** One for the short form; any number for a block. */
+  dependencies: DepDependency[];
+  span: Span;
+}
+
+/** One dependency: an upstream element feeds a downstream one (§27.1). */
+export interface DepDependency {
+  kind: 'DepDependency';
+  upstream: RefEndpoint;
+  downstream: RefEndpoint;
+  /** The arrow as written: `->` puts the upstream end first, `<-` the downstream end. */
+  arrow: '->' | '<-';
+  /**
+   * Settings in brackets after a dependency in a block (§27.2): they
+   * concern this dependency alone.
+   */
+  settings: Setting[];
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Module system (spec §28, new in v0.2)
  *
  * `use` and `reuse` directives import declarations from another xDBML file.
  * The directive can appear at file scope or inside a Container body; its
  * location determines where the imported elements live in the merged AST
- * (the "directive's location is the placement location" rule, §27.5).
+ * (the "directive's location is the placement location" rule, §28.5).
  *
  * Each directive may carry an optional clone block embedding the imported
- * declarations directly in the importing file (§27.6). When a clone block
+ * declarations directly in the importing file (§28.6). When a clone block
  * is present, the parser uses it as authoritative and does not open the
  * referenced file. When absent, the parser must open the referenced file
  * (P5 work; P4 only supports clone-present directives).
@@ -908,7 +969,7 @@ export interface ModuleImportDirective {
   /**
    * Directive mode:
    *   - `'reuse'`: transitive (visible to files that further import this file).
-   *     The recommended default per spec §27.4.
+   *     The recommended default per spec §28.4.
    *   - `'use'`: non-transitive (private to this file).
    */
   mode: 'use' | 'reuse';
@@ -946,7 +1007,7 @@ export type ImportSpec =
  *     type Email as PII_Email
  *     field core.dim_customer.email
  *
- * The element type is one of the keywords from §27.3 (table, entity,
+ * The element type is one of the keywords from §28.3 (table, entity,
  * collection, record, enum, tablepartial, note, schema, container,
  * tablegroup, type, edge, view, diagramview, field, and from v0.5
  * supertypegroup). Stored lowercased.
@@ -971,7 +1032,7 @@ export interface ImportItem {
  * an entity, type, container, etc. clone). Field imports are not supported
  * in P4 -- when they land, this type may grow to a wider union.
  *
- * Per spec §27.6, the clone contains exactly the imported declaration(s),
+ * Per spec §28.6, the clone contains exactly the imported declaration(s),
  * without surrounding wrappers from the source file. For an entity clone
  * the content is the EntityDeclaration alone (no container wrapper); for a
  * container clone the content is the ContainerDeclaration including its
@@ -983,7 +1044,7 @@ export interface CloneBlock {
    * Statements that the importing file pulls in from the source. Most are
    * top-level shapes (Entity, Type, Enum, Container, etc.). The one
    * exception is `FieldDeclaration`: when the parent directive imports
-   * one or more fields via `field <path>` items (spec §27.8), each field
+   * one or more fields via `field <path>` items (spec §28.8), each field
    * appears here as a bare FieldDeclaration with no entity wrapper.
    * The `flatten()` pass lifts each bare field into a synthetic
    * TypeDeclaration at file scope so downstream consumers see a normal
@@ -1031,7 +1092,8 @@ export type SettingValue =
   | IdentifierValue
   | ExpressionValue
   | ListValue
-  | RefValue;
+  | RefValue
+  | DepValue;
 
 export interface StringValue {
   kind: 'StringValue';
@@ -1098,6 +1160,19 @@ export interface RefValue {
   span: Span;
 }
 
+/**
+ * An inline `dep` setting (spec §27.2, v0.7): `[dep: <- stg_orders]` makes
+ * the named element upstream of the one carrying the setting, and
+ * `[dep: -> fct_orders]` downstream of it.
+ */
+export interface DepValue {
+  kind: 'DepValue';
+  arrow: '->' | '<-';
+  /** The element at the other end. */
+  target: RefEndpoint;
+  span: Span;
+}
+
 /* -------------------------------------------------------------------------
  * Parse options (new in v0.2 / parser batch P5)
  *
@@ -1134,7 +1209,7 @@ export interface ParseOptions {
    * Because this reader is synchronous, a host that supports remote sources
    * must return the fetched text from a cache it populated beforehand. The
    * network fetch, and its SSRF / redirect / size / timeout obligations
-   * (spec §27.14.5), live in the host's resolver, not in the parser.
+   * (spec §28.14.5), live in the host's resolver, not in the parser.
    *
    * If absent, reference-only directives fall back to the P4 rejection
    * with a clear "no resolver available" message. Clone-block-bearing

@@ -1,6 +1,6 @@
 xdbml: 0.2
 
-// Fixture for the "use (non-transitive)" case of grammar/test-cases.md (spec §27.4).
+// Fixture for the "use (non-transitive)" case of grammar/test-cases.md (spec §28.4).
 
 Type InternalAuditFields {
   created_at timestamp

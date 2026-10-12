@@ -8,6 +8,11 @@
  * draws.
  */
 
+/** Font size of a field name in an entity box, in px. */
+export const FIELD_FONT_SIZE = 12;
+/** Font size of an entity's name in its header band, in px. */
+export const ENTITY_NAME_FONT_SIZE = 13;
+
 /**
  * Approximate advance width of one character at 12px in the sans stack.
  *

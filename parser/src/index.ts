@@ -37,11 +37,14 @@ export {
   ModuleSourceError,
 } from './module-resolver.ts';
 export type { ModuleSource } from './module-resolver.ts';
-export { resolveNames, SymbolTable } from './name-resolver.ts';
+export { resolveLineage, resolveNames, SymbolTable } from './name-resolver.ts';
+export type { ResolvedDependency } from './name-resolver.ts';
 export { checkViews, viewSourceQuery } from './views.ts';
 export { checkDiagramViews, diagramViewMembers, diagramViewNote, diagramViews } from './diagram-views.ts';
 export { checkNotes, isStickyNoteColor, projectNote, resolveStickyNote, stickyNotes } from './notes.ts';
 export type { PlacedStickyNote, ProjectNote, StickyNoteResolution } from './notes.ts';
+export { checkLineage, collectLineage, depColor, depSettings, isDepColor, lineageById } from './lineage.ts';
+export type { DepEnd, DepEndResolver, Lineage, LineageDependency } from './lineage.ts';
 export type { DiagramViewMembers } from './diagram-views.ts';
 export {
   bodyConstraints,

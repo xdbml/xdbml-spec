@@ -32,6 +32,8 @@
  */
 
 import {
+  collectLineage,
+  depColor,
   diagramViewMembers,
   effectiveFieldList,
   effectiveFields,
@@ -72,6 +74,7 @@ import type {
   XDbmlDocument,
 } from '@xdbml/parse';
 import { layoutNoteText, type NoteText } from './note-text.ts';
+import { depExtent, layoutDeps } from '../geometry/dep-path.ts';
 
 /* -------------------------------------------------------------------------
  * Output shape
@@ -87,6 +90,12 @@ export interface DiagramModel {
   supertypeGroups: SupertypeGroupLayout[];
   /** Sticky notes (spec §19), drawn as boxes holding their Markdown text. */
   notes: NoteLayout[];
+  /**
+   * Data lineage (spec §27): each Dep, drawn as curves from upstream to
+   * downstream. A model built before v0.7 may lack it; readers take a
+   * missing list as empty.
+   */
+  deps: DepLayout[];
   /** Overall canvas size needed to hold the laid-out content. */
   width: number;
   height: number;
@@ -133,6 +142,30 @@ export interface NoteLayout {
   text: NoteText;
   bounds: Rect;
   decl: NoteDeclaration;
+}
+
+/**
+ * A Dep (spec §27), resolved against the boxes on the canvas. Each
+ * dependency draws as a curve with an arrowhead at its downstream end
+ * (§27.7); the geometry follows the boxes' current bounds and is computed
+ * at draw time by `layoutDep()` (geometry/dep-path.ts).
+ */
+export interface DepLayout {
+  /** `dep:<n>`, the id `collectLineage()` of @xdbml/parse gives the Dep. */
+  id: string;
+  /** The Dep's name, drawn at its junction when names are shown. */
+  name?: string;
+  /** The Dep's `color` (§27.3); undefined for the theme's lineage color. */
+  color?: string;
+  dependencies: DepLineLayout[];
+}
+
+/** One dependency of a Dep. An end that names no box on the canvas is undefined. */
+export interface DepLineLayout {
+  upstream?: FieldLocator;
+  downstream?: FieldLocator;
+  /** The `color` in the brackets after the dependency in a block (§27.3). */
+  color?: string;
 }
 
 export interface ContainerLayout {
@@ -750,6 +783,20 @@ export function buildDiagram (
   const refLayouts: RefLayout[] = collectRefDeclarations(doc)
     .map((decl, index) => buildRefLayout(decl, entityByName, index, doc));
 
+  // Data lineage (spec §27), in the order and under the ids of
+  // collectLineage(). An endpoint resolves as a relationship endpoint does
+  // (§11.16.3), against the entities and the Views on the canvas.
+  const depLayouts: DepLayout[] = collectLineage(doc).map((l) => ({
+    id: l.id,
+    ...(l.name !== undefined ? { name: l.name } : {}),
+    ...(depColor(l.settings) ? { color: depColor(l.settings) } : {}),
+    dependencies: l.dependencies.map((d) => ({
+      upstream: locateRefEndpoint(d.upstream, entityByName),
+      downstream: locateRefEndpoint(d.downstream, entityByName),
+      ...(depColor(d.settings) ? { color: depColor(d.settings) } : {}),
+    })),
+  }));
+
 
   // Mark the four relationship role markers of spec 11.12 on the fields
   // that participate in a resolved Ref:
@@ -838,7 +885,17 @@ export function buildDiagram (
   let shownRefs = refLayouts;
   let shownContainers = containerLayouts;
   let shownNotes = noteLayouts;
+  let shownDeps = depLayouts;
   if (boxIds) {
+    // A diagram view lists no dependency: it shows each dependency whose
+    // two ends lie in its members (§18.4, §27.7).
+    shownDeps = depLayouts
+      .map((d) => ({
+        ...d,
+        dependencies: d.dependencies.filter((x) =>
+          !!x.upstream && !!x.downstream && boxIds.has(x.upstream.entityId) && boxIds.has(x.downstream.entityId)),
+      }))
+      .filter((d) => d.dependencies.length > 0);
     shownEntities = entityLayouts.filter((e) => boxIds.has(e.id));
     shownRefs = refLayouts.filter((r) =>
       !!r.source && !!r.target && boxIds.has(r.source.entityId) && boxIds.has(r.target.entityId));
@@ -915,6 +972,13 @@ export function buildDiagram (
     width = Math.max(width, n.bounds.x + n.bounds.width + CANVAS_MARGIN);
     height = Math.max(height, n.bounds.y + n.bounds.height + CANVAS_MARGIN);
   }
+  // A dependency between two boxes of one column loops out past them
+  // (spec §27.7): the canvas holds the loop.
+  {
+    const reach = depExtent(layoutDeps(shownDeps, shownEntities));
+    width = Math.max(width, Math.ceil(reach.right) + CANVAS_MARGIN);
+    height = Math.max(height, Math.ceil(reach.bottom) + CANVAS_MARGIN);
+  }
 
   return {
     containers: shownContainers,
@@ -923,6 +987,7 @@ export function buildDiagram (
     edges,
     supertypeGroups,
     notes: shownNotes,
+    deps: shownDeps,
     width,
     height,
   };
@@ -1179,6 +1244,7 @@ function emptyDiagram (): DiagramModel {
     edges: [],
     supertypeGroups: [],
     notes: [],
+    deps: [],
     width: 400,
     height: 200,
   };
@@ -2309,6 +2375,10 @@ export function applyUserPositions (
     if (b.x + b.width > canvasMaxX) canvasMaxX = b.x + b.width;
     if (b.y + b.height > canvasMaxY) canvasMaxY = b.y + b.height;
   }
+  // The curves of the Deps, which may loop out past the boxes (spec §27.7).
+  const reach = depExtent(layoutDeps(diagram.deps ?? [], newEntities));
+  canvasMaxX = Math.max(canvasMaxX, Math.ceil(reach.right));
+  canvasMaxY = Math.max(canvasMaxY, Math.ceil(reach.bottom));
 
   return {
     containers: newContainers,
@@ -2317,6 +2387,7 @@ export function applyUserPositions (
     edges: newEdges,
     supertypeGroups: diagram.supertypeGroups,
     notes: newNotes,
+    deps: diagram.deps ?? [],
     width: Math.max(diagram.width, canvasMaxX + CANVAS_MARGIN),
     height: Math.max(diagram.height, canvasMaxY + CANVAS_MARGIN),
   };

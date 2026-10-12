@@ -26,8 +26,9 @@ import {
   refCardinality, refCardinalityIn,
   metadataIndex, settingValueText, withMetadata,
   projectNote, resolveStickyNote, stickyNotes,
+  collectLineage, depColor, depSettings, resolveLineage,
 } from '../src/index.ts';
-import type { AppliedSetting, EndCardinality, EntityDeclaration, FieldDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
+import type { AppliedSetting, DepDeclaration, EndCardinality, EntityDeclaration, FieldDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
 import {
   BSON_TYPES,
   CONTAINER_KEYWORDS,
@@ -1131,7 +1132,7 @@ Project lib_project {
 Entity X { id int [pk] }`,
       };
       return {
-        name: 'P5: ImportAll skips ProjectDeclaration (spec §27.4)',
+        name: 'P5: ImportAll skips ProjectDeclaration (spec §28.4)',
         source: `xdbml: 0.2
 reuse * from './lib'`,
         options: {
@@ -1206,7 +1207,7 @@ reuse { entity A_local } from './cycle-a'
 Entity X { id int [pk] }`,
       };
       return {
-        name: 'P5: circular imports do not crash (spec §27.15)',
+        name: 'P5: circular imports do not crash (spec §28.15)',
         source: files['/test/cycle-a.xdbml'],
         options: {
           filePath: '/test/cycle-a.xdbml',
@@ -1355,7 +1356,7 @@ reuse { entity Y } from './other' {
       };
     })(),
     /* -------------------------------------------------------------------
-     * v0.3: remote (URL) module sources  (spec §27.14)
+     * v0.3: remote (URL) module sources  (spec §28.14)
      * -----------------------------------------------------------------
      * Hermetic: the in-memory file map is keyed by the resolved key the
      * parser produces (a normalized https href), so no network is touched.
@@ -2887,7 +2888,7 @@ reuse { field core.dim_customer.no_such_field } from './lib'`,
           readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
         },
         assert: (doc) => {
-          // Per spec §27.13: failures are silent at module resolution.
+          // Per spec §28.13: failures are silent at module resolution.
           // The directive's clone block exists but is empty.
           const dir = doc.statements[0];
           if (dir.kind !== 'ModuleImportDirective') return 'expected directive';
@@ -3743,7 +3744,7 @@ Table rules {
       },
     },
     {
-      name: 'v0.6 §28.6: entityConstraints gathers every form into keys and checks',
+      name: 'v0.6 §29.6: entityConstraints gathers every form into keys and checks',
       source: `xdbml: 0.6
 Table t {
   a int [pk]
@@ -4905,7 +4906,7 @@ DiagramView v { Tables { orders revenue } }`)).diagnostics.map((x) => x.message)
     if (n !== 3) return `ext: ${ext}`;
     return dbml.length === 0 ? undefined : `dbml: ${dbml}`;
   });
-  check('v0.6.3 §27: reuse { diagramview X } imports the diagram view, not a database view named X', () => {
+  check('v0.6.3 §28: reuse { diagramview X } imports the diagram view, not a database view named X', () => {
     const files: Record<string, string> = {
       '/w/a.xdbml': `xdbml: 0.6
 Table orders { id int [pk] }
@@ -4921,7 +4922,7 @@ DiagramView reports { Tables { orders } }`,
     const got = diagramViewMembers(doc, 'reports')?.entities.join();
     return got === 'orders' ? undefined : `members: ${got}`;
   });
-  check('v0.6.3 §27.5: a diagramview import in a Container body fails; a reuse * in a Container body moves a DiagramView to the top level', () => {
+  check('v0.6.3 §28.5: a diagramview import in a Container body fails; a reuse * in a Container body moves a DiagramView to the top level', () => {
     const files: Record<string, string> = {
       '/w/a.xdbml': 'xdbml: 0.6\nTable orders { id int [pk] }\nDiagramView o { Tables { orders } }',
       '/w/bad.xdbml': "xdbml: 0.6\nSchema s {\n reuse { diagramview o } from './a'\n}",
@@ -4978,7 +4979,7 @@ DiagramView b5 { Tables { a } }`);
     if (dbmlNote.join() !== 'error:construct-requires-version') return `dbml note: ${dbmlNote}`;
     return dbmlSetting.join() === 'error:construct-requires-version' ? undefined : `dbml setting: ${dbmlSetting}`;
   });
-  check('v0.6.4 §27.2: import items one per line, with or without commas or semicolons', () => {
+  check('v0.6.4 §28.2: import items one per line, with or without commas or semicolons', () => {
     const files: Record<string, string> = {
       '/w/lib.xdbml': 'xdbml: 0.6\nEntity a { id int [pk] }\nEntity b { id int [pk] }\nType T string',
       '/w/m1.xdbml': "xdbml: 0.6\nreuse {\n  entity a\n  entity b as bb\n  type T\n} from './lib'",
@@ -5007,7 +5008,7 @@ DiagramView b5 { Tables { a } }`);
     if (old !== 'warning:named-type-shadows-builtin') return `0.5: ${old}`;
     return native === '' ? undefined : `native: ${native}`;
   });
-  check('v0.6.4 §27: a Windows importer path with backslashes resolves next to the importer', () => {
+  check('v0.6.4 §28: a Windows importer path with backslashes resolves next to the importer', () => {
     const read: string[] = [];
     const files: Record<string, string> = {
       'C:/repo/models/lib.xdbml': 'xdbml: 0.6\nEntity a { id int [pk] }',
@@ -5020,7 +5021,7 @@ DiagramView b5 { Tables { a } }`);
     if (names !== 'a,T') return `names: ${names}`;
     return read.join(' ') === 'C:/repo/models/lib.xdbml C:/repo/shared/types.xdbml' ? undefined : read.join(' ');
   });
-  check('v0.6.4 §27: an import cycle stops at the importer when its path uses backslashes', () => {
+  check('v0.6.4 §28: an import cycle stops at the importer when its path uses backslashes', () => {
     // a imports b, which imports a back: the importer is on the resolution
     // stack, so b's directive is not followed and a is never read.
     const reads: string[] = [];
@@ -5837,7 +5838,7 @@ Entity t {
     const t = doc.statements.find((s) => s.kind === 'EntityDeclaration') as EntityDeclaration;
     return clean(src) ?? same(effectiveFields(t, tablePartials(doc)).map((f) => f.field.name), ['id', 'created_at']);
   });
-  check('§27: an import names a quoted entity', () => {
+  check('§28: an import names a quoted entity', () => {
     const files: Record<string, string> = {
       '/q/lib.xdbml': `xdbml: 0.6
 Container "sales ops" {
@@ -6637,7 +6638,7 @@ function runV07StickyNoteTests (): TestResult[] {
   });
   check('§19.5: an unnamed Note takes no settings', () => parseFails("Note [color: #abc] {\n  'x'\n}", 'Settings belong to a sticky note'));
 
-  /* ---- §27 imports ---- */
+  /* ---- §28 imports ---- */
 
   const files: Record<string, string> = {
     '/n/lib.xdbml': V + "Note: 'Project note of lib'\nNote legend [color: #abc] {\n  'Legend'\n}\n" + SALES + 'Metadata Note sales.states {\n  owner: \'ops\'\n}\n',
@@ -6650,11 +6651,11 @@ function runV07StickyNoteTests (): TestResult[] {
       return text;
     },
   });
-  check('§19.5, §27.2: importing everything brings the sticky notes and leaves the note of the project behind', () => {
+  check('§19.5, §28.2: importing everything brings the sticky notes and leaves the note of the project behind', () => {
     const flat = flatten(parse(V + "use * from './lib'\n", opts('/n/main.xdbml')));
     return same(stickyNotes(flat).map((n) => n.id), ['legend', 'sales.states']) ?? same(projectNote(flat), undefined);
   });
-  check('§27.3: a sticky note in a Container imports by its qualified name, lands at the top level, and brings its Metadata block', () => {
+  check('§28.3: a sticky note in a Container imports by its qualified name, lands at the top level, and brings its Metadata block', () => {
     const main = V + "use { note sales.states as order_states } from './lib'\n";
     files['/n/main.xdbml'] = main;
     const flat = flatten(parse(main, opts('/n/main.xdbml')));
@@ -6662,7 +6663,7 @@ function runV07StickyNoteTests (): TestResult[] {
     const applied = metadataIndex(flat).note('order_states').map((a) => `${a.setting.name}=${settingValueText(a.setting.value)}`);
     return same(ids, ['order_states']) ?? same(applied, ['owner=ops']);
   });
-  check('§27.3: a bare name imports the one note of that name in a Container', () => {
+  check('§28.3: a bare name imports the one note of that name in a Container', () => {
     const flat = flatten(parse(V + "use { note states } from './lib'\n", opts('/n/main.xdbml')));
     return same(stickyNotes(flat).map((n) => [n.id, n.decl.body]), [['states', 'placed, shipped, delivered']]);
   });
@@ -6704,6 +6705,183 @@ function runV07StickyNoteTests (): TestResult[] {
   return results;
 }
 
+function runV07LineageTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string, options?: ParseOptions): string =>
+    resolveNames(parse(src, options)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string, options?: ParseOptions): string | undefined => {
+    const got = codes(src, options);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const dep = (src: string, k = 0): DepDeclaration =>
+    parse(src).statements.filter((x): x is DepDeclaration => x.kind === 'DepDeclaration')[k];
+  const ends = (src: string): string[] => collectLineage(flatten(parse(src))).map((l) =>
+    `${l.id}:${l.dependencies.map((d) => `${pathToString(d.upstream.path)}->${pathToString(d.downstream.path)}`).join(';')}`);
+  const settings = (list: ReadonlyArray<{ name: string; value: Parameters<typeof settingValueText>[0] }>): string[] =>
+    list.map((x) => `${x.name}=${settingValueText(x.value)}`);
+  const T = 'Table a {\n  x int\n  y int\n}\nTable b {\n  x int\n  y int\n}\nTable c {\n  x int\n}\n';
+  const V = 'xdbml: 0.7\n';
+
+  /* ---- §27.2 forms ---- */
+
+  check('§27.2: the short form reads the arrow from upstream to downstream', () => {
+    const d = dep(`${T}Dep: a -> b`);
+    return same([d.form, d.name, pathToString(d.dependencies[0].upstream.path), pathToString(d.dependencies[0].downstream.path), d.dependencies[0].arrow],
+      ['short', undefined, 'a', 'b', '->']);
+  });
+  check('§27.1: `b <- a` states the dependency `a -> b`', () => {
+    const d = dep(`${T}Dep: b.x <- a.y`);
+    return same([pathToString(d.dependencies[0].upstream.path), pathToString(d.dependencies[0].downstream.path), d.dependencies[0].arrow], ['a.y', 'b.x', '<-']);
+  });
+  check('§27.2, §27.4: a name before the colon, bare or quoted', () =>
+    same([dep(`${T}Dep load: a -> b`).name, dep(`${T}Dep "load orders": a -> b`).name], ['load', 'load orders']));
+  check('§27.2: brackets before the colon apply, and those after the dependency take precedence', () =>
+    same(settings(depSettings(dep(`${T}Dep n [note: 'x', owner: 'o']: a -> b [note: 'y']`))), ['note=y', 'owner=o']));
+  check('§27.2: in a block, the body takes precedence over the brackets, a Note included', () => {
+    const d = dep(`${T}Dep n [note: 'brackets', owner: 'o', color: #111] {\n  a -> b\n  owner: 'body'\n  Note {\n    'from the body'\n  }\n}`);
+    return same(settings(depSettings(d)), ['note=from the body', 'owner=body', 'color=#111']);
+  });
+  check('§27.2: brackets after a dependency in a block concern that dependency alone', () => {
+    const d = dep(`${T}Dep n {\n  a.x -> b.x [note: 'cast to int']\n  a.y -> b.x\n}`);
+    return same([settings(d.dependencies[0].settings), settings(d.dependencies[1].settings), settings(depSettings(d))],
+      [['note=cast to int'], [], []]);
+  });
+  check('§27.2: a block on one line, and an empty block', () =>
+    same([dep(`${T}Dep n { a -> b }`).dependencies.length, dep(`${T}Dep n { }`).dependencies.length], [1, 0]));
+  check('§3.10: `dep` still names a table, a field and a nested object', () =>
+    expectCodes(`${T}Table dep {\n  dep int\n  meta object {\n    dep int\n  }\n}\nDep: a -> dep\nDep: a.x -> dep.dep`, ''));
+  check("§27.2: 'Dep' is case-insensitive, like every keyword", () =>
+    same(dep(`${T}DEP: a -> b`).form, 'short'));
+
+  /* ---- §27.2 inline form, collectLineage ---- */
+
+  check('§27.2: inline deps gather after the declarations, the entity before its fields', () =>
+    same(ends(`${T}Table d [dep: <- a] {\n  x int [dep: <- a.x, dep: -> c.x]\n}\nDep: a -> b`),
+      ['dep:0:a->b', 'dep:1:a->d', 'dep:2:a.x->d.x', 'dep:3:d.x->c.x']));
+  check('§27.1: an inline dep on a nested field names it with its path, through [*]', () =>
+    same(ends(`${V}${T}Table o {\n  items array [object {\n    sku varchar [dep: <- a.x]\n  }]\n}`), ['dep:0:a.x->o.items.[*].sku'])
+      ?? expectCodes(`${V}${T}Table o {\n  items array [object {\n    sku varchar [dep: <- a.x]\n  }]\n}`, ''));
+  check('§27.2: an inline dep in a Container names the entity with its Container', () =>
+    same(ends(`${V}${T}Container s {\n  Entity t [dep: <- a] {\n    id int\n  }\n}`), ['dep:0:a->s.t']));
+  check('§27.3: depColor reads #rgb and #rrggbb only', () =>
+    same([depColor(depSettings(dep(`${T}Dep: a -> b [color: #abc]`))), depColor(depSettings(dep(`${T}Dep: a -> b [color: red]`)))], ['#abc', undefined]));
+
+  /* ---- §27.1 endpoints ---- */
+
+  check('§27.1: resolveLineage gives the element and the field of each end, by Dep id', () => {
+    const src = `${V}${T}Container s {\n  View v {\n    n int\n  }\n}\nDep: s.v.n <- a\nDep: a.x -> zz`;
+    const got = [...resolveLineage(parse(src))].map(([id, ds]) => [id, ds.map((d) => [d.upstream, d.downstream])]);
+    return same(got, [
+      ['dep:0', [[{ element: 'a', elementKind: 'entity' }, { element: 's.v', elementKind: 'view', field: 'n' }]]],
+      ['dep:1', [[{ element: 'a', elementKind: 'entity', field: 'x' }, undefined]]],
+    ]);
+  });
+
+  check('§27.1: an injected field is a field of the entity', () =>
+    expectCodes(`${T}TablePartial audited {\n  loaded_at timestamp\n}\nTable d {\n  id int\n  ~audited\n}\nDep: a.x -> d.loaded_at`, ''));
+  check('§11.16.3: a path naming an entity and a field reads as the field, with a warning', () =>
+    expectCodes(`${V}${T}Container a {\n  Entity x {\n    id int\n  }\n}\nDep: a.x -> b.x`, 'warning:ambiguous-dep-endpoint'));
+  check('§27.1: a bare name declared in two Containers asks for the Container', () => {
+    const src = `${V}Container s1 {\n  Entity t {\n    id int\n  }\n}\nContainer s2 {\n  Entity t {\n    id int\n  }\n}\nTable z {\n  id int\n}\nDep: t -> z`;
+    const d = resolveNames(parse(src)).diagnostics;
+    return same(d.map((x) => x.code), ['unresolved-dep-endpoint']) ?? (d[0].message.includes('several Containers') ? undefined : d[0].message);
+  });
+  check('§27.1: a field a View does not declare names nothing', () =>
+    expectCodes(`${V}${T}View v {\n  x int\n}\nDep: a.y -> v.y`, 'error:unresolved-dep-endpoint'));
+  check('§11.5: a nested path that the type does not hold is reported', () =>
+    expectCodes(`${V}${T}Table o {\n  p object {\n    id int\n  }\n}\nDep: o.p.nope -> b.x`, 'error:unresolved-field'));
+  check('§27.1: the field of an Edge is no endpoint', () =>
+    expectCodes(`${V}${T}Edge e [source: a, target: b] {\n  w int\n}\nDep: e.w -> b.x`, 'error:invalid-dep-endpoint'));
+  check('§27.1: a dep in the brackets of an Edge is an error', () =>
+    expectCodes(`${V}${T}Edge e [source: a, target: b, dep: <- a] {\n  w int\n}`, 'error:misplaced-dep'));
+  check('§27.2: a dep on a Ref or in a Type is an error', () =>
+    expectCodes(`${V}${T}Ref: a.x > b.x [dep: <- c]\nType t {\n  v int [dep: <- c.x]\n}`, 'error:misplaced-dep error:misplaced-dep'));
+
+  /* ---- §27.4 rules ---- */
+
+  check('§27.4: a reversed pair and a pair at another level are other dependencies', () =>
+    expectCodes(`${T}Dep: a -> b\nDep: b -> a\nDep: a.x -> b.x\nDep: a -> b.x`, ''));
+  check('§27.4: a dependency stated twice in one block', () =>
+    expectCodes(`${T}Dep n {\n  a.x -> b.x\n  b.x <- a.x\n}`, 'error:duplicate-dep'));
+  check('§27.4: the same dependency written with and without its Container is stated twice', () =>
+    expectCodes(`${V}Container s {\n  Entity t {\n    id int\n  }\n}\nTable z {\n  id int\n}\nDep: t.id -> z.id\nDep: s.t.id -> z.id`, 'error:duplicate-dep'));
+  check('§27.4: two fields of one entity may depend on each other', () =>
+    expectCodes(`${T}Dep: a.x -> a.y`, ''));
+  check('§27.3: a color in the brackets of a dependency in a block is checked too', () =>
+    expectCodes(`${T}Dep n {\n  a -> b [color: blue]\n}`, 'error:invalid-dep-color'));
+
+  /* ---- §27.9 values that are no arrow ---- */
+
+  check('§27.9: a dep flag, a number and a name are no arrow', () =>
+    expectCodes(`${T}Table d [dep] {\n  x int [dep: -3]\n  y int [dep: a]\n}`, 'error:invalid-dep-value error:invalid-dep-value error:invalid-dep-value'));
+  check('§27.9: in a v0.6 document, a TablePartial keeps a dep custom property with a warning, and an arrow is an error', () =>
+    expectCodes(`xdbml: 0.6\n${T}TablePartial p [dep: 'x'] {\n  f int [dep: <- a.x]\n}`, 'warning:invalid-dep-value error:dep-in-partial'));
+  check('§27.9: an arrow is a dependency in a document declaring v0.6', () =>
+    same(ends(`xdbml: 0.6\n${T}Table d [dep: <- a] {\n  x int\n}`), ['dep:0:a->d']));
+
+  /* ---- §27.8 modules ---- */
+
+  const files: Record<string, string> = {
+    '/l/lib.xdbml': `${T}Table d [dep: <- c] {\n  x int\n}\nDep load {\n  a -> b\n}\n`,
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  check('§27.8: importing everything brings the Deps, which resolve', () => {
+    const doc = parse("use * from './lib'\n", opts('/l/main.xdbml'));
+    const got = collectLineage(flatten(doc)).map((l) => l.name ?? l.id);
+    return same(got, ['load', 'dep:1']) ?? expectCodes("use * from './lib'\n", '', opts('/l/main.xdbml'));
+  });
+  check('§27.8: a selective import brings no Dep, and an inline dep travels with its entity', () => {
+    const src = "use { table c, table d } from './lib'\n";
+    const doc = parse(src, opts('/l/main.xdbml'));
+    return same(collectLineage(flatten(doc)).map((l) => l.inline?.carrier ?? l.name), ['d']) ?? expectCodes(src, '', opts('/l/main.xdbml'));
+  });
+  check('§27.8: an inline dep whose other end the import leaves behind names nothing', () =>
+    expectCodes("use { table d } from './lib'\n", 'error:unresolved-dep-endpoint', opts('/l/main.xdbml')));
+  check('§27.4, §28.2: a Dep that a Container-scoped import brings moves to the top level', () => {
+    const src = `${V}Container k {\n  use * from './lib'\n}\n`;
+    const flat = flatten(parse(src, opts('/l/main.xdbml')));
+    const top = flat.statements.filter((x) => x.kind === 'DepDeclaration').length;
+    return same(top, 1) ?? expectCodes(src, '', opts('/l/main.xdbml'));
+  });
+
+  /* ---- editors ---- */
+
+  check('§27.2: Monarch colors Dep at the start of a line as a keyword, and dep before a type as a name', () => {
+    const rules = xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>;
+    const rule = rules.find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('^dep'));
+    const arrows = rules.find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[1] === 'operators.lineage');
+    if (!rule || !arrows) return 'rule missing';
+    const re = new RegExp(rule[0].source, 'i');
+    const asKeyword = ['Dep: a -> b', 'dep load: a -> b', 'Dep load [owner: \'x\'] {', 'Dep "load it" {', 'DEP {', 'Dep n [note: \'x\']: a -> b']
+      .filter((t) => !re.test(t));
+    const asName = ['  dep int', 'dep int [pk]', '  Dep: a -> b', 'depot: x'].filter((t) => re.test(t));
+    const arrowRe = new RegExp(arrows[0].source);
+    const arrowsMissed = ['a -> b', 'b <- a', '[dep: <- a]'].filter((t) => !arrowRe.test(t));
+    return asKeyword.length || asName.length || arrowsMissed.length
+      ? `keyword missed: ${asKeyword.join(' / ')}; name matched: ${asName.join(' / ')}; arrows missed: ${arrowsMissed.join(' / ')}`
+      : undefined;
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -6719,6 +6897,7 @@ function main (): void {
   const optionalRefTests = runV07OptionalRefTests();
   const metadataTests = runV07MetadataTests();
   const noteTests = runV07StickyNoteTests();
+  const lineageTests = runV07LineageTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -6732,9 +6911,10 @@ function main (): void {
   const or = report('v0.7 optional marks and cardinality (spec §11.1, §11.7, §11.8, §11.16)', optionalRefTests);
   const mr = report('v0.7 custom properties and Metadata blocks (spec §24.5, §24.7)', metadataTests);
   const nr = report('v0.7 sticky notes and the note of the project (spec §19)', noteTests);
+  const lr = report('v0.7 data lineage (spec §27)', lineageTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

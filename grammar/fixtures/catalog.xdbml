@@ -1,6 +1,6 @@
 xdbml: 0.2
 
-// Fixture for the module cases of grammar/test-cases.md (spec §27): the
+// Fixture for the module cases of grammar/test-cases.md (spec §28): the
 // files they import from './catalog'. Top-level products and categories,
 // a Container core holding its own products and categories, and a Type.
 

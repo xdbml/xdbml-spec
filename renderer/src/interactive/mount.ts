@@ -28,6 +28,7 @@ import { serializeDiagram } from '../svg/serialize.ts';
 import { resolveTheme } from '../style/theme.ts';
 import type { DeepPartial, Theme } from '../style/theme.ts';
 import { buildOverlay, type Selection } from './overlay.ts';
+import { depEnds, depExtent, layoutDeps } from '../geometry/dep-path.ts';
 import {
   anchoredScroll,
   clampZoom,
@@ -69,6 +70,11 @@ export interface RelationshipVisibility {
    * notes are drawn unless it is false.
    */
   stickyNotes?: boolean;
+  /**
+   * Data lineage (spec §27.7): the curves of the Deps. Optional for callers
+   * written before v0.7; dependencies are drawn unless it is false.
+   */
+  lineage?: boolean;
 }
 
 export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
@@ -79,6 +85,7 @@ export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
   supertypeGroups: true,
   relationshipNames: false,
   stickyNotes: true,
+  lineage: true,
 };
 
 export interface LayoutState {
@@ -218,17 +225,23 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     const refs = model.refs.filter(refVisible);
     const groupsHidden = !refVisibility.supertypeGroups && model.supertypeGroups.length > 0;
     const notesHidden = refVisibility.stickyNotes === false && (model.notes ?? []).length > 0;
-    if (refs.length === model.refs.length && !groupsHidden && !notesHidden) return model;
+    const depsHidden = refVisibility.lineage === false && (model.deps ?? []).length > 0;
+    if (refs.length === model.refs.length && !groupsHidden && !notesHidden && !depsHidden) return model;
     return {
       ...model,
       refs,
       supertypeGroups: groupsHidden ? [] : model.supertypeGroups,
       notes: notesHidden ? [] : model.notes,
+      deps: depsHidden ? [] : (model.deps ?? []),
     };
   }
 
   function render (): void {
-    const shapes = serializeDiagram(visibleModel(), {
+    const shown = visibleModel();
+    // A selected Dep tints the rows of the fields at its ends (spec §27.7).
+    const sel = selection;
+    const dep = sel && sel.kind === 'dep' ? (shown.deps ?? []).find((d) => d.id === sel.id) : undefined;
+    const shapes = serializeDiagram(shown, {
       inner: true,
       collapsedPaths: collapsed,
       theme: options.theme,
@@ -236,8 +249,9 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
       selectedField: selection && selection.kind === 'field'
         ? { entityId: selection.id, path: selection.path }
         : undefined,
+      highlightedFields: dep ? depEnds(dep, shown.entities).fields : undefined,
     });
-    const overlay = buildOverlay(visibleModel(), selection, theme);
+    const overlay = buildOverlay(shown, selection, theme);
     const w = model.width * zoom;
     const h = model.height * zoom;
     viewport.innerHTML =
@@ -319,7 +333,11 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
   }
 
   function zoomToFit (): void {
-    const box = contentBox(model.containers, [...model.entities, ...(visibleModel().notes ?? [])]);
+    const shown = visibleModel();
+    // A dependency that loops out past its boxes is part of the content (spec §27.7).
+    const reach = depExtent(layoutDeps(shown.deps ?? [], shown.entities));
+    const loops = reach.right > 0 ? [{ bounds: { x: reach.right, y: reach.bottom, width: 0, height: 0 } }] : [];
+    const box = contentBox(model.containers, [...model.entities, ...(shown.notes ?? []), ...loops]);
     if (!box) return;
     const rect = viewport.getBoundingClientRect();
     const fit = computeFit(box, rect.width, rect.height);
@@ -464,6 +482,8 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     if (group) { setSelection({ kind: 'supertypeGroup', id: group.getAttribute('data-supertype-group') ?? '' }); return; }
     const ref = t.closest('[data-ref]');
     if (ref) { setSelection({ kind: 'ref', id: ref.getAttribute('data-ref') ?? '' }); return; }
+    const dep = t.closest('[data-dep]');
+    if (dep) { setSelection({ kind: 'dep', id: dep.getAttribute('data-dep') ?? '' }); return; }
     const cont = t.closest('[data-select-container]');
     if (cont) { setSelection({ kind: 'container', name: cont.getAttribute('data-select-container') ?? '' }); return; }
     // Clicking a drag handle is handled by mousedown/up; bare canvas clears.

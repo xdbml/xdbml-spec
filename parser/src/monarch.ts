@@ -128,6 +128,7 @@ export const xdbmlLanguageConfig: XDbmlLanguageConfiguration = {
  *   number                     -- numeric literals
  *   comment / comment.block    -- comments
  *   operators                  -- cardinality operators (< > - <>), with their `?` marks
+ *   operators.lineage          -- the arrows of a dependency (-> <-)
  *   keyword.wildcard           -- [*]
  *   keyword.partial            -- ~ in partial injection
  *   delimiter / @bracket       -- punctuation
@@ -210,6 +211,10 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       // Punctuation
       [/[,.:;]/, 'delimiter'],
 
+      // Spec §27 (v0.7): the arrows of a dependency, before the cardinality
+      // operators, which would read them as two operators.
+      [/->|<-/, 'operators.lineage'],
+
       // Cardinality operators
       // Spec §11.1 (v0.7): a `?` against the operator marks an end optional.
       [/\??<>\??/, 'operators.cardinality'],
@@ -254,6 +259,11 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       // only at the head of a Metadata declaration. Elsewhere `metadata`
       // names an entity or a field.
       [new RegExp(`(metadata)(\\s+)(${METADATA_TARGET_KINDS.join('|')})(?![\\w$])`), ['keyword.declaration', '', 'keyword.declaration']],
+
+      // Spec §27.2 (v0.7): `Dep` starts a declaration at the start of a line,
+      // before ':', '{' or '[', or before a name and one of them. Elsewhere,
+      // and indented in a body, `dep` names an entity or a field.
+      [/^dep(?![\w$])(?=\s*(?:[:{[]|(?:[A-Za-z_][\w$]*|"[^"]*")\s*(?:\[[^\]]*\]\s*)?[:{]))/, 'keyword.declaration'],
 
       // Spec §15.8 (v0.6.5): `definitions` opens the internal definitions of
       // an entity only before '{', and takes the color of the other body

@@ -79,6 +79,11 @@
         @edit-source="onEditSource"
         @select="onSelect"
       />
+      <DepInspector
+        v-else-if="resolved.kind === 'dep'"
+        :lineage="resolved.lineage"
+        @edit-source="onEditSource"
+      />
     </div>
     <div v-else class="flex-1 flex items-center justify-center text-gray-400 dark:text-slate-500 text-xs px-4 text-center">
       Click anything in the diagram to inspect it
@@ -129,6 +134,7 @@ import FieldInspector     from './FieldInspector.vue';
 import RefInspector       from './RefInspector.vue';
 import SupertypeGroupInspector from './SupertypeGroupInspector.vue';
 import NoteInspector      from './NoteInspector.vue';
+import DepInspector       from './DepInspector.vue';
 import DiagramInspector   from './DiagramInspector.vue';
 
 const props = defineProps<{
@@ -167,6 +173,7 @@ const kindLabel = computed(() => {
     case 'ref':       return 'Ref';
     case 'supertypeGroup': return 'Supertype group';
     case 'note':      return 'Sticky note';
+    case 'dep':       return 'Dep';
   }
 });
 
@@ -184,6 +191,7 @@ const kindBadgeClass = computed(() => {
     case 'ref':       return 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300';
     case 'supertypeGroup': return 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300';
     case 'note':      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+    case 'dep':       return 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300';
   }
 });
 
@@ -197,6 +205,11 @@ const titleLabel = computed(() => {
     case 'ref':       return `Ref #${resolved.value.index + 1}`;
     case 'supertypeGroup': return resolved.value.group.declaration.name;
     case 'note':      return resolved.value.note.id;
+    case 'dep': {
+      const l = resolved.value.lineage;
+      if (l.name !== undefined) return l.name;
+      return l.inline ? `dep on ${l.inline.carrier}` : `Dep #${Number(l.id.replace(/^dep:/, '')) + 1}`;
+    }
   }
 });
 

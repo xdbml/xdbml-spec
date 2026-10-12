@@ -271,7 +271,7 @@ function resolveSimple (name: string, kind: ElementKind, index: Index): boolean 
   return false;
 }
 
-/** The categories of a diagram view, with a body-level `*` read as `*` in every category (§28.8). */
+/** The categories of a diagram view, with a body-level `*` read as `*` in every category (§29.8). */
 function effectiveCategories (decl: DiagramViewDeclaration): Map<DiagramViewCategoryName, { wildcard: boolean; items: DiagramViewItem[] }> {
   const out = new Map<DiagramViewCategoryName, { wildcard: boolean; items: DiagramViewItem[] }>();
   if (decl.wildcardBody) {

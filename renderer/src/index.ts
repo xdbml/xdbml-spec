@@ -193,6 +193,8 @@ export type {
   EntityLayout,
   EdgeLayout,
   NoteLayout,
+  DepLayout,
+  DepLineLayout,
   FieldLayout,
   FieldFlags,
   RefLayout,
@@ -213,6 +215,7 @@ export {
   type SupertypeGroupGeometry,
 } from './geometry/supertype-symbol.ts';
 export { autoArrange, type ArrangeStrategy } from './layout/auto-arrange.ts';
+export { layoutDep, layoutDeps, curveMidpoint, JUNCTION_GAP, type DepCurve, type DepGeometry } from './geometry/dep-path.ts';
 export { inlineText, isBreak, parseInline, parseMarkdown } from './layout/markdown.ts';
 export type { MdBlock, MdBreak, MdInline, MdRun } from './layout/markdown.ts';
 export { layoutNoteText } from './layout/note-text.ts';

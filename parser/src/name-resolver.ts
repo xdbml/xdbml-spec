@@ -1,5 +1,5 @@
 /**
- * Name resolution pass (spec §27.10 / §27.15, parser batch P6).
+ * Name resolution pass (spec §28.10 / §28.15, parser batch P6).
  *
  * `resolveNames(doc)` walks an xDBML document (the flattened view; clone
  * blocks have been merged) and produces:
@@ -54,6 +54,7 @@ import type {
   TopLevelStatement,
   TypeDeclaration,
   TypeExpression,
+  ViewDeclaration,
   XDbmlDocument,
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
@@ -71,6 +72,9 @@ import { versionAtLeast } from './relationships.ts';
 import { checkViews } from './views.ts';
 import { checkDiagramViews } from './diagram-views.ts';
 import { checkDefinitions, entityDefinitions } from './definitions.ts';
+import { checkLineage, collectLineage } from './lineage.ts';
+import type { DepEnd } from './lineage.ts';
+import { pathToString } from './relationships.ts';
 import type { LocalTypes } from './definitions.ts';
 
 /* -------------------------------------------------------------------------
@@ -197,7 +201,21 @@ export type DiagnosticCode =
   | 'duplicate-definitions-block'
   | 'duplicate-definition'
   | 'definitions-unsupported-target'
-  | 'definition-shadows-type';
+  | 'definition-shadows-type'
+  // Data lineage (spec §27.10, v0.7)
+  | 'unresolved-dep-endpoint'
+  | 'invalid-dep-endpoint'
+  | 'ambiguous-dep-endpoint'
+  | 'dep-mixed-downstream'
+  | 'dep-mixed-level'
+  | 'dep-self-loop'
+  | 'duplicate-dep'
+  | 'empty-dep'
+  | 'invalid-dep-color'
+  | 'dep-wrong-kind'
+  | 'dep-in-partial'
+  | 'misplaced-dep'
+  | 'invalid-dep-value';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -453,6 +471,10 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
   // Pass 7: diagram views (spec §18.6).
   diagnostics.push(...checkDiagramViews(flat));
 
+  // Pass 7b: data lineage (spec §27.10), on the flattened document, where
+  // the endpoints of an imported Dep and of an imported inline dep resolve.
+  diagnostics.push(...checkLineage(flat, (endpoint, out) => resolveDepEnd(endpoint, symbols, out)));
+
   // Pass 8: Types under the name of a built-in type (spec §15.2).
   for (const t of flat.statements) {
     if (t.kind !== 'TypeDeclaration' || !BUILTIN_TYPES.has(t.name.toLowerCase())) continue;
@@ -482,6 +504,34 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
   diagnostics.push(...checkDefinitions(flat, (name) => typeOrEnumDeclarations(name, symbols).length > 0));
 
   return { diagnostics, symbols };
+}
+
+/** The two ends of one dependency, resolved; an end that names no element is undefined. */
+export interface ResolvedDependency {
+  upstream?: DepEnd;
+  downstream?: DepEnd;
+}
+
+/**
+ * The ends of every Dep of a document, resolved as name resolution resolves
+ * them (spec §27.1), by the id `collectLineage()` gives the Dep, one entry
+ * per dependency: the entity or View each end names, and the field in it.
+ * Diagnostics are left to `resolveNames()`.
+ */
+export function resolveLineage (doc: XDbmlDocument): Map<string, ResolvedDependency[]> {
+  const flat = flatten(doc);
+  const entries: SymbolEntry[] = [];
+  collectDeclarations(flat, entries, []);
+  const symbols = new SymbolTable(entries);
+  const out = new Map<string, ResolvedDependency[]>();
+  for (const l of collectLineage(flat)) {
+    out.set(l.id, l.dependencies.map((d) => {
+      const upstream = resolveDepEnd(d.upstream, symbols, []);
+      const downstream = resolveDepEnd(d.downstream, symbols, []);
+      return { ...(upstream ? { upstream } : {}), ...(downstream ? { downstream } : {}) };
+    }));
+  }
+  return out;
 }
 
 /* -------------------------------------------------------------------------
@@ -1179,6 +1229,125 @@ function resolveRefSpec (
       }
     }
   }
+}
+
+/* -------------------------------------------------------------------------
+ * Endpoints of a dependency (spec §27.1, v0.7)
+ * ----------------------------------------------------------------------- */
+
+const LINEAGE_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>(['entity', 'view', 'edge']);
+
+/** The entity, View or Edge a name designates, by its qualified name or by a bare name declared once. */
+function lookupLineageElement (name: string, symbols: SymbolTable): SymbolEntry | undefined {
+  const qualified = symbols.lookup(name);
+  if (qualified && LINEAGE_KINDS.has(qualified.kind)) return qualified;
+  if (isQualifiedName(name)) return undefined;
+  const bare = symbols.lookupAllBare(name).filter((e) => LINEAGE_KINDS.has(e.kind));
+  return bare.length === 1 ? bare[0] : undefined;
+}
+
+/**
+ * Resolve an endpoint of a dependency (spec §27.1). The longest leading
+ * part of the path that names an entity or a View holds the field; when
+ * no such reading exists, the whole path names an entity or a View, as a
+ * relationship endpoint does (§11.16.3). A path into a nested field walks
+ * the field's type (§11.5, §11.6). An Edge and its fields are no
+ * endpoints.
+ */
+function resolveDepEnd (
+  endpoint: RefEndpoint,
+  symbols: SymbolTable,
+  diagnostics: Diagnostic[],
+): DepEnd | undefined {
+  const leading: string[] = [];
+  for (const seg of endpoint.path) {
+    if (seg.kind !== 'PathField') break;
+    leading.push(seg.name);
+  }
+  const written = pathToString(endpoint.path);
+  if (leading.length === 0) return undefined;
+  const hasTail = endpoint.path.length > leading.length;
+  const whole = hasTail ? undefined : lookupLineageElement(joinName(leading), symbols);
+
+  let element: SymbolEntry | undefined;
+  let prefix = 0;
+  for (let len = leading.length - 1; len >= 1; len -= 1) {
+    const found = lookupLineageElement(joinName(leading.slice(0, len)), symbols);
+    if (found) {
+      element = found;
+      prefix = len;
+      break;
+    }
+  }
+
+  const edgeError = (edge: SymbolEntry): undefined => {
+    diagnostics.push({
+      severity: 'error',
+      code: 'invalid-dep-endpoint',
+      message: `'${written}' names Edge '${edge.qualifiedName}'${element === edge ? ' or one of its fields' : ''}: ` +
+        'an Edge and its fields are no endpoints of a dependency (spec §27.1).',
+      span: endpoint.span,
+    });
+    return undefined;
+  };
+
+  if (!element) {
+    if (whole?.kind === 'edge') return edgeError(whole);
+    if (whole) return { element: whole.qualifiedName, elementKind: whole.kind as 'entity' | 'view' };
+    const head = leading.length === 1 && !hasTail ? leading[0] : undefined;
+    const several = head !== undefined
+      && symbols.lookupAllBare(head).filter((e) => LINEAGE_KINDS.has(e.kind)).length > 1;
+    diagnostics.push({
+      severity: 'error',
+      code: 'unresolved-dep-endpoint',
+      message: several
+        ? `'${head}' is declared in several Containers: qualify it with the name of its Container (spec §27.1).`
+        : `Dependency endpoint '${written}' names no entity, View or field declared in the document or brought by ` +
+          'an import (spec §27.1).',
+      span: endpoint.span,
+    });
+    return undefined;
+  }
+  if (element.kind === 'edge') return edgeError(element);
+  if (whole && whole.kind !== 'edge') {
+    diagnostics.push({
+      severity: 'warning',
+      code: 'ambiguous-dep-endpoint',
+      message: `Endpoint '${written}' names both ${whole.kind === 'view' ? 'a View' : 'an entity'} and a field of ` +
+        `'${element.qualifiedName}'. Reading it as the field; rename one of them to remove the ambiguity (spec §11.16.3).`,
+      span: endpoint.span,
+    });
+  }
+
+  const remaining = endpoint.path.slice(prefix);
+  const top = remaining[0];
+  if (top.kind !== 'PathField') return undefined;
+  const decl = element.declaration;
+  const fields = decl.kind === 'EntityDeclaration'
+    ? effectiveFields(decl, partialLookup(symbols))
+    : (decl as ViewDeclaration).body
+      .filter((b): b is FieldDeclaration => b.kind === 'FieldDeclaration')
+      .map((field) => ({ field, partial: undefined }));
+  const hit = fields.find((e) => e.field.name === top.name);
+  if (!hit) {
+    diagnostics.push({
+      severity: 'error',
+      code: 'unresolved-dep-endpoint',
+      message: `Field '${top.name}' is not declared on ${element.kind === 'view' ? 'View' : 'entity'} ` +
+        `'${element.qualifiedName}' (spec §27.1).`,
+      span: top.span,
+    });
+    return undefined;
+  }
+  if (remaining.length > 1) {
+    const local = decl.kind === 'EntityDeclaration' && !hit.partial ? entityDefinitions(decl.body) : undefined;
+    if (!walkTypePath(hit.field.type, remaining.slice(1), symbols, diagnostics, 0, local)) return undefined;
+  }
+  return {
+    element: element.qualifiedName,
+    elementKind: element.kind as 'entity' | 'view',
+    field: pathToString(remaining),
+  };
 }
 
 function collectFieldNames (entity: EntityDeclaration, partials: PartialLookup): Set<string> {

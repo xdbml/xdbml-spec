@@ -189,7 +189,7 @@ check('visibility: inactive flag is carried',
 
 check('visibility: defaults to all types shown',
   JSON.stringify(visHandle.getRelationshipVisibility())
-    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true }));
+    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true }));
 
 const beforeHide = visHost.innerHTML;
 visHandle.setRelationshipVisibility({ foreignMaster: false });
@@ -198,7 +198,7 @@ check('visibility: getter reflects the change',
   visHandle.getRelationshipVisibility().foreignMaster === false);
 check('visibility: change callback fires',
   JSON.stringify(lastVisibility)
-    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true }));
+    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true }));
 check('visibility: the model keeps every relationship',
   visHandle.getModel().refs.length === 3);
 

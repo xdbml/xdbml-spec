@@ -207,6 +207,31 @@ async function main () {
       totalFailed++;
     }
   }
+  // Spec 27.2 (v0.7): Dep at the start of a line, and dep as a name.
+  console.log(`\n${CYAN}Dep and the arrows of a dependency${RESET}`);
+  for (const [line, word, scope] of [
+    ['Dep: raw.amount -> stg.revenue', 'Dep', 'keyword.declaration.xdbml'],
+    ['Dep build_orders [owner: \'a\'] {', 'Dep', 'keyword.declaration.xdbml'],
+    ['dep "load it": a -> b', 'dep', 'keyword.declaration.xdbml'],
+    ['  dep int', 'dep', null],
+    ['Dep: raw.amount -> stg.revenue', '->', 'keyword.operator.lineage.xdbml'],
+    ['Dep: stg.revenue <- raw.amount', '<-', 'keyword.operator.lineage.xdbml'],
+    ['  revenue decimal [dep: <- raw.amount]', '<-', 'keyword.operator.lineage.xdbml'],
+    ['  revenue decimal [dep: <- raw.amount]', 'dep', 'variable.parameter.setting.xdbml'],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const scopes = tok?.scopes ?? [];
+    const want = scope ?? 'keyword.declaration.xdbml';
+    const has = scopes.includes(want);
+    if (scope ? has : !has) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${scope ? `is ${scope}` : 'is no declaration keyword'}`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': ${word} expected ${scope ? '' : 'no '}${want}, got ${scopes.join(' ')}`);
+      totalFailed++;
+    }
+  }
   // Spec 11.1 (v0.7): a `?` against the operator is part of it.
   console.log(`\n${CYAN}Optional marks on cardinality operators${RESET}`);
   for (const [line, op] of [

@@ -1,0 +1,159 @@
+xdbml: 0.7
+
+// ---------------------------------------------------------------------------
+// Data lineage: which data is computed from which (spec 27).
+//
+// The analytics warehouse of an online shop. Raw data lands from the shop's
+// database and from the Stripe API; dbt models clean it in a staging layer
+// and join it into marts. Each Dep records which element feeds which, from
+// upstream to downstream. The transformations themselves stay in the notes,
+// as text.
+//
+//   - `Dep: a -> b` states one dependency, between entities, Views or
+//     fields, or from an entity to a field and the reverse.
+//   - A block gathers the dependencies into one downstream element, such as
+//     the columns one dbt model fills. Its note holds the query.
+//   - `[dep: <- source]` states a dependency in the brackets of the element
+//     it concerns.
+//   - In the diagram, a dependency draws as an amber curve with an arrowhead,
+//     and two fields combined into one meet at a junction.
+//
+// A Ref still records the relationships between rows: the dependencies say
+// how the data is produced, the relationships how its rows connect.
+// ---------------------------------------------------------------------------
+
+Project shop_analytics {
+  targets: [Snowflake, 'Stripe API']
+  Note: 'Lineage of the analytics warehouse, from the sources to the marts (spec §27).'
+}
+
+// An external source, declared so that dependencies can start from it.
+Container stripe [type: database, target: 'Stripe API'] {
+  Entity charges {
+    id       varchar [pk]
+    amount   int [note: 'In cents']
+    customer varchar
+    created  int [note: 'Unix time']
+  }
+}
+
+Container raw [type: schema, target: Snowflake] {
+  Table orders {
+    id          int [pk]
+    customer_id int
+    status      varchar
+    ordered_at  timestamp
+    line_items  array [object {
+      sku        varchar
+      quantity   int
+      unit_price decimal(10, 2)
+    }]
+  }
+
+  Table customers {
+    id         int [pk]
+    first_name varchar
+    last_name  varchar
+    email      varchar
+  }
+}
+
+Container staging [type: schema, target: Snowflake] {
+  // The inline form: each column names the column it is copied from.
+  Table stg_orders [dep: <- raw.orders] {
+    order_id    int [pk, dep: <- raw.orders.id]
+    customer_id int [dep: <- raw.orders.customer_id]
+    status      varchar [dep: <- raw.orders.status]
+    ordered_at  timestamp [dep: <- raw.orders.ordered_at]
+  }
+
+  Table stg_order_lines {
+    order_id   int
+    sku        varchar
+    quantity   int
+    unit_price decimal(10, 2)
+  }
+
+  Table stg_customers {
+    customer_id int [pk]
+    full_name   varchar
+    email       varchar
+  }
+
+  Table stg_payments {
+    payment_id   varchar [pk]
+    customer_id  varchar
+    amount_cents int
+    paid_at      timestamp
+  }
+}
+
+Container marts [type: schema, target: Snowflake] {
+  Table fct_orders {
+    order_id      int [pk]
+    ordered_at    timestamp
+    customer_name varchar
+    order_total   decimal(12, 2)
+    paid          boolean
+  }
+
+  View daily_revenue [materialized: true] {
+    day     date
+    orders  int
+    revenue decimal(14, 2)
+  }
+}
+
+Ref: staging.stg_order_lines.order_id > staging.stg_orders.order_id
+Ref: staging.stg_orders.customer_id > staging.stg_customers.customer_id
+
+// Field to entity: each element of the array becomes a row.
+Dep unnest_lines: raw.orders.line_items -> staging.stg_order_lines [note: 'One row per element of line_items']
+
+Dep stg_order_lines {
+  raw.orders.id                        -> staging.stg_order_lines.order_id
+  raw.orders.line_items.[*].sku        -> staging.stg_order_lines.sku
+  raw.orders.line_items.[*].quantity   -> staging.stg_order_lines.quantity
+  raw.orders.line_items.[*].unit_price -> staging.stg_order_lines.unit_price
+}
+
+// Two fields combined into one meet at a junction.
+Dep stg_customers [owner: 'analytics'] {
+  raw.customers.id         -> staging.stg_customers.customer_id
+  raw.customers.first_name -> staging.stg_customers.full_name
+  raw.customers.last_name  -> staging.stg_customers.full_name
+  raw.customers.email      -> staging.stg_customers.email [note: 'Lowercased']
+  Note: '''
+    ~~~sql
+    SELECT id AS customer_id,
+           first_name || ' ' || last_name AS full_name,
+           LOWER(email) AS email
+    FROM raw.customers
+    ~~~
+  '''
+}
+
+Dep stg_payments [color: #7c3aed] {
+  stripe.charges.id       -> staging.stg_payments.payment_id
+  stripe.charges.customer -> staging.stg_payments.customer_id
+  stripe.charges.amount   -> staging.stg_payments.amount_cents
+  stripe.charges.created  -> staging.stg_payments.paid_at [note: 'TO_TIMESTAMP(created)']
+}
+
+// Entity to field: `paid` flags an order that has a payment.
+Dep fct_orders [materialized: 'table'] {
+  staging.stg_orders.order_id        -> marts.fct_orders.order_id
+  staging.stg_orders.ordered_at      -> marts.fct_orders.ordered_at
+  staging.stg_customers.full_name    -> marts.fct_orders.customer_name
+  staging.stg_order_lines.quantity   -> marts.fct_orders.order_total
+  staging.stg_order_lines.unit_price -> marts.fct_orders.order_total
+  staging.stg_payments               -> marts.fct_orders.paid
+  Note: 'Joins each order to its customer, its lines and its payment; order_total = SUM(quantity * unit_price).'
+}
+
+// Entity to field: `orders` counts the rows of fct_orders.
+Dep daily_revenue {
+  marts.fct_orders.ordered_at  -> marts.daily_revenue.day
+  marts.fct_orders             -> marts.daily_revenue.orders
+  marts.fct_orders.order_total -> marts.daily_revenue.revenue
+}

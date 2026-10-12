@@ -7,7 +7,7 @@
  *      check of an entity into one list, whatever form declared it: a line
  *      in `constraints { }` or `checks { }`, `[pk]` / `[unique]` on a
  *      field, a `pk` entry in `indexes`, a field-level `check:`. This is
- *      the Constraint node of spec §28.6, and what the renderer and the
+ *      the Constraint node of spec §29.6, and what the renderer and the
  *      playground read, so a consumer finds the primary key in one place.
  *
  *   2. `markPrimaryKeyNotNull()` adds an implied `not null` to each
@@ -52,7 +52,7 @@ import { joinName, lastNameSegment, quoteNameSegment, splitName } from './names.
 export { isRelationalTarget } from './targets.ts';
 
 /* -------------------------------------------------------------------------
- * Normalized constraints (spec §28.6)
+ * Normalized constraints (spec §29.6)
  * ----------------------------------------------------------------------- */
 
 /** Where a constraint was declared. The raw AST keeps the form; this list does not. */

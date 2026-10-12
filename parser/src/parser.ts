@@ -29,6 +29,9 @@ import type {
   DiagramViewItem,
   ContainerKeyword,
   DefinitionsBlock,
+  DepDeclaration,
+  DepDependency,
+  DepValue,
   EdgeDeclaration,
   EntityBodyItem,
   EntityDeclaration,
@@ -154,13 +157,13 @@ const ENTITY_KEYWORDS = new Set(['table', 'entity', 'collection', 'record']);
 
 /**
  * Element-type keywords accepted in module-system import items
- * (spec §27.3). Stored lowercased; matching is case-insensitive.
+ * (spec §28.3). Stored lowercased; matching is case-insensitive.
  *
  * `field` is recognized but explicitly rejected by parseImportItem in P4
  * (field-level imports have special declaration-vs-placement semantics
  * that will land in a later batch).
  *
- * `project` is intentionally excluded -- spec §27.1 forbids importing
+ * `project` is intentionally excluded -- spec §28.1 forbids importing
  * Project declarations.
  */
 const IMPORT_ELEMENT_TYPES = new Set([
@@ -250,6 +253,17 @@ function canonEntityKw (raw: string): EntityKeyword {
   }
 }
 
+/** The `Note` of a Dep's body, as the `note` setting it stands for (spec §27.2). */
+function noteSetting (note: NoteBlock, keyword: string): Setting {
+  return {
+    kind: 'Setting',
+    name: 'note',
+    nameSource: keyword,
+    value: { kind: 'StringValue', value: note.body, multiline: note.body.includes('\n'), span: note.span },
+    span: note.span,
+  };
+}
+
 export class Parser {
   private tokens: Token[];
   private idx = 0;
@@ -267,7 +281,7 @@ export class Parser {
    * The set of file paths currently being parsed in the resolution chain.
    * Used for cycle detection: when resolving a directive whose `from` path
    * is already in this set, the parser produces an empty clone for that
-   * directive rather than recursing (matching spec §27.15: cycles are
+   * directive rather than recursing (matching spec §28.15: cycles are
    * allowed; name resolution handles them). The set is passed by reference
    * across recursive parse() calls so all transitive levels see it.
    *
@@ -361,6 +375,29 @@ export class Parser {
     if (!isKw(this.peek(), 'records')) return false;
     const next = this.peek(1).kind;
     return next === TokenKind.LBrace || next === TokenKind.LParen || next === TokenKind.LBracket;
+  }
+
+  /**
+   * Whether the current tokens start a `Dep` declaration (spec §27.2):
+   * `Dep:`, `Dep {`, `Dep [`, or a name and a colon, `Dep name:`. Before
+   * a type, `dep` names a field, as in DBML.
+   */
+  private atDepDeclaration (): boolean {
+    if (!isKw(this.peek(), 'dep')) return false;
+    const next = this.peek(1).kind;
+    if (next === TokenKind.Colon || next === TokenKind.LBrace || next === TokenKind.LBracket) return true;
+    return (next === TokenKind.Identifier || next === TokenKind.QuotedIdentifier)
+      && this.peek(2).kind === TokenKind.Colon;
+  }
+
+  /** A `Dep` stands at the top level, never in a body (spec §27.4), as in DBML. */
+  private rejectDepInBody (where: string): never {
+    throw new ParseError(
+      `A Dep is a top-level declaration and never appears in ${where} (spec §27.4). ` +
+      'Move it out, to the top level of the document.',
+      this.peek().start,
+      'dep-in-body',
+    );
   }
 
   /**
@@ -498,6 +535,7 @@ export class Parser {
     if (k === 'note') return this.parseNoteDeclaration();
     if (k === 'records') return this.parseTopLevelRecords();
     if (k === 'metadata') return this.parseMetadata();
+    if (k === 'dep') return this.parseDep();
     if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
     throw new ParseError(`Unknown top-level construct: ${t.text}`, t.start);
   }
@@ -517,6 +555,7 @@ export class Parser {
       if (isKw(this.peek(), 'note')) {
         body.push(this.parseNoteBlockOrSetting());
       } else {
+        if (this.atDepDeclaration()) this.rejectDepInBody(`Project '${name}'`);
         body.push(this.parseLineSetting());
       }
     }
@@ -688,6 +727,8 @@ export class Parser {
           `Move it out of Container '${name}', and qualify its target with the Container's name.`,
           t.start,
         );
+      } else if (k === 'dep') {
+        this.rejectDepInBody(`Container '${name}'`);
       } else {
         // Unknown line; tolerate as no-op rather than fail the whole parse.
         throw new ParseError(
@@ -770,6 +811,7 @@ export class Parser {
       } else if (t.kind === TokenKind.Tilde) {
         body.push(this.parsePartialInjection());
       } else {
+        if (this.atDepDeclaration()) this.rejectDepInBody(`${construct} '${name}'`);
         this.rejectSettingInBody(construct, name);
         body.push(this.parseFieldDeclaration());
       }
@@ -997,7 +1039,7 @@ export class Parser {
     return decl;
   }
 
-  /* ----- Module-system directives (spec §27, new in v0.2) ----- */
+  /* ----- Module-system directives (spec §28, new in v0.2) ----- */
 
   /**
    * Parse a `use` or `reuse` directive. Called from both the top-level
@@ -1028,7 +1070,7 @@ export class Parser {
     if (this.declaredVersion && compareVersions(this.declaredVersion, '0.2') < 0) {
       throw new ParseError(
         `The module system (use and reuse) needs xdbml: 0.2 or later; this document declares ` +
-        `xdbml: ${this.declaredVersion} (spec §27, Appendix D).`,
+        `xdbml: ${this.declaredVersion} (spec §28, Appendix D).`,
         modeTok.start,
       );
     }
@@ -1041,10 +1083,10 @@ export class Parser {
     } else if (this.check(TokenKind.LBrace)) {
       this.advance();
       const items: ImportItem[] = [];
-      // A list body (spec §3.9, §27.2, v0.6.4): items one per line, or
+      // A list body (spec §3.9, §28.2, v0.6.4): items one per line, or
       // separated by commas, with commas and semicolons optional anywhere
       // between items. Until v0.6.4 the parser required a comma between
-      // two items, against the multi-line form §27.2 shows.
+      // two items, against the multi-line form §28.2 shows.
       for (;;) {
         this.skipListSeparators();
         if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
@@ -1141,7 +1183,7 @@ export class Parser {
             resolvedPath = result.resolvedPath;
             break;
           case 'cycle':
-            // Per spec §27.15, cycles are allowed; the parser produces a
+            // Per spec §28.15, cycles are allowed; the parser produces a
             // directive with no clone, and name resolution (P6+) is
             // expected to bridge the cycle. We leave clone undefined.
             resolvedPath = result.resolvedPath;
@@ -1213,21 +1255,21 @@ export class Parser {
       );
     }
     if (elementType === 'diagramview' && context !== 'file-scope') {
-      // Spec §18.1, §27.5: a DiagramView is a top-level declaration, so its
+      // Spec §18.1, §28.5: a DiagramView is a top-level declaration, so its
       // import goes at file scope, where the declaration itself would.
       throw new ParseError(
-        'A DiagramView is a top-level declaration: import it at file scope, not inside a Container body (spec §18.1, §27.5).',
+        'A DiagramView is a top-level declaration: import it at file scope, not inside a Container body (spec §18.1, §28.5).',
         elemTok.start,
       );
     }
     if (elementType === 'field' && context !== 'file-scope') {
-      // Spec §27.8: field imports must appear at file scope. Inside a
+      // Spec §28.8: field imports must appear at file scope. Inside a
       // Container body, the field's eventual placement (as a Named Type)
       // would have no meaningful container scope -- field imports are
       // always lifted to file scope by flatten(), regardless of where
       // the directive sits.
       throw new ParseError(
-        `Field-level imports must appear at file scope, not inside a Container body (spec §27.8).`,
+        `Field-level imports must appear at file scope, not inside a Container body (spec §28.8).`,
         elemTok.start,
       );
     }
@@ -1257,12 +1299,12 @@ export class Parser {
    * that match the import items by name and element type (matching is
    * downstream-consumer's job; the parser is permissive).
    *
-   * Per spec §27.6, clone content uses the importing file's vocabulary
+   * Per spec §28.6, clone content uses the importing file's vocabulary
    * (aliases already applied) and is parsed under the importing file's
    * xdbml version directive.
    *
    * Most clone-block content uses TopLevelStatement shapes (Entity, Type,
-   * Container, etc.). The exception is field imports (§27.8): when the
+   * Container, etc.). The exception is field imports (§28.8): when the
    * directive imports one or more fields via `field <path>` items, the
    * clone block holds each field as a bare FieldDeclaration with no entity
    * wrapper. The dispatch below checks whether the next token starts a
@@ -1277,7 +1319,7 @@ export class Parser {
       if (this.isCloneTopLevelStart()) {
         statements.push(this.parseTopLevelStatement());
       } else {
-        // Bare field declaration -- the field-import case. Per spec §27.6
+        // Bare field declaration -- the field-import case. Per spec §28.6
         // the field appears without an entity wrapper.
         statements.push(this.parseFieldDeclaration());
       }
@@ -1318,6 +1360,7 @@ export class Parser {
     if (k === 'note') return true;
     if (k === 'records') return true;
     if (k === 'metadata') return true;
+    if (k === 'dep') return true;
     if (k === 'use' || k === 'reuse') return true;
     return false;
   }
@@ -1934,6 +1977,7 @@ export class Parser {
       } else {
         // Spec §14.2: `materialized: true` and the other settings go in
         // the brackets, never in the body.
+        if (this.atDepDeclaration()) this.rejectDepInBody(`View '${name}'`);
         this.rejectSettingInBody('View', name);
         body.push(this.parseFieldDeclaration());
       }
@@ -2295,6 +2339,151 @@ export class Parser {
     return segments;
   }
 
+  /* ----- Data lineage (spec §27, v0.7) ----- */
+
+  /**
+   * `Dep: a -> b [settings]`, `Dep name: a -> b`, or a block,
+   * `Dep name [settings] { a -> b ... key: value ... Note: '...' }` (spec
+   * §27.2). The name is optional, bare or quoted. DBML also accepts
+   * brackets between the name and the colon of the short form, and so does
+   * this parser.
+   */
+  private parseDep (): DepDeclaration {
+    const start = this.peek().start;
+    this.advance(); // Dep
+    let name: string | undefined;
+    const t = this.peek();
+    if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
+      this.advance();
+      name = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
+      if (this.check(TokenKind.Dot)) {
+        throw new ParseError(
+          `The name of a Dep is one identifier, bare or quoted, and belongs to no Container (spec §27.4): ` +
+          `write Dep "${name}.${this.peek(1).text}" or another name.`,
+          this.peek().start,
+        );
+      }
+    } else if (t.kind === TokenKind.Star) {
+      throw new ParseError("'*' is no name for a Dep: the name is an identifier, bare or quoted (spec §27.4).", t.start);
+    }
+    const brackets = this.maybeSettingsBlock();
+    if (this.match(TokenKind.Colon)) {
+      const dependency = this.parseDepDependency();
+      const settings = this.maybeSettingsBlock();
+      this.rejectChainedDependency();
+      return {
+        kind: 'DepDeclaration',
+        ...(name !== undefined ? { name } : {}),
+        form: 'short',
+        settings,
+        ...(brackets.length > 0 ? { headerSettings: brackets } : {}),
+        dependencies: [dependency],
+        span: this.spanFrom(start),
+      };
+    }
+    if (this.match(TokenKind.LBrace)) {
+      const dependencies: DepDependency[] = [];
+      const bodySettings: Setting[] = [];
+      while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+        if (this.atNoteElement()) {
+          const keyword = this.peek().text;
+          bodySettings.push(noteSetting(this.parseNoteBlockOrSetting(), keyword));
+        } else if (
+          (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier))
+          && this.peek(1).kind === TokenKind.Colon
+        ) {
+          bodySettings.push(this.parseLineSetting());
+        } else {
+          const dependency = this.parseDepDependency();
+          dependency.settings = this.maybeSettingsBlock();
+          if (dependency.settings.length > 0) dependency.span = this.spanFrom(dependency.span.start);
+          this.rejectChainedDependency();
+          dependencies.push(dependency);
+        }
+      }
+      this.expect(TokenKind.RBrace, "Expected '}' closing Dep");
+      return {
+        kind: 'DepDeclaration',
+        ...(name !== undefined ? { name } : {}),
+        form: 'block',
+        settings: brackets,
+        bodySettings,
+        dependencies,
+        span: this.spanFrom(start),
+      };
+    }
+    const next = this.peek();
+    throw new ParseError(
+      `Expected ':' or '{' after Dep (got ${next.kind} ${JSON.stringify(next.text)}): ` +
+      'write Dep: a -> b, or Dep name { a -> b } (spec §27.2).',
+      next.start,
+    );
+  }
+
+  /** One dependency: two endpoints joined by `->` or `<-` (spec §27.1). */
+  private parseDepDependency (): DepDependency {
+    const start = this.peek().start;
+    const first = this.parseRefEndpoint();
+    const arrow = this.parseDepArrow();
+    const second = this.parseRefEndpoint();
+    const [upstream, downstream] = arrow === '->' ? [first, second] : [second, first];
+    return {
+      kind: 'DepDependency',
+      upstream,
+      downstream,
+      arrow,
+      settings: [],
+      span: this.spanFrom(start),
+    };
+  }
+
+  /** `->` or `<-` at the current token, written without a space inside. */
+  private atDepArrow (): '->' | '<-' | undefined {
+    const a = this.peek();
+    const b = this.peek(1);
+    if (!b || b.start.offset !== a.end.offset) return undefined;
+    if (a.kind === TokenKind.Minus && b.kind === TokenKind.RAngle) return '->';
+    if (a.kind === TokenKind.LAngle && b.kind === TokenKind.Minus) return '<-';
+    return undefined;
+  }
+
+  private parseDepArrow (): '->' | '<-' {
+    const arrow = this.atDepArrow();
+    if (arrow) {
+      this.advance();
+      this.advance();
+      return arrow;
+    }
+    const t = this.peek();
+    const after = this.peek(1)?.kind;
+    if ((t.kind === TokenKind.Minus && after === TokenKind.RAngle) || (t.kind === TokenKind.LAngle && after === TokenKind.Minus)) {
+      throw new ParseError("Write the arrow of a dependency without a space inside: '->' or '<-' (spec §27.2).", t.start);
+    }
+    if (t.kind === TokenKind.Comma) {
+      throw new ParseError(
+        'A dependency links one upstream element to one downstream element: write one dependency for each, ' +
+        'as Dep: a -> c and Dep: b -> c, or gather them in a block (spec §27.2).',
+        t.start,
+      );
+    }
+    throw new ParseError(
+      `A dependency takes the arrow '->' or '<-', written without a space inside (got ${t.kind} ${JSON.stringify(t.text)}). ` +
+      "'>', '<', '-' and '<>' are the operators of a relationship, which a Ref declares (spec §27.2).",
+      t.start,
+    );
+  }
+
+  /** `a -> b -> c` and `a -> b, c`: a dependency has two ends (spec §27.2). */
+  private rejectChainedDependency (): void {
+    const t = this.peek();
+    if (this.atDepArrow() || t.kind === TokenKind.Comma) {
+      throw new ParseError(
+        'A dependency has two ends: write a -> b and b -> c as two dependencies (spec §27.2).',
+        t.start,
+      );
+    }
+  }
+
   /* ----- TablePartial / TableGroup ----- */
 
   private parseTablePartial (): TablePartialDeclaration {
@@ -2323,6 +2512,7 @@ export class Parser {
     const members: string[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
       const t = this.peek();
+      if (this.atDepDeclaration()) this.rejectDepInBody(`TableGroup '${name}'`);
       if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
         members.push(this.parseQualifiedName('TableGroup member'));
         // optional trailing semicolons in some sources
@@ -2800,6 +2990,28 @@ export class Parser {
         value: v,
         span: this.spanFrom(start),
       };
+    }
+    // `dep: <- source` and `dep: -> target` (spec §27.2, v0.7). Any other
+    // value is read as written; checkLineage() reports it, as an error, or
+    // as a warning in a document declaring v0.6 or earlier (§27.9).
+    if (lower === 'dep') {
+      const arrow = this.atDepArrow();
+      if (arrow) {
+        this.advance();
+        this.advance();
+        const target = this.parseRefEndpoint();
+        const v: DepValue = { kind: 'DepValue', arrow, target, span: this.spanFrom(start) };
+        return { kind: 'Setting', name: 'dep', nameSource, value: v, span: this.spanFrom(start) };
+      }
+      const t = this.peek();
+      const operator = t.kind === TokenKind.LAngle || t.kind === TokenKind.RAngle || t.kind === TokenKind.ManyToMany
+        || (t.kind === TokenKind.Minus && this.peek(1).kind !== TokenKind.NumberLiteral);
+      if (operator) {
+        throw new ParseError(
+          "'dep' takes '<- source' or '-> target', with no space inside the arrow (spec §27.2).",
+          t.start,
+        );
+      }
     }
     const value = this.parseSettingValue();
     return {

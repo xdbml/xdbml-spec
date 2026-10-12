@@ -1098,7 +1098,7 @@ reuse {
 } from './catalog'
 ```
 
-The import list is a list body (§3.9, §27.2): the single-line form of the next case imports the same three declarations. The two directives go in separate documents, since importing one declaration twice into one document declares it twice.
+The import list is a list body (§3.9, §28.2): the single-line form of the next case imports the same three declarations. The two directives go in separate documents, since importing one declaration twice into one document declares it twice.
 
 ### VALID -- comma-separated single-line import list
 
@@ -1898,6 +1898,431 @@ Entity users {
 ```
 
 ---
+
+## §27 Data lineage (v0.7)
+
+### VALID -- the three forms of DBML, in a document without a version
+
+```
+Table raw_orders {
+  id         int [pk]
+  amount_usd decimal(12, 2)
+}
+
+Table stg_orders [dep: <- raw_orders] {
+  order_id int [pk, dep: <- raw_orders.id]
+  revenue  decimal(12, 2)
+}
+
+Table fct_orders {
+  order_id int [pk]
+  revenue  decimal(12, 2)
+}
+
+Dep: raw_orders.amount_usd -> stg_orders.revenue [note: 'Converted to the reporting currency']
+Dep order_revenue: fct_orders.revenue <- stg_orders.revenue
+
+Dep build_fct_orders [owner: 'analytics', color: #d97706] {
+  stg_orders -> fct_orders
+  materialized: 'table'
+  Note: '''
+    One row per order.
+  '''
+}
+```
+
+### VALID -- entity to field and field to entity, a table built from its own previous state, and a cycle
+
+```
+Table orders {
+  id         int [pk]
+  line_items json
+}
+
+Table order_lines {
+  order_id int
+  sku      varchar
+}
+
+Table daily_kpis {
+  day         date [pk]
+  order_count int
+}
+
+Dep: orders -> daily_kpis.order_count
+Dep: orders.line_items -> order_lines
+Dep: daily_kpis -> daily_kpis
+Dep: order_lines -> orders
+```
+
+### VALID -- a block gathers the source fields of one target field, each with settings of its own
+
+```
+Table customers {
+  id         int [pk]
+  first_name varchar
+  last_name  varchar
+}
+
+Table dim_customer {
+  id        int [pk]
+  full_name varchar
+}
+
+Dep full_name [note: 'Concatenates the first and the last name'] {
+  customers.first_name -> dim_customer.full_name [color: #0891b2]
+  customers.last_name  -> dim_customer.full_name
+}
+```
+
+### VALID -- Views, nested fields and a Container (§27.1)
+
+```
+xdbml: 0.7
+
+Container stripe [type: database, target: 'Stripe API'] {
+  Entity charges {
+    id     varchar [pk]
+    amount int
+  }
+}
+
+Collection events {
+  _id     objectId [pk]
+  payload object {
+    customer object {
+      id int
+    }
+  }
+  items array [object {
+    sku varchar
+  }]
+}
+
+Table payments {
+  id           varchar [pk]
+  amount_cents int
+}
+
+View payment_summary {
+  customer_id int
+  total       int
+}
+
+Dep: stripe.charges.amount -> payments.amount_cents
+Dep: events.payload.customer.id -> payment_summary.customer_id
+Dep: events.items.[*].sku -> payments.id
+Dep: payments -> payment_summary
+```
+
+### VALID -- an alias names the entity, two Deps share a name, and `dep` names a field
+
+```
+Table very_long_orders_table as O {
+  id  int [pk]
+  dep varchar
+}
+
+Table summary {
+  id int [pk]
+}
+
+Dep load: O.id -> summary.id
+Dep load: O -> summary
+```
+
+### VALID with a warning -- a block with no dependency declares nothing (empty-dep, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Dep nothing_yet {
+  note: 'To be mapped'
+}
+```
+
+### VALID with a warning -- `dep` without an arrow stays a custom property in a v0.6 document (invalid-dep-value, §27.9)
+
+```
+xdbml: 0.6
+
+Table orders [dep: 'nightly batch'] {
+  id int [pk]
+}
+```
+
+### INVALID -- `dep` without an arrow in a document without a version (invalid-dep-value, §27.2)
+
+```
+Table orders [dep: 'nightly batch'] {
+  id int [pk]
+}
+```
+
+### INVALID -- a Dep in a Container (§27.4)
+
+```
+xdbml: 0.7
+
+Container sales {
+  Entity orders {
+    id int
+  }
+  Dep: orders -> orders
+}
+```
+
+### INVALID -- a Dep in the body of a table (§27.4)
+
+```
+Table orders {
+  id int
+  Dep: orders -> orders
+}
+```
+
+### INVALID -- an endpoint that names no element (unresolved-dep-endpoint, §27.1)
+
+```
+Table orders {
+  id int
+}
+
+Dep: payments.amount -> orders.id
+```
+
+### INVALID -- an endpoint that names a field the entity does not declare (unresolved-dep-endpoint, §27.1)
+
+```
+Table orders {
+  id int
+}
+
+Table payments {
+  id int
+}
+
+Dep: payments.amount -> orders.id
+```
+
+### INVALID -- an endpoint that names an Edge (invalid-dep-endpoint, §27.1)
+
+```
+xdbml: 0.7
+
+Table person {
+  id int [pk]
+}
+
+Edge knows [source: person, target: person] {
+  since date
+}
+
+Dep: person -> knows
+```
+
+### INVALID -- a composite endpoint (invalid-dep-endpoint, §27.1)
+
+```
+Table orders {
+  a int
+  b int
+}
+
+Table totals {
+  t int
+}
+
+Dep: orders.(a, b) -> totals.t
+```
+
+### INVALID -- a relationship operator in a dependency (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep: a > b
+```
+
+### INVALID -- a space inside the arrow (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep: a - > b
+```
+
+### INVALID -- three endpoints in one dependency (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Table c {
+  id int
+}
+
+Dep: a -> b -> c
+```
+
+### INVALID -- two upstream elements in one dependency (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Table c {
+  id int
+}
+
+Dep: a, b -> c
+```
+
+### INVALID -- a block whose dependencies feed two elements (dep-mixed-downstream, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Table c {
+  id int
+}
+
+Dep load {
+  a -> b
+  a -> c
+}
+```
+
+### INVALID -- a block mixing a dependency between entities with one naming a field (dep-mixed-level, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep load {
+  a -> b
+  a.id -> b.id
+}
+```
+
+### INVALID -- an inline dep on a field naming an entity (dep-wrong-kind, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int [dep: <- a]
+}
+```
+
+### INVALID -- an inline dep on an entity naming a field (dep-wrong-kind, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b [dep: <- a.id] {
+  id int
+}
+```
+
+### INVALID -- a dep on a TablePartial (dep-in-partial, §27.2)
+
+```
+Table a {
+  id int
+}
+
+TablePartial audited [dep: <- a] {
+  loaded_at timestamp
+}
+```
+
+### INVALID -- a color that is no hex code (invalid-dep-color, §27.3)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep: a -> b [color: none]
+```
+
+### INVALID -- a field depending on itself (dep-self-loop, §27.4)
+
+```
+Table a {
+  id int
+}
+
+Dep: a.id -> a.id
+```
+
+### INVALID -- a dependency stated twice, inline and as a Dep (duplicate-dep, §27.4)
+
+```
+Table a {
+  id int
+}
+
+Table b [dep: <- a] {
+  id int
+}
+
+Dep: a -> b
+```
+
+### INVALID -- a Dep name qualified with a Container (§27.4)
+
+```
+Table a {
+  id int
+}
+
+Dep sales.load: a -> a
+```
 
 ## §12 SupertypeGroup (v0.5)
 

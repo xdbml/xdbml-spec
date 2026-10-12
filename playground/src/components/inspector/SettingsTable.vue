@@ -53,6 +53,7 @@
  * via span-based replacement; that came up in the original plan but is
  * deferred until the read-only inspector is settled.
  */
+import { pathToString } from '@xdbml/parse';
 import type { Setting, SettingValue } from '@xdbml/parse';
 
 defineProps<{
@@ -71,6 +72,7 @@ function renderValue (v: SettingValue): string {
     case 'ExpressionValue': return `\`${v.expression}\``;
     case 'ListValue':       return `[${v.items.map(renderValue).join(', ')}]`;
     case 'RefValue':        return '<ref>';
+    case 'DepValue':        return `${v.arrow} ${pathToString(v.target.path)}`;
   }
 }
 </script>

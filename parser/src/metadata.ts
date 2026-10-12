@@ -38,7 +38,7 @@ import { joinName, lastNameSegment, quoteNameSegment, splitName } from './names.
 import { resolveStickyNote, stickyNotes } from './notes.ts';
 import { effectiveFieldList, effectiveFields, effectiveHeaderColor, effectiveNote, tablePartials } from './partials.ts';
 import type { PartialLookup } from './partials.ts';
-import { versionAtLeast } from './relationships.ts';
+import { pathToString, versionAtLeast } from './relationships.ts';
 
 /* -------------------------------------------------------------------------
  * Kinds and the settings each one takes (§24.7.1, §24.7.3)
@@ -230,6 +230,7 @@ export function settingValueText (v: SettingValue | null): string {
     case 'ExpressionValue': return `\`${v.expression}\``;
     case 'ListValue': return `[${v.items.map(settingValueText).join(', ')}]`;
     case 'RefValue': return `${v.operator} ...`;
+    case 'DepValue': return `${v.arrow} ${pathToString(v.target.path)}`;
   }
 }
 

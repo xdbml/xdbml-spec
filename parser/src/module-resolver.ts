@@ -54,13 +54,13 @@ import type { LocalTypes } from './definitions.ts';
  *
  * Inside a Container body, each `ModuleImportDirective` is replaced by its
  * `clone.statements` as `ContainerBodyItem`s. Note that the spec table in
- * §27.6 guarantees that clone-block content for entity/edge/view/enum
+ * §28.6 guarantees that clone-block content for entity/edge/view/enum
  * imports is shape-compatible with `ContainerBodyItem`; other shapes
  * (e.g., a TablePartial clone inside a Container directive) would be
  * semantically invalid per the spec and would surface as a downstream
  * type error rather than being caught here.
  *
- * Field-level imports (spec §27.8) get a special transform: the clone
+ * Field-level imports (spec §28.8) get a special transform: the clone
  * block holds a bare `FieldDeclaration`, which `flatten()` lifts into a
  * synthetic `TypeDeclaration` at file scope. Downstream consumers see
  * a normal Named Type and can use it as a field type without learning
@@ -141,13 +141,18 @@ function flattenTopLevel (
   if (stmt.kind === 'ContainerDeclaration') {
     // A `reuse *` inside a Container body can clone a DiagramView into it.
     // A DiagramView is top-level only (spec §18.1), so it moves out to the
-    // top level, after its Container.
+    // top level, after its Container, and so does a Dep (§27.4).
     const flat = flattenContainer(stmt);
     // A Metadata block is top-level only too (spec §24.7); one that a
     // Container-scoped import brings joins the imported blocks.
     const blocks = flat.body.filter((b) => (b as { kind: string }).kind === 'MetadataDeclaration') as unknown as MetadataDeclaration[];
     importedMetadata.push(...blocks.map(importedBlock));
-    const hoisted = flat.body.filter((b) => (b as { kind: string }).kind === 'DiagramViewDeclaration');
+    // A `use *` in a Container body brings the Deps of its file, which are
+    // top-level too (spec §27.4, §28.2).
+    const hoisted = flat.body.filter((b) => {
+      const kind = (b as { kind: string }).kind;
+      return kind === 'DiagramViewDeclaration' || kind === 'DepDeclaration';
+    });
     if (hoisted.length === 0 && blocks.length === 0) {
       out.push(flat);
       return;
@@ -263,7 +268,7 @@ export type ParseFn = (
  *   - `kind: 'resolved'`  -- the file was opened, parsed, and a clone
  *     block was synthesized
  *   - `kind: 'cycle'`     -- the resolution chain already contains this
- *     file; per spec §27.15 cycles are allowed, so we return an empty
+ *     file; per spec §28.15 cycles are allowed, so we return an empty
  *     clone block and let name resolution (P6+) handle the actual
  *     cross-file linking
  *   - `kind: 'no-resolver'` -- no `readFile` was supplied; caller should
@@ -368,7 +373,7 @@ export function resolveImport (
  * import spec. Applies aliases by renaming the extracted declaration.
  *
  * For `ImportAll`: every TopLevelStatement except ProjectDeclaration
- * (per spec §27.4, Project declarations cannot be imported).
+ * (per spec §28.4, Project declarations cannot be imported).
  *
  * For `ImportList`: each item is matched by element-type + source path.
  * Items not found in the source produce nothing (silent for P5; a
@@ -380,10 +385,10 @@ function extractImports (
 ): (TopLevelStatement | FieldDeclaration)[] {
   if (spec.kind === 'ImportAll') {
     // ImportAll never matches field imports (the `*` form is for top-level
-    // declarations only per spec §27.2). Return the source's top-level
+    // declarations only per spec §28.2). Return the source's top-level
     // statements minus Project.
     // A Note without a name is the note of the source's project and stays
-    // there with its Project block (spec §19.5, §27.1).
+    // there with its Project block (spec §19.5, §28.1).
     return sourceDoc.statements
       .filter((s) => s.kind !== 'ProjectDeclaration' && !(s.kind === 'NoteDeclaration' && s.name === undefined))
       .map((s) => s); // shallow-clone-able; we don't mutate them
@@ -404,7 +409,7 @@ function extractImports (
       }
     }
     // Silent skip on not-found. The spec leaves diagnostics to name
-    // resolution (§27.13). In practice, users notice missing entities
+    // resolution (§28.13). In practice, users notice missing entities
     // because their references downstream become unresolved.
   }
   // Spec §24.7.5: the Metadata blocks of the source file that target an
@@ -603,7 +608,7 @@ function findImportTarget (
   // a qualified name (`enum core.job_status`, the DBML form) matches its
   // full dotted path and imports under its bare name, like the
   // container-scoped form: the source container does not survive into
-  // the importing file (spec §27.16).
+  // the importing file (spec §28.16).
   if (item.elementType === 'enum') {
     if (segments.length > 1) {
       const qualifiedTopLevel = doc.statements.find(
@@ -638,7 +643,7 @@ function findImportTarget (
  * object types to find a FieldDeclaration in a referenced source document.
  * Returns undefined when any segment fails to resolve.
  *
- * Path shapes accepted (per spec §27.8):
+ * Path shapes accepted (per spec §28.8):
  *   - `entity.field`                    -- top-level entity
  *   - `container.entity.field`          -- container-qualified entity
  *   - `entity.field.sub`                -- nested via ObjectType
@@ -895,7 +900,7 @@ function applyAlias (
 }
 
 /* -------------------------------------------------------------------------
- * Module source classification (spec §27.14, "Remote module sources")
+ * Module source classification (spec §28.14, "Remote module sources")
  *
  * A `from` source is recognized purely by its scheme. A source beginning
  * with 'https://' is a remote (URL) source; anything else is a relative
@@ -907,7 +912,7 @@ function applyAlias (
  * This is pure, synchronous classification. The actual network fetch is
  * delegated to ParseOptions.readFile (the host's resolver). The obligations
  * on a fetcher (SSRF defenses, https-only redirects, size and time limits)
- * live with that resolver, not here; see spec §27.14.5.
+ * live with that resolver, not here; see spec §28.14.5.
  * ----------------------------------------------------------------------- */
 
 /** Raised when a `from` source string is structurally disallowed. */
@@ -998,7 +1003,7 @@ export function classifyModuleSource (from: string): ModuleSource {
  *   - A remote (https) source resolves to its normalized href. No '.xdbml'
  *     is appended (a raw-content URL may carry a query string).
  *   - A relative source whose importer is itself a remote module resolves
- *     against the importer's base URL per RFC 3986 (spec §27.14.1). A remote
+ *     against the importer's base URL per RFC 3986 (spec §28.14.1). A remote
  *     module therefore can never reach the local filesystem.
  *   - A relative source with a local importer resolves on the filesystem,
  *     exactly as in v0.2.

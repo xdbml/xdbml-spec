@@ -16,6 +16,7 @@
     { "include": "#numbers" },
     { "include": "#constants" },
     { "include": "#metadata-declaration" },
+    { "include": "#dep-declaration" },
     { "include": "#declarations" },
     { "include": "#block-keywords" },
     { "include": "#diagram-view-categories" },
@@ -24,6 +25,7 @@
     { "include": "#bson-types" },
     { "include": "#native-types" },
     { "include": "#x-properties" },
+    { "include": "#lineage-arrows" },
     { "include": "#ref-cardinality-operators" },
     { "include": "#brackets" }
   ],
@@ -75,6 +77,20 @@
         "2": { "name": "keyword.declaration.xdbml" },
         "3": { "name": "entity.name.type.xdbml" }
       }
+    },
+
+    "dep-declaration": {
+      "comment": "A Dep (spec 27.2, v0.7): the keyword at the start of a line, before ':', '{' or '[', or before a name and one of them. Indented in a body, or before a type, dep names an entity or a field.",
+      "match": "^((?i:dep))\\b(?=\\s*(?:[:{\\[]|(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")\\s*(?:\\[[^\\]]*\\]\\s*)?[:{]))",
+      "captures": {
+        "1": { "name": "keyword.declaration.xdbml" }
+      }
+    },
+
+    "lineage-arrows": {
+      "comment": "The arrows of a dependency (spec 27, v0.7): -> from upstream to downstream, <- from downstream to upstream, in a Dep and in a dep setting.",
+      "name": "keyword.operator.lineage.xdbml",
+      "match": "->|<-"
     },
 
     "declarations": {
@@ -160,6 +176,7 @@
         { "include": "#scalar-types" },
         { "include": "#bson-types" },
         { "include": "#native-types" },
+        { "include": "#lineage-arrows" },
         { "include": "#cardinality-operators" },
         {
           "name": "punctuation.separator.xdbml",

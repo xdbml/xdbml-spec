@@ -29,6 +29,8 @@ export type Selection =
    * in a Container, the name as declared at the top level.
    */
   | { kind: 'note'; noteName: string }
+  /** A Dep (spec §27), by the id `collectLineage()` gives it: `dep:<n>`. */
+  | { kind: 'dep'; depId: string }
   /**
    * The diagram on display, selected by clicking the empty canvas: the
    * Project on Main ERD, or the diagram view shown (spec §18).
@@ -57,6 +59,8 @@ export function selectionEquals (a: Selection, b: Selection): boolean {
       return b.kind === 'supertypeGroup' && a.groupName === b.groupName;
     case 'note':
       return b.kind === 'note' && a.noteName === b.noteName;
+    case 'dep':
+      return b.kind === 'dep' && a.depId === b.depId;
     case 'diagram':
       return b.kind === 'diagram';
   }

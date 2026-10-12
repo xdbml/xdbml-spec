@@ -45,6 +45,8 @@ import {
 } from '../src/components/diagram/layout-history.ts';
 import type { LayoutSnapshot } from '../src/components/diagram/layout-history.ts';
 import { applyTextEdits, planStickyNote } from '../src/components/diagram/add-note.ts';
+import { depNarrative } from '../src/components/inspector/dep-narrative.ts';
+import { collectLineage, resolveLineage } from '../../parser/src/index.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const examplesDir = join(__dirname, '..', '..', 'examples');
@@ -129,6 +131,79 @@ Ref: orders.orderID - customers.customerID
         assertTrue(!!resolved, `inspector should resolve ${r.id}`);
         assertEq(resolved!.kind, 'ref', `${r.id} should resolve to a relationship`);
       }
+    },
+  },
+
+  {
+    name: 'every drawn Dep resolves in the inspector (spec §27)',
+    source: `xdbml: 0.7
+Table raw {
+  id     int [pk]
+  amount int
+}
+Table stg [dep: <- raw] {
+  revenue int [dep: <- raw.amount]
+}
+Dep load [owner: 'etl'] {
+  raw.id -> stg.revenue
+  note: 'Loaded nightly'
+}
+`,
+    check: ({ ast, diagram }) => {
+      assertEq(diagram.deps.length, 3, 'Dep count');
+      for (const d of diagram.deps) {
+        const resolved = resolveSelection(ast, { kind: 'dep', depId: d.id });
+        assertTrue(!!resolved && resolved.kind === 'dep', `inspector should resolve ${d.id}`);
+      }
+      const load = resolveSelection(ast, { kind: 'dep', depId: 'dep:0' });
+      assertTrue(load?.kind === 'dep' && load.lineage.name === 'load', 'the block comes first, under its name');
+      const inline = resolveSelection(ast, { kind: 'dep', depId: 'dep:2' });
+      assertTrue(inline?.kind === 'dep' && inline.lineage.inline?.carrier === 'stg.revenue', 'the inline dep on a field names its carrier');
+      assertEq(resolveSelection(ast, { kind: 'dep', depId: 'dep:9' }), null, 'an id the document lacks');
+    },
+  },
+
+  {
+    name: 'the inspector reads a Dep back with the names of its elements, whatever the arrow (spec §27)',
+    source: `xdbml: 0.7
+Table raw {
+  id    int [pk]
+  first varchar
+  last  varchar
+  items json
+}
+Table stg {
+  id   int [pk]
+  full varchar
+  n    int
+}
+Table lines {
+  sku varchar
+}
+Dep: stg <- raw
+Dep names {
+  stg.full <- raw.first
+  raw.last -> stg.full [note: 'Trimmed']
+  raw.id   -> stg.id
+}
+Dep: raw -> stg.n
+Dep: raw.items -> lines
+Dep: stg -> stg
+`,
+    check: ({ ast }) => {
+      const resolved = resolveLineage(ast);
+      const read = collectLineage(ast).map((l) => depNarrative(l, resolved.get(l.id) ?? [])
+        .map((g) => g.sentence.map((p) => (p.code ? `\`${p.text}\`` : p.text)).join('')));
+      assertEq(JSON.stringify(read), JSON.stringify([
+        ['The rows of `stg` are computed from the rows of `raw`.'],
+        ['`stg.full` is computed from `raw.first` and `raw.last`.', '`stg.id` is computed from `raw.id`.'],
+        ['`stg.n` is computed from the rows of `raw`.'],
+        ['The rows of `lines` are computed from `raw.items`.'],
+        ['The rows of `stg` are computed from its own previous rows.'],
+      ]), 'sentences');
+      const names = collectLineage(ast)[1];
+      const withNote = depNarrative(names, resolved.get(names.id) ?? [])[0].withSettings;
+      assertEq(JSON.stringify(withNote.map((w) => w.upstream)), JSON.stringify(['raw.last']), 'the settings of one dependency of a group');
     },
   },
 

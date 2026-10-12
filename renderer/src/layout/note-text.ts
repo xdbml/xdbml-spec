@@ -10,7 +10,7 @@
  */
 
 import { isBreak, parseMarkdown, type MdBlock, type MdInline } from './markdown.ts';
-import { measureMono, measureText } from '../svg/metrics.ts';
+import { ENTITY_NAME_FONT_SIZE, FIELD_FONT_SIZE, measureMono, measureText } from '../svg/metrics.ts';
 
 /** A piece of a line in one style. */
 export interface NoteRun {
@@ -56,11 +56,14 @@ export interface NoteText {
   height: number;
 }
 
-const BODY = { size: 12, lead: 17 };
+// The text of a note is no larger than the field names of an entity, and a
+// heading no larger than an entity's name, so a note never outweighs the
+// entities it comments on. A heading stands out by its weight.
+const BODY = { size: FIELD_FONT_SIZE, lead: 17 };
 const HEADINGS: Record<number, { size: number; lead: number }> = {
-  1: { size: 16, lead: 22 },
-  2: { size: 14, lead: 20 },
-  3: { size: 13, lead: 18 },
+  1: { size: ENTITY_NAME_FONT_SIZE, lead: 19 },
+  2: { size: FIELD_FONT_SIZE, lead: 18 },
+  3: { size: FIELD_FONT_SIZE, lead: 17 },
 };
 const CODE = { size: 11, lead: 15, pad: 5 };
 const BLOCK_GAP = 6;

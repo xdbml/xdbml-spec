@@ -33,6 +33,9 @@
       "include": "#metadata-declaration"
     },
     {
+      "include": "#dep-declaration"
+    },
+    {
       "include": "#declarations"
     },
     {
@@ -55,6 +58,9 @@
     },
     {
       "include": "#x-properties"
+    },
+    {
+      "include": "#lineage-arrows"
     },
     {
       "include": "#ref-cardinality-operators"
@@ -116,6 +122,20 @@
           "name": "entity.name.type.xdbml"
         }
       }
+    },
+    "dep-declaration": {
+      "comment": "A Dep (spec 27.2, v0.7): the keyword at the start of a line, before ':', '{' or '[', or before a name and one of them. Indented in a body, or before a type, dep names an entity or a field.",
+      "match": "^((?i:dep))\\b(?=\\s*(?:[:{\\[]|(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")\\s*(?:\\[[^\\]]*\\]\\s*)?[:{]))",
+      "captures": {
+        "1": {
+          "name": "keyword.declaration.xdbml"
+        }
+      }
+    },
+    "lineage-arrows": {
+      "comment": "The arrows of a dependency (spec 27, v0.7): -> from upstream to downstream, <- from downstream to upstream, in a Dep and in a dep setting.",
+      "name": "keyword.operator.lineage.xdbml",
+      "match": "->|<-"
     },
     "declarations": {
       "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name). `Note` is skipped where it names a field (spec 3.10): it counts as a keyword only before ':' or '{', or before the name of a sticky note, qualified or not, its settings brackets, and '{' or ':' on the same line (spec 19.2).",
@@ -223,6 +243,9 @@
           "include": "#native-types"
         },
         {
+          "include": "#lineage-arrows"
+        },
+        {
           "include": "#cardinality-operators"
         },
         {
@@ -237,7 +260,7 @@
     },
     "setting-keys": {
       "comment": "Setting keys appear before a colon. Matched only here inside the settings block.",
-      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|constraint_type|source_database|storage_options|default_charset|database_type|discriminator|minproperties|maxproperties|business_term|completeness|source_query|materialized|headercolor|source_role|target_role|source_verb|target_verb|exclusivity|uniqueitems|granularity|constraints|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|supertype|minlength|maxlength|cloned_at|strategy|minitems|maxitems|synonyms|location|default|targets|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|merge|note|name|type|tags|ref|as))\\b(\\s*)(:)",
+      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|constraint_type|source_database|storage_options|default_charset|database_type|discriminator|minproperties|maxproperties|business_term|completeness|source_query|materialized|headercolor|source_role|target_role|source_verb|target_verb|exclusivity|uniqueitems|granularity|constraints|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|supertype|minlength|maxlength|cloned_at|strategy|minitems|maxitems|synonyms|location|default|targets|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|merge|note|name|type|tags|ref|dep|as))\\b(\\s*)(:)",
       "captures": {
         "1": {
           "name": "variable.parameter.setting.xdbml"

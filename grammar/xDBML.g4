@@ -59,6 +59,13 @@
  *     unnamed top-level note stays noteDefinition: the note of the
  *     project (§19.5).
  *
+ * v0.7 changes (spec §27):
+ *   - depDefinition and depSetting are defined here. DBML added Dep, the
+ *     data lineage construct, in 10.0, after the 3.13.6 baseline. A Dep
+ *     stands at the top level, in a short form or a block; `dep` states a
+ *     dependency inline, in the brackets of an entity, a View or a field.
+ *     The arrows `->` and `<-` are lexed as one token each.
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -194,6 +201,10 @@ DIAGRAM_VIEW        : 'DiagramView' ;
 
 METADATA            : 'Metadata' ;     // top-level only; also names an entity or a field elsewhere
 
+// ---- §27 Data lineage (v0.7) -------------------------------------------------
+
+DEP                 : 'Dep' ;          // top-level only; also names an entity or a field elsewhere
+
 // ---- §17.2 Structural type keywords ---------------------------------------
 
 OBJECT              : 'object' ;
@@ -239,6 +250,11 @@ AS                  : 'as' ;
 // the parser would see it as '<' followed by '>'.
 
 MANY_TO_MANY        : '<>' ;
+
+// The arrows of a dependency (§27, v0.7), one token each, so a space inside
+// an arrow fails the lex, as in DBML.
+ARROW_RIGHT         : '->' ;
+ARROW_LEFT          : '<-' ;
 
 // A `?` against an operator marks the end on its side optional (§11.1, v0.7,
 // the DBML form). Lexed with the operator as one token, so the mark touches
@@ -321,6 +337,7 @@ topLevelStatement
     | supertypeGroupDefinition     // spec §12 (new in v0.5)
     | diagramViewDefinition        // spec §18 (defined in v0.6.3)
     | metadataDefinition           // spec §24.7 (defined in v0.7)
+    | depDefinition                // spec §27 (defined in v0.7)
     | stickyNoteDefinition         // spec §19.2 (defined in v0.7)
     | noteDefinition               // upstream DBML; unnamed: the note of the project, §19.5
     | topLevelRecords              // §26.2 (defined in v0.7)
@@ -525,7 +542,7 @@ cloneContent
     | tablePartialDefinition
     | tableGroupDefinition
     | supertypeGroupDefinition      // spec §12 (new in v0.5)
-    | diagramViewDefinition         // spec §18; file scope only (§27.5)
+    | diagramViewDefinition         // spec §18; file scope only (§28.5)
     | noteDefinition
     | fieldDeclaration              // for field-level imports
     | useDirective                  // nested reuses (barrel-file pattern)
@@ -747,6 +764,46 @@ metadataKind
 
 metadataSetting
     : (IDENTIFIER | quotedIdentifier) COLON settingValue
+    ;
+
+// ---- §27 Data lineage (defined in v0.7) ------------------------------------
+//
+// A dependency between two entities, Views or fields (§27.1), in three forms
+// (§27.2). The name is one segment, bare or quoted. DBML also accepts
+// brackets between the name and the colon of the short form; the brackets
+// after the dependency take precedence over them. In a block, a `key: value`
+// line or a Note is a setting of the Dep, and brackets after a dependency
+// concern that dependency alone. A Dep stands at the top level only (§27.4).
+// What each endpoint names, the rules of a block (one downstream element,
+// one level), the kind an inline `dep` names, and the value of `color` are
+// checked after parsing (§27.10).
+
+depDefinition
+    : DEP nameSegment? settingsBlock? COLON depSpec settingsBlock?     // short form
+    | DEP nameSegment? settingsBlock? LBRACE depBodyItem* RBRACE        // block form
+    ;
+
+depSpec
+    : refEndpoint depArrow refEndpoint
+    ;
+
+depArrow
+    : ARROW_RIGHT        // '->': the left end is upstream
+    | ARROW_LEFT         // '<-': the right end is upstream
+    ;
+
+depBodyItem
+    : depSpec settingsBlock?
+    | (IDENTIFIER | quotedIdentifier) COLON settingValue
+    | NOTE COLON (STRING_LITERAL | multilineString)
+    | NOTE LBRACE (STRING_LITERAL | multilineString) RBRACE
+    ;
+
+// The inline form, in the brackets of an entity, a View or a field (§27.2).
+// The value of any other form is an error, or, in a document declaring v0.6
+// or earlier, a custom property that draws a warning (§27.9).
+depSetting
+    : 'dep' COLON depArrow refEndpoint
     ;
 
 // ---- §26 Records (defined in v0.7) -----------------------------------------
@@ -1173,7 +1230,8 @@ settingsBlock
     ;
 
 setting
-    : aiReadinessSetting
+    : depSetting                                  // §27.2 (v0.7)
+    | aiReadinessSetting
     | cardinalitySetting
     | validationSetting
     | customProperty
@@ -1420,6 +1478,18 @@ quotedIdentifier options { caseInsensitive=false; }
 //          * `<>` is rejected between entities: many-to-many states a
 //            cardinality, which is unstated there.
 //          * `undirected` takes true or false (§11.16.2).
+//      - data lineage (§27, v0.7):
+//          * each endpoint names an entity, a View or a field declared in
+//            the document or brought by an import; the longest leading part
+//            that names an entity or a View holds the field (§11.16.3). An
+//            Edge, its fields, and a composite endpoint are errors.
+//          * the dependencies of a block have one downstream entity or
+//            View, and are all between entities or all name a field at one
+//            end at least. A block with no dependency draws a warning.
+//          * an inline `dep` on an entity or a View names one, and on a
+//            field names a field. A TablePartial carries no `dep`.
+//          * `color` is #rgb or #rrggbb; a field does not depend on itself;
+//            a dependency is stated once in the document, inline included.
 //
 // 5. Conflict resolution with upstream DBML. Where xDBML extends a rule
 //    that exists upstream (tableKeyword, fieldPath, refSpec, indexBlock,

@@ -94,7 +94,7 @@ import type {
   Span,
   XDbmlDocument,
 } from '@xdbml/parse';
-import { diagramViewMembers, diagramViewNote, metadataIndex, metadataNote, projectNote as projectNoteOf, stickyNotes, withMetadata } from '@xdbml/parse';
+import { collectLineage, diagramViewMembers, diagramViewNote, metadataIndex, metadataNote, projectNote as projectNoteOf, stickyNotes, withMetadata } from '@xdbml/parse';
 import type { AppliedSetting } from '@xdbml/parse';
 import { collectRefDeclarations } from '@xdbml/render';
 
@@ -164,6 +164,7 @@ const modelCounts = computed(() => {
     { label: 'Relationships', count: collectRefDeclarations(props.doc).length },
     { label: 'Edges', count: edges },
     { label: 'Sticky notes', count: stickyNotes(props.doc).length },
+    { label: 'Data lineage Deps', count: collectLineage(props.doc).length },
   ];
   return rows.filter((r, i) => i === 0 || r.count > 0);
 });

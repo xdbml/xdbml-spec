@@ -227,7 +227,7 @@ function anchorOnSide (entity: EntityLayout, side: Side, fieldName: string | und
  * segments ([name], {name}, <name>), then a single-segment leaf-name
  * match.
  */
-function findFieldRow (entity: EntityLayout, fieldName: string): FieldLayout | undefined {
+export function findFieldRow (entity: EntityLayout, fieldName: string): FieldLayout | undefined {
   // Row paths and field names are in the form of names.ts: a field name
   // that holds a dot keeps its quotes (spec §3.2).
   const exact = entity.fields.find((f) => f.path === fieldName);

@@ -31,8 +31,9 @@ import { glyphTransform, labelAnchor } from '../geometry/placement.ts';
 import { refLabelX, refLabelY, resolveRef } from '../geometry/ref-path.ts';
 import { edgeConnectors, edgeLabelX, edgeLabelY } from '../geometry/edge-path.ts';
 import { escapeXml } from './util.ts';
-import { measureText } from './metrics.ts';
+import { ENTITY_NAME_FONT_SIZE, FIELD_FONT_SIZE, measureText } from './metrics.ts';
 import { layoutSupertypeGroups, longestSegmentMidpoint, type SupertypeGroupGeometry } from '../geometry/supertype-symbol.ts';
+import { layoutDeps, type DepGeometry } from '../geometry/dep-path.ts';
 
 const HEADER_HEIGHT = 32;
 const INDENT_PX = 14;
@@ -66,6 +67,11 @@ export interface SerializeOptions {
    */
   selectedField?: { entityId: string; path: string };
   /**
+   * More rows drawn with the selection tint: the fields at the ends of a
+   * selected Dep (spec §27.7).
+   */
+  highlightedFields?: ReadonlyArray<{ entityId: string; path: string }>;
+  /**
    * When set (and not in `inner` mode), draws a small clickable
    * "Open in xDBML playground" link in a footer band below the diagram.
    * The href is precomputed by `renderToSVG` (an lz-string `#s=` share
@@ -74,9 +80,9 @@ export interface SerializeOptions {
    */
   playgroundLink?: { href: string; label: string };
   /**
-   * Draw relationship names: the name of a named `Ref` on its line, and the
-   * name of each supertype group beside its symbol (spec §12.9). Off by
-   * default.
+   * Draw relationship names: the name of a named `Ref` on its line, the
+   * name of each supertype group beside its symbol (spec §12.9), and the
+   * name of a Dep at its junction (§27.7). Off by default.
    */
   showRelationshipNames?: boolean;
 }
@@ -110,10 +116,15 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
   for (const c of model.containers) parts.push(container(c, theme));
   const showNames = options.showRelationshipNames === true;
   for (const r of model.refs) parts.push(refLine(r, model, theme, showNames));
+  for (const g of layoutDeps(model.deps ?? [], model.entities)) parts.push(depShape(g, theme, showNames));
   for (const g of layoutSupertypeGroups(model)) parts.push(supertypeGroupShape(g, theme, showNames));
   for (const e of model.edges) parts.push(edgeLine(e, model.entities, theme));
-  for (const e of model.entities) parts.push(entityCard(e, collapsed, theme, options.selectedField));
-  for (const e of model.edges) parts.push(entityCard(e.box, collapsed, theme, options.selectedField));
+  const tinted = new Set<string>(
+    [...(options.selectedField ? [options.selectedField] : []), ...(options.highlightedFields ?? [])]
+      .map((f) => rowKey(f.entityId, f.path)),
+  );
+  for (const e of model.entities) parts.push(entityCard(e, collapsed, theme, tinted));
+  for (const e of model.edges) parts.push(entityCard(e.box, collapsed, theme, tinted));
   for (const n of model.notes ?? []) parts.push(stickyNote(n, theme));
 
   const unresolved = model.refs.filter((r) => r.unresolved).length;
@@ -192,7 +203,12 @@ function container (c: ContainerLayout, theme: Theme): string {
 
 /* ----------------------------------------------------------- entity card */
 
-function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme: Theme, selectedField?: { entityId: string; path: string }): string {
+/** Key of a row in the set of tinted rows. */
+function rowKey (entityId: string, path: string): string {
+  return `${entityId}\u0000${path}`;
+}
+
+function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme: Theme, tinted: ReadonlySet<string>): string {
   const { x, y, width, height } = entity.bounds;
   const te = theme.entity;
   const parts: string[] = ['<g>'];
@@ -231,7 +247,7 @@ function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme
 
   const nameLeftX = x + (entity.isView || entity.isEdge ? 32 : 12);
   parts.push(
-    text({ x: nameLeftX, y: y + 20, fill: ink, size: 13, weight: 600, content: escapeXml(entity.name) }),
+    text({ x: nameLeftX, y: y + 20, fill: ink, size: ENTITY_NAME_FONT_SIZE, weight: 600, content: escapeXml(entity.name) }),
     text({
       x: x + width - 12, y: y + 20, fill: ink, size: 10, anchor: 'end', opacity: 0.85,
       content: escapeXml(entity.keyword),
@@ -240,7 +256,7 @@ function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme
 
   // Field rows.
   entity.fields.forEach((field, i) => {
-    parts.push(fieldRow(entity, field, i, collapsed, theme, selectedField));
+    parts.push(fieldRow(entity, field, i, collapsed, theme, tinted));
   });
 
   parts.push('</g>');
@@ -253,15 +269,14 @@ function fieldRow (
   index: number,
   collapsed: ReadonlySet<string>,
   theme: Theme,
-  selectedField?: { entityId: string; path: string },
+  tinted: ReadonlySet<string>,
 ): string {
   const { x, y, width } = entity.bounds;
   const tr = theme.row;
   const parts: string[] = [];
 
-  const isSelected = selectedField !== undefined
-    && selectedField.entityId === entity.id
-    && selectedField.path === field.path;
+  // The selected field, or a field at an end of the selected Dep.
+  const isSelected = tinted.has(rowKey(entity.id, field.path));
 
   // Row tint. A selected field gets the selection tint (over any zebra/pk
   // fill) plus an accent strip; the field name is drawn afterwards on top,
@@ -309,7 +324,7 @@ function fieldRow (
       x: x + nameLeftEdge,
       y: y + field.rowY + 16,
       fill: nameColor(field, theme),
-      size: 12,
+      size: FIELD_FONT_SIZE,
       weight: field.flags.pk ? 600 : 400,
       italic: field.synthetic === true,
       content: escapeXml(field.name),
@@ -454,6 +469,38 @@ function refLine (ref: RefLayout, model: DiagramModel, theme: Theme, showNames =
  * with its marks, and the branches to the subtypes. Drawn above
  * relationship lines and below entity cards.
  */
+/**
+ * A Dep (spec §27.7): a curve for each dependency, the trunk from each
+ * junction, the junctions and the arrowheads, in the Dep's color or the
+ * theme's lineage color. A dependency's own color applies to its curve.
+ */
+function depShape (g: DepGeometry, theme: Theme, showNames: boolean): string {
+  const color = g.dep.color ?? theme.lineage.line;
+  const parts: string[] = ['<g>'];
+  for (const c of g.curves) {
+    parts.push(`<path d="${c.d}" fill="none" stroke="${c.color ?? color}" stroke-width="1.5"/>`);
+  }
+  for (const t of g.trunks) parts.push(`<path d="${t}" fill="none" stroke="${color}" stroke-width="1.5"/>`);
+  for (const j of g.junctions) parts.push(`<circle cx="${j.x}" cy="${j.y}" r="3.5" fill="${color}"/>`);
+  for (const a of g.arrows) parts.push(`<polygon points="${a}" fill="${color}"/>`);
+  if (showNames && g.label && g.dep.name !== undefined) {
+    parts.push(
+      text({
+        x: g.label.x,
+        y: g.label.y,
+        fill: g.dep.color ?? theme.lineage.label,
+        size: 10,
+        weight: 500,
+        anchor: g.label.anchor,
+        italic: true,
+        content: escapeXml(g.dep.name),
+      }),
+    );
+  }
+  parts.push('</g>');
+  return parts.join('');
+}
+
 function supertypeGroupShape (g: SupertypeGroupGeometry, theme: Theme, showNames: boolean): string {
   const line = theme.ref.line;
   const dash = ' stroke-dasharray="3.5 2.5"';

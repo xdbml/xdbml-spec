@@ -290,6 +290,7 @@ export const SETTING_KEYS = [
   'note',
   'default',
   'ref',
+  'dep',               // v0.7 §27.2: inline data lineage, `dep: <- source`
   'name',
   'color',
   'headercolor',

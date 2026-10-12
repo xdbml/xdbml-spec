@@ -156,7 +156,7 @@ const definitions = computed(() => {
   });
 });
 
-// Every key and check of the entity (spec §28.6). Views declare none.
+// Every key and check of the entity (spec §29.6). Views declare none.
 const constraints = computed<Constraint[]>(() => {
   const doc = parser.flatAst;
   if (!doc || props.entity.kind === 'ViewDeclaration') return [];
@@ -246,7 +246,7 @@ const noteBody = computed(() => {
 });
 
 /**
- * The source query of a View (spec §14.3, §28.7): the first
+ * The source query of a View (spec §14.3, §29.7): the first
  * `source_query:` element of its body, as `viewSourceQuery()` returns it.
  * Empty for Entities, Edges and Views without one. A second source query
  * and a `source_query` written in the brackets draw warnings in the

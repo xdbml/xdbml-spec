@@ -101,6 +101,16 @@ export interface Theme {
     label: string;
   };
 
+  /**
+   * Data lineage (spec §27.7): the curve of a dependency, its arrowhead and
+   * its junction, in `line` unless the Dep states a `color`; the Dep's name
+   * in `label`.
+   */
+  lineage: {
+    line: string;
+    label: string;
+  };
+
   banner: {
     fill: string;
     stroke: string;
@@ -206,6 +216,11 @@ export const defaultTheme: Theme = {
     label: '#8b5cf6',
   },
 
+  lineage: {
+    line: '#d97706',
+    label: '#b45309',
+  },
+
   banner: {
     fill: '#fef3c7',
     stroke: '#f59e0b',
@@ -307,6 +322,11 @@ export const darkTheme: Theme = {
   edge: {
     line: '#a78bfa',
     label: '#c4b5fd',
+  },
+
+  lineage: {
+    line: '#f59e0b',
+    label: '#fbbf24',
   },
 
   banner: {
