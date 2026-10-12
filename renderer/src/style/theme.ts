@@ -101,10 +101,33 @@ export interface Theme {
     label: string;
   };
 
+  /**
+   * Data lineage (spec §27.7): the curve of a dependency, its arrowhead and
+   * its junction, in `line` unless the Dep states a `color`; the Dep's name
+   * in `label`.
+   */
+  lineage: {
+    line: string;
+    label: string;
+  };
+
   banner: {
     fill: string;
     stroke: string;
     text: string;
+  };
+
+  /**
+   * Sticky notes (spec §19.6). `fill` is the default color of a note that
+   * states none; the ink on a colored note follows `readableInk`, and
+   * `plainInk` colors the text of a note with `color: none`, drawn on the
+   * canvas. `link` colors a link on a light note.
+   */
+  note: {
+    fill: string;
+    stroke: string;
+    plainInk: string;
+    link: string;
   };
 
   /**
@@ -193,10 +216,22 @@ export const defaultTheme: Theme = {
     label: '#8b5cf6',
   },
 
+  lineage: {
+    line: '#d97706',
+    label: '#b45309',
+  },
+
   banner: {
     fill: '#fef3c7',
     stroke: '#f59e0b',
     text: '#92400e',
+  },
+
+  note: {
+    fill: '#fde68a',
+    stroke: 'rgba(15, 23, 42, 0.16)',
+    plainInk: '#334155',
+    link: '#1d4ed8',
   },
 
   canvas: {
@@ -289,10 +324,22 @@ export const darkTheme: Theme = {
     label: '#c4b5fd',
   },
 
+  lineage: {
+    line: '#f59e0b',
+    label: '#fbbf24',
+  },
+
   banner: {
     fill: '#422006',
     stroke: '#f59e0b',
     text: '#fcd34d',
+  },
+
+  note: {
+    fill: '#fde68a',
+    stroke: 'rgba(0, 0, 0, 0.35)',
+    plainInk: '#cbd5e1',
+    link: '#1d4ed8',
   },
 
   canvas: {

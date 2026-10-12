@@ -21,7 +21,7 @@
  *     and a list of diagnostics (unresolved references, name conflicts).
  *     The AST is not mutated. Flattens the input internally.
  *
- * The parser is DBML-3.13.6 compatible: a document without an `xdbml: ...`
+ * The parser is DBML-10.3.1 compatible: a document without an `xdbml: ...`
  * version header still parses, and DBML constructs are preserved.
  */
 
@@ -34,12 +34,18 @@ export { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSeg
 export {
   classifyModuleSource,
   isUrlKey,
+  moduleCandidates,
   ModuleSourceError,
 } from './module-resolver.ts';
 export type { ModuleSource } from './module-resolver.ts';
-export { resolveNames, SymbolTable } from './name-resolver.ts';
+export { resolveLineage, resolveNames, SymbolTable } from './name-resolver.ts';
+export type { ResolvedDependency } from './name-resolver.ts';
 export { checkViews, viewSourceQuery } from './views.ts';
 export { checkDiagramViews, diagramViewMembers, diagramViewNote, diagramViews } from './diagram-views.ts';
+export { checkNotes, isStickyNoteColor, projectNote, resolveStickyNote, stickyNotes } from './notes.ts';
+export type { PlacedStickyNote, ProjectNote, StickyNoteResolution } from './notes.ts';
+export { checkLineage, collectLineage, depColor, depSettings, isDepColor, lineageById } from './lineage.ts';
+export type { DepEnd, DepEndResolver, Lineage, LineageDependency } from './lineage.ts';
 export type { DiagramViewMembers } from './diagram-views.ts';
 export {
   bodyConstraints,
@@ -49,6 +55,7 @@ export {
   keyPathString,
   markPrimaryKeyNotNull,
   primaryKey,
+  refChildNullable,
 } from './constraints.ts';
 export type { CheckConstraint, Constraint, ConstraintSource, KeyConstraint } from './constraints.ts';
 export { checkDefinitions, entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
@@ -83,6 +90,19 @@ export {
   isUndirected,
 } from './relationships.ts';
 export type { RelationshipType, ConstraintType } from './relationships.ts';
+export { checkOptionalMarks, refCardinality, refCardinalityIn } from './cardinality.ts';
+export {
+  METADATA_SETTINGS,
+  checkMetadata,
+  metadataColor,
+  metadataIndex,
+  metadataNote,
+  resolveMetadataTarget,
+  settingValueText,
+  withMetadata,
+} from './metadata.ts';
+export type { AppliedSetting, MetadataIndex, ResolvedMetadataTarget } from './metadata.ts';
+export type { CardinalityOrigin, EndCardinality, RefCardinality, RefCardinalityContext } from './cardinality.ts';
 export {
   SUPERTYPE_GROUP_VALUES,
   canonicalSupertypeGroupValue,

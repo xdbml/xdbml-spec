@@ -7,7 +7,7 @@
  *      check of an entity into one list, whatever form declared it: a line
  *      in `constraints { }` or `checks { }`, `[pk]` / `[unique]` on a
  *      field, a `pk` entry in `indexes`, a field-level `check:`. This is
- *      the Constraint node of spec §28.6, and what the renderer and the
+ *      the Constraint node of spec §29.6, and what the renderer and the
  *      playground read, so a consumer finds the primary key in one place.
  *
  *   2. `markPrimaryKeyNotNull()` adds an implied `not null` to each
@@ -52,7 +52,7 @@ import { joinName, lastNameSegment, quoteNameSegment, splitName } from './names.
 export { isRelationalTarget } from './targets.ts';
 
 /* -------------------------------------------------------------------------
- * Normalized constraints (spec §28.6)
+ * Normalized constraints (spec §29.6)
  * ----------------------------------------------------------------------- */
 
 /** Where a constraint was declared. The raw AST keeps the form; this list does not. */
@@ -351,6 +351,37 @@ export function markPrimaryKeyNotNull (doc: XDbmlDocument): void {
       field.settings.push({ kind: 'Setting', name: 'not null', nameSource: 'not null', value: null, implied: true, span: field.span });
     }
   }
+}
+
+/**
+ * Whether the child end of a referential relationship may hold null (spec
+ * §11.8). True when one of its fields is nullable: neither `not null`
+ * (`required` reads as `not null`) nor part of its entity's primary key.
+ * False when none is. Undefined when the end does not resolve to fields of
+ * an entity, through an array for instance, so no inference applies.
+ */
+export function refChildNullable (doc: XDbmlDocument, child: RefEndpoint): boolean | undefined {
+  const end = resolveEnd(child, entityIndex(doc));
+  if (!end || end === 'entity-level') return undefined;
+  const partials = tablePartials(doc);
+  const pk = primaryKey(end.entity.decl, doc)?.fields ?? [];
+  let nullable = false;
+  for (const dotted of end.fields) {
+    const names = splitName(dotted);
+    let fields: ReadonlyArray<FieldDeclaration> = topFields(end.entity.decl.body, partials);
+    let field: FieldDeclaration | undefined;
+    for (const n of names) {
+      field = fields.find((f) => f.name === n);
+      if (!field) return undefined;
+      fields = field.type.kind === 'ObjectType'
+        ? field.type.fields.filter((f): f is FieldDeclaration => f.kind === 'FieldDeclaration')
+        : [];
+    }
+    if (!field) return undefined;
+    const notNull = field.settings.some((x) => x.name === 'not null') || pk.includes(dotted);
+    if (!notNull) nullable = true;
+  }
+  return nullable;
 }
 
 function findField (body: Body, names: string[]): FieldDeclaration | undefined {

@@ -72,7 +72,11 @@ or a `DiagramModel`, and returns an SVG string. Options:
 
 Also re-exported: `buildDiagram`, `applyUserPositions`, `autoArrange`,
 `serializeDiagram`, `defaultTheme`/`resolveTheme`, the layout constants, and
-all model types (`DiagramModel`, `EntityLayout`, `RefLayout`, ...).
+all model types (`DiagramModel`, `EntityLayout`, `RefLayout`, `NoteLayout`, ...).
+For sticky notes (spec §19): `parseMarkdown`/`parseInline`, the Markdown
+reader that the diagram and the playground's inspector share, and
+`layoutNoteText`/`sizeNote`, which break a note's text into lines and size
+its box.
 
 ## Package layout
 
@@ -81,6 +85,8 @@ src/
   layout/      pure AST -> DiagramModel core (relocated from the playground)
     layout.ts        buildDiagram, applyUserPositions, model types, constants
     auto-arrange.ts  positioning strategies (relational, star)
+    markdown.ts      the Markdown of a sticky note, read into blocks and runs
+    note-text.ts     a sticky note's text, broken into lines that fit its box
   geometry/    pure path/glyph math, extracted from the .vue components
     cardinality.ts   operator + min..max -> Cardinality
     placement.ts     glyph transform, label anchor
@@ -91,6 +97,7 @@ src/
     theme.ts         theme tokens; defaults reproduce the playground look
   svg/
     serialize.ts     DiagramModel -> SVG string (the serializer)
+    metrics.ts       estimated text widths, shared with the note layout
     util.ts          XML escaping
   index.ts     public API
 ```

@@ -4,6 +4,30 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0]
+
+Follows xDBML 0.7, whose DBML baseline moves from 3.13.6 to 10.3.1. The
+constructs DBML added in between take the colors of the constructs they
+resemble. Versions 0.6.6 and 0.6.7 of the language changed no highlighting,
+so the extension skips them.
+
+### Added
+- **`Metadata` blocks**: `Metadata` and the kind that follows it (`Table`,
+  `Column`, `Entity`, `View`, ...) are colored as declaration keywords, only
+  together, so an entity or a field may still be named `metadata`.
+- **Sticky notes**: `Note` is colored as a keyword before the name of a
+  sticky note followed by settings brackets, a qualified name, or the colon
+  form.
+- **Data lineage**: `Dep` is colored as a declaration keyword at the start of
+  a line before `:`, `{`, `[` or a name, so a field may still be named `dep`;
+  `dep` is colored as a setting key in brackets; `->` and `<-` are colored as
+  the arrows of a dependency.
+- **Optional marks**: a relationship operator and its `?` marks (`>?`,
+  `?<`, `?-?`) are colored as one operator.
+- **Records**: `records` takes the block color before the `(` of a column
+  list and the `[` of its settings as well as before `{`, and `example` the
+  color of a setting flag.
+
 ## [0.6.5]
 
 Follows xDBML 0.6.5, which defines internal definitions (spec §15.8).

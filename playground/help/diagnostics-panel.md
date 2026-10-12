@@ -81,6 +81,43 @@ Internal definitions (spec §15.8) add five conditions of their own, with the sa
 
 An entry under the name of a built-in type, such as `money`, raises `named-type-shadows-builtin` as an error in every version.
 
+From version 0.7, the parser reads the constructs DBML added up to version 10.3, in every document, with conditions of their own.
+
+Records (spec §26):
+
+- **`duplicate-records-block`**: an entity holds a second records block, in its body or at the top level. Put every row in one block. An error, as in DBML; a warning in a document declaring v0.6 or an earlier version, which accepted it.
+
+Relationships (spec §11.7):
+
+- **`cardinality-conflict`** (warning): a `?` marks an end optional, and a `source:` or `target:` setting gives that end a minimum of 1 or more. Drop one of the two. The setting applies in a document declaring an `xdbml:` version, and the mark in one without.
+
+Settings and Metadata blocks (spec §24.5, §24.7):
+
+- **`duplicate-setting`** (warning): one settings list writes a setting twice. The first one applies; DBML rejects the list.
+- **`metadata-override`** (warning): a `Metadata` block of the document changes a value that the element's own declaration, or a block of an imported file, already set. The block's value applies. See [**Metadata blocks**](./metadata-blocks).
+- **`metadata-custom-property`** (warning): a Metadata block sets a setting that belongs in the element's brackets, such as `tags` or `pk`. In the block it is only a custom property.
+- **`metadata-brackets-ignored`** (warning): settings in brackets after the target of a Metadata block. They apply nothing, as in DBML; move them into the body.
+- **`unresolved-metadata-target`** and **`unknown-metadata-kind`** (errors): the block names no element of its kind, or a kind that does not exist. An xDBML kind, such as `Entity` or `View`, in a document that does not declare `xdbml: 0.7` raises `construct-requires-version`.
+- **`duplicate-metadata-setting`** and **`invalid-metadata-value`** (errors): a block sets one setting twice, or gives `note` something other than a string, or a color something other than `#rgb` or `#rrggbb`.
+
+Sticky notes (spec §19):
+
+- **`invalid-note-color`** (error): a sticky note's `color` is not `#rgb`, `#rrggbb` or `none`.
+- **`duplicate-project-note`** (warning): a top-level `Note` without a name, when the Project block or an earlier unnamed `Note` already carries the note of the project. It applies nothing; give it a name to make it a sticky note. See [**Sticky notes**](./sticky-notes).
+
+Data lineage (spec §27):
+
+- **`unresolved-dep-endpoint`** and **`invalid-dep-endpoint`** (errors): an end of a dependency names nothing, or names an Edge, or several fields at once.
+- **`dep-wrong-kind`** (error): an inline `dep` on a field names an entity, or one on an entity names a field.
+- **`dep-mixed-downstream`** and **`dep-mixed-level`** (errors): the dependencies of one block go to different elements, or mix dependencies between entities with dependencies naming fields.
+- **`dep-self-loop`** (error): a field depends on itself. An entity may: its rows can come from its own earlier rows.
+- **`duplicate-dep`** (error): one dependency stated twice, inline and in a `Dep`, say.
+- **`invalid-dep-color`** (error): a `color` other than `#rgb` or `#rrggbb`.
+- **`misplaced-dep`** and **`dep-in-partial`** (errors): a `dep` where no dependency can stand, such as on an Edge, a Type or a TablePartial.
+- **`invalid-dep-value`**: a `dep` whose value is no arrow. An error; in a document declaring v0.6 or an earlier version, a warning, and the value stays a custom property, as it was.
+- **`empty-dep`** (warning): a block with no dependency. DBML drops it silently.
+- **`ambiguous-dep-endpoint`** (warning): an end reads both as an entity and as a field of another one. The field reading is used, as for a relationship. See [**Data lineage**](./data-lineage).
+
 ## Rows in the body
 
 Each row shows:

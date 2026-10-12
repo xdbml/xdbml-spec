@@ -181,6 +181,9 @@ export {
   CANVAS_MARGIN,
   EDGE_HEADER_COLOR,
   EDGE_COLLAPSED_WIDTH,
+  NOTE_PADDING,
+  NOTE_WIDTHS,
+  sizeNote,
 } from './layout/layout.ts';
 
 export type {
@@ -189,6 +192,9 @@ export type {
   ContainerLayout,
   EntityLayout,
   EdgeLayout,
+  NoteLayout,
+  DepLayout,
+  DepLineLayout,
   FieldLayout,
   FieldFlags,
   RefLayout,
@@ -209,6 +215,11 @@ export {
   type SupertypeGroupGeometry,
 } from './geometry/supertype-symbol.ts';
 export { autoArrange, type ArrangeStrategy } from './layout/auto-arrange.ts';
+export { layoutDep, layoutDeps, curveMidpoint, JUNCTION_GAP, type DepCurve, type DepGeometry } from './geometry/dep-path.ts';
+export { inlineText, isBreak, parseInline, parseMarkdown } from './layout/markdown.ts';
+export type { MdBlock, MdBreak, MdInline, MdRun } from './layout/markdown.ts';
+export { layoutNoteText } from './layout/note-text.ts';
+export type { NoteLine, NoteMark, NoteRun, NoteText } from './layout/note-text.ts';
 
 export { serializeDiagram, type SerializeOptions } from './svg/serialize.ts';
 export { defaultTheme, darkTheme, resolveTheme, type Theme, type DeepPartial } from './style/theme.ts';

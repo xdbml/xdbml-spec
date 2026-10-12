@@ -45,9 +45,9 @@ const SERVER_VERSION = pkg.version;
  */
 const SERVER_INSTRUCTIONS =
   'This server works with xDBML, a text markup language for data schemas and a ' +
-  'strict superset of DBML 3.13.6. When a user asks you to design, draft, edit, ' +
+  'strict superset of DBML 10.3.1. When a user asks you to design, draft, edit, ' +
   'or render a schema with these tools, author it in xDBML -- not plain DBML -- ' +
-  'beginning with the line "xdbml: 0.3" and using xDBML constructs (Entity, ' +
+  'beginning with the line "xdbml: 0.7" and using xDBML constructs (Entity, ' +
   'nested objects and arrays, oneOf/union, reusable Type, precise min/max ' +
   'cardinality, Edge, View, and AI-readiness metadata such as tags, synonyms, ' +
   'and business_term) where they fit. If you are unsure of the syntax, call the ' +

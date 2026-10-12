@@ -3,7 +3,7 @@
     <InspectorSection title="Identification">
       <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
         <dt class="font-medium text-gray-500 dark:text-slate-400">Operator</dt>
-        <dd class="text-gray-900 dark:text-slate-100 font-mono">{{ refDecl.spec.operator }}</dd>
+        <dd class="text-gray-900 dark:text-slate-100 font-mono">{{ operatorText }}</dd>
         <dt class="font-medium text-gray-500 dark:text-slate-400">Source</dt>
         <dd class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ renderEndpoint(refDecl.spec.source) }}</dd>
         <dt class="font-medium text-gray-500 dark:text-slate-400">Target</dt>
@@ -19,6 +19,22 @@
           <dd class="text-gray-900 dark:text-slate-100">{{ constraint }}</dd>
         </template>
       </dl>
+    </InspectorSection>
+
+    <InspectorSection title="Cardinality">
+      <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+        <template v-for="row in cardinalityRows" :key="row.label">
+          <dt class="font-medium text-gray-500 dark:text-slate-400">{{ row.label }}</dt>
+          <dd class="text-gray-900 dark:text-slate-100">
+            <span class="font-mono">{{ row.value }}</span>
+            <span class="text-gray-500 dark:text-slate-400"> {{ row.origin }}</span>
+          </dd>
+        </template>
+      </dl>
+      <p
+        v-if="conflictNote"
+        class="mt-2 text-xs text-amber-700 dark:text-amber-400"
+      >{{ conflictNote }}</p>
     </InspectorSection>
 
     <InspectorSection v-if="hasReading" title="Reading">
@@ -47,8 +63,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { joinName, quoteNameSegment, splitName } from '@xdbml/parse';
-import type { RefDeclaration, RefEndpoint, Setting, Span } from '@xdbml/parse';
+import { joinName, quoteNameSegment, refCardinalityIn, splitName } from '@xdbml/parse';
+import type { CardinalityOrigin, EndCardinality, RefDeclaration, RefEndpoint, Setting, Span, XDbmlDocument } from '@xdbml/parse';
 
 import InspectorSection   from './InspectorSection.vue';
 import SettingsTable      from './SettingsTable.vue';
@@ -57,6 +73,8 @@ import EditInSourceButton from './EditInSourceButton.vue';
 const props = defineProps<{
   refDecl: RefDeclaration;
   index: number;
+  /** The flattened document, for the nullability of the child end (spec §11.8). */
+  doc?: XDbmlDocument;
 }>();
 
 defineEmits<{
@@ -102,6 +120,52 @@ const directionLabel = computed(() => {
   }
 });
 
+/** The operator as written, with its `?` marks (spec §11.1). */
+const operatorText = computed(() => {
+  const spec = props.refDecl.spec;
+  return `${spec.sourceOptional ? '?' : ''}${spec.operator}${spec.targetOptional ? '?' : ''}`;
+});
+
+/* ------------------------------------------------------ cardinality */
+//
+// What each end's cardinality is, and what states it (spec §11.7, §11.8,
+// §11.16): a setting, the operator, a `?` against it, or a nullable foreign
+// key at the child end. The diagram draws the same values.
+
+const card = computed(() => (props.doc ? refCardinalityIn(props.doc, props.refDecl) : undefined));
+
+const ORIGIN_TEXT: Record<CardinalityOrigin, string> = {
+  setting: '(setting)',
+  operator: '(operator)',
+  'optional-mark': "(the '?' of the operator)",
+  'nullable-foreign-key': '(nullable foreign key)',
+  unstated: '',
+};
+
+function endValue (end: EndCardinality): string {
+  if (end.text) return end.text;
+  if (end.min !== undefined) return `minimum ${end.min}`;
+  return 'Not stated';
+}
+
+const cardinalityRows = computed(() => {
+  const c = card.value;
+  if (!c) return [];
+  return [
+    { label: 'Source', value: endValue(c.source), origin: ORIGIN_TEXT[c.source.origin] },
+    { label: 'Target', value: endValue(c.target), origin: ORIGIN_TEXT[c.target.origin] },
+  ];
+});
+
+const conflictNote = computed(() => {
+  const c = card.value;
+  if (!c || c.conflicts.length === 0) return '';
+  const which = c.conflicts.join(' and ');
+  return props.doc?.version
+    ? `The '?' and the settings disagree on the ${which} end; the setting applies (spec §11.7).`
+    : `The '?' and the settings disagree on the ${which} end; the '?' applies, as in DBML (spec §11.7).`;
+});
+
 const readingRows = computed(() => {
   const s = props.refDecl.settings;
   const rows: { label: string; value: string }[] = [];
@@ -111,10 +175,8 @@ const readingRows = computed(() => {
   };
   add('Source role', 'source_role');
   add('Source verb', 'source_verb');
-  add('Source cardinality', 'source');
   add('Target role', 'target_role');
   add('Target verb', 'target_verb');
-  add('Target cardinality', 'target');
   return rows;
 });
 

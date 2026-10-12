@@ -36,6 +36,7 @@
           :selection="selection"
           @select="onSelect"
           @diagram-view-change="activeDiagramView = $event"
+          @add-note="onAddNote"
         />
       </section>
 
@@ -111,6 +112,7 @@ import DiagnosticsPanel from '@/components/diagnostics/DiagnosticsPanel.vue';
 import { useParserStore } from '@/stores/parserStore';
 import { selectionEquals, type Selection } from '@/components/inspector/selection';
 import { spanStart } from '@/components/inspector/source-location';
+import { planStickyNote, type TextEdit } from '@/components/diagram/add-note';
 
 const parser = useParserStore();
 
@@ -119,17 +121,19 @@ const content = computed({
   set: (v: string) => parser.setContent(v),
 });
 
-// XdbmlEditor exposes revealPosition via defineExpose.
+// XdbmlEditor exposes revealPosition and applyEdits via defineExpose.
 const editorRef = useTemplateRef<{
   revealPosition: (line: number, column: number) => void;
+  applyEdits: (edits: ReadonlyArray<TextEdit>, revealOffset?: number) => void;
 }>('editorRef');
 
-// DiagramCanvas exposes its ERD layout undo/redo.
+// DiagramCanvas exposes its ERD layout undo/redo, and places a new sticky note.
 const diagramRef = useTemplateRef<{
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  placeNote: (name: string, at: { x: number; y: number }) => void;
 }>('diagramRef');
 
 /* -------------------------------------------------------------------------
@@ -266,6 +270,21 @@ watch(selection, (s) => {
 function onEditSource (span: Span): void {
   const pos = spanStart(span);
   editorRef.value?.revealPosition(pos.line, pos.column);
+}
+
+/* -------------------------------------------------------------------------
+ * Add sticky note (spec §19): the diagram toolbar asks, the source takes the
+ * declaration, the diagram places the note where the view is centered, and
+ * the note is selected once it parses. Monaco's undo takes the text back.
+ * ----------------------------------------------------------------------- */
+
+function onAddNote (request: { container?: string; at: { x: number; y: number } }): void {
+  const doc = parser.ast;
+  if (!doc) return;
+  const plan = planStickyNote(parser.content, doc, { container: request.container, diagramView: activeDiagramView.value });
+  diagramRef.value?.placeNote(plan.noteName, request.at);
+  editorRef.value?.applyEdits(plan.edits, plan.revealOffset);
+  selection.value = { kind: 'note', noteName: plan.noteName };
 }
 
 /* -------------------------------------------------------------------------

@@ -8,17 +8,19 @@
  * the two layers cannot drift, and no shape geometry is duplicated.
  *
  * Elements carry `data-*` attributes the mount reads via event delegation:
- *   data-handle="entity|edge|container"  a drag handle (+ data-id/data-name)
+ *   data-handle="entity|edge|container|note"  a drag handle (+ data-id/data-name)
  *   data-field + data-id                 a field row (selection)
  *   data-caret + data-id + data-path     a collapse/expand caret
  *   data-ref                             a relationship line
+ *   data-dep                             a data lineage Dep (spec §27)
  *   data-select-entity / -container      a bare selection target
  */
-import type { DiagramModel, EntityLayout } from '../layout/layout.ts';
+import type { DiagramModel, EntityLayout, NoteLayout } from '../layout/layout.ts';
 import { CONTAINER_HEADER_HEIGHT, ENTITY_HEADER_HEIGHT } from '../layout/layout.ts';
 import type { Theme } from '../style/theme.ts';
 import { resolveRef } from '../geometry/ref-path.ts';
 import { layoutSupertypeGroups, type SupertypeGroupGeometry } from '../geometry/supertype-symbol.ts';
+import { depEnds, layoutDeps, type DepGeometry } from '../geometry/dep-path.ts';
 
 const INDENT_PX = 14;
 
@@ -29,6 +31,10 @@ export type Selection =
   | { kind: 'container'; name: string }
   /** A supertype group (spec §12), selected by clicking its symbol. `id` is the group layout id. */
   | { kind: 'supertypeGroup'; id: string }
+  /** A sticky note (spec §19). `id` is the note layout id, `note:<name>`. */
+  | { kind: 'note'; id: string }
+  /** A Dep (spec §27), selected by clicking one of its curves. `id` is `dep:<n>`. */
+  | { kind: 'dep'; id: string }
   | null;
 
 export function buildOverlay (model: DiagramModel, selection: Selection, theme: Theme): string {
@@ -36,9 +42,26 @@ export function buildOverlay (model: DiagramModel, selection: Selection, theme: 
 
   for (const c of model.containers) parts.push(containerOverlay(c, selection, theme));
   for (const r of model.refs) parts.push(refOverlay(r, model, selection, theme));
+  const depGeometry = layoutDeps(model.deps ?? [], model.entities);
+  for (const g of depGeometry) parts.push(depOverlay(g, selection, theme));
+  // A selected Dep outlines the boxes it names with no field; the rows of
+  // the fields it names take the selection tint in the serializer.
+  if (selection && selection.kind === 'dep') {
+    const dep = (model.deps ?? []).find((d) => d.id === selection.id);
+    for (const id of dep ? depEnds(dep, model.entities).entities : []) {
+      const e = model.entities.find((x) => x.id === id);
+      if (!e) continue;
+      const { x, y, width, height } = e.bounds;
+      parts.push(
+        `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="5" fill="none" ` +
+        `stroke="${theme.row.selectStrip}" stroke-width="2" pointer-events="none"/>`,
+      );
+    }
+  }
   for (const g of layoutSupertypeGroups(model)) parts.push(supertypeGroupOverlay(g, selection, theme));
   for (const e of model.entities) parts.push(entityOverlay(e, 'entity', selection, theme));
   for (const e of model.edges) parts.push(entityOverlay(e.box, 'edge', selection, theme));
+  for (const n of model.notes ?? []) parts.push(noteOverlay(n, selection, theme));
 
   parts.push('</g>');
   return parts.join('');
@@ -80,6 +103,25 @@ function entityOverlay (entity: EntityLayout, handle: 'entity' | 'edge', sel: Se
     }
   }
 
+  parts.push('</g>');
+  return parts.join('');
+}
+
+/** A sticky note is a drag handle over its whole box; a press without a move selects it. */
+function noteOverlay (note: NoteLayout, sel: Selection, theme: Theme): string {
+  const { x, y, width, height } = note.bounds;
+  const id = attr(note.id);
+  const parts: string[] = [`<g data-xdbml="note" data-id="${id}">`];
+  if (sel && sel.kind === 'note' && sel.id === note.id) {
+    parts.push(
+      `<rect x="${x - 3}" y="${y - 3}" width="${width + 6}" height="${height + 6}" rx="6" fill="none" ` +
+      `stroke="${theme.row.selectStrip}" stroke-width="2"${note.transparent ? ' stroke-dasharray="4 3"' : ''} pointer-events="none"/>`,
+    );
+  }
+  parts.push(
+    `<rect x="${x}" y="${y}" width="${width}" height="${height}" ` +
+    `fill="transparent" data-handle="note" data-id="${id}" style="cursor:move"/>`,
+  );
   parts.push('</g>');
   return parts.join('');
 }
@@ -194,6 +236,26 @@ function refOverlay (
     `data-ref="${id}" style="cursor:pointer"/>`,
   );
 
+  parts.push('</g>');
+  return parts.join('');
+}
+
+/** A Dep is selected as a whole, from any of its curves or its trunk. */
+function depOverlay (g: DepGeometry, sel: Selection, theme: Theme): string {
+  const id = attr(g.dep.id);
+  const paths = [...g.curves.map((c) => c.d), ...g.trunks];
+  const parts: string[] = [`<g data-xdbml="dep" data-id="${id}">`];
+  if (sel && sel.kind === 'dep' && sel.id === g.dep.id) {
+    const blue = theme.row.selectStrip;
+    for (const d of paths) {
+      parts.push(`<path d="${d}" fill="none" stroke="${blue}" stroke-width="2.5" pointer-events="none"/>`);
+    }
+    for (const j of g.junctions) parts.push(`<circle cx="${j.x}" cy="${j.y}" r="4" fill="${blue}" pointer-events="none"/>`);
+    for (const a of g.arrows) parts.push(`<polygon points="${a}" fill="${blue}" stroke="${blue}" stroke-width="1" stroke-linejoin="round" pointer-events="none"/>`);
+  }
+  for (const d of paths) {
+    parts.push(`<path d="${d}" fill="none" stroke="transparent" stroke-width="12" data-dep="${id}" style="cursor:pointer"/>`);
+  }
   parts.push('</g>');
   return parts.join('');
 }

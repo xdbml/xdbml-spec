@@ -94,7 +94,7 @@ If you select a field, the entity card's outline also highlights (because select
 
 - **Settings on the entity declaration** (e.g. `Table users [headercolor: '#ff0000']`). These are in the inspector's "Settings" section.
 - **The `Note: '...'` body** of an entity. Shown in the inspector's "Note" section.
-- **Indexes, views, computed columns.** These language features are either future xDBML additions or already in the spec but not yet visualized. They will get their own treatment as they're added.
+- **Indexes and records.** Neither is drawn. The inspector's Constraints section lists the keys and checks.
 - **The full path** of a field (for nested fields). The card shows the indented row; the inspector's identification section shows the full dotted path.
 
 ## What's next

@@ -28,7 +28,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parse, flatten } from '../../parser/src/index.ts';
+import { parse, flatten, diagramViewMembers } from '../../parser/src/index.ts';
 import type { XDbmlDocument } from '../../parser/src/index.ts';
 // Import the pure layout modules directly (not the package index): they
 // only type-import @xdbml/parse, which is erased at runtime, so the test
@@ -44,6 +44,9 @@ import {
   canUndo as histCanUndo, canRedo as histCanRedo, currentSnapshot,
 } from '../src/components/diagram/layout-history.ts';
 import type { LayoutSnapshot } from '../src/components/diagram/layout-history.ts';
+import { applyTextEdits, planStickyNote } from '../src/components/diagram/add-note.ts';
+import { depNarrative } from '../src/components/inspector/dep-narrative.ts';
+import { collectLineage, resolveLineage } from '../../parser/src/index.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const examplesDir = join(__dirname, '..', '..', 'examples');
@@ -128,6 +131,79 @@ Ref: orders.orderID - customers.customerID
         assertTrue(!!resolved, `inspector should resolve ${r.id}`);
         assertEq(resolved!.kind, 'ref', `${r.id} should resolve to a relationship`);
       }
+    },
+  },
+
+  {
+    name: 'every drawn Dep resolves in the inspector (spec §27)',
+    source: `xdbml: 0.7
+Table raw {
+  id     int [pk]
+  amount int
+}
+Table stg [dep: <- raw] {
+  revenue int [dep: <- raw.amount]
+}
+Dep load [owner: 'etl'] {
+  raw.id -> stg.revenue
+  note: 'Loaded nightly'
+}
+`,
+    check: ({ ast, diagram }) => {
+      assertEq(diagram.deps.length, 3, 'Dep count');
+      for (const d of diagram.deps) {
+        const resolved = resolveSelection(ast, { kind: 'dep', depId: d.id });
+        assertTrue(!!resolved && resolved.kind === 'dep', `inspector should resolve ${d.id}`);
+      }
+      const load = resolveSelection(ast, { kind: 'dep', depId: 'dep:0' });
+      assertTrue(load?.kind === 'dep' && load.lineage.name === 'load', 'the block comes first, under its name');
+      const inline = resolveSelection(ast, { kind: 'dep', depId: 'dep:2' });
+      assertTrue(inline?.kind === 'dep' && inline.lineage.inline?.carrier === 'stg.revenue', 'the inline dep on a field names its carrier');
+      assertEq(resolveSelection(ast, { kind: 'dep', depId: 'dep:9' }), null, 'an id the document lacks');
+    },
+  },
+
+  {
+    name: 'the inspector reads a Dep back with the names of its elements, whatever the arrow (spec §27)',
+    source: `xdbml: 0.7
+Table raw {
+  id    int [pk]
+  first varchar
+  last  varchar
+  items json
+}
+Table stg {
+  id   int [pk]
+  full varchar
+  n    int
+}
+Table lines {
+  sku varchar
+}
+Dep: stg <- raw
+Dep names {
+  stg.full <- raw.first
+  raw.last -> stg.full [note: 'Trimmed']
+  raw.id   -> stg.id
+}
+Dep: raw -> stg.n
+Dep: raw.items -> lines
+Dep: stg -> stg
+`,
+    check: ({ ast }) => {
+      const resolved = resolveLineage(ast);
+      const read = collectLineage(ast).map((l) => depNarrative(l, resolved.get(l.id) ?? [])
+        .map((g) => g.sentence.map((p) => (p.code ? `\`${p.text}\`` : p.text)).join('')));
+      assertEq(JSON.stringify(read), JSON.stringify([
+        ['The rows of `stg` are computed from the rows of `raw`.'],
+        ['`stg.full` is computed from `raw.first` and `raw.last`.', '`stg.id` is computed from `raw.id`.'],
+        ['`stg.n` is computed from the rows of `raw`.'],
+        ['The rows of `lines` are computed from `raw.items`.'],
+        ['The rows of `stg` are computed from its own previous rows.'],
+      ]), 'sentences');
+      const names = collectLineage(ast)[1];
+      const withNote = depNarrative(names, resolved.get(names.id) ?? [])[0].withSettings;
+      assertEq(JSON.stringify(withNote.map((w) => w.upstream)), JSON.stringify(['raw.last']), 'the settings of one dependency of a group');
     },
   },
 
@@ -1243,7 +1319,8 @@ tests.push({
     for (const name of ['order_to_cash', 'parties', 'catalog_usage']) {
       const base = buildDiagram(ast, new Set(), { diagramView: name });
       const positions = autoArrange(base, 'relational');
-      assertEq([...positions.keys()].sort().join(','), base.entities.map((e) => e.id).sort().join(','), `${name} positions`);
+      // The members, entities and sticky notes (spec §19), and nothing else.
+      assertEq([...positions.keys()].sort().join(','), [...base.entities, ...base.notes].map((e) => e.id).sort().join(','), `${name} positions`);
       const placed = applyUserPositions(base, positions);
       for (const e of placed.entities) {
         if (!e.containerName) continue;
@@ -1275,6 +1352,58 @@ tests.push({
     assertTrue(note.includes('thread.replies') && !note.some((p) => p.startsWith('thread.replies.')), 'recursive Comment stops');
     const resolved = resolveSelection(ast, { kind: 'field', entityId: 'intake.claim_submission', path: 'claimant.address.country' });
     assertTrue(resolved !== null && resolved.kind === 'field' && resolved.node.name === 'country', 'inspector resolves claimant.address.country');
+  },
+});
+
+tests.push({
+  name: 'v0.7: a sticky note resolves in the inspector by its id, and selections compare by name',
+  source: `xdbml: 0.7
+Container sales [type: schema] {
+  Entity orders { id int [pk] }
+  Note states { 'placed, shipped' }
+}
+Note legend { 'Legend' }`,
+  check: ({ ast, diagram }) => {
+    assertEq(diagram.notes.map((n) => n.id).join(','), 'note:sales.states,note:legend', 'notes in the diagram model');
+    const r = resolveSelection(ast, { kind: 'note', noteName: 'sales.states' });
+    assertTrue(r !== null && r.kind === 'note' && r.note.container?.name === 'sales' && r.note.decl.body === 'placed, shipped', 'note in a Container resolves');
+    assertTrue(resolveSelection(ast, { kind: 'note', noteName: 'states' }) === null, 'the inspector selects by id');
+    assertTrue(selectionEquals({ kind: 'note', noteName: 'a' }, { kind: 'note', noteName: 'a' }), 'equal note selections');
+    assertTrue(!selectionEquals({ kind: 'note', noteName: 'a' }, { kind: 'note', noteName: 'b' }), 'different note selections');
+  },
+});
+
+tests.push({
+  name: 'v0.7: Add sticky note writes a note at the end, in a Container, and into the diagram view shown',
+  source: 'xdbml: 0.7\nEntity a { id int }\n',
+  check: () => {
+    const reparse = (src: string) => flatten(parse(src));
+    const top = 'xdbml: 0.7\nEntity a { id int }\nNote note_1 { \'x\' }\n';
+    const p1 = planStickyNote(top, parse(top));
+    const out1 = applyTextEdits(top, p1.edits);
+    assertEq(p1.noteName, 'note_2', 'the first free name');
+    assertTrue(out1.endsWith("\n\nNote note_2 {\n  'Write something...'\n}\n"), `appended after a blank line: ${JSON.stringify(out1)}`);
+    assertEq(out1.slice(p1.revealOffset, p1.revealOffset + 11), 'Note note_2', 'reveal offset points at the keyword');
+
+    const inC = 'xdbml: 0.7\nContainer sales {\n  Entity o { id int }\n}\n';
+    const p2 = planStickyNote(inC, parse(inC), { container: 'sales' });
+    const out2 = applyTextEdits(inC, p2.edits);
+    assertEq(p2.noteName, 'sales.note_1', 'a note in the selected Container');
+    assertTrue(reparse(out2).statements.some((s) => s.kind === 'ContainerDeclaration' && s.body.some((b) => b.kind === 'NoteDeclaration' && b.name === 'note_1')), `the Container holds it: ${out2}`);
+    assertEq(out2.slice(p2.revealOffset, p2.revealOffset + 11), 'Note note_1', 'reveal offset inside the Container');
+
+    const old = 'xdbml: 0.6\nContainer sales {\n  Entity o { id int }\n}\n';
+    assertEq(planStickyNote(old, parse(old), { container: 'sales' }).noteName, 'note_1', 'before v0.7 the note goes to the top level');
+
+    const dv = "xdbml: 0.7\nEntity a { id int }\nNote n { 'x' }\nDiagramView v {\n  Tables {\n    a\n  }\n  Notes {\n    n\n  }\n}\nDiagramView w {\n  Tables { a }\n}\nDiagramView all { * }\nDiagramView e {\n  Notes { }\n}\n";
+    for (const [view, want] of [['v', ['n', 'note_1']], ['w', ['note_1']], ['all', ['n', 'note_1']], ['e', ['note_1']]] as const) {
+      const plan = planStickyNote(dv, parse(dv), { diagramView: view });
+      const doc = reparse(applyTextEdits(dv, plan.edits));
+      const members = diagramViewMembers(doc, view);
+      assertEq(members?.notes.join(','), want.join(','), `diagram view ${view} shows the new note`);
+      const reveal = applyTextEdits(dv, plan.edits).slice(plan.revealOffset, plan.revealOffset + 11);
+      assertEq(reveal, 'Note note_1', `reveal offset with the edit to ${view}`);
+    }
   },
 });
 

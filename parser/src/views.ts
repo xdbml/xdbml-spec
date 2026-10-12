@@ -6,7 +6,7 @@
  * settings brackets; since v0.6.1 that form is not the view's source query
  * and draws a warning, so a document valid under v0.6.0 stays valid.
  *
- * `viewSourceQuery()` is the normalized AST of §28.7: the one source query
+ * `viewSourceQuery()` is the normalized AST of §29.7: the one source query
  * of a View, the first `source_query:` element of its body. Consumers such
  * as the playground inspector read it rather than walking the body.
  */
@@ -19,7 +19,7 @@ import type {
 } from './ast.ts';
 import type { Diagnostic } from './name-resolver.ts';
 
-/** The source query of a View (spec §14.3, §28.7), or undefined when it declares none. */
+/** The source query of a View (spec §14.3, §29.7), or undefined when it declares none. */
 export function viewSourceQuery (view: ViewDeclaration): SourceQueryItem | undefined {
   for (const item of view.body) {
     if (item.kind === 'SourceQueryItem') return item;

@@ -95,9 +95,36 @@ The ring (`○`) means "zero allowed." The bar (`║`) caps "exactly one." The c
 
 When the line is **blue and thicker**, the relationship is currently selected.
 
-Cardinality text labels (`0..*`, `1..1`, etc.) appear next to the glyphs as the source of truth. Glyphs are the visual shorthand; text is exact.
+A range that a `source:` or `target:` setting states also shows as a text label beside its glyph, such as `2..5`, which a glyph can only approximate. A ring at the parent end of a foreign key that may hold null, or at the end a `?` marks, shows that end is optional.
 
 With **Display > Relationship names** on, a named `Ref` shows its name in italics at the middle of its line.
+
+## Sticky notes
+
+| What you see | What it means |
+|---|---|
+| Box with a folded corner, its text formatted | A sticky note, a named top-level `Note`, its text Markdown |
+| Light yellow box | The default color; a `color` setting gives another |
+| Text with no box | `color: none` |
+| Note inside a Container frame | A sticky note of that Container, which carries it when dragged |
+
+See [Sticky notes](./sticky-notes).
+
+## Data lineage
+
+A curve with an arrowhead is a `Dep`: the element at the arrowhead is computed from the element at the other end, by a job or a query outside the model (spec §27). It carries no cardinality symbol, so it never reads as a relationship, whose lines turn at right angles.
+
+| What you see | What it means |
+|---|---|
+| Amber curve, arrowhead at one end | A dependency, from upstream to downstream |
+| Curve ending at a field row | The dependency names that field |
+| Curve ending at a card's header | The dependency names the entity or the View |
+| Several curves meeting at a dot before one arrowhead | Fields of one Dep combined into one, such as a first and a last name into a full name |
+| A curve in another color | The `color` of the Dep, or of that one dependency |
+
+With **Display > Relationship names** on, a named Dep shows its name at its junction, or along its curve. Clicking a curve selects the Dep: its curves and arrowheads turn blue, the rows of the fields at its ends take the selection tint, and an entity or a View it names with no field is outlined. The inspector reads its dependencies back as sentences that name the elements, such as "`fct_orders.revenue` is computed from `stg_orders.revenue`", and shows its note and its settings.
+
+An automatic arrangement places each entity to the right of the entities it is computed from, where the layout allows. See [Data lineage](./data-lineage).
 
 ## Supertype groups
 
@@ -129,7 +156,7 @@ See [Supertype groups](./supertype-groups).
 | Cursor | Where | What it indicates |
 |---|---|---|
 | Default (arrow) | Empty canvas | Click to inspect the diagram on display |
-| Pointer (hand) | Anywhere clickable: entity headers, field rows, container bodies, relationship lines, supertype group symbols | Clickable to select |
+| Pointer (hand) | Anywhere clickable: entity headers, field rows, container bodies, relationship lines, supertype group symbols, sticky notes, dependency curves | Clickable to select |
 | Grab / grabbing | Entity header band when held | Drag in progress |
 | Col-resize | Pane dividers | Drag to resize the pane |
 

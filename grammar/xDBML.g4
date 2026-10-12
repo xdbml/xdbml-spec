@@ -1,10 +1,11 @@
 /*
- * xDBML v0.6.1 -- ANTLR4 grammar additions
+ * xDBML v0.7 -- ANTLR4 grammar additions
  *
- * Status:    Draft v0.6.1 -- pre-stable
+ * Status:    Draft v0.7 -- pre-stable
  * License:   Apache License 2.0
- * Spec:      xDBML Specification v0.6 (xdbml.org/spec/current)
+ * Spec:      xDBML Specification v0.7 (xdbml.org/spec/current)
  * Upstream:  github.com/holistics/dbml (Apache 2.0)
+ * Baseline:  DBML 10.3.1 (spec Appendix D); DBML 3.13.6 through v0.6
  *
  * This grammar layers xDBML extensions on top of the Holistics DBML
  * ANTLR4 grammar. It declares new tokens, new top-level rules, and
@@ -35,6 +36,37 @@
  *     categories are Tables, Views, Containers (DBML name Schemas),
  *     TableGroups, SupertypeGroups and Notes; Edges is not one.
  *
+ * v0.7 changes (spec §11.1):
+ *   - OPTIONAL_OPERATOR: a relationship operator with a `?` against it on
+ *     one side or both, the form DBML added in 9.0. Lexed as one token so
+ *     the mark touches the operator.
+ *
+ * v0.7 changes (spec §26):
+ *   - recordsBlock and topLevelRecords are defined here. DBML added a
+ *     column list on records inside a table, the `example` flag and empty
+ *     fields after the 3.13.6 baseline, so the upstream rule no longer
+ *     covers them. `records` starts a block before '{', '(' or '['.
+ *
+ * v0.7 changes (spec §24.7):
+ *   - metadataDefinition is defined here. DBML added Metadata blocks in
+ *     9.1, after the 3.13.6 baseline, so there is no upstream rule to
+ *     inherit. A block is top-level only.
+ *
+ * v0.7 changes (spec §19):
+ *   - stickyNoteDefinition is defined here. DBML added settings brackets
+ *     to sticky notes in 8.3 and 9.1, after the 3.13.6 baseline. A sticky
+ *     note stands at the top level, where its name may be qualified, and
+ *     in a Container body, where the Container qualifies it (§19.4). An
+ *     unnamed top-level note stays noteDefinition: the note of the
+ *     project (§19.5).
+ *
+ * v0.7 changes (spec §27):
+ *   - depDefinition and depSetting are defined here. DBML added Dep, the
+ *     data lineage construct, in 10.0, after the 3.13.6 baseline. A Dep
+ *     stands at the top level, in a short form or a block; `dep` states a
+ *     dependency inline, in the brackets of an entity, a View or a field.
+ *     The arrows `->` and `<-` are lexed as one token each.
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -43,6 +75,7 @@
  *   - enumDefinition, tablePartialDefinition, tableGroupDefinition
  *                      (v0.6.1: list separators, spec §3.9)
  *   - schemaPrefix     (kept; explicit Container blocks coexist)
+ *   - recordsBlock     (v0.7: column list, example flag, empty fields, §26)
  *
  * Naming conventions:
  *   - Lowercase rule names = parser rules
@@ -165,6 +198,14 @@ SUPERTYPE_GROUP     : 'SupertypeGroup' ;
 
 DIAGRAM_VIEW        : 'DiagramView' ;
 
+// ---- §24.7 Metadata (v0.7) ----------------------------------------------------
+
+METADATA            : 'Metadata' ;     // top-level only; also names an entity or a field elsewhere
+
+// ---- §27 Data lineage (v0.7) -------------------------------------------------
+
+DEP                 : 'Dep' ;          // top-level only; also names an entity or a field elsewhere
+
 // ---- §17.2 Structural type keywords ---------------------------------------
 
 OBJECT              : 'object' ;
@@ -210,6 +251,19 @@ AS                  : 'as' ;
 // the parser would see it as '<' followed by '>'.
 
 MANY_TO_MANY        : '<>' ;
+
+// The arrows of a dependency (§27, v0.7), one token each, so a space inside
+// an arrow fails the lex, as in DBML.
+ARROW_RIGHT         : '->' ;
+ARROW_LEFT          : '<-' ;
+
+// A `?` against an operator marks the end on its side optional (§11.1, v0.7,
+// the DBML form). Lexed with the operator as one token, so the mark touches
+// it: `>?`, `?<`, `?-?`, `?<>?`. A `?` apart from the operator matches no
+// token rule and fails the lex, as in DBML.
+OPTIONAL_OPERATOR   : '?' ('<>' | '<' | '>' | '-') '?'?
+                    | ('<>' | '<' | '>' | '-') '?'
+                    ;
 
 // ---- §17.10/17.11 Cardinality settings keys -------------------------------
 // These are identifier-shaped and could be matched by the upstream IDENTIFIER
@@ -283,7 +337,11 @@ topLevelStatement
     | tableGroupDefinition         // upstream DBML
     | supertypeGroupDefinition     // spec §12 (new in v0.5)
     | diagramViewDefinition        // spec §18 (defined in v0.6.3)
-    | noteDefinition               // upstream DBML
+    | metadataDefinition           // spec §24.7 (defined in v0.7)
+    | depDefinition                // spec §27 (defined in v0.7)
+    | stickyNoteDefinition         // spec §19.2 (defined in v0.7)
+    | noteDefinition               // upstream DBML; unnamed: the note of the project, §19.5
+    | topLevelRecords              // §26.2 (defined in v0.7)
     | useDirective                 //§25  (new in v0.2)
     ;
 
@@ -328,7 +386,7 @@ entityBodyItem
     | indexBlock
     | checksBlock
     | constraintsBlock             // v0.6 §10
-    | recordsBlock                 // §26 (upstream DBML)
+    | recordsBlock                 // §26.1 (defined in v0.7)
     | definitionsBlock             // v0.6.5 §15.8; Entity bodies only, see below
     | noteDefinition
     ;
@@ -368,7 +426,8 @@ containerBody
     | edgeDefinition
     | viewDefinition
     | enumDefinition               // enums may be container-scoped
-    | noteDefinition
+    | stickyNoteDefinition         // spec §19.4 (defined in v0.7): a named Note, attached to the Container
+    | noteDefinition               // the Container's own note
     | useDirective                 //§25  (new in v0.2; field imports are semantically rejected here)
     | containerSetting             // e.g. replication, location, default_charset
     ;
@@ -484,7 +543,7 @@ cloneContent
     | tablePartialDefinition
     | tableGroupDefinition
     | supertypeGroupDefinition      // spec §12 (new in v0.5)
-    | diagramViewDefinition         // spec §18; file scope only (§27.5)
+    | diagramViewDefinition         // spec §18; file scope only (§28.5)
     | noteDefinition
     | fieldDeclaration              // for field-level imports
     | useDirective                  // nested reuses (barrel-file pattern)
@@ -660,6 +719,143 @@ diagramViewName
     : nameSegment (DOT nameSegment)*
     ;
 
+// ---- §19 Sticky notes (defined in v0.7) -----------------------------------
+//
+// A named Note. The settings brackets take `color` and custom properties
+// (§19.3); the value of `color` and, in a Container body, the version the
+// document declares are checked after parsing (§19.7). In a Container body
+// the name is one segment (§19.4). The colon form after a name, which DBML
+// rejects, reads the same (§19.2).
+
+stickyNoteDefinition
+    : NOTE entityReference settingsBlock?
+        ( LBRACE (STRING_LITERAL | multilineString) RBRACE
+        | COLON (STRING_LITERAL | multilineString)
+        )
+    ;
+
+// ---- §24.7 Metadata blocks (defined in v0.7) ------------------------------
+//
+// Settings for an element declared elsewhere. The kind and the target are
+// read here; which kind words a document may use (the DBML four in every
+// document, the xDBML ones from v0.7), whether the target resolves, which
+// settings each kind takes and the precedence between sources are checked
+// after parsing (§24.7.1 to §24.7.4). The body holds `key: value` lines
+// only. Settings in brackets after the target, which DBML accepts, apply
+// nothing (§24.7.3).
+
+metadataDefinition
+    : METADATA metadataKind entityReference settingsBlock? LBRACE
+        (metadataSetting | listSeparator)*
+      RBRACE
+    ;
+
+// Case-insensitive, like every keyword (§3.8). An identifier that names no
+// kind parses and is reported after parsing (unknown-metadata-kind).
+metadataKind
+    : TABLE | ENTITY | COLLECTION | RECORD
+    | 'Column' | 'Field'
+    | 'TableGroup'
+    | NOTE
+    | containerKeyword
+    | VIEW
+    | DIAGRAM_VIEW
+    | IDENTIFIER
+    ;
+
+metadataSetting
+    : (IDENTIFIER | quotedIdentifier) COLON settingValue
+    ;
+
+// ---- §27 Data lineage (defined in v0.7) ------------------------------------
+//
+// A dependency between two entities, Views or fields (§27.1), in three forms
+// (§27.2). The name is one segment, bare or quoted. DBML also accepts
+// brackets between the name and the colon of the short form; the brackets
+// after the dependency take precedence over them. In a block, a `key: value`
+// line or a Note is a setting of the Dep, and brackets after a dependency
+// concern that dependency alone. A Dep stands at the top level only (§27.4).
+// What each endpoint names, the rules of a block (one downstream element,
+// one level), the kind an inline `dep` names, and the value of `color` are
+// checked after parsing (§27.10).
+
+depDefinition
+    : DEP nameSegment? settingsBlock? COLON depSpec settingsBlock?     // short form
+    | DEP nameSegment? settingsBlock? LBRACE depBodyItem* RBRACE        // block form
+    ;
+
+depSpec
+    : refEndpoint depArrow refEndpoint
+    ;
+
+depArrow
+    : ARROW_RIGHT        // '->': the left end is upstream
+    | ARROW_LEFT         // '<-': the right end is upstream
+    ;
+
+depBodyItem
+    : depSpec settingsBlock?
+    | (IDENTIFIER | quotedIdentifier) COLON settingValue
+    | NOTE COLON (STRING_LITERAL | multilineString)
+    | NOTE LBRACE (STRING_LITERAL | multilineString) RBRACE
+    ;
+
+// The inline form, in the brackets of an entity, a View or a field (§27.2).
+// The value of any other form is an error, or, in a document declaring v0.6
+// or earlier, a custom property that draws a warning (§27.9).
+depSetting
+    : 'dep' COLON depArrow refEndpoint
+    ;
+
+// ---- §26 Records (defined in v0.7) -----------------------------------------
+//
+// Sample data, inside an entity body or at the top level for a named entity.
+// The column list comes before the brackets, as in DBML. A row ends at the end
+// of its line (§3.9), which a context-free rule cannot state: recordRow reads
+// the values and commas of one row, and an implementation splits the rows by
+// line as §26.4 describes. A comma first in a row, or two commas in a row,
+// hold an empty field, which reads as null; a comma after the last value is
+// ignored. An entity holds one records block in either form (§26.6), checked
+// after parsing, as is each column naming a field of the entity.
+
+recordsBlock                                   // §26.1, in an entity body
+    : RECORDS recordsColumnList? recordsSettingsBlock? LBRACE recordRow* RBRACE
+    ;
+
+topLevelRecords                                // §26.2
+    : RECORDS entityReference recordsColumnList recordsSettingsBlock? LBRACE recordRow* RBRACE
+    ;
+
+recordsColumnList
+    : LPAREN (nameSegment (COMMA nameSegment)* COMMA?)? RPAREN
+    ;
+
+// `example` marks rows that illustrate the data rather than load it (§26.5).
+// Any other setting passes through as a custom property (§24.5).
+recordsSettingsBlock
+    : LBRACK recordsSetting (COMMA recordsSetting)* RBRACK
+    ;
+
+recordsSetting
+    : 'example' (COLON BOOLEAN_LITERAL)?
+    | setting
+    ;
+
+recordRow
+    : (recordValue | COMMA)+
+    ;
+
+recordValue                                    // §26.4
+    : STRING_LITERAL
+    | multilineString
+    | NUMBER
+    | BOOLEAN_LITERAL
+    | NULL_LITERAL
+    | qualifiedName                            // an enum value: Status.active
+    | nameSegment
+    | EXPRESSION_LITERAL                       // backtick-quoted
+    ;
+
 // ---- §17.2 Type expressions (the core recursive type rule) ----------------
 // Replaces upstream columnType. Used everywhere a type appears:
 //   - field declarations
@@ -820,10 +1016,11 @@ fieldDeclaration
 // ---- §3.10 Keywords and field names (v0.6.1) ------------------------------
 // No keyword is reserved as the name of a field or of an enum value. In a
 // body, seven words start an element, each only when the token that element
-// needs follows it: Note before ':' or '{'; indexes, checks, constraints,
-// records and definitions before '{'; source_query before ':'. A field
-// declaration never has ':' or '{' right after its name, so two tokens of
-// lookahead separate the readings. fieldName lists these seven; every other
+// needs follows it: Note before ':' or '{'; indexes, checks, constraints
+// and definitions before '{'; records before '{', '(' or '[' (v0.7);
+// source_query before ':'. A field declaration never has ':', '{', '(' or
+// '[' right after its name, so two tokens of lookahead separate the
+// readings. fieldName lists these seven; every other
 // keyword also names a field, and an implementation whose lexer reserves
 // keyword tokens accepts them here as well.
 
@@ -978,6 +1175,7 @@ cardinalityOperator
     | RANGLE             // '>'  many-to-one
     | MINUS              // '-'  one-to-one
     | MANY_TO_MANY       // '<>' many-to-many
+    | OPTIONAL_OPERATOR  // any of the four with '?' on one side or both (§11.1, v0.7)
     ;
 
 // ---- §17.10 Cardinality settings (on Ref and via edgeSetting on Edge) -----
@@ -1033,7 +1231,8 @@ settingsBlock
     ;
 
 setting
-    : aiReadinessSetting
+    : depSetting                                  // §27.2 (v0.7)
+    | aiReadinessSetting
     | cardinalitySetting
     | validationSetting
     | customProperty
@@ -1152,7 +1351,7 @@ COMMA               : ',' ;
 SEMICOLON           : ';' ;
 DOT                 : '.' ;
 CONSTRAINTS         : 'constraints' ;   // v0.6 §10; contextual: a keyword only before '{'
-RECORDS             : 'records' ;       // §26; contextual: a keyword only before '{' (v0.6.1 §3.10)
+RECORDS             : 'records' ;       // §26; contextual: a keyword only before '{', '(' or '[' (v0.6.1 and v0.7 §3.10)
 DEFINITIONS         : 'definitions' ;   // v0.6.5 §15.8; contextual: a keyword only before '{'
 SOURCE_QUERY        : 'source_query' ;  // §14.3; contextual: a keyword only before ':' (v0.6.1 §3.10)
 TILDE               : '~' ;
@@ -1243,6 +1442,12 @@ quotedIdentifier options { caseInsensitive=false; }
 //      - relationship settings (§11.9):
 //          * `inactive` is a flag (no value); a visualization hint, not
 //            a structural change. Parser preserves the flag in the AST.
+//      - optional marks (§11.1, v0.7):
+//          * an inline `ref:` setting takes the operators of
+//            cardinalityOperator, OPTIONAL_OPERATOR included: `[ref: >? t.id]`.
+//          * a `?` and a `source:` or `target:` setting that disagree on an
+//            end draw a warning; the setting applies in a document that
+//            declares a version, the `?` in one that does not (§11.7).
 //      - foreign master relationships (§11.10, new in v0.4):
 //          * `foreign_master` is a flag (no value) on a Ref. Its absence
 //            marks the relationship referential.
@@ -1274,6 +1479,18 @@ quotedIdentifier options { caseInsensitive=false; }
 //          * `<>` is rejected between entities: many-to-many states a
 //            cardinality, which is unstated there.
 //          * `undirected` takes true or false (§11.16.2).
+//      - data lineage (§27, v0.7):
+//          * each endpoint names an entity, a View or a field declared in
+//            the document or brought by an import; the longest leading part
+//            that names an entity or a View holds the field (§11.16.3). An
+//            Edge, its fields, and a composite endpoint are errors.
+//          * the dependencies of a block have one downstream entity or
+//            View, and are all between entities or all name a field at one
+//            end at least. A block with no dependency draws a warning.
+//          * an inline `dep` on an entity or a View names one, and on a
+//            field names a field. A TablePartial carries no `dep`.
+//          * `color` is #rgb or #rrggbb; a field does not depend on itself;
+//            a dependency is stated once in the document, inline included.
 //
 // 5. Conflict resolution with upstream DBML. Where xDBML extends a rule
 //    that exists upstream (tableKeyword, fieldPath, refSpec, indexBlock,

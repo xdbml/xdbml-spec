@@ -148,7 +148,7 @@ Every `use` / `reuse` directive can appear in one of two forms.
 reuse { entity core.dim_customer } from './conformed-dimensions'
 ```
 
-When a tool with file access parses this, it opens `./conformed-dimensions.xdbml`, finds the named entity, and pulls it into the current file's namespace. The parser handles the resolution; the importing file stays compact.
+When a tool with file access parses this, it opens `conformed-dimensions.xdbml` next to the importing file, or `conformed-dimensions.dbml` when there is none, finds the named entity, and pulls it into the current file's namespace. The parser handles the resolution; the importing file stays compact.
 
 **With a clone block** -- the directive includes an inline copy of the imported content:
 
@@ -166,6 +166,17 @@ reuse { entity core.dim_customer } from './conformed-dimensions' {
 The braces hold a **clone** of the imported declaration, embedded directly in the importer. The `from './conformed-dimensions'` clause becomes provenance metadata: it records where this content originated, but the importing file is self-contained -- it parses correctly even when the referenced file is missing.
 
 Both forms are valid xDBML. The choice is about autonomy versus compactness.
+
+## How the path after `from` reads
+
+The string after `from` names the file to import from. From v0.7 it reads as in DBML 10.3 ([spec §28.13](/spec/v0.7#_28-13-path-resolution)):
+
+- A path is relative to the importing file, with or without `./`: `'./lib'`, `'lib'` and `'sub/lib'` all work, and `'../lib'` moves up one folder.
+- Without an extension, the parser looks for `lib.xdbml`, then for `lib.dbml`, so a DBML multi-file project imports as it is. `'./lib.dbml'` reads that file.
+- An `https://` URL imports a published module ([spec §28.14](/spec/v0.7#_28-14-remote-module-sources)).
+- An absolute path, such as `'/models/lib'`, is an error unless the tool that reads the file accepts it, since it names a place on one machine only. A tool may also map names of its own, such as `'@shared/users'`, to files.
+
+In the playground, the path records where a clone block comes from; the clone block is what the diagram draws.
 
 ## What the playground supports
 
@@ -238,9 +249,9 @@ Project declarations are excluded because two `Project` declarations in the same
 
 **use versus reuse.** The two keywords are semantically equivalent at the parser level. The intent the spec captures: `use` suggests "I depend on this but I'm not republishing it"; `reuse` suggests "I'm pulling this into my namespace and treating it as mine." Pick whichever reads more naturally; tooling treats them identically.
 
-**Where directives may live.** File-scope directives appear at the top level. Entity imports may also appear inside a Container body, where the imported entity becomes a member of that Container. Imports of top-level declarations (Type, Enum, TableGroup, TablePartial, View, Edge, Note) and of individual fields (§26.8) must appear at file scope. Directives MAY NOT appear inside Entity, Edge, View, or Type bodies.
+**Where directives may live.** File-scope directives appear at the top level. Entity imports may also appear inside a Container body, where the imported entity becomes a member of that Container. Imports of top-level declarations (Type, Enum, TableGroup, TablePartial, View, Edge, Note) and of individual fields (§28.8) must appear at file scope. Directives MAY NOT appear inside Entity, Edge, View, or Type bodies.
 
-**Cycles are allowed.** If A imports from B and B imports from A, the parser breaks the cycle by leaving the back-edge directive's clone block undefined. Spec §26.15 makes this explicit: cycles compile, but the back-edge produces nothing.
+**Cycles are allowed.** If A imports from B and B imports from A, the parser breaks the cycle by leaving the back-edge directive's clone block undefined. Spec §28.15 makes this explicit: cycles compile, but the back-edge produces nothing.
 
 ## What's NOT included in the playground
 
@@ -257,4 +268,4 @@ A few related capabilities deliberately out of scope for the in-browser experien
 - [**Open and save files**](./open-and-save-files): how the playground handles individual `.xdbml` files.
 - [**Loading examples**](./loading-examples): the bundled `09-modules-conformed-dimensions.xdbml` and `10-modules-consumer.xdbml` examples demonstrate the patterns described here.
 - [**When parsing fails**](./when-parsing-fails): how to read parser-error messages, including the reference-only-directive error.
-- [Module system in the spec (v0.2 §26)](/spec/v0.2#_26-module-system): the authoritative grammar and resolution rules.
+- [Module system in the spec (§28)](/spec/v0.7#_28-module-system): the authoritative grammar and resolution rules.

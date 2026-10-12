@@ -11,6 +11,11 @@
       >
         <td class="py-1.5 pr-2 font-medium text-gray-700 dark:text-slate-200 align-top w-2/5 break-words">
           {{ s.nameSource }}
+          <span
+            v-if="fromMetadata?.has(s)"
+            class="ml-1 inline-block px-1 py-px text-[9px] font-medium bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 rounded align-middle"
+            title="Set by a Metadata block (spec §24.7)"
+          >Metadata</span>
         </td>
         <td class="py-1.5 align-top">
           <span
@@ -41,14 +46,20 @@
  *   - ExpressionValue   `...`
  *   - ListValue     [..., ..., ...]
  *
+ * A setting that a Metadata block sets (spec §24.7) carries a small
+ * "Metadata" badge beside its name; `fromMetadata` holds those settings.
+ *
  * For v1 the table is read-only. Editing would write back to source
  * via span-based replacement; that came up in the original plan but is
  * deferred until the read-only inspector is settled.
  */
+import { pathToString } from '@xdbml/parse';
 import type { Setting, SettingValue } from '@xdbml/parse';
 
 defineProps<{
   settings: readonly Setting[];
+  /** The settings that a Metadata block sets, marked in the table (spec §24.7). */
+  fromMetadata?: ReadonlySet<Setting>;
 }>();
 
 function renderValue (v: SettingValue): string {
@@ -61,6 +72,7 @@ function renderValue (v: SettingValue): string {
     case 'ExpressionValue': return `\`${v.expression}\``;
     case 'ListValue':       return `[${v.items.map(renderValue).join(', ')}]`;
     case 'RefValue':        return '<ref>';
+    case 'DepValue':        return `${v.arrow} ${pathToString(v.target.path)}`;
   }
 }
 </script>

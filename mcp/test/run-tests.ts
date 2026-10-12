@@ -234,7 +234,7 @@ test('the reference teaches commas between settings, relationship direction and 
  * with it: `// Wrong (<code>): ...` reports a diagnostic with that code, and
  * `// Wrong (accepted silently): ...` stays valid: the parser accepts it, and
  * it means something other than its author intended. A part without a
- * version line is read as `xdbml: 0.6`.
+ * version line is read as `xdbml: 0.7`, the version the reference declares.
  * ---------------------------------------------------------------------- */
 
 interface ReferencePart {
@@ -261,7 +261,7 @@ function referenceParts (): ReferencePart[] {
       .map((text, k) => ({ text, k }))
       .filter(({ text }) => /^\/\/ (Wrong|Right)\b/.test(text));
     const withVersion = (src: string): string =>
-      /^\s*xdbml:/m.test(src) ? src : `xdbml: 0.6\n${src}`;
+      /^\s*xdbml:/m.test(src) ? src : `xdbml: 0.7\n${src}`;
     if (markers.length === 0) {
       parts.push({ line: fenceLine, label: 'block', source: withVersion(body.join('\n')) });
     } else {

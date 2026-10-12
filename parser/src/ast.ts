@@ -63,6 +63,8 @@ export type TopLevelStatement =
   | DiagramViewDeclaration
   | NoteDeclaration
   | TopLevelRecordsDeclaration
+  | MetadataDeclaration
+  | DepDeclaration
   | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
@@ -112,6 +114,8 @@ export type ContainerBodyItem =
   | ViewDeclaration
   | EnumDeclaration
   | NoteBlock
+  /** A sticky note attached to the Container (spec §19.4, v0.7). */
+  | NoteDeclaration
   | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
@@ -424,7 +428,15 @@ export interface RefDeclaration {
 export interface RefSpec {
   kind: 'RefSpec';
   source: RefEndpoint;
+  /** The operator without its `?` marks, which `sourceOptional` and `targetOptional` carry. */
   operator: CardinalityOperator;
+  /**
+   * A `?` before the operator, `?>` (spec §11.1, v0.7): the source end may
+   * have no counterpart, so its minimum cardinality is 0.
+   */
+  sourceOptional?: true;
+  /** A `?` after the operator, `>?`: the target end's minimum cardinality is 0. */
+  targetOptional?: true;
   target: RefEndpoint;
   span: Span;
 }
@@ -639,7 +651,7 @@ export interface SupertypeGroupMember {
  * `{ * }` as the whole body lists every element of every category. The AST
  * keeps the category keyword as written (`Schemas`, `tables`) next to its
  * canonical name (`Containers`, `Tables`); names stay unresolved strings,
- * and `diagramViewMembers()` resolves them (spec §18.2, §18.3, §28.8).
+ * and `diagramViewMembers()` resolves them (spec §18.2, §18.3, §29.8).
  * ----------------------------------------------------------------------- */
 
 export type DiagramViewCategoryName =
@@ -698,12 +710,15 @@ export interface PartialInjection {
  *
  * Records declare sample data inline in the schema. Two forms:
  *
- *   - Inside an entity body, implicit column list (§26.1):
+ *   - Inside an entity body (§26.1), with the entity's columns in
+ *     declaration order, or with a column list (v0.7):
  *       records {
  *         1, 'Alice', 'alice@example.com'
  *         2, 'Bob',   'bob@example.com'
  *       }
- *     Values are assigned to fields in declaration order.
+ *       records (id, email) {
+ *         1, 'alice@example.com'
+ *       }
  *
  *   - Top-level, explicit column list (§26.2, new in v0.2):
  *       records users (id, name, email) {
@@ -711,11 +726,16 @@ export interface PartialInjection {
  *       }
  *     Columns not in the list default to null or the field's declared default.
  *
+ * Either form takes an `[example]` flag after its column list, or after
+ * `records` when an entity's block has none (§26.5, v0.7). An entity holds
+ * one records block (§26.6).
+ *
  * Each row is a comma-separated list of values on a single source line; rows
  * are separated by newlines. Trailing commas at end-of-row are tolerated.
  * Multi-line values are supported via triple-quoted strings (the line check
  * uses the comma's line vs the next-value's line, so a triple-quoted value
- * doesn't break row continuation).
+ * doesn't break row continuation). An empty field, between two commas or
+ * before the first one, is a NullValue with `empty: true` (§26.4, v0.7).
  *
  * Value forms (§26.4): strings, multi-line strings, numbers, booleans, null,
  * ISO 8601 dates (lexed as strings), enum values (dotted identifiers like
@@ -726,6 +746,16 @@ export interface PartialInjection {
 
 export interface RecordsBlock {
   kind: 'RecordsBlock';
+  /**
+   * The column list of `records (a, b) { ... }` (v0.7), each column bare or
+   * quoted and held as written. Absent when the block names no columns, in
+   * which case the rows populate the entity's columns in declaration order.
+   */
+  columns?: string[];
+  /** The settings in brackets, `[example]` among them (§26.5). */
+  settings: Setting[];
+  /** True when the block carries the `example` flag (§26.5). */
+  example: boolean;
   rows: RecordRow[];
   span: Span;
 }
@@ -746,6 +776,10 @@ export interface TopLevelRecordsDeclaration {
   entityRef: string;
   /** The explicit column list. Required for the top-level form. */
   columns: string[];
+  /** The settings in brackets, `[example]` among them (§26.5). */
+  settings: Setting[];
+  /** True when the declaration carries the `example` flag (§26.5). */
+  example: boolean;
   rows: RecordRow[];
   span: Span;
 }
@@ -753,14 +787,25 @@ export interface TopLevelRecordsDeclaration {
 /* -------------------------------------------------------------------------
  * Notes
  *
- * Notes appear in two places:
- *   - As a top-level standalone declaration: `Note name { '''...''' }`
+ * Notes appear in three places (spec §19):
+ *   - As a sticky note, a named declaration at the top level or in a
+ *     Container body: `Note name [color: #abc] { '''...''' }`
+ *   - As the note of the project, a top-level declaration without a
+ *     name: `Note: '...'` (§19.5)
  *   - As an inline block inside an entity, container, etc.: `Note: '...'`
  * ----------------------------------------------------------------------- */
 
 export interface NoteDeclaration {
   kind: 'NoteDeclaration';
+  /**
+   * The name of a sticky note, in the form of names.ts. A top-level name may
+   * be qualified, `core.legend`, which places the note in the implicit
+   * Container `core` (§19.2). Undefined for the note of the project (§19.5).
+   */
   name?: string;
+  /** Settings in brackets: `color` and custom properties (§19.3, v0.7). */
+  settings: Setting[];
+  /** The text, Markdown (§19.6). */
   body: string;
   span: Span;
 }
@@ -773,15 +818,135 @@ export interface NoteBlock {
 }
 
 /* -------------------------------------------------------------------------
- * Module system (spec §27, new in v0.2)
+ * Metadata blocks (spec §24.7, v0.7; DBML 9.1)
+ *
+ *   Metadata Table users {
+ *     owner: 'scott'
+ *     note: 'Accounts of the web shop'
+ *   }
+ *
+ * Settings for an element declared elsewhere, in this file or an imported
+ * one. A block adds no element: a tool reads the element's settings with
+ * its Metadata blocks applied (`metadataIndex`, metadata.ts).
+ * ----------------------------------------------------------------------- */
+
+/** The canonical kinds a Metadata block targets. */
+export type MetadataTargetKind =
+  | 'Table'
+  | 'Column'
+  | 'TableGroup'
+  | 'Note'
+  | 'Container'
+  | 'View'
+  | 'DiagramView';
+
+export interface MetadataDeclaration {
+  kind: 'MetadataDeclaration';
+  /** The kind word as written: `Table`, `column`, `Schema`, `Field`. */
+  targetKindSource: string;
+  /**
+   * The canonical kind, or undefined when the word names none. `Entity`,
+   * `Collection` and `Record` read as `Table`, `Field` as `Column`, and a
+   * container keyword as `Container`.
+   */
+  targetKind?: MetadataTargetKind;
+  /**
+   * The target's name in the form of names.ts: `users`, `core.users`,
+   * `users.id`. An entity alias at its head is replaced by the entity's
+   * name, as in a relationship endpoint (§7.4).
+   */
+  target: string;
+  /** The target as written, before an alias is replaced. */
+  targetSource: string;
+  /** One setting per `key: value` line of the body. */
+  settings: Setting[];
+  /** Settings in brackets after the target, which DBML accepts and ignores. */
+  bracketSettings: Setting[];
+  /**
+   * The file the block was read from, when the parser knew it
+   * (`ParseOptions.filePath`). Diagnostics name it for a block that an
+   * import brought.
+   */
+  file?: string;
+  /**
+   * Set by `flatten()` on a block that an import brought rather than one
+   * the document writes itself. Imported blocks apply before the
+   * document's own (§24.7.4).
+   */
+  imported?: true;
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Data lineage (spec §27, v0.7; DBML 10.0)
+ *
+ *   Dep: raw_orders -> stg_orders
+ *   Dep order_revenue: stg_orders.revenue -> fct_orders.revenue [note: '...']
+ *   Dep build_fct_orders [owner: 'analytics'] {
+ *     stg_orders.revenue    -> fct_orders.revenue
+ *     stg_customers.segment -> fct_orders.customer_segment
+ *     Note: 'Joins each order to its customer.'
+ *   }
+ *
+ * A Dep records that an entity, a View or a field is computed from another.
+ * The inline form, `[dep: <- stg_orders]`, is a `DepValue` in the settings
+ * of the element that carries it. `collectLineage()` (lineage.ts) gathers
+ * both forms.
+ * ----------------------------------------------------------------------- */
+
+export interface DepDeclaration {
+  kind: 'DepDeclaration';
+  /** The optional name, bare or quoted, as written (§27.4). */
+  name?: string;
+  /** `short`: `Dep: a -> b`; `block`: `Dep name { ... }`. */
+  form: 'short' | 'block';
+  /**
+   * The settings in brackets: after the dependency in the short form, after
+   * the name in the block form.
+   */
+  settings: Setting[];
+  /**
+   * The `key: value` lines and the `Note` of a block's body, the note as a
+   * `note` setting. A setting here takes precedence over the brackets
+   * (§27.2).
+   */
+  bodySettings?: Setting[];
+  /**
+   * Brackets between the name and the colon of the short form,
+   * `Dep n [note: 'x']: a -> b`, which DBML accepts. The brackets after
+   * the dependency take precedence.
+   */
+  headerSettings?: Setting[];
+  /** One for the short form; any number for a block. */
+  dependencies: DepDependency[];
+  span: Span;
+}
+
+/** One dependency: an upstream element feeds a downstream one (§27.1). */
+export interface DepDependency {
+  kind: 'DepDependency';
+  upstream: RefEndpoint;
+  downstream: RefEndpoint;
+  /** The arrow as written: `->` puts the upstream end first, `<-` the downstream end. */
+  arrow: '->' | '<-';
+  /**
+   * Settings in brackets after a dependency in a block (§27.2): they
+   * concern this dependency alone.
+   */
+  settings: Setting[];
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Module system (spec §28, new in v0.2)
  *
  * `use` and `reuse` directives import declarations from another xDBML file.
  * The directive can appear at file scope or inside a Container body; its
  * location determines where the imported elements live in the merged AST
- * (the "directive's location is the placement location" rule, §27.5).
+ * (the "directive's location is the placement location" rule, §28.5).
  *
  * Each directive may carry an optional clone block embedding the imported
- * declarations directly in the importing file (§27.6). When a clone block
+ * declarations directly in the importing file (§28.6). When a clone block
  * is present, the parser uses it as authoritative and does not open the
  * referenced file. When absent, the parser must open the referenced file
  * (P5 work; P4 only supports clone-present directives).
@@ -804,7 +969,7 @@ export interface ModuleImportDirective {
   /**
    * Directive mode:
    *   - `'reuse'`: transitive (visible to files that further import this file).
-   *     The recommended default per spec §27.4.
+   *     The recommended default per spec §28.4.
    *   - `'use'`: non-transitive (private to this file).
    */
   mode: 'use' | 'reuse';
@@ -842,7 +1007,7 @@ export type ImportSpec =
  *     type Email as PII_Email
  *     field core.dim_customer.email
  *
- * The element type is one of the keywords from §27.3 (table, entity,
+ * The element type is one of the keywords from §28.3 (table, entity,
  * collection, record, enum, tablepartial, note, schema, container,
  * tablegroup, type, edge, view, diagramview, field, and from v0.5
  * supertypegroup). Stored lowercased.
@@ -867,7 +1032,7 @@ export interface ImportItem {
  * an entity, type, container, etc. clone). Field imports are not supported
  * in P4 -- when they land, this type may grow to a wider union.
  *
- * Per spec §27.6, the clone contains exactly the imported declaration(s),
+ * Per spec §28.6, the clone contains exactly the imported declaration(s),
  * without surrounding wrappers from the source file. For an entity clone
  * the content is the EntityDeclaration alone (no container wrapper); for a
  * container clone the content is the ContainerDeclaration including its
@@ -879,7 +1044,7 @@ export interface CloneBlock {
    * Statements that the importing file pulls in from the source. Most are
    * top-level shapes (Entity, Type, Enum, Container, etc.). The one
    * exception is `FieldDeclaration`: when the parent directive imports
-   * one or more fields via `field <path>` items (spec §27.8), each field
+   * one or more fields via `field <path>` items (spec §28.8), each field
    * appears here as a bare FieldDeclaration with no entity wrapper.
    * The `flatten()` pass lifts each bare field into a synthetic
    * TypeDeclaration at file scope so downstream consumers see a normal
@@ -927,7 +1092,8 @@ export type SettingValue =
   | IdentifierValue
   | ExpressionValue
   | ListValue
-  | RefValue;
+  | RefValue
+  | DepValue;
 
 export interface StringValue {
   kind: 'StringValue';
@@ -952,6 +1118,12 @@ export interface BooleanValue {
 
 export interface NullValue {
   kind: 'NullValue';
+  /**
+   * True for an empty field of a records row, `1, , 'x'` or `, 'x'`, which
+   * reads as null (§26.4, v0.7). Its span is empty, at the comma that
+   * follows it.
+   */
+  empty?: true;
   span: Span;
 }
 
@@ -978,7 +1150,25 @@ export interface ListValue {
 /** An inline `ref: > target.field` setting carries a small ref spec. */
 export interface RefValue {
   kind: 'RefValue';
+  /** The operator without its `?` marks. The field carrying the setting is the source end. */
   operator: CardinalityOperator;
+  /** A `?` before the operator, `[ref: ?> users.id]` (spec §11.1, v0.7). */
+  sourceOptional?: true;
+  /** A `?` after the operator, `[ref: >? users.id]`. */
+  targetOptional?: true;
+  target: RefEndpoint;
+  span: Span;
+}
+
+/**
+ * An inline `dep` setting (spec §27.2, v0.7): `[dep: <- stg_orders]` makes
+ * the named element upstream of the one carrying the setting, and
+ * `[dep: -> fct_orders]` downstream of it.
+ */
+export interface DepValue {
+  kind: 'DepValue';
+  arrow: '->' | '<-';
+  /** The element at the other end. */
   target: RefEndpoint;
   span: Span;
 }
@@ -1014,12 +1204,13 @@ export interface ParseOptions {
    * for remote (v0.3) sources (when a directive's `from` is a URL, or a
    * relative reference inside a remote module resolves to one). The function
    * should return the source text for that key, or throw if it is missing
-   * or unreadable.
+   * or unreadable. When the source has no extension, the parser asks for
+   * `<path>.xdbml`, then for `<path>.dbml` if the first call throws (§28.13).
    *
    * Because this reader is synchronous, a host that supports remote sources
    * must return the fetched text from a cache it populated beforehand. The
    * network fetch, and its SSRF / redirect / size / timeout obligations
-   * (spec §27.14.5), live in the host's resolver, not in the parser.
+   * (spec §28.14.5), live in the host's resolver, not in the parser.
    *
    * If absent, reference-only directives fall back to the P4 rejection
    * with a clear "no resolver available" message. Clone-block-bearing
@@ -1027,6 +1218,19 @@ export interface ParseOptions {
    * embedded in the importing file.
    */
   readFile?: (pathOrUrl: string) => string;
+
+  /**
+   * Host mapping of module specifiers (v0.7, spec §28.13), the counterpart
+   * of DBML 10.3's `resolveFileSpecifier`. Called with the string after
+   * `from` and the importer's `filePath` for every source that is not an
+   * `https://` URL, when the importer is a local file; never inside a
+   * remote module (§28.14.1). Return the key to hand to `readFile`, used as
+   * is (no extension search), or `undefined` to apply the default
+   * resolution: relative to the importing file, with an absolute path
+   * rejected. A host maps, say, `@shared/users` to a library folder, or
+   * accepts absolute paths, here.
+   */
+  resolveSpecifier?: (specifier: string, importerPath: string | undefined) => string | undefined;
 
   /**
    * Maximum recursion depth when resolving directives. Each `from` traversal

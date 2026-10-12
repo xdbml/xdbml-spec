@@ -39,7 +39,7 @@ No, and this is by design. xDBML is not the round-trip format between an xDBML t
 
 xDBML carries the parts of that model with meaning across boundaries: structural shape, types, relationships, declarative constraints, classifications, and AI-readiness metadata. Operational and procedural features stay native.
 
-The diagram in the [scope section of the specification](/spec/v0.2#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
+The diagram in the [scope section of the specification](/spec/current#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
 
 What this means in practice:
 
@@ -71,7 +71,7 @@ What xDBML deliberately is NOT is the persistent model artifact that a data mode
 
 ## How does xDBML relate to DBML?
 
-xDBML is a **strict superset of DBML 3.13.6** under Apache License 2.0. Every valid DBML document parses correctly under xDBML rules, and every DBML construct (used in a way valid in DBML) means the same thing in xDBML as in DBML. To opt into xDBML extensions, add `xdbml: 0.2` at the top of a DBML document. The version directive selects which semantics apply: a file with no directive is treated as DBML; a file with `xdbml: 0.2` opts into the full xDBML feature set.
+xDBML is a **strict superset of DBML 10.3.1** under Apache License 2.0. Every valid DBML document parses correctly under xDBML rules, and every DBML construct (used in a way valid in DBML) means the same thing in xDBML as in DBML. To opt into xDBML extensions, add `xdbml: 0.7` at the top of a DBML document. The version directive selects which semantics apply: a file with no directive is treated as DBML; a file with `xdbml: 0.7` opts into the full v0.7 feature set.
 
 xDBML extends DBML with constructs DBML cannot currently express: explicit namespace levels (Containers), nested hierarchical types, structural polymorphism (oneOf/anyOf/allOf), first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, scalar Named Types, an enriched module system (`use`/`reuse` with optional clone blocks for file autonomy), and a structured custom-properties mechanism.
 
@@ -79,7 +79,7 @@ DBML's `database_type:` setting is preserved as an alias for single-target schem
 
 ## How do I split a large xDBML schema across multiple files?
 
-Use the **module system** (spec §27). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
+Use the **module system** (spec §28). The `use` and `reuse` directives import declarations from another xDBML or DBML file. The pattern matches DBML's module system with xDBML-specific extensions: every xDBML construct (Container, Entity, Type, Edge, View, TablePartial, Enum, TableGroup, DiagramView, and individual fields) is importable.
 
 Two import modes are supported. Import in full brings every top-level declaration from the source file: `reuse * from './library'`. Selective import names what you want: `reuse { entity products, type Email } from './library'`. Use `as` to rename for clarity or to avoid conflicts.
 
@@ -121,9 +121,15 @@ These are adjacent standards that layer above and below xDBML:
 - **ODCS** (Open Data Contract Standard) wraps an xDBML schema with contractual metadata: quality rules, SLAs, ownership, pricing, lifecycle.
 - **[Apache Ossie](https://ossie.apache.org/)** (incubating, formerly Open Semantic Interchange, OSI) and **dbt MetricFlow** describe measures, metrics, dimensions, and aggregations -- the computational meaning that xDBML deliberately leaves to the semantic layer. An Ossie dataset points at a physical table and lists its keys, fields, and join relationships; an xDBML entity supplies those, together with the synonyms of spec §24.1 for Ossie's `ai_context`.
 - **OWL** and RDF-star handle inferential reasoning and knowledge-graph semantics.
-- **OpenLineage** tracks data flow and lineage at runtime.
+- **OpenLineage** tracks data flow and lineage at runtime: the jobs that ran and the datasets they read and wrote. xDBML records the lineage a model declares, with `Dep` (spec §27).
 
 xDBML generates the schemas these standards reference and consumes nothing they own. The same xDBML document can feed an ODCS contract's schema section, an Apache Ossie semantic model's datasets, a SHACL validator's target shapes, and the SQL DDL that creates them.
+
+## Does xDBML record data lineage?
+
+Yes, as of v0.7, with the `Dep` construct that DBML added in version 10.0 (spec §27). A `Dep` states that an entity, a View or a field is computed from another, at the level of entities, of fields, or one of each: `Dep: raw_orders.amount_usd -> stg_orders.revenue`. A block gathers the dependencies of one transformation step and may describe it, a query included, in its note. xDBML reads DBML's short, block and inline forms in every document, and adds Views and nested fields as endpoints, so a model can state that a relational table is the flattened form of a MongoDB array.
+
+A `Dep` is declared lineage: what the model intends to feed what. The lineage observed at runtime, which jobs ran, when, and on which datasets, belongs in OpenLineage. A `Dep` records which element feeds which, not the transformation itself; typed source-to-target mapping rules, with expressions and lookups, are planned for a later version.
 
 ## How does xDBML compare with LinkML?
 
@@ -157,7 +163,7 @@ xDBML works one layer down. It is the schema itself -- precisely typed, polyglot
 
 ## Who maintains xDBML?
 
-xDBML is currently a draft v0.3 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
+xDBML is currently a draft v0.7 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
 
 ## How can I contribute?
 

@@ -29,8 +29,8 @@
       <InspectorSection title="Note">
         <NoteDisplay :body="projectNote" />
       </InspectorSection>
-      <div v-if="project" class="px-3 pb-3">
-        <EditInSourceButton @click="$emit('edit-source', project.span)" />
+      <div v-if="projectSpan" class="px-3 pb-3">
+        <EditInSourceButton @click="$emit('edit-source', projectSpan)" />
       </div>
     </template>
 
@@ -65,7 +65,7 @@
         </dl>
       </InspectorSection>
       <InspectorSection v-if="customSettings.length > 0" title="Settings">
-        <SettingsTable :settings="customSettings" />
+        <SettingsTable :settings="customSettings" :from-metadata="mergedViewSettings.fromMetadata" />
       </InspectorSection>
       <InspectorSection title="Note">
         <NoteDisplay :body="viewNote" />
@@ -94,7 +94,8 @@ import type {
   Span,
   XDbmlDocument,
 } from '@xdbml/parse';
-import { diagramViewMembers, diagramViewNote } from '@xdbml/parse';
+import { collectLineage, diagramViewMembers, diagramViewNote, metadataIndex, metadataNote, projectNote as projectNoteOf, stickyNotes, withMetadata } from '@xdbml/parse';
+import type { AppliedSetting } from '@xdbml/parse';
 import { collectRefDeclarations } from '@xdbml/render';
 
 import InspectorSection   from './InspectorSection.vue';
@@ -113,12 +114,12 @@ defineEmits<{ 'edit-source': [span: Span] }>();
 const project = computed<ProjectDeclaration | undefined>(() =>
   props.doc.statements.find((s): s is ProjectDeclaration => s.kind === 'ProjectDeclaration'));
 
-const projectNote = computed(() => {
-  for (const item of project.value?.body ?? []) {
-    if (item.kind === 'NoteBlock') return item.body;
-  }
-  return '';
-});
+// The note of the project: the Project block's, or a top-level Note
+// without a name (spec §19.5).
+const projectNote = computed(() => projectNoteOf(props.doc)?.body ?? '');
+
+/** Where the project is written: its Project block, or else the Note that is its note. */
+const projectSpan = computed<Span | undefined>(() => project.value?.span ?? projectNoteOf(props.doc)?.source.span);
 
 const targets = computed<string[]>(() => {
   const setting = project.value?.body.find((b): b is Setting => b.kind === 'Setting' && b.name === 'targets');
@@ -162,6 +163,8 @@ const modelCounts = computed(() => {
     { label: 'Containers', count: containers },
     { label: 'Relationships', count: collectRefDeclarations(props.doc).length },
     { label: 'Edges', count: edges },
+    { label: 'Sticky notes', count: stickyNotes(props.doc).length },
+    { label: 'Data lineage Deps', count: collectLineage(props.doc).length },
   ];
   return rows.filter((r, i) => i === 0 || r.count > 0);
 });
@@ -185,7 +188,17 @@ const memberCounts = computed(() => {
   ].filter((r, i) => i === 0 || r.count > 0);
 });
 
-const customSettings = computed<Setting[]>(() => (view.value?.settings ?? []).filter((s) => s.name !== 'note'));
+// The settings the Metadata blocks of the document set on this diagram
+// view (spec §24.7): a note and x_ properties.
+const metadataSettings = computed<readonly AppliedSetting[]>(() =>
+  (view.value ? metadataIndex(props.doc).diagramView(view.value.name) : []));
 
-const viewNote = computed(() => (view.value ? diagramViewNote(view.value) ?? '' : ''));
+const mergedViewSettings = computed(() =>
+  withMetadata((view.value?.settings ?? []).filter((s) => s.name !== 'note'),
+    metadataSettings.value.filter((a) => a.setting.name !== 'note')));
+
+const customSettings = computed<Setting[]>(() => mergedViewSettings.value.settings);
+
+const viewNote = computed(() =>
+  metadataNote(metadataSettings.value) ?? (view.value ? diagramViewNote(view.value) ?? '' : ''));
 </script>

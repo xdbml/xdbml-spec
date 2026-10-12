@@ -55,6 +55,26 @@ export const ENTITY_KEYWORDS = [
 ] as const;
 
 /**
+ * The words that name the kind of element a `Metadata` block targets
+ * (spec §24.7, v0.7). DBML defines `table`, `column`, `tablegroup` and
+ * `note`; xDBML adds the entity synonyms, `field`, `view`, `diagramview`,
+ * and `container` with its synonyms, in documents that declare a version.
+ */
+export const METADATA_TARGET_KINDS = [
+  'table',
+  'column',
+  'tablegroup',
+  'note',
+  'entity',
+  'collection',
+  'record',
+  'field',
+  'view',
+  'diagramview',
+  ...CONTAINER_KEYWORDS,
+] as const;
+
+/**
  * The full set of declaration keywords. Includes containers,
  * entities, and other top-level constructs.
  */
@@ -262,6 +282,7 @@ export const SETTING_FLAGS = [
   'increment',
   'inactive',          // v0.2 §11.9: Ref flag for visualization-only deactivation
   'foreign_master',    // v0.4 §11.10: Ref flag for denormalized replication
+  'example',           // v0.7 §26.5: records flag for illustrative rows
 ] as const;
 
 export const SETTING_KEYS = [
@@ -269,6 +290,7 @@ export const SETTING_KEYS = [
   'note',
   'default',
   'ref',
+  'dep',               // v0.7 §27.2: inline data lineage, `dep: <- source`
   'name',
   'color',
   'headercolor',

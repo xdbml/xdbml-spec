@@ -20,16 +20,20 @@ import type {
   EdgeLayout,
   EntityLayout,
   FieldLayout,
+  NoteLayout,
   RefLayout,
 } from '../layout/layout.ts';
-import { makeCollapsedKey, readableInk } from '../layout/layout.ts';
+import { makeCollapsedKey, NOTE_PADDING, readableInk } from '../layout/layout.ts';
+import type { NoteLine, NoteRun } from '../layout/note-text.ts';
 import { type DeepPartial, resolveTheme, type Theme } from '../style/theme.ts';
 import { crowFootGroup } from '../geometry/crowfoot.ts';
 import { glyphTransform, labelAnchor } from '../geometry/placement.ts';
 import { refLabelX, refLabelY, resolveRef } from '../geometry/ref-path.ts';
 import { edgeConnectors, edgeLabelX, edgeLabelY } from '../geometry/edge-path.ts';
 import { escapeXml } from './util.ts';
+import { ENTITY_NAME_FONT_SIZE, FIELD_FONT_SIZE, measureText } from './metrics.ts';
 import { layoutSupertypeGroups, longestSegmentMidpoint, type SupertypeGroupGeometry } from '../geometry/supertype-symbol.ts';
+import { layoutDeps, type DepGeometry } from '../geometry/dep-path.ts';
 
 const HEADER_HEIGHT = 32;
 const INDENT_PX = 14;
@@ -63,6 +67,11 @@ export interface SerializeOptions {
    */
   selectedField?: { entityId: string; path: string };
   /**
+   * More rows drawn with the selection tint: the fields at the ends of a
+   * selected Dep (spec §27.7).
+   */
+  highlightedFields?: ReadonlyArray<{ entityId: string; path: string }>;
+  /**
    * When set (and not in `inner` mode), draws a small clickable
    * "Open in xDBML playground" link in a footer band below the diagram.
    * The href is precomputed by `renderToSVG` (an lz-string `#s=` share
@@ -71,9 +80,9 @@ export interface SerializeOptions {
    */
   playgroundLink?: { href: string; label: string };
   /**
-   * Draw relationship names: the name of a named `Ref` on its line, and the
-   * name of each supertype group beside its symbol (spec §12.9). Off by
-   * default.
+   * Draw relationship names: the name of a named `Ref` on its line, the
+   * name of each supertype group beside its symbol (spec §12.9), and the
+   * name of a Dep at its junction (§27.7). Off by default.
    */
   showRelationshipNames?: boolean;
 }
@@ -107,10 +116,16 @@ export function serializeDiagram (model: DiagramModel, options: SerializeOptions
   for (const c of model.containers) parts.push(container(c, theme));
   const showNames = options.showRelationshipNames === true;
   for (const r of model.refs) parts.push(refLine(r, model, theme, showNames));
+  for (const g of layoutDeps(model.deps ?? [], model.entities)) parts.push(depShape(g, theme, showNames));
   for (const g of layoutSupertypeGroups(model)) parts.push(supertypeGroupShape(g, theme, showNames));
   for (const e of model.edges) parts.push(edgeLine(e, model.entities, theme));
-  for (const e of model.entities) parts.push(entityCard(e, collapsed, theme, options.selectedField));
-  for (const e of model.edges) parts.push(entityCard(e.box, collapsed, theme, options.selectedField));
+  const tinted = new Set<string>(
+    [...(options.selectedField ? [options.selectedField] : []), ...(options.highlightedFields ?? [])]
+      .map((f) => rowKey(f.entityId, f.path)),
+  );
+  for (const e of model.entities) parts.push(entityCard(e, collapsed, theme, tinted));
+  for (const e of model.edges) parts.push(entityCard(e.box, collapsed, theme, tinted));
+  for (const n of model.notes ?? []) parts.push(stickyNote(n, theme));
 
   const unresolved = model.refs.filter((r) => r.unresolved).length;
   if (unresolved > 0) parts.push(banner(unresolved, model, theme));
@@ -188,7 +203,12 @@ function container (c: ContainerLayout, theme: Theme): string {
 
 /* ----------------------------------------------------------- entity card */
 
-function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme: Theme, selectedField?: { entityId: string; path: string }): string {
+/** Key of a row in the set of tinted rows. */
+function rowKey (entityId: string, path: string): string {
+  return `${entityId}\u0000${path}`;
+}
+
+function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme: Theme, tinted: ReadonlySet<string>): string {
   const { x, y, width, height } = entity.bounds;
   const te = theme.entity;
   const parts: string[] = ['<g>'];
@@ -227,7 +247,7 @@ function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme
 
   const nameLeftX = x + (entity.isView || entity.isEdge ? 32 : 12);
   parts.push(
-    text({ x: nameLeftX, y: y + 20, fill: ink, size: 13, weight: 600, content: escapeXml(entity.name) }),
+    text({ x: nameLeftX, y: y + 20, fill: ink, size: ENTITY_NAME_FONT_SIZE, weight: 600, content: escapeXml(entity.name) }),
     text({
       x: x + width - 12, y: y + 20, fill: ink, size: 10, anchor: 'end', opacity: 0.85,
       content: escapeXml(entity.keyword),
@@ -236,7 +256,7 @@ function entityCard (entity: EntityLayout, collapsed: ReadonlySet<string>, theme
 
   // Field rows.
   entity.fields.forEach((field, i) => {
-    parts.push(fieldRow(entity, field, i, collapsed, theme, selectedField));
+    parts.push(fieldRow(entity, field, i, collapsed, theme, tinted));
   });
 
   parts.push('</g>');
@@ -249,15 +269,14 @@ function fieldRow (
   index: number,
   collapsed: ReadonlySet<string>,
   theme: Theme,
-  selectedField?: { entityId: string; path: string },
+  tinted: ReadonlySet<string>,
 ): string {
   const { x, y, width } = entity.bounds;
   const tr = theme.row;
   const parts: string[] = [];
 
-  const isSelected = selectedField !== undefined
-    && selectedField.entityId === entity.id
-    && selectedField.path === field.path;
+  // The selected field, or a field at an end of the selected Dep.
+  const isSelected = tinted.has(rowKey(entity.id, field.path));
 
   // Row tint. A selected field gets the selection tint (over any zebra/pk
   // fill) plus an accent strip; the field name is drawn afterwards on top,
@@ -305,7 +324,7 @@ function fieldRow (
       x: x + nameLeftEdge,
       y: y + field.rowY + 16,
       fill: nameColor(field, theme),
-      size: 12,
+      size: FIELD_FONT_SIZE,
       weight: field.flags.pk ? 600 : 400,
       italic: field.synthetic === true,
       content: escapeXml(field.name),
@@ -450,6 +469,38 @@ function refLine (ref: RefLayout, model: DiagramModel, theme: Theme, showNames =
  * with its marks, and the branches to the subtypes. Drawn above
  * relationship lines and below entity cards.
  */
+/**
+ * A Dep (spec §27.7): a curve for each dependency, the trunk from each
+ * junction, the junctions and the arrowheads, in the Dep's color or the
+ * theme's lineage color. A dependency's own color applies to its curve.
+ */
+function depShape (g: DepGeometry, theme: Theme, showNames: boolean): string {
+  const color = g.dep.color ?? theme.lineage.line;
+  const parts: string[] = ['<g>'];
+  for (const c of g.curves) {
+    parts.push(`<path d="${c.d}" fill="none" stroke="${c.color ?? color}" stroke-width="1.5"/>`);
+  }
+  for (const t of g.trunks) parts.push(`<path d="${t}" fill="none" stroke="${color}" stroke-width="1.5"/>`);
+  for (const j of g.junctions) parts.push(`<circle cx="${j.x}" cy="${j.y}" r="3.5" fill="${color}"/>`);
+  for (const a of g.arrows) parts.push(`<polygon points="${a}" fill="${color}"/>`);
+  if (showNames && g.label && g.dep.name !== undefined) {
+    parts.push(
+      text({
+        x: g.label.x,
+        y: g.label.y,
+        fill: g.dep.color ?? theme.lineage.label,
+        size: 10,
+        weight: 500,
+        anchor: g.label.anchor,
+        italic: true,
+        content: escapeXml(g.dep.name),
+      }),
+    );
+  }
+  parts.push('</g>');
+  return parts.join('');
+}
+
 function supertypeGroupShape (g: SupertypeGroupGeometry, theme: Theme, showNames: boolean): string {
   const line = theme.ref.line;
   const dash = ' stroke-dasharray="3.5 2.5"';
@@ -524,6 +575,82 @@ function banner (count: number, model: DiagramModel, theme: Theme): string {
   );
 }
 
+/* ------------------------------------------------------------ sticky note */
+
+/** The size of the folded corner at the bottom right of a sticky note. */
+const NOTE_FOLD = 14;
+
+/**
+ * A sticky note (spec §19.6): a box in the note's color, or the theme's
+ * default, with its bottom-right corner folded, holding the Markdown text
+ * the layout broke into lines. With `color: none`, the text alone.
+ */
+function stickyNote (n: NoteLayout, theme: Theme): string {
+  const { x, y, width: w, height: h } = n.bounds;
+  const tn = theme.note;
+  const fill = n.color ?? tn.fill;
+  const ink = n.transparent ? tn.plainInk : readableInk(fill);
+  const link = !n.transparent && ink !== 'white' ? tn.link : ink;
+  const parts: string[] = ['<g>', `<title>${escapeXml(n.name)}</title>`];
+
+  if (!n.transparent) {
+    const r = 4;
+    const f = NOTE_FOLD;
+    parts.push(
+      `<path d="M ${x + r} ${y} H ${x + w - r} Q ${x + w} ${y} ${x + w} ${y + r} V ${y + h - f} ` +
+      `L ${x + w - f} ${y + h} H ${x + r} Q ${x} ${y + h} ${x} ${y + h - r} V ${y + r} Q ${x} ${y} ${x + r} ${y} Z" ` +
+      `fill="${fill}" stroke="${tn.stroke}" stroke-width="1" filter="url(#entity-shadow)"/>`,
+      `<path d="M ${x + w} ${y + h - f} L ${x + w - f} ${y + h - f} L ${x + w - f} ${y + h} Z" ` +
+      `fill="${ink}" fill-opacity="0.14" stroke="${tn.stroke}" stroke-width="1" stroke-linejoin="round"/>`,
+    );
+  }
+
+  const ox = x + NOTE_PADDING;
+  const oy = y + NOTE_PADDING;
+  for (const m of n.text.marks) {
+    switch (m.kind) {
+      case 'code':
+        parts.push(`<rect x="${round(ox + m.x)}" y="${round(oy + m.y)}" width="${round(m.width)}" height="${round(m.height)}" rx="3" fill="${ink}" fill-opacity="0.08"/>`);
+        break;
+      case 'quote':
+        parts.push(`<rect x="${round(ox + m.x)}" y="${round(oy + m.y)}" width="2.5" height="${round(m.height)}" rx="1" fill="${ink}" fill-opacity="0.35"/>`);
+        break;
+      case 'rule':
+        parts.push(`<line x1="${round(ox + m.x)}" y1="${round(oy + m.y)}" x2="${round(ox + m.x + m.width)}" y2="${round(oy + m.y)}" stroke="${ink}" stroke-opacity="0.3" stroke-width="1"/>`);
+        break;
+      case 'marker':
+        parts.push(text({ x: round(ox + m.x), y: round(oy + m.y), fill: ink, size: m.size, content: escapeXml(m.text) }));
+        break;
+    }
+  }
+  for (const line of n.text.lines) parts.push(noteLine(line, ox, oy, ink, link, theme));
+
+  parts.push('</g>');
+  return parts.join('');
+}
+
+function noteLine (line: NoteLine, ox: number, oy: number, ink: string, link: string, theme: Theme): string {
+  if (line.runs.length === 0) return '';
+  const attrs = [`x="${round(ox + line.x)}"`, `y="${round(oy + line.y)}"`, `fill="${ink}"`, `font-size="${line.size}"`];
+  if (line.weight !== 400) attrs.push(`font-weight="${line.weight}"`);
+  if (line.muted) attrs.push('fill-opacity="0.78"');
+  if (line.mono) attrs.push(`font-family="${theme.fontMono}"`, 'xml:space="preserve"');
+  const body = line.runs.map((r) => noteRun(r, line, ink, link, theme)).join('');
+  return `<text ${attrs.join(' ')}>${body}</text>`;
+}
+
+function noteRun (r: NoteRun, line: NoteLine, ink: string, link: string, theme: Theme): string {
+  const content = escapeXml(r.text);
+  const attrs: string[] = [];
+  if (r.strong && line.weight < 600) attrs.push('font-weight="600"');
+  if (r.em) attrs.push('font-style="italic"');
+  if (r.code && !line.mono) attrs.push(`font-family="${theme.fontMono}"`, `font-size="${line.size - 1}"`);
+  const decorations = [r.href !== undefined ? 'underline' : '', r.strike ? 'line-through' : ''].filter(Boolean);
+  if (decorations.length > 0) attrs.push(`text-decoration="${decorations.join(' ')}"`);
+  if (r.href !== undefined && link !== ink) attrs.push(`fill="${link}"`);
+  return attrs.length === 0 ? content : `<tspan ${attrs.join(' ')}>${content}</tspan>`;
+}
+
 /* --------------------------------------------------------------- helpers */
 
 function headerFill (entity: EntityLayout, theme: Theme): string {
@@ -584,34 +711,6 @@ function directionArrow (color: string, transform: string): string {
 }
 
 /* --------------------------------------------------------- text metrics */
-
-/**
- * Approximate advance width of one character at 12px in the sans stack.
- *
- * SVG offers no measurement at serialization time, and the renderer runs in
- * Node as well as in the browser, so widths are estimated from character
- * class. A flat per-character average is not good enough here: it
- * over-spaces narrow words like `street` and under-spaces wide ones like
- * `customerName`, and a badge placed from an under-estimate lands on top of
- * the name. Grouping by class keeps the error inside a couple of pixels for
- * ordinary identifiers.
- */
-function charWidth12 (ch: string): number {
-  if (ch === ' ') return 3.4;
-  if ('ijlI|!.,:;\'`'.includes(ch)) return 3.0;
-  if ('ftr()[]{}/\\-'.includes(ch)) return 4.2;
-  if (ch === 'm' || ch === 'M') return 10.0;
-  if (ch === 'w' || ch === 'W') return 9.3;
-  if (ch >= 'A' && ch <= 'Z') return 8.0;
-  return 6.7;
-}
-
-/** Estimated width of a string in the sans stack at the given size/weight. */
-function measureText (s: string, size = 12, weight = 400): number {
-  let w = 0;
-  for (const ch of s) w += charWidth12(ch);
-  return w * (size / 12) * (weight >= 600 ? 1.05 : 1);
-}
 
 /** Trim estimated coordinates to two decimals so goldens stay stable. */
 function round (n: number): number {

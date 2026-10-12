@@ -11,11 +11,24 @@
           {{ entityCount }} {{ entityCount === 1 ? 'member' : 'members' }}
           <span v-if="memberBreakdown" class="text-gray-500 dark:text-slate-400">({{ memberBreakdown }})</span>
         </dd>
+        <template v-if="stickyNoteNames.length > 0">
+          <dt class="font-medium text-gray-500 dark:text-slate-400">Sticky notes</dt>
+          <dd class="font-mono break-all">
+            <template v-for="(n, i) in stickyNoteNames" :key="n">
+              <span v-if="i > 0" class="text-gray-400 dark:text-slate-500">, </span>
+              <button
+                type="button"
+                class="text-blue-700 dark:text-blue-300 hover:underline text-left"
+                @click="$emit('select', { kind: 'note', noteName: `${container.name}.${n}` })"
+              >{{ n }}</button>
+            </template>
+          </dd>
+        </template>
       </dl>
     </InspectorSection>
 
     <InspectorSection title="Settings">
-      <SettingsTable :settings="standardSettings" />
+      <SettingsTable :settings="standardSettings" :from-metadata="mergedSettings.fromMetadata" />
     </InspectorSection>
 
     <InspectorSection title="Note">
@@ -30,7 +43,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { ContainerDeclaration, NoteBlock, Span } from '@xdbml/parse';
+import { metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
+import type { AppliedSetting, ContainerDeclaration, NoteBlock, Span } from '@xdbml/parse';
+import { useParserStore } from '@/stores/parserStore';
+import type { Selection } from './selection';
 
 import InspectorSection   from './InspectorSection.vue';
 import SettingsTable      from './SettingsTable.vue';
@@ -43,7 +59,13 @@ const props = defineProps<{
 
 defineEmits<{
   'edit-source': [span: Span];
+  /** A sticky note the Container carries (spec §19.4). */
+  select: [selection: Selection];
 }>();
+
+/** The sticky notes attached to the Container (spec §19.4), by name. */
+const stickyNoteNames = computed(() =>
+  props.container.body.flatMap((b) => (b.kind === 'NoteDeclaration' && b.name !== undefined ? [b.name] : [])));
 
 const entityCount = computed(() =>
   props.container.body.filter(
@@ -75,15 +97,24 @@ const memberBreakdown = computed(() => {
 // Settings table excludes the `note` setting because notes render
 // below in their own Note section; showing them twice would be
 // redundant. (Field- and entity-level Inspectors apply the same filter.)
-const standardSettings = computed(() =>
-  props.container.settings.filter((s) => s.name !== 'note'),
-);
+// The settings the Metadata blocks of the document set on this Container
+// (spec §24.7). A block's setting replaces the Container's own and is
+// marked in the table; a block's note shows in the Note section.
+const parser = useParserStore();
+const metadataSettings = computed<readonly AppliedSetting[]>(() =>
+  (parser.flatAst ? metadataIndex(parser.flatAst).container(props.container.name) : []));
+const mergedSettings = computed(() =>
+  withMetadata(props.container.settings.filter((s) => s.name !== 'note'),
+    metadataSettings.value.filter((a) => a.setting.name !== 'note')));
+const standardSettings = computed(() => mergedSettings.value.settings);
 
 // Container-level notes can come from two sources: a `Note: '...'`
 // block inside the container body (the canonical syntax) or a
 // `[note: '...']` setting on the container declaration line. Prefer
 // the body block when both exist; fall back to the setting otherwise.
 const noteBody = computed(() => {
+  const fromBlock = metadataNote(metadataSettings.value);
+  if (fromBlock !== undefined) return fromBlock;
   for (const item of props.container.body) {
     if (item.kind === 'NoteBlock') return (item as NoteBlock).body;
   }

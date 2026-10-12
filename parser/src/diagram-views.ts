@@ -36,7 +36,10 @@ export interface DiagramViewMembers {
   entities: string[];
   /** Ids of the member database views, in declaration order. */
   views: string[];
-  /** Names of the member sticky notes, in declaration order. */
+  /**
+   * Ids of the member sticky notes, in declaration order: `sales.order_states`
+   * for a note in a Container (§19.4), the name as declared at the top level.
+   */
   notes: string[];
   /** Containers holding at least one member: their frames surround those members only. */
   containers: string[];
@@ -97,9 +100,10 @@ interface Element {
 interface Index {
   elements: Element[];
   byKindId: Map<string, Element>;
-  /** Container name to the ids of its entities and database views, in order. */
+  /** Container name to the ids of its entities, database views and sticky notes, in order. */
   entitiesOf: Map<string, string[]>;
   viewsOf: Map<string, string[]>;
+  notesOf: Map<string, string[]>;
   /** Alias to entity id, for the aliases that name something (§7.4). */
   aliases: Map<string, string>;
   /** TableGroup name to its member names as written. */
@@ -113,6 +117,7 @@ function buildIndex (doc: XDbmlDocument): Index {
   const byKindId = new Map<string, Element>();
   const entitiesOf = new Map<string, string[]>();
   const viewsOf = new Map<string, string[]>();
+  const notesOf = new Map<string, string[]>();
   const tableGroupMembers = new Map<string, string[]>();
   const aliasCandidates = new Map<string, string | null>();
   const takenNames = new Set<string>();
@@ -122,8 +127,8 @@ function buildIndex (doc: XDbmlDocument): Index {
     const el: Element = { kind, id, name, container, topLevel };
     elements.push(el);
     byKindId.set(key(kind, id), el);
-    if (container && (kind === 'entity' || kind === 'view')) {
-      const map = kind === 'entity' ? entitiesOf : viewsOf;
+    if (container && (kind === 'entity' || kind === 'view' || kind === 'note')) {
+      const map = kind === 'entity' ? entitiesOf : kind === 'view' ? viewsOf : notesOf;
       const list = map.get(container) ?? [];
       list.push(id);
       map.set(container, list);
@@ -162,6 +167,9 @@ function buildIndex (doc: XDbmlDocument): Index {
           if (item.kind === 'EntityDeclaration') addBoxed('entity', item, c.name);
           else if (item.kind === 'ViewDeclaration') addBoxed('view', item, c.name);
           else if (item.kind === 'EdgeDeclaration') add('edge', `${c.name}.${item.name}`, item.name, c.name, false);
+          else if (item.kind === 'NoteDeclaration' && item.name !== undefined) {
+            add('note', `${c.name}.${item.name}`, item.name, c.name, false);
+          }
         }
         break;
       }
@@ -173,7 +181,14 @@ function buildIndex (doc: XDbmlDocument): Index {
         if (!tableGroupMembers.has(stmt.name)) tableGroupMembers.set(stmt.name, stmt.members);
         break;
       case 'SupertypeGroupDeclaration': add('supertypegroup', stmt.name, stmt.name, undefined, true); break;
-      case 'NoteDeclaration': if (stmt.name) add('note', stmt.name, stmt.name, undefined, true); break;
+      case 'NoteDeclaration': {
+        // A qualified name, `Note core.legend`, places the note in the
+        // implicit Container `core` (§19.2).
+        if (stmt.name === undefined) break;
+        const owner = nameQualifier(stmt.name);
+        add('note', stmt.name, owner ? quoteNameSegment(lastNameSegment(stmt.name)) : stmt.name, owner, owner === undefined);
+        break;
+      }
       default: break;
     }
   }
@@ -183,7 +198,7 @@ function buildIndex (doc: XDbmlDocument): Index {
   for (const [alias, id] of aliasCandidates) {
     if (id !== null && !takenNames.has(alias)) aliases.set(alias, id);
   }
-  return { elements, byKindId, entitiesOf, viewsOf, aliases, tableGroupMembers };
+  return { elements, byKindId, entitiesOf, viewsOf, notesOf, aliases, tableGroupMembers };
 }
 
 /* --------------------------------------------------------- resolution */
@@ -232,7 +247,7 @@ type Resolution =
 function resolveName (name: string, kind: ElementKind, index: Index): Resolution {
   const direct = index.byKindId.get(key(kind, name));
   if (direct) return { ok: true, id: direct.id };
-  if (!isQualifiedName(name) && (kind === 'entity' || kind === 'view')) {
+  if (!isQualifiedName(name) && (kind === 'entity' || kind === 'view' || kind === 'note')) {
     const top = index.elements.find((e) => e.kind === kind && e.topLevel && e.name === name);
     if (top) return { ok: true, id: top.id };
     const inside = index.elements.filter((e) => e.kind === kind && e.name === name);
@@ -256,7 +271,7 @@ function resolveSimple (name: string, kind: ElementKind, index: Index): boolean 
   return false;
 }
 
-/** The categories of a diagram view, with a body-level `*` read as `*` in every category (§28.8). */
+/** The categories of a diagram view, with a body-level `*` read as `*` in every category (§29.8). */
 function effectiveCategories (decl: DiagramViewDeclaration): Map<DiagramViewCategoryName, { wildcard: boolean; items: DiagramViewItem[] }> {
   const out = new Map<DiagramViewCategoryName, { wildcard: boolean; items: DiagramViewItem[] }>();
   if (decl.wildcardBody) {
@@ -294,10 +309,14 @@ function computeMembers (decl: DiagramViewDeclaration, index: Index, doc: XDbmlD
   const entities = named('Tables');
   const views = named('Views');
 
-  // Rule 2: a listed Container contributes its entities and its database
-  // views, each list narrowed separately to the names under Tables or Views
-  // when they name at least one of the Container's own.
+  const notes = named('Notes');
+
+  // Rule 2: a listed Container contributes its entities, its database views
+  // and its sticky notes, each list narrowed separately to the names under
+  // Tables, Views or Notes when they name at least one of the Container's own.
   for (const container of named('Containers')) {
+    const ownNotes = index.notesOf.get(container) ?? [];
+    if (!ownNotes.some((id) => notes.has(id))) ownNotes.forEach((id) => notes.add(id));
     const ownEntities = index.entitiesOf.get(container) ?? [];
     if (!ownEntities.some((id) => entities.has(id))) ownEntities.forEach((id) => entities.add(id));
     const ownViews = index.viewsOf.get(container) ?? [];
@@ -321,15 +340,16 @@ function computeMembers (decl: DiagramViewDeclaration, index: Index, doc: XDbmlD
     for (const s of g.subtypes) if (s.entity) entities.add(s.entity);
   }
 
-  const notes = named('Notes');
-
   const ordered = (kind: ElementKind, set: Set<string>): string[] => all(kind).filter((id) => set.has(id));
   const memberEntities = ordered('entity', entities);
   const memberViews = ordered('view', views);
   const boxed = new Set([...memberEntities, ...memberViews]);
 
+  const memberNotes = ordered('note', notes);
+  const noteSet = new Set(memberNotes);
   const containers = all('container').filter((c) =>
-    [...(index.entitiesOf.get(c) ?? []), ...(index.viewsOf.get(c) ?? [])].some((id) => boxed.has(id)),
+    [...(index.entitiesOf.get(c) ?? []), ...(index.viewsOf.get(c) ?? [])].some((id) => boxed.has(id))
+    || (index.notesOf.get(c) ?? []).some((id) => noteSet.has(id)),
   );
   const tableGroups = all('tablegroup').filter((g) =>
     (index.tableGroupMembers.get(g) ?? []).some((m) => {
@@ -345,7 +365,7 @@ function computeMembers (decl: DiagramViewDeclaration, index: Index, doc: XDbmlD
     declaration: decl,
     entities: memberEntities,
     views: memberViews,
-    notes: ordered('note', notes),
+    notes: memberNotes,
     containers,
     tableGroups,
     supertypeGroups: [...new Set(supertypeGroups)],

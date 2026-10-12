@@ -29,6 +29,9 @@ import type {
   DiagramViewItem,
   ContainerKeyword,
   DefinitionsBlock,
+  DepDeclaration,
+  DepDependency,
+  DepValue,
   EdgeDeclaration,
   EntityBodyItem,
   EntityDeclaration,
@@ -52,7 +55,10 @@ import type {
   ModuleImportDirective,
   NamedTypeReference,
   NoteBlock,
+  MetadataDeclaration,
+  MetadataTargetKind,
   NoteDeclaration,
+  NullValue,
   NumberValue,
   ObjectType,
   OneOfType,
@@ -121,7 +127,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.6.7';
+export const SUPPORTED_XDBML_VERSION = '0.7';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -151,13 +157,13 @@ const ENTITY_KEYWORDS = new Set(['table', 'entity', 'collection', 'record']);
 
 /**
  * Element-type keywords accepted in module-system import items
- * (spec §27.3). Stored lowercased; matching is case-insensitive.
+ * (spec §28.3). Stored lowercased; matching is case-insensitive.
  *
  * `field` is recognized but explicitly rejected by parseImportItem in P4
  * (field-level imports have special declaration-vs-placement semantics
  * that will land in a later batch).
  *
- * `project` is intentionally excluded -- spec §27.1 forbids importing
+ * `project` is intentionally excluded -- spec §28.1 forbids importing
  * Project declarations.
  */
 const IMPORT_ELEMENT_TYPES = new Set([
@@ -196,6 +202,31 @@ function isKw (token: Token | undefined, expected: string): boolean {
   return kw(token) === expected;
 }
 
+/**
+ * The canonical kind a word names after `Metadata` (spec §24.7), or
+ * undefined. Case-insensitive, like every keyword (§3.8).
+ */
+function metadataKind (word: string): MetadataTargetKind | undefined {
+  const w = word.toLowerCase();
+  if (w === 'table' || ENTITY_KEYWORDS.has(w)) return 'Table';
+  if (w === 'column' || w === 'field') return 'Column';
+  if (w === 'tablegroup') return 'TableGroup';
+  if (w === 'note') return 'Note';
+  if (w === 'view') return 'View';
+  if (w === 'diagramview') return 'DiagramView';
+  if (CONTAINER_KEYWORDS.has(w)) return 'Container';
+  return undefined;
+}
+
+/**
+ * True when the settings of a records block carry the `example` flag
+ * (spec §26.5): `[example]`, or `[example: true]`.
+ */
+function hasExampleFlag (settings: ReadonlyArray<Setting>): boolean {
+  return settings.some((s) => s.name === 'example'
+    && (s.value === null || (s.value.kind === 'BooleanValue' && s.value.value)));
+}
+
 /** Canonical capitalization for container keywords */
 function canonContainerKw (raw: string): ContainerKeyword {
   const lower = raw.toLowerCase();
@@ -222,6 +253,17 @@ function canonEntityKw (raw: string): EntityKeyword {
   }
 }
 
+/** The `Note` of a Dep's body, as the `note` setting it stands for (spec §27.2). */
+function noteSetting (note: NoteBlock, keyword: string): Setting {
+  return {
+    kind: 'Setting',
+    name: 'note',
+    nameSource: keyword,
+    value: { kind: 'StringValue', value: note.body, multiline: note.body.includes('\n'), span: note.span },
+    span: note.span,
+  };
+}
+
 export class Parser {
   private tokens: Token[];
   private idx = 0;
@@ -239,7 +281,7 @@ export class Parser {
    * The set of file paths currently being parsed in the resolution chain.
    * Used for cycle detection: when resolving a directive whose `from` path
    * is already in this set, the parser produces an empty clone for that
-   * directive rather than recursing (matching spec §27.15: cycles are
+   * directive rather than recursing (matching spec §28.15: cycles are
    * allowed; name resolution handles them). The set is passed by reference
    * across recursive parse() calls so all transitive levels see it.
    *
@@ -321,6 +363,41 @@ export class Parser {
    */
   private atBlockKeyword (word: string): boolean {
     return isKw(this.peek(), word) && this.peek(1).kind === TokenKind.LBrace;
+  }
+
+  /**
+   * `records` starts a records block before `{`, before the column list of
+   * `records (a, b) { }` and before the brackets of `records [example] { }`
+   * (spec §3.10, §26.1). A field's type never starts with `(` or `[`, so a
+   * field may still be named `records`.
+   */
+  private atRecordsBlock (): boolean {
+    if (!isKw(this.peek(), 'records')) return false;
+    const next = this.peek(1).kind;
+    return next === TokenKind.LBrace || next === TokenKind.LParen || next === TokenKind.LBracket;
+  }
+
+  /**
+   * Whether the current tokens start a `Dep` declaration (spec §27.2):
+   * `Dep:`, `Dep {`, `Dep [`, or a name and a colon, `Dep name:`. Before
+   * a type, `dep` names a field, as in DBML.
+   */
+  private atDepDeclaration (): boolean {
+    if (!isKw(this.peek(), 'dep')) return false;
+    const next = this.peek(1).kind;
+    if (next === TokenKind.Colon || next === TokenKind.LBrace || next === TokenKind.LBracket) return true;
+    return (next === TokenKind.Identifier || next === TokenKind.QuotedIdentifier)
+      && this.peek(2).kind === TokenKind.Colon;
+  }
+
+  /** A `Dep` stands at the top level, never in a body (spec §27.4), as in DBML. */
+  private rejectDepInBody (where: string): never {
+    throw new ParseError(
+      `A Dep is a top-level declaration and never appears in ${where} (spec §27.4). ` +
+      'Move it out, to the top level of the document.',
+      this.peek().start,
+      'dep-in-body',
+    );
   }
 
   /**
@@ -457,6 +534,8 @@ export class Parser {
     if (k === 'diagramview') return this.parseDiagramView();
     if (k === 'note') return this.parseNoteDeclaration();
     if (k === 'records') return this.parseTopLevelRecords();
+    if (k === 'metadata') return this.parseMetadata();
+    if (k === 'dep') return this.parseDep();
     if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
     throw new ParseError(`Unknown top-level construct: ${t.text}`, t.start);
   }
@@ -476,6 +555,7 @@ export class Parser {
       if (isKw(this.peek(), 'note')) {
         body.push(this.parseNoteBlockOrSetting());
       } else {
+        if (this.atDepDeclaration()) this.rejectDepInBody(`Project '${name}'`);
         body.push(this.parseLineSetting());
       }
     }
@@ -525,22 +605,46 @@ export class Parser {
   }
 
   /**
-   * Top-level `Note name { '''...''' }` standalone declaration.
+   * A `Note` declaration (spec §19): a sticky note when it has a name,
+   * `Note name [settings] { '...' }`, and the note of the project when it
+   * has none, `Note: '...'` or `Note { '...' }` (§19.5). At the top level a
+   * name may be qualified, `Note core.legend`, the DBML form of a sticky
+   * note in a schema (§19.2); in a Container body (`inContainer`) the name
+   * is one segment, since the Container qualifies it (§19.4). The colon
+   * form also reads after a name, which DBML rejects.
    */
-  private parseNoteDeclaration (): NoteDeclaration {
+  private parseNoteDeclaration (inContainer?: string): NoteDeclaration {
     const start = this.peek().start;
     this.advance(); // Note
-    // Could be: `Note: '...'`, `Note name { '''...''' }`, or `Note { ... }`
     let name: string | undefined;
     if (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier)) {
-      const tok = this.advance();
-      name = tok.kind === TokenKind.QuotedIdentifier ? (tok.value ?? '') : tok.text;
+      if (inContainer !== undefined) {
+        name = this.parseDeclaredName('sticky note name');
+        if (this.check(TokenKind.Dot)) {
+          throw new ParseError(
+            `A sticky note in Container '${inContainer}' takes a name of one segment: the Container ` +
+            'qualifies it (spec §19.4).',
+            this.peek().start,
+          );
+        }
+      } else {
+        name = this.parseQualifiedName('sticky note name');
+      }
     }
+    if (name === undefined && this.check(TokenKind.LBracket)) {
+      throw new ParseError(
+        'Settings belong to a sticky note, which has a name: write `Note name [ ... ] { ... }`. ' +
+        'A Note without a name is the note of the project and takes no settings (spec §19.5).',
+        this.peek().start,
+      );
+    }
+    const settings = this.maybeSettingsBlock();
     if (this.match(TokenKind.Colon)) {
       const body = this.parseSettingValueExpectingString('Expected string after Note:');
       return {
         kind: 'NoteDeclaration',
         name,
+        settings,
         body,
         span: this.spanFrom(start),
       };
@@ -551,6 +655,7 @@ export class Parser {
     return {
       kind: 'NoteDeclaration',
       name,
+      settings,
       body,
       span: this.spanFrom(start),
     };
@@ -592,7 +697,14 @@ export class Parser {
       const t = this.peek();
       const k = kw(t);
       if (k === 'note') {
-        body.push(this.parseNoteBlockOrSetting());
+        // `Note:` and `Note { }` are the Container's own note; a named
+        // `Note` is a sticky note attached to the Container (spec §19.4).
+        const next = this.peek(1);
+        if (next.kind === TokenKind.Identifier || next.kind === TokenKind.QuotedIdentifier) {
+          body.push(this.parseNoteDeclaration(name));
+        } else {
+          body.push(this.parseNoteBlockOrSetting());
+        }
       } else if (k && ENTITY_KEYWORDS.has(k)) {
         body.push(this.parseEntity());
       } else if (k === 'edge') {
@@ -609,6 +721,14 @@ export class Parser {
           `Move it out of Container '${name}'.`,
           t.start,
         );
+      } else if (k === 'metadata') {
+        throw new ParseError(
+          `A Metadata block is a top-level declaration and never appears in a Container (spec §24.7). ` +
+          `Move it out of Container '${name}', and qualify its target with the Container's name.`,
+          t.start,
+        );
+      } else if (k === 'dep') {
+        this.rejectDepInBody(`Container '${name}'`);
       } else {
         // Unknown line; tolerate as no-op rather than fail the whole parse.
         throw new ParseError(
@@ -682,7 +802,7 @@ export class Parser {
         body.push(this.parseChecks());
       } else if (this.atBlockKeyword('constraints')) {
         body.push(this.parseConstraints());
-      } else if (this.atBlockKeyword('records')) {
+      } else if (this.atRecordsBlock()) {
         body.push(this.parseRecordsBlock());
       } else if (this.atBlockKeyword('definitions')) {
         // Spec §15.8 (v0.6.5): read here for every body this method reads;
@@ -691,6 +811,7 @@ export class Parser {
       } else if (t.kind === TokenKind.Tilde) {
         body.push(this.parsePartialInjection());
       } else {
+        if (this.atDepDeclaration()) this.rejectDepInBody(`${construct} '${name}'`);
         this.rejectSettingInBody(construct, name);
         body.push(this.parseFieldDeclaration());
       }
@@ -710,45 +831,53 @@ export class Parser {
   }
 
   /**
-   * Parse a `records { ... }` block inside an entity body (§26.1, implicit
-   * column list). Values are stored as SettingValue cells; row boundaries
-   * are determined by source line (see `parseRecordRow`).
+   * Parse a records block inside an entity body (spec §26.1):
+   *
+   *     records { ... }                     the entity's columns, in order
+   *     records (id, email) { ... }         a column list (v0.7)
+   *     records [example] { ... }           the example flag (§26.5, v0.7)
+   *     records (id, email) [example] { ... }
+   *
+   * The brackets follow the column list, as in DBML. Values are stored as
+   * SettingValue cells; row boundaries are determined by source line (see
+   * `parseRecordRow`).
    */
   private parseRecordsBlock (): RecordsBlock {
     const start = this.peek().start;
     this.advance(); // records
-    this.expect(TokenKind.LBrace, "Expected '{' after 'records'");
+    const columns = this.check(TokenKind.LParen) ? this.parseRecordsColumnList() : undefined;
+    const settings = this.maybeSettingsBlock();
+    if (!columns && settings.length > 0 && this.check(TokenKind.LParen)) {
+      throw new ParseError(
+        'The column list of a records block comes before its brackets, as in DBML: ' +
+        '`records (id, name) [example] { ... }` (spec §26.5).',
+        this.peek().start,
+      );
+    }
+    this.expect(TokenKind.LBrace, columns
+      ? "Expected '{' after the records column list"
+      : "Expected '{' after 'records'");
     const rows: RecordRow[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
       rows.push(this.parseRecordRow());
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing records");
-    return {
+    const block: RecordsBlock = {
       kind: 'RecordsBlock',
+      settings,
+      example: hasExampleFlag(settings),
       rows,
       span: this.spanFrom(start),
     };
+    if (columns) block.columns = columns;
+    return block;
   }
 
   /**
-   * Top-level records declaration (§26.2, new in v0.2):
-   *
-   *     records users (id, name, email) { ... }
-   *     records core.users (id, name, email) { ... }
-   *
-   * The entity reference can be a bare name or a dotted path for cross-
-   * container references. The column list is required; it tells the
-   * generator which columns each row's values are populating.
+   * A records column list, `(id, name, email)`. A column is a field name,
+   * bare or quoted, held as written; a comma after the last one is ignored.
    */
-  private parseTopLevelRecords (): TopLevelRecordsDeclaration {
-    const start = this.peek().start;
-    this.advance(); // records
-    // Entity reference: a name or a dotted path (`core.users`), each
-    // segment bare or quoted (spec §3.2).
-    const refStart = this.peek().start;
-    const entityRef = this.parseQualifiedName("entity name after 'records'");
-    // Explicit column list -- required for top-level form. A column is a
-    // field name, bare or quoted, held as written.
+  private parseRecordsColumnList (): string[] {
     this.expect(TokenKind.LParen, "Expected '(' starting column list after entity reference");
     const columns: string[] = [];
     if (!this.check(TokenKind.RParen)) {
@@ -759,6 +888,36 @@ export class Parser {
       }
     }
     this.expect(TokenKind.RParen, "Expected ')' closing column list");
+    return columns;
+  }
+
+  /**
+   * Top-level records declaration (§26.2, new in v0.2):
+   *
+   *     records users (id, name, email) { ... }
+   *     records core.users (id, name, email) { ... }
+   *     records users (id, name) [example] { ... }     (§26.5, v0.7)
+   *
+   * The entity reference can be a bare name or a dotted path for cross-
+   * container references. The column list is required; it tells the
+   * generator which columns each row's values are populating.
+   */
+  private parseTopLevelRecords (): TopLevelRecordsDeclaration {
+    const start = this.peek().start;
+    this.advance(); // records
+    // Entity reference: a name or a dotted path (`core.users`), each
+    // segment bare or quoted (spec §3.2).
+    const entityRef = this.parseQualifiedName("entity name after 'records'");
+    // Explicit column list -- required for top-level form.
+    if (this.check(TokenKind.LBracket)) {
+      throw new ParseError(
+        'The column list of a top-level records declaration comes before its brackets, as in DBML: ' +
+        '`records users (id, name) [example] { ... }` (spec §26.2, §26.5).',
+        this.peek().start,
+      );
+    }
+    const columns = this.parseRecordsColumnList();
+    const settings = this.maybeSettingsBlock();
     // Row body.
     this.expect(TokenKind.LBrace, "Expected '{' starting records body");
     const rows: RecordRow[] = [];
@@ -766,11 +925,12 @@ export class Parser {
       rows.push(this.parseRecordRow());
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing records body");
-    void refStart; // currently unused but reserved for future improved error reporting
     return {
       kind: 'TopLevelRecordsDeclaration',
       entityRef,
       columns,
+      settings,
+      example: hasExampleFlag(settings),
       rows,
       span: this.spanFrom(start),
     };
@@ -793,7 +953,11 @@ export class Parser {
    */
   private parseRecordRow (): RecordRow {
     const start = this.peek().start;
-    const values: SettingValue[] = [this.parseSettingValue()];
+    // An empty field, before the first comma or between two commas on the
+    // same line, reads as null (§26.4, v0.7): `, 'a'` and `1, , 'a'`.
+    const values: SettingValue[] = [
+      this.check(TokenKind.Comma) ? this.emptyRecordValue() : this.parseSettingValue(),
+    ];
     while (this.check(TokenKind.Comma)) {
       const commaLine = this.peek().start.line;
       this.advance(); // consume comma
@@ -807,7 +971,7 @@ export class Parser {
         // trailing comma at end of row (next value is on a later line)
         break;
       }
-      values.push(this.parseSettingValue());
+      values.push(nextTok.kind === TokenKind.Comma ? this.emptyRecordValue() : this.parseSettingValue());
     }
     return {
       kind: 'RecordRow',
@@ -816,7 +980,66 @@ export class Parser {
     };
   }
 
-  /* ----- Module-system directives (spec §27, new in v0.2) ----- */
+  /** An empty field of a records row: null, with an empty span at the comma after it. */
+  private emptyRecordValue (): NullValue {
+    const at = this.peek().start;
+    return { kind: 'NullValue', empty: true, span: { start: at, end: at } };
+  }
+
+  /* ----- Metadata blocks (spec §24.7, v0.7) ----- */
+
+  /**
+   * `Metadata <kind> <target> { key: value ... }`. The kind word is read as
+   * written and canonicalized here; a word that names no kind is reported
+   * by the resolver, which knows the document's version. The body is a list
+   * body (§3.9) of `key: value` lines; a flag or a block in it is a syntax
+   * error, as in DBML.
+   */
+  private parseMetadata (): MetadataDeclaration {
+    const start = this.peek().start;
+    this.advance(); // Metadata
+    const kindTok = this.peek();
+    if (kindTok.kind !== TokenKind.Identifier) {
+      throw new ParseError(
+        'Expected the kind of element after Metadata: Table, Column, TableGroup or Note, ' +
+        'and in a document that declares a version Container, View or DiagramView (spec §24.7).',
+        kindTok.start,
+      );
+    }
+    this.advance();
+    const target = this.parseQualifiedName("the name of the element after 'Metadata " + kindTok.text + "'");
+    const bracketSettings = this.maybeSettingsBlock();
+    this.expect(TokenKind.LBrace, "Expected '{' starting the Metadata body");
+    const settings: Setting[] = [];
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
+      const t = this.peek();
+      if ((t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) && this.peek(1).kind !== TokenKind.Colon) {
+        throw new ParseError(
+          `A Metadata body holds 'key: value' lines only; '${t.text}' has no ':' and value after it (spec §24.7).`,
+          t.start,
+        );
+      }
+      settings.push(this.parseLineSetting());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing the Metadata body");
+    const decl: MetadataDeclaration = {
+      kind: 'MetadataDeclaration',
+      targetKindSource: kindTok.text,
+      target,
+      targetSource: target,
+      settings,
+      bracketSettings,
+      span: this.spanFrom(start),
+    };
+    const canonical = metadataKind(kindTok.text);
+    if (canonical) decl.targetKind = canonical;
+    if (this.options.filePath) decl.file = toForwardSlashes(this.options.filePath);
+    return decl;
+  }
+
+  /* ----- Module-system directives (spec §28, new in v0.2) ----- */
 
   /**
    * Parse a `use` or `reuse` directive. Called from both the top-level
@@ -847,7 +1070,7 @@ export class Parser {
     if (this.declaredVersion && compareVersions(this.declaredVersion, '0.2') < 0) {
       throw new ParseError(
         `The module system (use and reuse) needs xdbml: 0.2 or later; this document declares ` +
-        `xdbml: ${this.declaredVersion} (spec §27, Appendix D).`,
+        `xdbml: ${this.declaredVersion} (spec §28, Appendix D).`,
         modeTok.start,
       );
     }
@@ -860,10 +1083,10 @@ export class Parser {
     } else if (this.check(TokenKind.LBrace)) {
       this.advance();
       const items: ImportItem[] = [];
-      // A list body (spec §3.9, §27.2, v0.6.4): items one per line, or
+      // A list body (spec §3.9, §28.2, v0.6.4): items one per line, or
       // separated by commas, with commas and semicolons optional anywhere
       // between items. Until v0.6.4 the parser required a comma between
-      // two items, against the multi-line form §27.2 shows.
+      // two items, against the multi-line form §28.2 shows.
       for (;;) {
         this.skipListSeparators();
         if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
@@ -906,10 +1129,10 @@ export class Parser {
     this.advance();
     const from = pathTok.value ?? '';
 
-    // v0.3 §26.14: classify the source string up front so a disallowed form
-    // (non-https scheme, protocol-relative, embedded credentials, bare host)
-    // surfaces as a located error pointing at the string itself, regardless
-    // of whether a resolver is present.
+    // §28.14: classify the source string up front so a disallowed form
+    // (non-https scheme, protocol-relative, embedded credentials) surfaces
+    // as a located error pointing at the string itself, regardless of
+    // whether a resolver is present.
     try {
       classifyModuleSource(from);
     } catch (e) {
@@ -947,20 +1170,28 @@ export class Parser {
           settings,
           span: this.spanFrom(start),
         };
-        const result = resolveImport(
-          partial,
-          this.options,
-          this.resolutionStack,
-          this.depth,
-          recursiveParse,
-        );
+        let result: ReturnType<typeof resolveImport>;
+        try {
+          result = resolveImport(
+            partial,
+            this.options,
+            this.resolutionStack,
+            this.depth,
+            recursiveParse,
+          );
+        } catch (e) {
+          // An absolute path the host does not resolve, or a local path in
+          // a remote module (§28.13, §28.14.1): located at the string.
+          if (e instanceof ModuleSourceError) throw new ParseError(e.message, pathTok.start);
+          throw e;
+        }
         switch (result.kind) {
           case 'resolved':
             clone = result.clone;
             resolvedPath = result.resolvedPath;
             break;
           case 'cycle':
-            // Per spec §27.15, cycles are allowed; the parser produces a
+            // Per spec §28.15, cycles are allowed; the parser produces a
             // directive with no clone, and name resolution (P6+) is
             // expected to bridge the cycle. We leave clone undefined.
             resolvedPath = result.resolvedPath;
@@ -1032,21 +1263,21 @@ export class Parser {
       );
     }
     if (elementType === 'diagramview' && context !== 'file-scope') {
-      // Spec §18.1, §27.5: a DiagramView is a top-level declaration, so its
+      // Spec §18.1, §28.5: a DiagramView is a top-level declaration, so its
       // import goes at file scope, where the declaration itself would.
       throw new ParseError(
-        'A DiagramView is a top-level declaration: import it at file scope, not inside a Container body (spec §18.1, §27.5).',
+        'A DiagramView is a top-level declaration: import it at file scope, not inside a Container body (spec §18.1, §28.5).',
         elemTok.start,
       );
     }
     if (elementType === 'field' && context !== 'file-scope') {
-      // Spec §27.8: field imports must appear at file scope. Inside a
+      // Spec §28.8: field imports must appear at file scope. Inside a
       // Container body, the field's eventual placement (as a Named Type)
       // would have no meaningful container scope -- field imports are
       // always lifted to file scope by flatten(), regardless of where
       // the directive sits.
       throw new ParseError(
-        `Field-level imports must appear at file scope, not inside a Container body (spec §27.8).`,
+        `Field-level imports must appear at file scope, not inside a Container body (spec §28.8).`,
         elemTok.start,
       );
     }
@@ -1076,12 +1307,12 @@ export class Parser {
    * that match the import items by name and element type (matching is
    * downstream-consumer's job; the parser is permissive).
    *
-   * Per spec §27.6, clone content uses the importing file's vocabulary
+   * Per spec §28.6, clone content uses the importing file's vocabulary
    * (aliases already applied) and is parsed under the importing file's
    * xdbml version directive.
    *
    * Most clone-block content uses TopLevelStatement shapes (Entity, Type,
-   * Container, etc.). The exception is field imports (§27.8): when the
+   * Container, etc.). The exception is field imports (§28.8): when the
    * directive imports one or more fields via `field <path>` items, the
    * clone block holds each field as a bare FieldDeclaration with no entity
    * wrapper. The dispatch below checks whether the next token starts a
@@ -1096,7 +1327,7 @@ export class Parser {
       if (this.isCloneTopLevelStart()) {
         statements.push(this.parseTopLevelStatement());
       } else {
-        // Bare field declaration -- the field-import case. Per spec §27.6
+        // Bare field declaration -- the field-import case. Per spec §28.6
         // the field appears without an entity wrapper.
         statements.push(this.parseFieldDeclaration());
       }
@@ -1136,6 +1367,8 @@ export class Parser {
     if (k === 'tablegroup') return true;
     if (k === 'note') return true;
     if (k === 'records') return true;
+    if (k === 'metadata') return true;
+    if (k === 'dep') return true;
     if (k === 'use' || k === 'reuse') return true;
     return false;
   }
@@ -1752,6 +1985,7 @@ export class Parser {
       } else {
         // Spec §14.2: `materialized: true` and the other settings go in
         // the brackets, never in the body.
+        if (this.atDepDeclaration()) this.rejectDepInBody(`View '${name}'`);
         this.rejectSettingInBody('View', name);
         body.push(this.parseFieldDeclaration());
       }
@@ -1885,15 +2119,61 @@ export class Parser {
   private parseRefSpec (): RefSpec {
     const start = this.peek().start;
     const source = this.parseRefEndpoint();
-    const op = this.parseCardinalityOperator();
+    const op = this.parseMarkedOperator();
     const target = this.parseRefEndpoint();
-    return {
+    const spec: RefSpec = {
       kind: 'RefSpec',
       source,
-      operator: op,
+      operator: op.operator,
       target,
       span: this.spanFrom(start),
     };
+    if (op.sourceOptional) spec.sourceOptional = true;
+    if (op.targetOptional) spec.targetOptional = true;
+    return spec;
+  }
+
+  /**
+   * A relationship operator with its optional `?` marks (spec §11.1, v0.7):
+   * `?` against the left of the operator marks the source end optional,
+   * against its right the target end, as in DBML: `>?`, `?<`, `?-?`,
+   * `?<>?`. A mark separated from the operator by whitespace is an error,
+   * as in DBML.
+   */
+  private parseMarkedOperator (): { operator: CardinalityOperator; sourceOptional: boolean; targetOptional: boolean } {
+    let sourceOptional = false;
+    if (this.check(TokenKind.Question)) {
+      const q = this.advance();
+      if (this.check(TokenKind.Question)) this.doubledQuestion(this.peek());
+      if (this.peek().start.offset !== q.end.offset) this.misplacedQuestion(q);
+      sourceOptional = true;
+    }
+    const opTok = this.peek();
+    const operator = this.parseCardinalityOperator();
+    let targetOptional = false;
+    if (this.check(TokenKind.Question)) {
+      const q = this.peek();
+      if (q.start.offset !== opTok.end.offset) this.misplacedQuestion(q);
+      this.advance();
+      targetOptional = true;
+    }
+    if (this.check(TokenKind.Question)) {
+      if (targetOptional) this.doubledQuestion(this.peek());
+      this.misplacedQuestion(this.peek());
+    }
+    return { operator, sourceOptional, targetOptional };
+  }
+
+  private doubledQuestion (q: Token): never {
+    throw new ParseError("Each end of a relationship takes one '?' at most: `?>?` (spec §11.1).", q.start);
+  }
+
+  private misplacedQuestion (q: Token): never {
+    throw new ParseError(
+      "A '?' marks one end of a relationship optional and is written against the operator, with no space: " +
+      '`>?`, `?>`, `?-?` (spec §11.1).',
+      q.start,
+    );
   }
 
   private parseCardinalityOperator (): CardinalityOperator {
@@ -2067,6 +2347,151 @@ export class Parser {
     return segments;
   }
 
+  /* ----- Data lineage (spec §27, v0.7) ----- */
+
+  /**
+   * `Dep: a -> b [settings]`, `Dep name: a -> b`, or a block,
+   * `Dep name [settings] { a -> b ... key: value ... Note: '...' }` (spec
+   * §27.2). The name is optional, bare or quoted. DBML also accepts
+   * brackets between the name and the colon of the short form, and so does
+   * this parser.
+   */
+  private parseDep (): DepDeclaration {
+    const start = this.peek().start;
+    this.advance(); // Dep
+    let name: string | undefined;
+    const t = this.peek();
+    if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
+      this.advance();
+      name = t.kind === TokenKind.QuotedIdentifier ? (t.value ?? '') : t.text;
+      if (this.check(TokenKind.Dot)) {
+        throw new ParseError(
+          `The name of a Dep is one identifier, bare or quoted, and belongs to no Container (spec §27.4): ` +
+          `write Dep "${name}.${this.peek(1).text}" or another name.`,
+          this.peek().start,
+        );
+      }
+    } else if (t.kind === TokenKind.Star) {
+      throw new ParseError("'*' is no name for a Dep: the name is an identifier, bare or quoted (spec §27.4).", t.start);
+    }
+    const brackets = this.maybeSettingsBlock();
+    if (this.match(TokenKind.Colon)) {
+      const dependency = this.parseDepDependency();
+      const settings = this.maybeSettingsBlock();
+      this.rejectChainedDependency();
+      return {
+        kind: 'DepDeclaration',
+        ...(name !== undefined ? { name } : {}),
+        form: 'short',
+        settings,
+        ...(brackets.length > 0 ? { headerSettings: brackets } : {}),
+        dependencies: [dependency],
+        span: this.spanFrom(start),
+      };
+    }
+    if (this.match(TokenKind.LBrace)) {
+      const dependencies: DepDependency[] = [];
+      const bodySettings: Setting[] = [];
+      while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
+        if (this.atNoteElement()) {
+          const keyword = this.peek().text;
+          bodySettings.push(noteSetting(this.parseNoteBlockOrSetting(), keyword));
+        } else if (
+          (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier))
+          && this.peek(1).kind === TokenKind.Colon
+        ) {
+          bodySettings.push(this.parseLineSetting());
+        } else {
+          const dependency = this.parseDepDependency();
+          dependency.settings = this.maybeSettingsBlock();
+          if (dependency.settings.length > 0) dependency.span = this.spanFrom(dependency.span.start);
+          this.rejectChainedDependency();
+          dependencies.push(dependency);
+        }
+      }
+      this.expect(TokenKind.RBrace, "Expected '}' closing Dep");
+      return {
+        kind: 'DepDeclaration',
+        ...(name !== undefined ? { name } : {}),
+        form: 'block',
+        settings: brackets,
+        bodySettings,
+        dependencies,
+        span: this.spanFrom(start),
+      };
+    }
+    const next = this.peek();
+    throw new ParseError(
+      `Expected ':' or '{' after Dep (got ${next.kind} ${JSON.stringify(next.text)}): ` +
+      'write Dep: a -> b, or Dep name { a -> b } (spec §27.2).',
+      next.start,
+    );
+  }
+
+  /** One dependency: two endpoints joined by `->` or `<-` (spec §27.1). */
+  private parseDepDependency (): DepDependency {
+    const start = this.peek().start;
+    const first = this.parseRefEndpoint();
+    const arrow = this.parseDepArrow();
+    const second = this.parseRefEndpoint();
+    const [upstream, downstream] = arrow === '->' ? [first, second] : [second, first];
+    return {
+      kind: 'DepDependency',
+      upstream,
+      downstream,
+      arrow,
+      settings: [],
+      span: this.spanFrom(start),
+    };
+  }
+
+  /** `->` or `<-` at the current token, written without a space inside. */
+  private atDepArrow (): '->' | '<-' | undefined {
+    const a = this.peek();
+    const b = this.peek(1);
+    if (!b || b.start.offset !== a.end.offset) return undefined;
+    if (a.kind === TokenKind.Minus && b.kind === TokenKind.RAngle) return '->';
+    if (a.kind === TokenKind.LAngle && b.kind === TokenKind.Minus) return '<-';
+    return undefined;
+  }
+
+  private parseDepArrow (): '->' | '<-' {
+    const arrow = this.atDepArrow();
+    if (arrow) {
+      this.advance();
+      this.advance();
+      return arrow;
+    }
+    const t = this.peek();
+    const after = this.peek(1)?.kind;
+    if ((t.kind === TokenKind.Minus && after === TokenKind.RAngle) || (t.kind === TokenKind.LAngle && after === TokenKind.Minus)) {
+      throw new ParseError("Write the arrow of a dependency without a space inside: '->' or '<-' (spec §27.2).", t.start);
+    }
+    if (t.kind === TokenKind.Comma) {
+      throw new ParseError(
+        'A dependency links one upstream element to one downstream element: write one dependency for each, ' +
+        'as Dep: a -> c and Dep: b -> c, or gather them in a block (spec §27.2).',
+        t.start,
+      );
+    }
+    throw new ParseError(
+      `A dependency takes the arrow '->' or '<-', written without a space inside (got ${t.kind} ${JSON.stringify(t.text)}). ` +
+      "'>', '<', '-' and '<>' are the operators of a relationship, which a Ref declares (spec §27.2).",
+      t.start,
+    );
+  }
+
+  /** `a -> b -> c` and `a -> b, c`: a dependency has two ends (spec §27.2). */
+  private rejectChainedDependency (): void {
+    const t = this.peek();
+    if (this.atDepArrow() || t.kind === TokenKind.Comma) {
+      throw new ParseError(
+        'A dependency has two ends: write a -> b and b -> c as two dependencies (spec §27.2).',
+        t.start,
+      );
+    }
+  }
+
   /* ----- TablePartial / TableGroup ----- */
 
   private parseTablePartial (): TablePartialDeclaration {
@@ -2095,6 +2520,7 @@ export class Parser {
     const members: string[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
       const t = this.peek();
+      if (this.atDepDeclaration()) this.rejectDepInBody(`TableGroup '${name}'`);
       if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
         members.push(this.parseQualifiedName('TableGroup member'));
         // optional trailing semicolons in some sources
@@ -2555,14 +2981,16 @@ export class Parser {
     }
     // `ref: > target` form
     if (lower === 'ref') {
-      const op = this.parseCardinalityOperator();
+      const op = this.parseMarkedOperator();
       const target = this.parseRefEndpoint();
       const v: RefValue = {
         kind: 'RefValue',
-        operator: op,
+        operator: op.operator,
         target,
         span: this.spanFrom(start),
       };
+      if (op.sourceOptional) v.sourceOptional = true;
+      if (op.targetOptional) v.targetOptional = true;
       return {
         kind: 'Setting',
         name: 'ref',
@@ -2570,6 +2998,28 @@ export class Parser {
         value: v,
         span: this.spanFrom(start),
       };
+    }
+    // `dep: <- source` and `dep: -> target` (spec §27.2, v0.7). Any other
+    // value is read as written; checkLineage() reports it, as an error, or
+    // as a warning in a document declaring v0.6 or earlier (§27.9).
+    if (lower === 'dep') {
+      const arrow = this.atDepArrow();
+      if (arrow) {
+        this.advance();
+        this.advance();
+        const target = this.parseRefEndpoint();
+        const v: DepValue = { kind: 'DepValue', arrow, target, span: this.spanFrom(start) };
+        return { kind: 'Setting', name: 'dep', nameSource, value: v, span: this.spanFrom(start) };
+      }
+      const t = this.peek();
+      const operator = t.kind === TokenKind.LAngle || t.kind === TokenKind.RAngle || t.kind === TokenKind.ManyToMany
+        || (t.kind === TokenKind.Minus && this.peek(1).kind !== TokenKind.NumberLiteral);
+      if (operator) {
+        throw new ParseError(
+          "'dep' takes '<- source' or '-> target', with no space inside the arrow (spec §27.2).",
+          t.start,
+        );
+      }
     }
     const value = this.parseSettingValue();
     return {
@@ -2821,6 +3271,14 @@ function applyEntityAliases (doc: XDbmlDocument): void {
       if (segments) {
         obj.path = [...segments.map((name) => ({ ...first, name })), ...obj.path.slice(1)];
       }
+    }
+    // Spec §24.7: the target of a Metadata Table or Column block may start
+    // with an entity's alias, as in DBML.
+    if (obj.kind === 'MetadataDeclaration' && (obj.targetKind === 'Table' || obj.targetKind === 'Column')
+      && typeof obj.target === 'string') {
+      const parts = splitName(obj.target);
+      const segments = aliases.get(quoteNameSegment(parts[0]));
+      if (segments) obj.target = joinName([...segments, ...parts.slice(1)]);
     }
     for (const [key, value] of Object.entries(obj)) {
       if (key !== 'span' && value && typeof value === 'object') walk(value);

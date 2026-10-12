@@ -87,6 +87,12 @@ slug  = "supertype-groups"
 title = "Diagram views"
 slug  = "diagram-views"
 [[nodes.children]]
+title = "Sticky notes"
+slug  = "sticky-notes"
+[[nodes.children]]
+title = "Data lineage"
+slug  = "data-lineage"
+[[nodes.children]]
 title = "Nested fields"
 slug  = "nested-fields"
 [[nodes.children]]
@@ -107,6 +113,9 @@ slug  = "open-and-save-files"
 [[nodes.children]]
 title = "Module system: use and reuse"
 slug  = "module-system"
+[[nodes.children]]
+title = "Metadata blocks"
+slug  = "metadata-blocks"
 [[nodes.children]]
 title = "Sharing via URL"
 slug  = "sharing-via-url"

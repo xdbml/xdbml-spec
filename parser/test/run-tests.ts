@@ -23,8 +23,13 @@ import {
   viewSourceQuery,
   diagramViewMembers, diagramViews, diagramViewNote,
   entityDefinitions, isDefinitionsExcludedTarget,
+  refCardinality, refCardinalityIn,
+  metadataIndex, settingValueText, withMetadata,
+  projectNote, resolveStickyNote, stickyNotes,
+  collectLineage, depColor, depSettings, resolveLineage,
+  classifyModuleSource, moduleCandidates, ParseError,
 } from '../src/index.ts';
-import type { EntityDeclaration, ParseOptions, XDbmlDocument } from '../src/index.ts';
+import type { AppliedSetting, DepDeclaration, EndCardinality, EntityDeclaration, FieldDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
 import {
   BSON_TYPES,
   CONTAINER_KEYWORDS,
@@ -1128,7 +1133,7 @@ Project lib_project {
 Entity X { id int [pk] }`,
       };
       return {
-        name: 'P5: ImportAll skips ProjectDeclaration (spec §27.4)',
+        name: 'P5: ImportAll skips ProjectDeclaration (spec §28.4)',
         source: `xdbml: 0.2
 reuse * from './lib'`,
         options: {
@@ -1203,7 +1208,7 @@ reuse { entity A_local } from './cycle-a'
 Entity X { id int [pk] }`,
       };
       return {
-        name: 'P5: circular imports do not crash (spec §27.15)',
+        name: 'P5: circular imports do not crash (spec §28.15)',
         source: files['/test/cycle-a.xdbml'],
         options: {
           filePath: '/test/cycle-a.xdbml',
@@ -1352,7 +1357,7 @@ reuse { entity Y } from './other' {
       };
     })(),
     /* -------------------------------------------------------------------
-     * v0.3: remote (URL) module sources  (spec §27.14)
+     * v0.3: remote (URL) module sources  (spec §28.14)
      * -----------------------------------------------------------------
      * Hermetic: the in-memory file map is keyed by the resolved key the
      * parser produces (a normalized https href), so no network is touched.
@@ -1472,13 +1477,6 @@ reuse { type Amount } from '${AZ}'`,
       source: `xdbml: 0.2\nuse * from 'https://user:token@example.com/core.xdbml'`,
       options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
       assert: (_doc) => 'parse should have rejected URL with userinfo',
-      expectError: true,
-    },
-    {
-      name: 'v0.3 remote: INVALID -- bare host (no scheme) rejected',
-      source: `xdbml: 0.2\nuse * from 'github.com/acme/schemas/core.xdbml'`,
-      options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
-      assert: (_doc) => 'parse should have rejected bare host source',
       expectError: true,
     },
     (() => {
@@ -2884,7 +2882,7 @@ reuse { field core.dim_customer.no_such_field } from './lib'`,
           readFile: (p: string) => files[p] ?? (() => { throw new Error(`not found: ${p}`); })(),
         },
         assert: (doc) => {
-          // Per spec §27.13: failures are silent at module resolution.
+          // Per spec §28.13: failures are silent at module resolution.
           // The directive's clone block exists but is empty.
           const dir = doc.statements[0];
           if (dir.kind !== 'ModuleImportDirective') return 'expected directive';
@@ -3673,12 +3671,12 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
       };
     })(),
     {
-      name: 'Version: xdbml 0.6 is accepted; a newer version is refused with unsupported-version',
-      source: `xdbml: 0.6
+      name: 'Version: xdbml 0.7 is accepted; a newer version is refused with unsupported-version',
+      source: `xdbml: 0.7
 Entity A { }`,
       assert: (doc) => {
-        if (doc.version?.version !== '0.6') return 'version 0.6 not parsed';
-        for (const v of ['0.7', '1.0', '0.10']) {
+        if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
+        for (const v of ['0.8', '0.7.1', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -3740,7 +3738,7 @@ Table rules {
       },
     },
     {
-      name: 'v0.6 §28.6: entityConstraints gathers every form into keys and checks',
+      name: 'v0.6 §29.6: entityConstraints gathers every form into keys and checks',
       source: `xdbml: 0.6
 Table t {
   a int [pk]
@@ -4329,8 +4327,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.6.1 §4: xdbml: 0.6.8 is newer than this parser supports',
-      source: `xdbml: 0.6.8
+      name: 'v0.7 §4: xdbml: 0.7.1 is newer than this parser supports',
+      source: `xdbml: 0.7.1
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -4603,8 +4601,9 @@ Ref: sites.region.country > countries.code
     const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
       .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('note(?!'));
     const re = rule ? new RegExp(rule[0].source, 'i') : null;
-    const asField = ['note varchar', 'Note varchar [not null]', 'note    int'];
-    const asKeyword = ['Note: \'x\'', 'Note { \'x\' }', 'note:', 'Note schema_notes {', 'notes varchar'];
+    const asField = ['note varchar', 'Note varchar [not null]', 'note    int', "note varchar [note: 'x']"];
+    const asKeyword = ['Note: \'x\'', 'Note { \'x\' }', 'note:', 'Note schema_notes {', 'notes varchar',
+      'Note legend [color: #F4D03F] {', 'Note core.legend {', 'Note "Release plan" [color: none] {', "Note legend: 'x'"];
     const bad = re === null
       ? ['rule missing']
       : [
@@ -4901,7 +4900,7 @@ DiagramView v { Tables { orders revenue } }`)).diagnostics.map((x) => x.message)
     if (n !== 3) return `ext: ${ext}`;
     return dbml.length === 0 ? undefined : `dbml: ${dbml}`;
   });
-  check('v0.6.3 §27: reuse { diagramview X } imports the diagram view, not a database view named X', () => {
+  check('v0.6.3 §28: reuse { diagramview X } imports the diagram view, not a database view named X', () => {
     const files: Record<string, string> = {
       '/w/a.xdbml': `xdbml: 0.6
 Table orders { id int [pk] }
@@ -4917,7 +4916,7 @@ DiagramView reports { Tables { orders } }`,
     const got = diagramViewMembers(doc, 'reports')?.entities.join();
     return got === 'orders' ? undefined : `members: ${got}`;
   });
-  check('v0.6.3 §27.5: a diagramview import in a Container body fails; a reuse * in a Container body moves a DiagramView to the top level', () => {
+  check('v0.6.3 §28.5: a diagramview import in a Container body fails; a reuse * in a Container body moves a DiagramView to the top level', () => {
     const files: Record<string, string> = {
       '/w/a.xdbml': 'xdbml: 0.6\nTable orders { id int [pk] }\nDiagramView o { Tables { orders } }',
       '/w/bad.xdbml': "xdbml: 0.6\nSchema s {\n reuse { diagramview o } from './a'\n}",
@@ -4934,8 +4933,8 @@ DiagramView reports { Tables { orders } }`,
   });
   check('v0.6.3 §4.1: the parser reads xdbml: 0.6.3 and refuses a later patch it does not know', () => {
     parse('xdbml: 0.6.3\nTable a { id int [pk] }');
-    try { parse('xdbml: 0.6.99\nTable a { id int [pk] }'); } catch { return undefined; }
-    return '0.6.99 accepted';
+    try { parse('xdbml: 0.7.99\nTable a { id int [pk] }'); } catch { return undefined; }
+    return '0.7.99 accepted';
   });
   check('v0.6.3: Monarch colors a category keyword before { only', () => {
     const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
@@ -4974,7 +4973,7 @@ DiagramView b5 { Tables { a } }`);
     if (dbmlNote.join() !== 'error:construct-requires-version') return `dbml note: ${dbmlNote}`;
     return dbmlSetting.join() === 'error:construct-requires-version' ? undefined : `dbml setting: ${dbmlSetting}`;
   });
-  check('v0.6.4 §27.2: import items one per line, with or without commas or semicolons', () => {
+  check('v0.6.4 §28.2: import items one per line, with or without commas or semicolons', () => {
     const files: Record<string, string> = {
       '/w/lib.xdbml': 'xdbml: 0.6\nEntity a { id int [pk] }\nEntity b { id int [pk] }\nType T string',
       '/w/m1.xdbml': "xdbml: 0.6\nreuse {\n  entity a\n  entity b as bb\n  type T\n} from './lib'",
@@ -5003,7 +5002,7 @@ DiagramView b5 { Tables { a } }`);
     if (old !== 'warning:named-type-shadows-builtin') return `0.5: ${old}`;
     return native === '' ? undefined : `native: ${native}`;
   });
-  check('v0.6.4 §27: a Windows importer path with backslashes resolves next to the importer', () => {
+  check('v0.6.4 §28: a Windows importer path with backslashes resolves next to the importer', () => {
     const read: string[] = [];
     const files: Record<string, string> = {
       'C:/repo/models/lib.xdbml': 'xdbml: 0.6\nEntity a { id int [pk] }',
@@ -5016,7 +5015,7 @@ DiagramView b5 { Tables { a } }`);
     if (names !== 'a,T') return `names: ${names}`;
     return read.join(' ') === 'C:/repo/models/lib.xdbml C:/repo/shared/types.xdbml' ? undefined : read.join(' ');
   });
-  check('v0.6.4 §27: an import cycle stops at the importer when its path uses backslashes', () => {
+  check('v0.6.4 §28: an import cycle stops at the importer when its path uses backslashes', () => {
     // a imports b, which imports a back: the importer is on the resolution
     // stack, so b's directive is not followed and a is never read.
     const reads: string[] = [];
@@ -5833,7 +5832,7 @@ Entity t {
     const t = doc.statements.find((s) => s.kind === 'EntityDeclaration') as EntityDeclaration;
     return clean(src) ?? same(effectiveFields(t, tablePartials(doc)).map((f) => f.field.name), ['id', 'created_at']);
   });
-  check('§27: an import names a quoted entity', () => {
+  check('§28: an import names a quoted entity', () => {
     const files: Record<string, string> = {
       '/q/lib.xdbml': `xdbml: 0.6
 Container "sales ops" {
@@ -5963,6 +5962,1110 @@ function report (title: string, results: TestResult[]): { passed: number; failed
   };
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7: records in the forms of DBML 10.3.1 (spec §26)
+ *
+ * The cases without a version declaration are valid DBML 10.3.1, checked
+ * against @dbml/core 10.3.1: the example flag on both forms, a column list
+ * on records inside a table, empty fields. A second records block for an
+ * entity is an error, as in DBML, and a warning in a document declaring
+ * 0.6 or an earlier version, which accepted it (§26.6).
+ * ----------------------------------------------------------------------- */
+
+function runV07RecordsTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string): string | undefined => {
+    const got = codes(src);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  /** Every records node of a document, inside entities and at the top level, in source order. */
+  const records = (src: string): Array<RecordsBlock | TopLevelRecordsDeclaration> => {
+    const out: Array<RecordsBlock | TopLevelRecordsDeclaration> = [];
+    const walk = (e: EntityDeclaration) => {
+      for (const item of e.body) if (item.kind === 'RecordsBlock') out.push(item);
+    };
+    for (const s of parse(src).statements) {
+      if (s.kind === 'EntityDeclaration') walk(s);
+      if (s.kind === 'ContainerDeclaration') for (const b of s.body) if (b.kind === 'EntityDeclaration') walk(b);
+      if (s.kind === 'TopLevelRecordsDeclaration') out.push(s);
+    }
+    return out;
+  };
+  /** A row's values in a compact form: `∅` for an empty field. */
+  const cells = (row: RecordRow): string[] => row.values.map((v) => {
+    if (v.kind === 'NullValue') return v.empty ? '∅' : 'null';
+    if (v.kind === 'StringValue' || v.kind === 'NumberValue' || v.kind === 'IdentifierValue') return String(v.value);
+    if (v.kind === 'BooleanValue') return String(v.value);
+    if (v.kind === 'ExpressionValue') return `\`${v.expression}\``;
+    return v.kind;
+  });
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const T = 'Table t {\n  id int [pk]\n  name varchar\n}\n';
+
+  /* ---- §26.5 example records ---- */
+
+  check('§26.5 DBML: [example] on a top-level declaration, after the column list', () => {
+    const src = `${T}records t (id, name) [example] {\n  1, 'Alice'\n}`;
+    const [r] = records(src);
+    return expectCodes(src, '') ?? same([r.kind, r.example, (r as TopLevelRecordsDeclaration).columns], ['TopLevelRecordsDeclaration', true, ['id', 'name']]);
+  });
+  check('§26.5 DBML: [example] inside a table, without a column list', () => {
+    const src = 'Table t {\n  id int [pk]\n  records [example] {\n    1\n  }\n}';
+    const [r] = records(src);
+    return expectCodes(src, '') ?? same([r.example, (r as RecordsBlock).columns], [true, undefined]);
+  });
+  check('§26.5 DBML: [example] inside a table, after a column list', () => {
+    const src = "Table t {\n  id int [pk]\n  name varchar\n  records (name) [example] {\n    'x'\n  }\n}";
+    const [r] = records(src);
+    return expectCodes(src, '') ?? same([r.example, (r as RecordsBlock).columns], [true, ['name']]);
+  });
+  check('§26.5: a records block without the flag is not an example; [example: true] is', () => {
+    const src = `${T}records t (id) {\n  1\n}\nTable u {\n  id int\n  records [example: true] {\n    1\n  }\n}`;
+    return same(records(src).map((r) => r.example), [false, true]);
+  });
+  check('§26.5 DBML: the brackets before the column list are a parse error, inside a table', () =>
+    parseFails('Table t {\n  id int\n  records [example] (id) {\n    1\n  }\n}', 'comes before its brackets'));
+  check('§26.5 DBML: the brackets before the column list are a parse error, at the top level', () =>
+    parseFails(`${T}records t [example] (id) {\n  1\n}`, 'comes before its brackets'));
+
+  /* ---- §26.1 a column list inside an entity ---- */
+
+  check('§26.1 DBML: records inside a table with a column list populate those columns', () => {
+    const src = "Table t {\n  id int [pk]\n  name varchar\n  email varchar\n  records (id, email) {\n    1, 'a@x.org'\n  }\n}";
+    const [r] = records(src) as RecordsBlock[];
+    return expectCodes(src, '') ?? same([r.columns, cells(r.rows[0])], [['id', 'email'], ['1', 'a@x.org']]);
+  });
+  check('§26.1: a column of the list that is not a field of the entity is an error', () =>
+    expectCodes('Table t {\n  id int\n  records (id, nope) {\n    1, 2\n  }\n}', 'error:unresolved-records-column'));
+  check('§26.1: a column injected by a TablePartial is a field of the entity', () =>
+    expectCodes('TablePartial stamps {\n  created_at timestamp\n}\nTable t {\n  id int\n  ~stamps\n  records (id, created_at) {\n    1, \'2026-01-01\'\n  }\n}', ''));
+  check('§3.10: records followed by ( or [ starts a block; a field may still be named records', () =>
+    same(parse('Table t {\n  id int\n  records int\n}').statements.map((s) => s.kind === 'EntityDeclaration' ? s.body.map((b) => b.kind) : []), [['FieldDeclaration', 'FieldDeclaration']]));
+
+  /* ---- §26.4 empty fields ---- */
+
+  check('§26.4 DBML: an empty field between two commas reads as null', () => {
+    const src = 'Table t {\n  a int\n  b int\n  c int\n}\nrecords t (a, b, c) {\n  1, , 3\n}';
+    return expectCodes(src, '') ?? same(cells(records(src)[0].rows[0]), ['1', '∅', '3']);
+  });
+  check('§26.4 DBML: an empty field before the first comma reads as null', () => {
+    const src = `${T}records t (id, name) {\n  , 'Alice'\n}`;
+    return expectCodes(src, '') ?? same(cells(records(src)[0].rows[0]), ['∅', 'Alice']);
+  });
+  check('§26.4: a comma at the end of a row is ignored, as in v0.6; DBML reads `1,` with the same meaning', () => {
+    const src = `${T}records t (id, name) {\n  1,\n  2, 'Bob',\n}`;
+    return expectCodes(src, '') ?? same(records(src)[0].rows.map(cells), [['1'], ['2', 'Bob']]);
+  });
+  check('§26.4: an empty field has an empty span at the comma after it', () => {
+    const [r] = records(`${T}records t (id, name) {\n  , 'x'\n}`);
+    const v = r.rows[0].values[0];
+    return same([v.span.start.line, v.span.start.column, v.span.end.column], [6, 3, 3]);
+  });
+  check('§26.4 DBML: an empty field inside a table, in each position', () => {
+    const src = 'Table t {\n  a int\n  b int\n  c int\n  records {\n    , 2, 3\n    1, , 3\n    1, 2,\n  }\n}';
+    return expectCodes(src, '') ?? same(records(src)[0].rows.map(cells), [['∅', '2', '3'], ['1', '∅', '3'], ['1', '2']]);
+  });
+
+  /* ---- §26.6 one records block per entity ---- */
+
+  check('§26.6 DBML: a second records block inside a table is an error', () =>
+    expectCodes('Table t {\n  id int\n  records {\n    1\n  }\n  records {\n    2\n  }\n}', 'error:duplicate-records-block'));
+  check('§26.6 DBML: a second top-level declaration for a table is an error, example or not', () =>
+    expectCodes(`${T}records t (id) {\n  1\n}\nrecords t (name) [example] {\n  'x'\n}`, 'error:duplicate-records-block'));
+  check('§26.6 DBML: a block inside a table and a top-level declaration for it are an error', () =>
+    expectCodes(`Table t {\n  id int\n  records {\n    1\n  }\n}\nrecords t (id) {\n  2\n}`, 'error:duplicate-records-block'));
+  check('§26.6: a container-qualified declaration and the block inside the entity are an error', () =>
+    expectCodes('xdbml: 0.7\nContainer core [type: schema] {\n  Entity u {\n    id int\n    records {\n      1\n    }\n  }\n}\nrecords core.u (id) {\n  2\n}', 'error:duplicate-records-block'));
+  check('§26.6: the error falls on each block after the first', () =>
+    expectCodes(`${T}records t (id) {\n  1\n}\nrecords t (id) {\n  2\n}\nrecords t (id) {\n  3\n}`, 'error:duplicate-records-block error:duplicate-records-block'));
+  check('§26.6: a document declaring xdbml: 0.7 draws an error', () =>
+    expectCodes(`xdbml: 0.7\n${T}records t (id) {\n  1\n}\nrecords t (name) {\n  'x'\n}`, 'error:duplicate-records-block'));
+  check('§26.6: a document declaring xdbml: 0.6 draws a warning and stays valid', () =>
+    expectCodes(`xdbml: 0.6\n${T}records t (id) {\n  1\n}\nrecords t (name) {\n  'x'\n}`, 'warning:duplicate-records-block'));
+  check('§26.6: one block for each of two entities is clean', () =>
+    expectCodes('Table a {\n  id int\n  records {\n    1\n  }\n}\nTable b {\n  id int\n  records {\n    1\n  }\n}', ''));
+
+  return results;
+}
+
+/* -------------------------------------------------------------------------
+ * v0.7: optional marks on relationship operators, and cardinality (spec
+ * §11.1, §11.7, §11.8, §11.16)
+ *
+ * The DBML cases are valid DBML 10.3.1, checked against @dbml/core 10.3.1,
+ * which gives the same cardinality for every operator on a not-null foreign
+ * key, `<>` aside: §11.8 keeps '0..*' at both ends of a many-to-many.
+ * ----------------------------------------------------------------------- */
+
+function runV07OptionalRefTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const firstRef = (src: string): { doc: XDbmlDocument; ref: RefDeclaration } => {
+    const doc = flatten(parse(src));
+    const ref = doc.statements.find((s): s is RefDeclaration => s.kind === 'RefDeclaration');
+    if (!ref) throw new Error('no Ref');
+    return { doc, ref };
+  };
+  const ends = (src: string): string => {
+    const { doc, ref } = firstRef(src);
+    const c = refCardinalityIn(doc, ref);
+    const one = (e: EndCardinality) => `${e.text ?? (e.min !== undefined ? `${e.min}..?` : '-')}:${e.origin}`;
+    return `${one(c.source)} ${one(c.target)}`;
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  const B = 'Table a {\n  id int [pk]\n}\nTable b {\n  id   int [pk]\n  n    int\n  nn   int [not null]\n}\n';
+
+  /* ---- §11.1 the marks ---- */
+
+  check('§11.1 DBML: every operator with and without ? parses, and the AST keeps the marks', () => {
+    const ops = ['>', '<', '-', '<>', '>?', '?>', '?>?', '<?', '?<', '?<?', '-?', '?-', '?-?', '<>?', '?<>', '?<>?'];
+    const got = ops.map((op) => {
+      const { ref } = firstRef(`${B}Ref: b.nn ${op} a.id`);
+      return `${ref.spec.sourceOptional ? '?' : ''}${ref.spec.operator}${ref.spec.targetOptional ? '?' : ''}`;
+    });
+    return same(got, ops);
+  });
+  check('§11.1 DBML: the ? marks of an inline ref', () => {
+    const doc = parse(`${B}Table c {\n  x int [ref: ?> a.id]\n  y int [ref: >? a.id]\n}`);
+    const c = doc.statements.find((s): s is EntityDeclaration => s.kind === 'EntityDeclaration' && s.name === 'c');
+    const vals = (c?.body ?? []).flatMap((f) => (f.kind === 'FieldDeclaration' ? f.settings : []))
+      .map((st) => st.value)
+      .filter((v): v is RefValue => !!v && v.kind === 'RefValue')
+      .map((v) => `${v.sourceOptional ? '?' : ''}${v.operator}${v.targetOptional ? '?' : ''}`);
+    return same(vals, ['?>', '>?']);
+  });
+  check('§11.1 DBML: the long form takes a marked operator and settings', () => {
+    const { ref } = firstRef(`${B}Ref r {\n  b.nn >? a.id [delete: cascade]\n}`);
+    return same([ref.spec.targetOptional, ref.settings.map((x) => x.name)], [true, ['delete']]);
+  });
+  check('§11.1 DBML: a ? apart from the operator is a syntax error', () =>
+    parseFails(`${B}Ref: b.nn > ? a.id`, 'written against the operator'));
+  check('§11.1 DBML: two ? on one side are a syntax error', () =>
+    parseFails(`${B}Ref: b.nn ??> a.id`, "one '?' at most") ?? parseFails(`${B}Ref: b.nn >?? a.id`, "one '?' at most"));
+  check('§11.1: marked operators draw no diagnostic in a document without a version (DBML)', () => {
+    const got = codes(`${B}Ref: b.nn >? a.id\nRef: a.id ?< b.nn\nRef: b.nn ?-? a.id`);
+    return got === '' ? undefined : got;
+  });
+
+  /* ---- §11.8 the operator, the marks and nullability ---- */
+
+  check('§11.8 DBML: on a not-null foreign key, every operator gives the cardinality of DBML 10, <> aside', () => {
+    const want: Record<string, string> = {
+      '>': '1..*/1..1', '<': '1..1/1..*', '-': '1..1/1..1', '<>': '0..*/0..*',
+      '>?': '1..*/0..1', '?>': '0..*/1..1', '?>?': '0..*/0..1',
+      '<?': '1..1/0..*', '?<': '0..1/1..*', '?<?': '0..1/0..*',
+      '-?': '1..1/0..1', '?-': '0..1/1..1', '?-?': '0..1/0..1',
+    };
+    const bad: string[] = [];
+    for (const [op, w] of Object.entries(want)) {
+      const bare = op.replace(/\?/g, '');
+      const src = bare === '<' ? `${B}Ref: a.id ${op} b.nn` : `${B}Ref: b.nn ${op} a.id`;
+      const { doc, ref } = firstRef(src);
+      const c = refCardinalityIn(doc, ref);
+      const got = `${c.source.text}/${c.target.text}`;
+      if (got !== w) bad.push(`${op}: ${got}, want ${w}`);
+    }
+    return bad.length ? bad.join('; ') : undefined;
+  });
+  check('§11.8: a nullable foreign key makes the parent end optional, for > and for <', () =>
+    same([ends(`${B}Ref: b.n > a.id`), ends(`${B}Ref: a.id < b.n`)],
+      ['1..*:operator 0..1:nullable-foreign-key', '0..1:nullable-foreign-key 1..*:operator']));
+  check('§11.8: a nullable foreign key under - makes the target end optional', () =>
+    same(ends(`${B}Ref: b.n - a.id`), '1..1:operator 0..1:nullable-foreign-key'));
+  check('§11.8: a field of the primary key is not nullable', () =>
+    same(ends('Table p {\n  id int [pk]\n}\nTable c {\n  pid int [pk]\n}\nRef: c.pid - p.id'), '1..1:operator 1..1:operator'));
+  check('§11.8: required reads as not null', () =>
+    same(ends('Table p {\n  id int [pk]\n}\nTable c {\n  pid int [required]\n}\nRef: c.pid > p.id'), '1..*:operator 1..1:operator'));
+  check('§11.8: a composite foreign key with one nullable field is nullable', () =>
+    same(ends('Table p {\n  x int\n  y int\n  indexes {\n    (x, y) [pk]\n  }\n}\nTable q {\n  x int [not null]\n  y int\n}\nRef: q.(x, y) > p.(x, y)'),
+      '1..*:operator 0..1:nullable-foreign-key'));
+  check('§11.8: a nullable field of an injected TablePartial counts', () =>
+    same(ends('TablePartial fk {\n  pid int\n}\nTable p {\n  id int [pk]\n}\nTable c {\n  id int [pk]\n  ~fk\n}\nRef: c.pid > p.id'),
+      '1..*:operator 0..1:nullable-foreign-key'));
+  check('§11.8: a nested foreign key field reads its own nullability', () =>
+    same(ends('xdbml: 0.7\nTable p {\n  id int [pk]\n}\nTable c {\n  id int [pk]\n  info object {\n    pid int\n  }\n}\nRef: c.info.pid > p.id'),
+      '1..*:operator 0..1:nullable-foreign-key'));
+  check('§11.8: the ? and the nullable foreign key combine end by end', () =>
+    same(ends(`${B}Ref: b.n ?> a.id`), '0..*:optional-mark 0..1:nullable-foreign-key'));
+  check('§11.8: <> keeps 0..* at both ends, nullable or not', () =>
+    same([ends(`${B}Ref: b.nn <> a.id`), ends(`${B}Ref: b.n <> a.id`)], ['0..*:operator 0..*:operator', '0..*:operator 0..*:operator']));
+
+  /* ---- §11.7 settings and the marks ---- */
+
+  check('§11.7: a setting states its end; the other end keeps the operator', () =>
+    same(ends(`xdbml: 0.7\n${B}Ref: b.n > a.id [target: '1..1']`), '1..*:operator 1..1:setting'));
+  check('§11.7: the four-key form states its end too', () =>
+    same(ends(`xdbml: 0.7\n${B}Ref: b.nn > a.id [min_target: 0, max_target: 1]`), '1..*:operator 0..1:setting'));
+  check('§11.7: a ? and a setting that agree draw nothing', () => {
+    const src = `xdbml: 0.7\n${B}Ref: b.nn >? a.id [target: '0..1', source: '0..*']`;
+    return same([ends(src), codes(src)], ['0..*:setting 0..1:setting', '']);
+  });
+  check('§11.7: with an xdbml: version, a setting that disagrees with a ? applies, with a warning', () => {
+    const src = `xdbml: 0.7\n${B}Ref: b.nn >? a.id [target: '1..1']`;
+    return same([ends(src), codes(src)], ['1..*:operator 1..1:setting', 'warning:cardinality-conflict']);
+  });
+  check('§11.7: without a version (DBML), the ? applies over a setting that disagrees, with a warning', () => {
+    const src = `${B}Ref: b.nn >? a.id [target: '1..1']`;
+    return same([ends(src), codes(src)], ['1..*:operator 0..1:optional-mark', 'warning:cardinality-conflict']);
+  });
+  check('§11.7: a disagreement on the source end names it', () => {
+    const d = resolveNames(parse(`xdbml: 0.7\n${B}Ref: b.nn ?> a.id [source: '1..*']`)).diagnostics;
+    return d.length === 1 && d[0].message.includes('source end') ? undefined : d.map((x) => x.message).join(' | ');
+  });
+
+  /* ---- §11.16 entity-level relationships ---- */
+
+  const E = 'xdbml: 0.7\nEntity Customer { }\nEntity Order { }\n';
+  check('§11.16: an entity-level Ref states no cardinality from its operator', () =>
+    same(ends(`${E}Ref: Customer > Order`), '-:unstated -:unstated'));
+  check('§11.16: a ? on an entity-level Ref states the minimum of its end only', () =>
+    same(ends(`${E}Ref: Customer >? Order`), '-:unstated 0..?:optional-mark'));
+  check('§11.16: a setting completes an end that a ? marks', () =>
+    same(ends(`${E}Ref: Customer >? Order [target: '0..*']`), '-:unstated 0..*:setting'));
+  check('§11.16: a ? on an entity-level Ref draws no diagnostic', () => {
+    const got = codes(`${E}Ref: Customer ?>? Order`);
+    return got === '' ? undefined : got;
+  });
+
+  /* ---- refCardinality without a document ---- */
+
+  check('refCardinality: an unknown nullability infers nothing', () => {
+    const c = refCardinality({ operator: '>' }, [], {});
+    return same([c.source.text, c.target.text, c.target.origin], ['1..*', '1..1', 'operator']);
+  });
+
+  return results;
+}
+
+/* -------------------------------------------------------------------------
+ * v0.7: custom properties and Metadata blocks (spec §24.5, §24.7)
+ *
+ * The cases marked DBML are valid DBML 10.3.1, checked against
+ * @dbml/core 10.3.1, or rejected by it where the case expects an error.
+ * ----------------------------------------------------------------------- */
+
+function runV07MetadataTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string): string =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string): string | undefined => {
+    const got = codes(src);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  /** Applied settings as name=value text, in index order. */
+  const shown = (list: ReadonlyArray<AppliedSetting>): string[] =>
+    list.map((a) => `${a.setting.name}=${settingValueText(a.setting.value)}`);
+  const index = (src: string, options?: ParseOptions) => metadataIndex(flatten(parse(src, options)));
+  const Q = "'''";
+
+  const T = "Table users [owner: 'jane'] {\n  id    int [pk]\n  email varchar\n  Note: 'own note'\n}\n";
+
+  /* ---- §24.5 custom properties ---- */
+
+  check('§24.5 DBML: custom properties on a table, a column and a TableGroup draw nothing', () =>
+    expectCodes("Table users [owner: 'data-team', sla_hours: '24'] {\n  id int [pk, masking: 'partial']\n}\nTableGroup g [team: 'growth'] {\n  users\n}", ''));
+  check('§24.5 DBML: a setting written twice in one list draws a warning on the second', () =>
+    expectCodes("Table t [owner: 'a', Owner: 'b'] {\n  id int\n}", 'warning:duplicate-setting'));
+  check('§24.5 DBML: check and ref repeat by design', () =>
+    expectCodes('Table a {\n  id int [pk]\n}\nTable b {\n  id int [pk]\n}\nTable t {\n  x int [ref: > a.id, ref: > b.id, check: `x > 0`, check: `x < 9`]\n}', ''));
+
+  /* ---- §24.7.1 kinds ---- */
+
+  check('§24.7.1 DBML: Table, Column, TableGroup and Note in a document without a version', () => {
+    const src = `${T}TableGroup g {\n  users\n}\nNote n {\n  'sticky'\n}\nMetadata Table users {\n  team: 'web'\n}\nMetadata Column users.email {\n  pii: 'yes'\n}\nMetadata TableGroup g {\n  color: #123456\n}\nMetadata Note n {\n  color: none\n}`;
+    const i = index(src);
+    return expectCodes(src, '') ?? same([shown(i.entity('users')), shown(i.field('users', undefined, 'email')), shown(i.tableGroup('g')), shown(i.note('n'))],
+      [['team=web'], ['pii=yes'], ['color=#123456'], ['color=none']]);
+  });
+  check('§24.7.1 DBML: kind words are case-insensitive', () => {
+    const src = `${T}metadata TABLE users {\n  team: 'web'\n}`;
+    return expectCodes(src, '') ?? same(shown(index(src).entity('users')), ['team=web']);
+  });
+  check('§24.7.1 DBML: a word that names no kind is an error', () =>
+    expectCodes(`${T}enum E {\n  a\n}\nMetadata Enum E {\n  owner: 'x'\n}`, 'error:unknown-metadata-kind'));
+  check('§24.7.1: an xDBML kind requires xdbml: 0.7 or later', () =>
+    same([codes(`${T}Metadata Entity users {\n  team: 'x'\n}`), codes(`xdbml: 0.6\n${T}Metadata Field users.id {\n  note: 'x'\n}`)],
+      ['error:construct-requires-version', 'error:construct-requires-version']));
+  check('§24.7.1: Entity, Field, Container and its synonyms, View and DiagramView with xdbml: 0.7', () => {
+    const src = "xdbml: 0.7\nSchema sales [type: schema] {\n  Entity orders {\n    id int\n    addr object {\n      city varchar\n    }\n  }\n  View open_orders {\n    id int\n  }\n}\nDiagramView dv {\n  Tables {\n    sales.orders\n  }\n}\nMetadata Entity sales.orders {\n  team: 'x'\n}\nMetadata Field orders.addr.city {\n  note: 'City'\n}\nMetadata Schema sales {\n  color: #abcdef\n}\nMetadata View open_orders {\n  headercolor: #fedcba\n}\nMetadata DiagramView dv {\n  note: 'Orders', x_owner: 'ops'\n}";
+    const i = index(src);
+    return expectCodes(src, '') ?? same([
+      shown(i.entity('orders', 'sales')), shown(i.field('orders', 'sales', 'addr.city')), shown(i.container('sales')),
+      shown(i.view('open_orders', 'sales')), shown(i.diagramView('dv')),
+    ], [['team=x'], ['note=City'], ['color=#abcdef'], ['headercolor=#fedcba'], ['note=Orders', 'x_owner=ops']]);
+  });
+  check('§24.7.1: a Metadata block inside a Container is a syntax error', () =>
+    parseFails("xdbml: 0.7\nContainer c {\n  Metadata Table t {\n    owner: 'x'\n  }\n}", 'never appears in a Container'));
+  check('§24.7.1: a field and an entity may be named Metadata', () =>
+    expectCodes("Table Metadata {\n  metadata json\n}\nMetadata Table Metadata {\n  owner: 'x'\n}", ''));
+
+  /* ---- §24.7.2 targets ---- */
+
+  check('§24.7.2 DBML: a schema-qualified table and column', () => {
+    const src = "Table core.orders {\n  id int\n}\nMetadata Table core.orders {\n  owner: 'o'\n}\nMetadata Column core.orders.id {\n  pii: 'no'\n}";
+    const i = index(src);
+    return expectCodes(src, '') ?? same([shown(i.entity('core.orders')), shown(i.field('core.orders', undefined, 'id'))], [['owner=o'], ['pii=no']]);
+  });
+  check('§24.7.2 DBML: an alias names the entity', () => {
+    const src = "Table users as U {\n  id int\n}\nMetadata Table U {\n  owner: 'x'\n}\nMetadata Column U.id {\n  pii: 'no'\n}";
+    const i = index(src);
+    return expectCodes(src, '') ?? same([shown(i.entity('users')), shown(i.field('users', undefined, 'id'))], [['owner=x'], ['pii=no']]);
+  });
+  check('§24.7.2 DBML: quoted names', () => {
+    const src = 'Table "my table" {\n  "my col" int\n}\nMetadata Column "my table"."my col" {\n  owner: \'x\'\n}';
+    return expectCodes(src, '') ?? same(shown(index(src).field('my table', undefined, 'my col')), ['owner=x']);
+  });
+  check('§24.7.2: a bare name finds an entity in a Container when only one carries it', () => {
+    const src = "xdbml: 0.7\nContainer core [type: schema] {\n  Table users {\n    id int\n  }\n}\nMetadata Table users {\n  owner: 'x'\n}";
+    return expectCodes(src, '') ?? same(shown(index(src).entity('users', 'core')), ['owner=x']);
+  });
+  check('§24.7.2 DBML: a field a TablePartial injects is a field of the entity', () => {
+    const src = "TablePartial stamps {\n  created_at timestamp\n}\nTable t {\n  id int\n  ~stamps\n}\nMetadata Column t.created_at {\n  owner: 'x'\n}";
+    return expectCodes(src, '') ?? same(shown(index(src).field('t', undefined, 'created_at')), ['owner=x']);
+  });
+  check('§24.7.2 DBML: a target that names nothing is an error', () =>
+    same([codes(`${T}Metadata Table nobody {\n  owner: 'x'\n}`), codes(`${T}Metadata Column users.nothing {\n  owner: 'x'\n}`)],
+      ['error:unresolved-metadata-target', 'error:unresolved-metadata-target']));
+  check('§24.7.2: Metadata Table on a View is an error naming the View', () => {
+    const d = resolveNames(parse("xdbml: 0.7\nView v {\n  id int\n}\nMetadata Table v {\n  owner: 'x'\n}")).diagnostics;
+    return d.length === 1 && d[0].code === 'unresolved-metadata-target' && d[0].message.includes('Metadata View v') ? undefined : d.map((x) => x.message).join(' | ');
+  });
+
+  /* ---- §24.7.3 settings ---- */
+
+  check('§24.7.3 DBML: note, headercolor and custom properties on a table, a multi-line note included', () => {
+    const src = `${T}Metadata Table users {\n  note: ${Q}\n  Accounts\n  ${Q}\n  headercolor: #3498DB\n  x_team: 'web'\n}`;
+    return same(shown(index(src).entity('users')), ['note=Accounts\n', 'headercolor=#3498DB', 'x_team=web']);
+  });
+  check('§24.7.3: the body is a list body: commas and semicolons separate lines', () => {
+    const src = `${T}Metadata Table users { a: '1', b: '2'; c: '3' }`;
+    return same(shown(index(src).entity('users')), ['a=1', 'b=2', 'c=3']);
+  });
+  check('§24.7.3 DBML: a flag in the body is a syntax error', () =>
+    parseFails(`${T}Metadata Column users.id {\n  pk\n}`, "'key: value' lines only"));
+  check('§24.7.3 DBML: a block in the body is a syntax error', () =>
+    parseFails(`${T}Metadata Table users {\n  Note { 'x' }\n}`, "'key: value' lines only"));
+  check('§24.7.3 DBML: a key written twice in one block is an error', () =>
+    expectCodes(`${T}Metadata Table users {\n  team: 'a'\n  team: 'b'\n}`, 'error:duplicate-metadata-setting'));
+  check('§24.7.3 DBML: a note that is not a string, a color that is not a color', () =>
+    expectCodes(`${T}Metadata Table users {\n  note: 42\n  headercolor: red\n}`, 'error:invalid-metadata-value error:invalid-metadata-value'));
+  check('§24.7.3 DBML: note on a sticky note is a custom property', () => {
+    const src = "Note n {\n  'text'\n}\nMetadata Note n {\n  note: 'x'\n}";
+    return expectCodes(src, '') ?? same(shown(index(src).note('n')), ['note=x']);
+  });
+  check('§24.7.3 DBML: synonyms, a field setting and a color on a Column draw warnings and read as custom properties', () => {
+    const src = `${T}Metadata Table users {\n  synonyms: 'clients'\n}\nMetadata Column users.id {\n  pk: 'true'\n  headercolor: #111111\n}`;
+    const i = index(src);
+    return expectCodes(src, 'warning:metadata-custom-property warning:metadata-custom-property warning:metadata-custom-property')
+      ?? same([shown(i.entity('users')), shown(i.field('users', undefined, 'id'))], [['synonyms=clients'], ['pk=true', 'headercolor=#111111']]);
+  });
+  check('§24.7.3: a custom property of a reserved name stands beside the element\'s own setting', () => {
+    const doc = flatten(parse(`${T}Metadata Column users.id {\n  pk: 'true'\n}`));
+    const users = doc.statements.find((s): s is EntityDeclaration => s.kind === 'EntityDeclaration')!;
+    const id = users.body.find((b): b is FieldDeclaration => b.kind === 'FieldDeclaration' && b.name === 'id')!;
+    const merged = withMetadata(id.settings, metadataIndex(doc).field('users', undefined, 'id'));
+    return same(merged.settings.map((x) => `${x.name}=${settingValueText(x.value)}`), ['pk=(flag)', 'pk=true']);
+  });
+  check('§24.7.3: a diagram view takes note and x_ properties only', () =>
+    expectCodes("xdbml: 0.7\nTable t {\n  id int\n}\nDiagramView dv {\n  Tables {\n    t\n  }\n}\nMetadata DiagramView dv {\n  owner: 'x'\n}", 'error:unknown-diagram-view-setting'));
+  check('§24.7.3 DBML: settings in brackets after the target apply nothing, with a warning', () => {
+    const src = `${T}Metadata Table users [team: 'y'] {\n  x_a: 'b'\n}`;
+    return expectCodes(src, 'warning:metadata-brackets-ignored') ?? same(shown(index(src).entity('users')), ['x_a=b']);
+  });
+
+  /* ---- §24.7.4 precedence ---- */
+
+  check('§24.7.4 DBML: a block replaces the element\'s own setting, with a warning naming both values', () => {
+    const src = `${T}Metadata Table users {\n  owner: 'scott'\n}`;
+    const d = resolveNames(parse(src)).diagnostics;
+    return same(shown(index(src).entity('users')), ['owner=scott'])
+      ?? (d.length === 1 && d[0].code === 'metadata-override' && d[0].message.includes("'jane'") && d[0].message.includes("'scott'") ? undefined : d.map((x) => x.message).join(' | '));
+  });
+  check('§24.7.4: the note of a Note element is the element\'s own', () =>
+    expectCodes(`${T}Metadata Table users {\n  note: 'block note'\n}`, 'warning:metadata-override'));
+  check('§24.7.4 DBML: of two blocks, the later applies', () => {
+    const src = `${T}Metadata Table users {\n  team: 'a'\n}\nMetadata Table users {\n  team: 'b'\n}`;
+    return expectCodes(src, 'warning:metadata-override') ?? same(shown(index(src).entity('users')), ['team=b']);
+  });
+  check('§24.7.4: a value set again unchanged draws nothing', () =>
+    expectCodes(`${T}Metadata Table users {\n  owner: 'jane'\n}`, ''));
+
+  /* ---- §24.7.5 imports ---- */
+
+  const files: Record<string, string> = {
+    '/m/schema.xdbml': "xdbml: 0.7\nTable users [owner: 'jane'] {\n  id int [pk]\n}\nContainer core [type: schema] {\n  Table orders {\n    id int\n  }\n}\nNote n {\n  'x'\n}\nMetadata Table users {\n  owner: 'david'\n}\nMetadata Column users.id {\n  pii: 'yes'\n}\nMetadata Table core.orders {\n  owner: 'o'\n}\nMetadata Container core {\n  note: 'Core'\n}\nMetadata Note n {\n  color: #abcdef\n}\n",
+    '/m/team.xdbml': "xdbml: 0.7\nreuse * from './schema'\nMetadata Table users {\n  owner: 'alice'\n}\n",
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  const importing = (main: string) => {
+    files['/m/main.xdbml'] = main;
+    return index(main, opts('/m/main.xdbml'));
+  };
+
+  check('§24.7.5 DBML: importing everything brings every block, and the importing file reports nothing about them', () => {
+    const main = "xdbml: 0.7\nuse * from './schema'\n";
+    const i = importing(main);
+    const d = resolveNames(parse(main, opts('/m/main.xdbml'))).diagnostics.map((x) => x.code).join(' ');
+    return same([shown(i.entity('users')), shown(i.field('users', undefined, 'id')), shown(i.entity('orders', 'core')), shown(i.container('core')), shown(i.note('n')), d],
+      [['owner=david'], ['pii=yes'], ['owner=o'], ['note=Core'], ['color=#abcdef'], '']);
+  });
+  check('§24.7.5 DBML: a file\'s own blocks come after those of its imports', () =>
+    same(shown(importing("xdbml: 0.7\nuse * from './team'\n").entity('users')), ['owner=alice']));
+  check('§24.7.5 DBML: a selective import brings the blocks of the element and its fields', () => {
+    const i = importing("xdbml: 0.7\nuse {\n  table users\n} from './schema'\n");
+    return same([shown(i.entity('users')), shown(i.field('users', undefined, 'id')), shown(i.note('n'))], [['owner=david'], ['pii=yes'], []]);
+  });
+  check('§24.7.5 DBML: an alias carries the blocks to the new name', () => {
+    const i = importing("xdbml: 0.7\nuse {\n  table users as u\n} from './schema'\nMetadata Table u {\n  team: 'x'\n}\n");
+    return same([shown(i.entity('u')), shown(i.field('u', undefined, 'id'))], [['owner=david', 'team=x'], ['pii=yes']]);
+  });
+  check('§24.7.5: an entity imported out of its Container takes its blocks along', () =>
+    same(shown(importing("xdbml: 0.7\nuse {\n  table core.orders\n} from './schema'\n").entity('orders')), ['owner=o']));
+  check('§24.7.5: an imported Container brings the blocks of its elements, renamed', () => {
+    const i = importing("xdbml: 0.7\nuse {\n  container core as c\n} from './schema'\n");
+    return same([shown(i.container('c')), shown(i.entity('orders', 'c'))], [['note=Core'], ['owner=o']]);
+  });
+  check('§24.7.4 DBML: the document\'s block applies after the imported ones, even written before the import', () => {
+    const main = "xdbml: 0.7\nMetadata Table users {\n  owner: 'main'\n}\nuse * from './schema'\n";
+    const i = importing(main);
+    const d = resolveNames(parse(main, opts('/m/main.xdbml'))).diagnostics;
+    return same(shown(i.entity('users')), ['owner=main'])
+      ?? (d.length === 1 && d[0].code === 'metadata-override' && d[0].message.includes('/m/schema.xdbml') ? undefined : d.map((x) => x.message).join(' | '));
+  });
+  check('§24.7.4: flatten() lists the blocks last, those an import brings first and marked', () => {
+    files['/m/main.xdbml'] = "xdbml: 0.7\nMetadata Table users {\n  owner: 'main'\n}\nuse * from './schema'\nTable z {\n  id int\n}\n";
+    const flat = flatten(parse(files['/m/main.xdbml'], opts('/m/main.xdbml')));
+    const tail = flat.statements.slice(-7).map((x) => (x.kind === 'MetadataDeclaration' ? `${x.target}${x.imported ? '*' : ''}` : x.kind));
+    return same(tail, ['EntityDeclaration', 'users*', 'users.id*', 'core.orders*', 'core*', 'n*', 'users']);
+  });
+
+  check('§24.7: Monarch colors Metadata and its kind, and leaves a field named metadata alone', () => {
+    const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('(metadata)'));
+    if (!rule) return 'rule missing';
+    const re = new RegExp(`^(?:${rule[0].source})`, 'i');
+    const yes = ['Metadata Table users', 'metadata column users.id', 'Metadata TableGroup g', 'Metadata Schema s'];
+    const no = ['metadata json', 'Metadata Tables x', 'metadata varchar'];
+    const bad = [...yes.filter((t) => !re.test(t)), ...no.filter((t) => re.test(t))];
+    return bad.length ? bad.join('; ') : undefined;
+  });
+
+  return results;
+}
+
+function runV07StickyNoteTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const diags = (src: string, options?: ParseOptions) => resolveNames(parse(src, options)).diagnostics;
+  const codes = (src: string, options?: ParseOptions): string =>
+    diags(src, options).map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string): string | undefined => {
+    const got = codes(src);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const parseFails = (src: string, fragment: string): string | undefined => {
+    try {
+      parse(src);
+      return 'parsed';
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return msg.includes(fragment) ? undefined : `wrong error: ${msg}`;
+    }
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const placed = (src: string) => stickyNotes(flatten(parse(src))).map((n) => `${n.id}|${n.name}|${n.containerName ?? ''}|${n.topLevel ? 'top' : 'in'}`);
+  const settingsOf = (src: string) => stickyNotes(flatten(parse(src))).map((n) => n.decl.settings.map((s) => `${s.name}=${settingValueText(s.value)}`).join(','));
+  const V = 'xdbml: 0.7\n';
+  const SALES = "Container sales [type: schema] {\n  Note: 'Order management'\n  Entity orders {\n    id int [pk]\n  }\n  Note states [color: #FBCFE8] {\n    'placed, shipped, delivered'\n  }\n}\n";
+
+  /* ---- §19.2 sticky notes ---- */
+
+  check('§19.2 DBML: a named top-level Note is a sticky note, its text the body', () => {
+    const doc = parse("Table a {\n  id int\n}\nNote design {\n  '''\n  ## Title\n  - **one**\n  '''\n}\n");
+    const n = stickyNotes(doc);
+    return same(n.map((x) => [x.id, x.decl.body]), [['design', '## Title\n- **one**\n']]);
+  });
+  check('§19.2 DBML: a quoted name keeps its text', () => same(placed("Note \"Design decision\" {\n  'x'\n}"), ['Design decision|Design decision||top']));
+  check('§19.2 DBML: a qualified name places the note in the implicit Container', () =>
+    same(placed("Table core.users {\n  id int\n}\nNote core.legend {\n  'x'\n}"), ['core.legend|legend|core|in']));
+  check('§19.2: the colon form after a name reads the same', () => same(placed("Note n: 'x'"), ['n||top'.replace('||', '|n||')]));
+  check('§19.2 DBML: an empty body is a syntax error', () => parseFails('Note n {\n}', 'Expected string inside Note block'));
+  check('§19.2 DBML: two strings in a body are a syntax error', () => parseFails("Note n {\n  'a'\n  'b'\n}", "Expected '}' closing Note"));
+  check('§19.2 DBML: two sticky notes of one name are an error naming a sticky note', () => {
+    const d = diags("Note n {\n  'a'\n}\nNote n {\n  'b'\n}");
+    return d.length === 1 && d[0].code === 'duplicate-declaration' && d[0].message.includes('sticky note') ? undefined : d.map((x) => x.message).join(' | ');
+  });
+  check('§19.2: a sticky note may share its name with an entity', () => expectCodes("Table a {\n  id int\n}\nNote a {\n  'x'\n}", ''));
+
+  /* ---- §19.3 settings ---- */
+
+  check('§19.3 DBML: color and custom properties in the brackets, in a document without a version', () => {
+    const src = "Note n [color: #F4D03F, author: \"docs\"] {\n  'x'\n}";
+    return same(settingsOf(src), ['color=#F4D03F,author=docs']) ?? expectCodes(src, '');
+  });
+  check("§19.3: color none is valid bare or quoted, as a color is (§3.3)", () =>
+    expectCodes("Note a [color: none] {\n  'x'\n}\nNote b [color: 'NONE'] {\n  'y'\n}\nNote c [color: #abc] {\n  'z'\n}", ''));
+  check('§19.3 DBML: a color of another form is an error', () => {
+    const d = diags("Note n [color: red] {\n  'x'\n}");
+    return d.length === 1 && d[0].code === 'invalid-note-color' && d[0].severity === 'error' && d[0].message.includes("'red'") ? undefined : d.map((x) => x.message).join(' | ');
+  });
+  check('§19.3: a flag in the brackets is a custom property, with nothing reported', () => expectCodes("Note n [pinned] {\n  'x'\n}", ''));
+  check('§19.3: a setting written twice draws a warning', () => expectCodes("Note n [author: 'a', author: 'b'] {\n  'x'\n}", 'warning:duplicate-setting'));
+
+  /* ---- §19.4 sticky notes in a Container ---- */
+
+  check('§19.4: a named Note in a Container is a sticky note, the unnamed one the Container note', () => {
+    const doc = parse(V + SALES);
+    const c = doc.statements.find((s) => s.kind === 'ContainerDeclaration');
+    const kinds = c && c.kind === 'ContainerDeclaration' ? c.body.map((b) => b.kind) : [];
+    return same(kinds, ['NoteBlock', 'EntityDeclaration', 'NoteDeclaration'])
+      ?? same(placed(V + SALES), ['sales.states|states|sales|in'])
+      ?? expectCodes(V + SALES, '');
+  });
+  check('§19.4: a sticky note in a Container needs xdbml: 0.7', () =>
+    expectCodes(SALES, 'error:construct-requires-version') ?? expectCodes('xdbml: 0.6\n' + SALES, 'error:construct-requires-version'));
+  check('§19.4: a sticky note in a Container takes a name of one segment', () =>
+    parseFails(V + "Container s {\n  Note a.b {\n    'x'\n  }\n}", 'takes a name of one segment'));
+  check('§19.4: notes of one name in two Containers are distinct', () =>
+    expectCodes(V + "Container a {\n  Note n {\n    'x'\n  }\n}\nContainer b {\n  Note n {\n    'y'\n  }\n}", ''));
+  check('§19.4: Note core.n and a note n in Container core are duplicates', () =>
+    expectCodes(V + "Note core.n {\n  'x'\n}\nContainer core {\n  Note n {\n    'y'\n  }\n}", 'error:duplicate-declaration'));
+  check('§19.4: an unqualified name resolves at the top level first, then to the one note in a Container', () => {
+    const notes = stickyNotes(flatten(parse(V + SALES + "Note other {\n  'o'\n}")));
+    const a = resolveStickyNote(notes, 'states');
+    const b = resolveStickyNote(notes, 'sales.states');
+    const c = resolveStickyNote(notes, 'nothing');
+    return same([a.ok && a.note.id, b.ok && b.note.id, c.ok], ['sales.states', 'sales.states', false]);
+  });
+  check('§19.4: an unqualified name two Containers hold is ambiguous', () => {
+    const notes = stickyNotes(parse(V + "Container a {\n  Note n {\n    'x'\n  }\n}\nContainer b {\n  Note n {\n    'y'\n  }\n}"));
+    const r = resolveStickyNote(notes, 'n');
+    return !r.ok && r.reason === 'ambiguous' ? undefined : JSON.stringify(r);
+  });
+
+  /* ---- §19.5 the note of the project ---- */
+
+  check('§19.5: a top-level Note without a name is the note of the project', () => {
+    const doc = parse("Table a {\n  id int\n}\nNote: 'Reference model'\n");
+    return same(projectNote(doc)?.body, 'Reference model') ?? same(stickyNotes(doc).length, 0) ?? expectCodes("Note { 'x' }", '');
+  });
+  check("§19.5: the Project block's note applies, and an unnamed Note draws a warning", () => {
+    const src = "Project p {\n  Note: 'own'\n}\nNote: 'other'\n";
+    return same(projectNote(parse(src))?.body, 'own') ?? expectCodes(src, 'warning:duplicate-project-note');
+  });
+  check('§19.5: without a Project note, the first unnamed Note applies and the second draws a warning', () => {
+    const src = "Note: 'first'\nNote: 'second'\n";
+    return same(projectNote(parse(src))?.body, 'first') ?? expectCodes(src, 'warning:duplicate-project-note');
+  });
+  check('§19.5: an unnamed Note takes no settings', () => parseFails("Note [color: #abc] {\n  'x'\n}", 'Settings belong to a sticky note'));
+
+  /* ---- §28 imports ---- */
+
+  const files: Record<string, string> = {
+    '/n/lib.xdbml': V + "Note: 'Project note of lib'\nNote legend [color: #abc] {\n  'Legend'\n}\n" + SALES + 'Metadata Note sales.states {\n  owner: \'ops\'\n}\n',
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  check('§19.5, §28.2: importing everything brings the sticky notes and leaves the note of the project behind', () => {
+    const flat = flatten(parse(V + "use * from './lib'\n", opts('/n/main.xdbml')));
+    return same(stickyNotes(flat).map((n) => n.id), ['legend', 'sales.states']) ?? same(projectNote(flat), undefined);
+  });
+  check('§28.3: a sticky note in a Container imports by its qualified name, lands at the top level, and brings its Metadata block', () => {
+    const main = V + "use { note sales.states as order_states } from './lib'\n";
+    files['/n/main.xdbml'] = main;
+    const flat = flatten(parse(main, opts('/n/main.xdbml')));
+    const ids = stickyNotes(flat).map((n) => n.id);
+    const applied = metadataIndex(flat).note('order_states').map((a) => `${a.setting.name}=${settingValueText(a.setting.value)}`);
+    return same(ids, ['order_states']) ?? same(applied, ['owner=ops']);
+  });
+  check('§28.3: a bare name imports the one note of that name in a Container', () => {
+    const flat = flatten(parse(V + "use { note states } from './lib'\n", opts('/n/main.xdbml')));
+    return same(stickyNotes(flat).map((n) => [n.id, n.decl.body]), [['states', 'placed, shipped, delivered']]);
+  });
+
+  /* ---- §24.7 Metadata ---- */
+
+  check('§24.7.2: Metadata Note names a note in a Container, qualified or not', () => {
+    const src = V + SALES + "Metadata Note sales.states {\n  owner: 'a'\n}\nMetadata Note states {\n  reviewer: 'b'\n}\n";
+    const applied = metadataIndex(flatten(parse(src))).note('sales.states').map((a) => a.setting.name);
+    return same(applied, ['owner', 'reviewer']) ?? expectCodes(src, '');
+  });
+  check("§24.7.4: a Metadata headercolor over a table's own draws the override warning and replaces it", () => {
+    const src = "Table t [headercolor: #111111] {\n  id int\n}\nMetadata Table t {\n  headercolor: #222222\n}\n";
+    const doc = flatten(parse(src));
+    const t = doc.statements[0] as EntityDeclaration;
+    const merged = withMetadata(t.settings, metadataIndex(doc).entity('t')).settings.map((x) => `${x.name}=${settingValueText(x.value)}`);
+    return expectCodes(src, 'warning:metadata-override') ?? same(merged, ['headercolor=#222222']);
+  });
+  check("§24.7.4: a Metadata color over a note's own color draws the override warning", () =>
+    expectCodes(V + SALES + 'Metadata Note sales.states {\n  color: #000000\n}\n', 'warning:metadata-override'));
+
+  /* ---- §18 diagram views ---- */
+
+  const DV = V + SALES + "Note other {\n  'o'\n}\n";
+  const members = (src: string, view: string) => {
+    const m = diagramViewMembers(parse(src), view);
+    return m ? { notes: m.notes, containers: m.containers, entities: m.entities } : undefined;
+  };
+  check('§18.2: a listed Container contributes its sticky notes', () =>
+    same(members(DV + 'DiagramView v {\n  Containers {\n    sales\n  }\n}', 'v'), { notes: ['sales.states'], containers: ['sales'], entities: ['sales.orders'] }));
+  check('§18.2: Notes naming a note of the Container narrows what the Container contributes', () =>
+    same(members(V + SALES.replace("  Note states", "  Note extra {\n    'e'\n  }\n  Note states") + 'DiagramView v {\n  Containers {\n    sales\n  }\n  Notes {\n    sales.states\n  }\n}', 'v')?.notes, ['sales.states']));
+  check('§18.2: a top-level note under Notes leaves the Container contributing all of its notes', () =>
+    same(members(DV + 'DiagramView v {\n  Containers {\n    sales\n  }\n  Notes {\n    other\n  }\n}', 'v')?.notes, ['sales.states', 'other']));
+  check('§18.3: an unqualified note name resolves into a Container, and its frame is drawn', () =>
+    same(members(DV + 'DiagramView v {\n  Notes {\n    states\n  }\n}', 'v'), { notes: ['sales.states'], containers: ['sales'], entities: [] })
+      ?? expectCodes(DV + 'DiagramView v {\n  Notes {\n    states\n  }\n}', ''));
+
+  return results;
+}
+
+function runV07LineageTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string, options?: ParseOptions): string =>
+    resolveNames(parse(src, options)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string, options?: ParseOptions): string | undefined => {
+    const got = codes(src, options);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const dep = (src: string, k = 0): DepDeclaration =>
+    parse(src).statements.filter((x): x is DepDeclaration => x.kind === 'DepDeclaration')[k];
+  const ends = (src: string): string[] => collectLineage(flatten(parse(src))).map((l) =>
+    `${l.id}:${l.dependencies.map((d) => `${pathToString(d.upstream.path)}->${pathToString(d.downstream.path)}`).join(';')}`);
+  const settings = (list: ReadonlyArray<{ name: string; value: Parameters<typeof settingValueText>[0] }>): string[] =>
+    list.map((x) => `${x.name}=${settingValueText(x.value)}`);
+  const T = 'Table a {\n  x int\n  y int\n}\nTable b {\n  x int\n  y int\n}\nTable c {\n  x int\n}\n';
+  const V = 'xdbml: 0.7\n';
+
+  /* ---- §27.2 forms ---- */
+
+  check('§27.2: the short form reads the arrow from upstream to downstream', () => {
+    const d = dep(`${T}Dep: a -> b`);
+    return same([d.form, d.name, pathToString(d.dependencies[0].upstream.path), pathToString(d.dependencies[0].downstream.path), d.dependencies[0].arrow],
+      ['short', undefined, 'a', 'b', '->']);
+  });
+  check('§27.1: `b <- a` states the dependency `a -> b`', () => {
+    const d = dep(`${T}Dep: b.x <- a.y`);
+    return same([pathToString(d.dependencies[0].upstream.path), pathToString(d.dependencies[0].downstream.path), d.dependencies[0].arrow], ['a.y', 'b.x', '<-']);
+  });
+  check('§27.2, §27.4: a name before the colon, bare or quoted', () =>
+    same([dep(`${T}Dep load: a -> b`).name, dep(`${T}Dep "load orders": a -> b`).name], ['load', 'load orders']));
+  check('§27.2: brackets before the colon apply, and those after the dependency take precedence', () =>
+    same(settings(depSettings(dep(`${T}Dep n [note: 'x', owner: 'o']: a -> b [note: 'y']`))), ['note=y', 'owner=o']));
+  check('§27.2: in a block, the body takes precedence over the brackets, a Note included', () => {
+    const d = dep(`${T}Dep n [note: 'brackets', owner: 'o', color: #111] {\n  a -> b\n  owner: 'body'\n  Note {\n    'from the body'\n  }\n}`);
+    return same(settings(depSettings(d)), ['note=from the body', 'owner=body', 'color=#111']);
+  });
+  check('§27.2: brackets after a dependency in a block concern that dependency alone', () => {
+    const d = dep(`${T}Dep n {\n  a.x -> b.x [note: 'cast to int']\n  a.y -> b.x\n}`);
+    return same([settings(d.dependencies[0].settings), settings(d.dependencies[1].settings), settings(depSettings(d))],
+      [['note=cast to int'], [], []]);
+  });
+  check('§27.2: a block on one line, and an empty block', () =>
+    same([dep(`${T}Dep n { a -> b }`).dependencies.length, dep(`${T}Dep n { }`).dependencies.length], [1, 0]));
+  check('§3.10: `dep` still names a table, a field and a nested object', () =>
+    expectCodes(`${T}Table dep {\n  dep int\n  meta object {\n    dep int\n  }\n}\nDep: a -> dep\nDep: a.x -> dep.dep`, ''));
+  check("§27.2: 'Dep' is case-insensitive, like every keyword", () =>
+    same(dep(`${T}DEP: a -> b`).form, 'short'));
+
+  /* ---- §27.2 inline form, collectLineage ---- */
+
+  check('§27.2: inline deps gather after the declarations, the entity before its fields', () =>
+    same(ends(`${T}Table d [dep: <- a] {\n  x int [dep: <- a.x, dep: -> c.x]\n}\nDep: a -> b`),
+      ['dep:0:a->b', 'dep:1:a->d', 'dep:2:a.x->d.x', 'dep:3:d.x->c.x']));
+  check('§27.1: an inline dep on a nested field names it with its path, through [*]', () =>
+    same(ends(`${V}${T}Table o {\n  items array [object {\n    sku varchar [dep: <- a.x]\n  }]\n}`), ['dep:0:a.x->o.items.[*].sku'])
+      ?? expectCodes(`${V}${T}Table o {\n  items array [object {\n    sku varchar [dep: <- a.x]\n  }]\n}`, ''));
+  check('§27.2: an inline dep in a Container names the entity with its Container', () =>
+    same(ends(`${V}${T}Container s {\n  Entity t [dep: <- a] {\n    id int\n  }\n}`), ['dep:0:a->s.t']));
+  check('§27.3: depColor reads #rgb and #rrggbb only', () =>
+    same([depColor(depSettings(dep(`${T}Dep: a -> b [color: #abc]`))), depColor(depSettings(dep(`${T}Dep: a -> b [color: red]`)))], ['#abc', undefined]));
+
+  /* ---- §27.1 endpoints ---- */
+
+  check('§27.1: resolveLineage gives the element and the field of each end, by Dep id', () => {
+    const src = `${V}${T}Container s {\n  View v {\n    n int\n  }\n}\nDep: s.v.n <- a\nDep: a.x -> zz`;
+    const got = [...resolveLineage(parse(src))].map(([id, ds]) => [id, ds.map((d) => [d.upstream, d.downstream])]);
+    return same(got, [
+      ['dep:0', [[{ element: 'a', elementKind: 'entity' }, { element: 's.v', elementKind: 'view', field: 'n' }]]],
+      ['dep:1', [[{ element: 'a', elementKind: 'entity', field: 'x' }, undefined]]],
+    ]);
+  });
+
+  check('§27.1: an injected field is a field of the entity', () =>
+    expectCodes(`${T}TablePartial audited {\n  loaded_at timestamp\n}\nTable d {\n  id int\n  ~audited\n}\nDep: a.x -> d.loaded_at`, ''));
+  check('§11.16.3: a path naming an entity and a field reads as the field, with a warning', () =>
+    expectCodes(`${V}${T}Container a {\n  Entity x {\n    id int\n  }\n}\nDep: a.x -> b.x`, 'warning:ambiguous-dep-endpoint'));
+  check('§27.1: a bare name declared in two Containers asks for the Container', () => {
+    const src = `${V}Container s1 {\n  Entity t {\n    id int\n  }\n}\nContainer s2 {\n  Entity t {\n    id int\n  }\n}\nTable z {\n  id int\n}\nDep: t -> z`;
+    const d = resolveNames(parse(src)).diagnostics;
+    return same(d.map((x) => x.code), ['unresolved-dep-endpoint']) ?? (d[0].message.includes('several Containers') ? undefined : d[0].message);
+  });
+  check('§27.1: a field a View does not declare names nothing', () =>
+    expectCodes(`${V}${T}View v {\n  x int\n}\nDep: a.y -> v.y`, 'error:unresolved-dep-endpoint'));
+  check('§11.5: a nested path that the type does not hold is reported', () =>
+    expectCodes(`${V}${T}Table o {\n  p object {\n    id int\n  }\n}\nDep: o.p.nope -> b.x`, 'error:unresolved-field'));
+  check('§27.1: the field of an Edge is no endpoint', () =>
+    expectCodes(`${V}${T}Edge e [source: a, target: b] {\n  w int\n}\nDep: e.w -> b.x`, 'error:invalid-dep-endpoint'));
+  check('§27.1: a dep in the brackets of an Edge is an error', () =>
+    expectCodes(`${V}${T}Edge e [source: a, target: b, dep: <- a] {\n  w int\n}`, 'error:misplaced-dep'));
+  check('§27.2: a dep on a Ref or in a Type is an error', () =>
+    expectCodes(`${V}${T}Ref: a.x > b.x [dep: <- c]\nType t {\n  v int [dep: <- c.x]\n}`, 'error:misplaced-dep error:misplaced-dep'));
+
+  /* ---- §27.4 rules ---- */
+
+  check('§27.4: a reversed pair and a pair at another level are other dependencies', () =>
+    expectCodes(`${T}Dep: a -> b\nDep: b -> a\nDep: a.x -> b.x\nDep: a -> b.x`, ''));
+  check('§27.4: a dependency stated twice in one block', () =>
+    expectCodes(`${T}Dep n {\n  a.x -> b.x\n  b.x <- a.x\n}`, 'error:duplicate-dep'));
+  check('§27.4: the same dependency written with and without its Container is stated twice', () =>
+    expectCodes(`${V}Container s {\n  Entity t {\n    id int\n  }\n}\nTable z {\n  id int\n}\nDep: t.id -> z.id\nDep: s.t.id -> z.id`, 'error:duplicate-dep'));
+  check('§27.4: two fields of one entity may depend on each other', () =>
+    expectCodes(`${T}Dep: a.x -> a.y`, ''));
+  check('§27.3: a color in the brackets of a dependency in a block is checked too', () =>
+    expectCodes(`${T}Dep n {\n  a -> b [color: blue]\n}`, 'error:invalid-dep-color'));
+
+  /* ---- §27.9 values that are no arrow ---- */
+
+  check('§27.9: a dep flag, a number and a name are no arrow', () =>
+    expectCodes(`${T}Table d [dep] {\n  x int [dep: -3]\n  y int [dep: a]\n}`, 'error:invalid-dep-value error:invalid-dep-value error:invalid-dep-value'));
+  check('§27.9: in a v0.6 document, a TablePartial keeps a dep custom property with a warning, and an arrow is an error', () =>
+    expectCodes(`xdbml: 0.6\n${T}TablePartial p [dep: 'x'] {\n  f int [dep: <- a.x]\n}`, 'warning:invalid-dep-value error:dep-in-partial'));
+  check('§27.9: an arrow is a dependency in a document declaring v0.6', () =>
+    same(ends(`xdbml: 0.6\n${T}Table d [dep: <- a] {\n  x int\n}`), ['dep:0:a->d']));
+
+  /* ---- §27.8 modules ---- */
+
+  const files: Record<string, string> = {
+    '/l/lib.xdbml': `${T}Table d [dep: <- c] {\n  x int\n}\nDep load {\n  a -> b\n}\n`,
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  check('§27.8: importing everything brings the Deps, which resolve', () => {
+    const doc = parse("use * from './lib'\n", opts('/l/main.xdbml'));
+    const got = collectLineage(flatten(doc)).map((l) => l.name ?? l.id);
+    return same(got, ['load', 'dep:1']) ?? expectCodes("use * from './lib'\n", '', opts('/l/main.xdbml'));
+  });
+  check('§27.8: a selective import brings no Dep, and an inline dep travels with its entity', () => {
+    const src = "use { table c, table d } from './lib'\n";
+    const doc = parse(src, opts('/l/main.xdbml'));
+    return same(collectLineage(flatten(doc)).map((l) => l.inline?.carrier ?? l.name), ['d']) ?? expectCodes(src, '', opts('/l/main.xdbml'));
+  });
+  check('§27.8: an inline dep whose other end the import leaves behind names nothing', () =>
+    expectCodes("use { table d } from './lib'\n", 'error:unresolved-dep-endpoint', opts('/l/main.xdbml')));
+  check('§27.4, §28.2: a Dep that a Container-scoped import brings moves to the top level', () => {
+    const src = `${V}Container k {\n  use * from './lib'\n}\n`;
+    const flat = flatten(parse(src, opts('/l/main.xdbml')));
+    const top = flat.statements.filter((x) => x.kind === 'DepDeclaration').length;
+    return same(top, 1) ?? expectCodes(src, '', opts('/l/main.xdbml'));
+  });
+
+  /* ---- editors ---- */
+
+  check('§27.2: Monarch colors Dep at the start of a line as a keyword, and dep before a type as a name', () => {
+    const rules = xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>;
+    const rule = rules.find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('^dep'));
+    const arrows = rules.find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[1] === 'operators.lineage');
+    if (!rule || !arrows) return 'rule missing';
+    const re = new RegExp(rule[0].source, 'i');
+    const asKeyword = ['Dep: a -> b', 'dep load: a -> b', 'Dep load [owner: \'x\'] {', 'Dep "load it" {', 'DEP {', 'Dep n [note: \'x\']: a -> b']
+      .filter((t) => !re.test(t));
+    const asName = ['  dep int', 'dep int [pk]', '  Dep: a -> b', 'depot: x'].filter((t) => re.test(t));
+    const arrowRe = new RegExp(arrows[0].source);
+    const arrowsMissed = ['a -> b', 'b <- a', '[dep: <- a]'].filter((t) => !arrowRe.test(t));
+    return asKeyword.length || asName.length || arrowsMissed.length
+      ? `keyword missed: ${asKeyword.join(' / ')}; name matched: ${asName.join(' / ')}; arrows missed: ${arrowsMissed.join(' / ')}`
+      : undefined;
+  });
+
+  return results;
+}
+
+/* -------------------------------------------------------------------------
+ * v0.7: module specifiers as DBML 10.3 reads them (spec §28.13)
+ *
+ * A specifier other than an https URL is read relative to the importing
+ * file, with or without './'; without an extension the parser asks for
+ * '<path>.xdbml', then '<path>.dbml'. The host may map a specifier first
+ * (ParseOptions.resolveSpecifier, DBML's resolveFileSpecifier); without a
+ * mapping an absolute path is an error, as in DBML's default layout.
+ * ----------------------------------------------------------------------- */
+
+function runV07ModuleSpecifierTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const LIB = 'Table users {\n  id int [pk]\n}';
+  const XLIB = 'xdbml: 0.7\nEntity members {\n  id int [pk]\n}';
+  const reads: string[] = [];
+  const host = (files: Record<string, string>, extra: Partial<ParseOptions> = {}): ParseOptions => ({
+    filePath: '/p/main.xdbml',
+    readFile: (key: string) => {
+      reads.push(key);
+      if (key in files) return files[key];
+      throw new Error(`not found: ${key}`);
+    },
+    ...extra,
+  });
+  const imported = (src: string, options: ParseOptions): string => {
+    reads.length = 0;
+    return flatten(parse(src, options)).statements
+      .filter((x) => x.kind === 'EntityDeclaration')
+      .map((x) => (x as EntityDeclaration).name).join(',');
+  };
+  const failure = (src: string, options: ParseOptions): Error | undefined => {
+    try {
+      parse(src, options);
+      return undefined;
+    } catch (e) {
+      return e as Error;
+    }
+  };
+  const use = (from: string): string => `use * from '${from}'`;
+
+  /* ---- the extension search ---- */
+
+  check('§28.13: ./lib reads lib.xdbml', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.xdbml': XLIB }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: ./lib reads lib.dbml when there is no lib.xdbml, as a DBML project has', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.dbml': LIB }));
+    return got === 'users' && reads.join(' ') === '/p/lib.xdbml /p/lib.dbml' ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.13: ./lib reads lib.xdbml when both files exist', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.xdbml': XLIB, '/p/lib.dbml': LIB }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: ./lib.dbml reads lib.dbml as written (until v0.7 the parser asked for lib.dbml.xdbml)', () => {
+    const got = imported(use('./lib.dbml'), host({ '/p/lib.dbml': LIB }));
+    return got === 'users' && reads.join(' ') === '/p/lib.dbml' ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.13: ./lib.xdbml reads lib.xdbml only', () => {
+    const got = imported(use('./lib.xdbml'), host({ '/p/lib.xdbml': XLIB, '/p/lib.dbml': LIB }));
+    return got === 'members' && reads.join(' ') === '/p/lib.xdbml' ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.13: a file found under neither name is an error naming both', () => {
+    const e = failure(use('./nope'), host({}));
+    return e && /'\/p\/nope\.xdbml' or '\/p\/nope\.dbml'/.test(e.message) ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+
+  /* ---- specifiers without './' ---- */
+
+  check('§28.13: lib without ./ reads the same file as ./lib, as in DBML', () => {
+    const got = imported(use('lib'), host({ '/p/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: sub/lib reads sub/lib next to the importing file', () => {
+    const got = imported(use('sub/lib'), host({ '/p/sub/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: ../lib reads lib in the parent directory', () => {
+    const got = imported(use('../lib'), host({ '/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: @shared-users reads @shared-users next to the importing file by default', () => {
+    const got = imported(use('@shared-users'), host({ '/p/@shared-users.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: backslashes read as forward slashes', () => {
+    const got = imported(use('.\\\\sub\\\\lib'), host({ '/p/sub/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: a source whose first folder looks like a host is a folder, as in DBML', () => {
+    const got = imported(use('github.com/acme/schemas/core'), host({ '/p/github.com/acme/schemas/core.xdbml': XLIB }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: when that folder holds no such file, the error suggests https://', () => {
+    const e = failure(use('github.com/acme/schemas/core.xdbml'), host({}));
+    return e && e.message.includes("'https://github.com/acme/schemas/core.xdbml'") ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+
+  /* ---- the host's mapping ---- */
+
+  check('§28.13: resolveSpecifier maps @shared/users to a library file', () => {
+    const seen: string[] = [];
+    const got = imported(use('@shared/users'), host({ '/libs/shared/users.dbml': LIB }, {
+      resolveSpecifier: (spec, importer) => {
+        seen.push(`${spec}|${importer}`);
+        return spec.startsWith('@shared/') ? `/libs/shared/${spec.slice(8)}.dbml` : undefined;
+      },
+    }));
+    return got === 'users' && seen.join() === '@shared/users|/p/main.xdbml' ? undefined : `imported '${got}', seen ${seen.join()}`;
+  });
+  check('§28.13: a specifier the host leaves alone resolves by default', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.xdbml': XLIB }, { resolveSpecifier: () => undefined }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: the key the host returns is read as is, with no extension search', () => {
+    imported(use('@lib'), host({ '/libs/lib': LIB }, { resolveSpecifier: () => '/libs/lib' }));
+    return reads.join(' ') === '/libs/lib' ? undefined : `reads ${reads.join(' ')}`;
+  });
+
+  /* ---- absolute paths ---- */
+
+  check('§28.13: an absolute path the host does not map is an error at the string', () => {
+    const e = failure(`xdbml: 0.7\n${use('/models/lib')}`, host({ '/models/lib.xdbml': XLIB }));
+    return e instanceof ParseError && e.position.line === 2 && /absolute path/.test(e.message)
+      ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+  check('§28.13: a host may accept an absolute path', () => {
+    const got = imported(use('/models/lib'), host({ '/models/lib.xdbml': XLIB }, { resolveSpecifier: (s) => `${s}.xdbml` }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: C:\\models\\lib is a Windows path, not a URL scheme c:', () => {
+    const e = failure(use('C:\\\\models\\\\lib'), host({}));
+    return e && /absolute path/.test(e.message) && !/scheme/.test(e.message) ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+  check('§28.13: the host receives a Windows path as written; the key reads with forward slashes', () => {
+    let seen = '';
+    imported(use('C:\\\\models\\\\lib.xdbml'), host({ 'C:/models/lib.xdbml': XLIB }, { resolveSpecifier: (s) => { seen = s; return s; } }));
+    return seen === 'C:\\models\\lib.xdbml' && reads.join(' ') === 'C:/models/lib.xdbml' ? undefined : `seen ${seen}, reads ${reads.join(' ')}`;
+  });
+  check('§28.13: classifyModuleSource tells absolute paths, URLs and relative specifiers apart', () => {
+    const kinds = ['/x', 'C:/x', 'c:\\x', '\\\\server\\share\\x', 'https://h.example/x', './x', 'x', '@x', 'github.com/x']
+      .map((s) => classifyModuleSource(s).kind).join(' ');
+    return kinds === 'absolute absolute absolute absolute url relative relative relative relative' ? undefined : kinds;
+  });
+  check('§28.14: http:, file: and //host stay rejected', () => {
+    const thrown = ['http://h.example/x', 'file:///x', '//h.example/x'].filter((s) => {
+      try { classifyModuleSource(s); return false; } catch { return true; }
+    });
+    return thrown.length === 3 ? undefined : `rejected only ${thrown.join(', ')}`;
+  });
+
+  /* ---- inside a remote module ---- */
+
+  const BASE = 'https://h.example/acme/v1/';
+  check('§28.14.1: inside a remote module a specifier resolves against its URL, never through the host', () => {
+    const got = imported(use(`${BASE}core.xdbml`), host({
+      [`${BASE}core.xdbml`]: "use * from 'enums'",
+      [`${BASE}enums.dbml`]: LIB,
+    }, { resolveSpecifier: () => { throw new Error('the host was asked'); } }));
+    return got === 'users' && reads.join(' ') === `${BASE}core.xdbml ${BASE}enums.xdbml ${BASE}enums.dbml`
+      ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.14.1: a remote module cannot import a Windows or UNC path', () => {
+    const bad = ['C:\\x\\lib', '\\\\server\\share\\lib'].filter((from) => {
+      try { moduleCandidates(from, `${BASE}core.xdbml`); return false; } catch { return true; }
+    });
+    return bad.length === 2 ? undefined : `accepted ${2 - bad.length}`;
+  });
+
+  /* ---- cycles ---- */
+
+  check('§28.15: a cycle through a .dbml file terminates', () => {
+    const got = imported(use('./a'), host({
+      '/p/a.xdbml': "use * from './b'\nTable a {\n  id int\n}",
+      '/p/b.dbml': "use * from './a'\nTable b {\n  id int\n}",
+    }));
+    return got.split(',').sort().join() === 'a,b' ? undefined : `imported '${got}'`;
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -5974,6 +7077,12 @@ function main (): void {
   const v065 = runV065Tests();
   const partialTests = runPartialInjectionTests();
   const quotedTests = runQuotedNameTests();
+  const recordsTests = runV07RecordsTests();
+  const optionalRefTests = runV07OptionalRefTests();
+  const metadataTests = runV07MetadataTests();
+  const noteTests = runV07StickyNoteTests();
+  const lineageTests = runV07LineageTests();
+  const specifierTests = runV07ModuleSpecifierTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -5983,9 +7092,15 @@ function main (): void {
   const fr = report('v0.6.5 internal definitions', v065);
   const pr = report('TablePartial injection (spec §17.1)', partialTests);
   const qr = report('v0.6.7 quoted names (spec §3.2, §20.1)', quotedTests);
+  const rr = report('v0.7 records in the forms of DBML 10.3.1 (spec §26)', recordsTests);
+  const or = report('v0.7 optional marks and cardinality (spec §11.1, §11.7, §11.8, §11.16)', optionalRefTests);
+  const mr = report('v0.7 custom properties and Metadata blocks (spec §24.5, §24.7)', metadataTests);
+  const nr = report('v0.7 sticky notes and the note of the project (spec §19)', noteTests);
+  const lr = report('v0.7 data lineage (spec §27)', lineageTests);
+  const sr = report('v0.7 module specifiers (spec §28.13)', specifierTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

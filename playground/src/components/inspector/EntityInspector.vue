@@ -75,7 +75,7 @@
     </InspectorSection>
 
     <InspectorSection title="Settings">
-      <SettingsTable :settings="standardSettings" />
+      <SettingsTable :settings="standardSettings" :from-metadata="mergedSettings.fromMetadata" />
     </InspectorSection>
 
     <InspectorSection title="Note">
@@ -118,7 +118,8 @@ import { highlightSql }   from './sqlHighlight';
 import { supertypeGroupsOf } from './ast-lookup';
 import type { Selection } from './selection';
 import { useParserStore } from '@/stores/parserStore';
-import { effectiveFieldList, effectiveFields, effectiveHeaderColor, effectiveNote, entityConstraints, entityDefinitions, tablePartials, viewSourceQuery } from '@xdbml/parse';
+import { effectiveFieldList, effectiveFields, effectiveHeaderColor, effectiveNote, entityConstraints, entityDefinitions, metadataIndex, metadataNote, tablePartials, viewSourceQuery, withMetadata } from '@xdbml/parse';
+import type { AppliedSetting } from '@xdbml/parse';
 import type { Constraint, ConstraintSource } from '@xdbml/parse';
 
 const props = defineProps<{
@@ -155,7 +156,7 @@ const definitions = computed(() => {
   });
 });
 
-// Every key and check of the entity (spec §28.6). Views declare none.
+// Every key and check of the entity (spec §29.6). Views declare none.
 const constraints = computed<Constraint[]>(() => {
   const doc = parser.flatAst;
   if (!doc || props.entity.kind === 'ViewDeclaration') return [];
@@ -201,13 +202,32 @@ const keywordLabel = computed(() => {
 // The header color of a TablePartial the entity injects applies to the
 // entity when it declares none (spec §17.1), so it is listed with the
 // entity's own settings.
-const standardSettings = computed(() => {
+const ownSettings = computed(() => {
   const own = props.entity.settings.filter((s) => s.name !== 'note');
   if (own.some((s) => s.name === 'headercolor')) return own;
   const doc = parser.flatAst;
   const carried = doc ? effectiveHeaderColor(props.entity, tablePartials(doc)) : undefined;
   return carried ? [...own, carried] : own;
 });
+
+// The settings the Metadata blocks of the document set on this entity or
+// View (spec §24.7). An Edge is no target of a Metadata block.
+const metadataSettings = computed<readonly AppliedSetting[]>(() => {
+  const doc = parser.flatAst;
+  if (!doc || props.entity.kind === 'EdgeDeclaration') return [];
+  const index = metadataIndex(doc);
+  const container = props.container?.name;
+  return props.entity.kind === 'ViewDeclaration'
+    ? index.view(props.entity.name, container)
+    : index.entity(props.entity.name, container);
+});
+
+// A block's setting replaces the entity's own and is marked in the table;
+// a block's note shows in the Note section.
+const mergedSettings = computed(() =>
+  withMetadata(ownSettings.value, metadataSettings.value.filter((a) => a.setting.name !== 'note')));
+
+const standardSettings = computed(() => mergedSettings.value.settings);
 
 // Entity/View-level notes can come from two sources: a `Note: '...'`
 // block inside the body (the canonical syntax) or a `[note: '...']`
@@ -217,13 +237,16 @@ const standardSettings = computed(() => {
 // otherwise.
 // The note of a TablePartial the entity injects applies when the entity
 // declares none (spec §17.1); `effectiveNote` settles both.
+// A Metadata block's note applies over the entity's own (spec §24.7.4).
 const noteBody = computed(() => {
+  const fromBlock = metadataNote(metadataSettings.value);
+  if (fromBlock !== undefined) return fromBlock;
   const doc = parser.flatAst;
   return effectiveNote(props.entity, doc ? tablePartials(doc) : new Map())?.body ?? '';
 });
 
 /**
- * The source query of a View (spec §14.3, §28.7): the first
+ * The source query of a View (spec §14.3, §29.7): the first
  * `source_query:` element of its body, as `viewSourceQuery()` returns it.
  * Empty for Entities, Edges and Views without one. A second source query
  * and a `source_query` written in the brackets draw warnings in the

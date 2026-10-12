@@ -29,6 +29,8 @@ const XDBML_TOKEN_PROVIDER = xdbmlMonarchTokensProvider as unknown as monaco.lan
  *   - x_-prefixed custom properties -- italic amber so they stand out as
  *     extension points.
  *   - Cardinality operators (< > - <>) -- bold black for emphasis.
+ *   - The arrows of a dependency (-> <-) -- bold amber, the color the
+ *     diagram draws data lineage in (spec §27.7).
  *   - `[*]` array wildcard and `~` partial injection -- orange-bold to make
  *     them visually scannable.
  */
@@ -68,6 +70,7 @@ const XDBML_THEME: monaco.editor.IStandaloneThemeData = {
     { token: 'number.hex', foreground: '2030c0' },
 
     { token: 'operators.cardinality', foreground: '000000', fontStyle: 'bold' },
+    { token: 'operators.lineage', foreground: 'b45309', fontStyle: 'bold' },
     { token: 'delimiter', foreground: '404040' },
     { token: 'delimiter.curly', foreground: '404040' },
     { token: 'delimiter.square', foreground: '404040' },
@@ -121,6 +124,7 @@ const XDBML_THEME_DARK: monaco.editor.IStandaloneThemeData = {
     { token: 'number.hex', foreground: '6ea8ff' },
 
     { token: 'operators.cardinality', foreground: 'd4d4d4', fontStyle: 'bold' },
+    { token: 'operators.lineage', foreground: 'f59e0b', fontStyle: 'bold' },
     { token: 'delimiter', foreground: 'b0b0b0' },
     { token: 'delimiter.curly', foreground: 'b0b0b0' },
     { token: 'delimiter.square', foreground: 'b0b0b0' },

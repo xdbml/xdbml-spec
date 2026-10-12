@@ -6,10 +6,10 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 
 ## Ground rules
 
-- The first line of every document is `xdbml: 0.6`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
+- The first line of every document is `xdbml: 0.7`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
 - Comments are `//` to the end of the line, or `/* ... */`. `#` and `--` are errors.
 - Keywords match any casing, and names are case-sensitive. Write construct keywords capitalized (`Entity`, `Table`, `View`, `Ref`), settings and type keywords in lowercase.
-- A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks.
+- A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks, and so do `records (` and `records [`.
 - Entities, Views, Edges, Types, Enums and TablePartials share one namespace: two of them never have the same name.
 - Declare every entity, Enum and Type that the document names.
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Schema`, `Database`, `Keyspace`, `Namespace`, `Dataset` or `Bucket`.
@@ -56,7 +56,7 @@ Ref customer_vehicles: vehicles.customer_id > customers.customer_id [
 ]
 ```
 
-Other lists keep their own rules. In `indexes { }` a comma between two entries is an error, and a composite index is written `(a, b)`. A `records { }` row puts a comma between its values, one row per line. `union [T1, T2]` and `map [K, V]` need their commas.
+Other lists keep their own rules. In `indexes { }` a comma between two entries is an error, and a composite index is written `(a, b)`. A `records { }` row puts a comma between its values, one row per line; an empty field, `1, , 'x'`, reads as null. An entity takes one records block, in its body or at the top level as `records users (id, name) { ... }`, and `[example]` after the column list marks rows that illustrate the data. `union [T1, T2]` and `map [K, V]` need their commas.
 
 ## What goes where
 
@@ -65,7 +65,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | Construct | Brackets after the name | Body holds | Declared |
 |---|---|---|---|
 | `Project` | none | `targets:`, `Note:` | top level, at most once |
-| `Container`, `Schema`, `Database`, ... | `type`, `target`, `note`, custom | entities, Views, Edges, Enums, `Note:` | top level |
+| `Container`, `Schema`, `Database`, ... | `type`, `target`, `color`, `note`, custom | entities, Views, Edges, Enums, `Note:`, sticky notes (`xdbml: 0.7`) | top level |
 | `Entity`, `Table`, `Collection`, `Record` | `note`, `headercolor`, `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }`, `definitions { }` | top level or in a Container |
 | `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
 | `Edge` | `source`, `target` (entities), `source_cardinality`, `target_cardinality`, `undirected`, roles and verbs, `note` | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }` | top level or in a Container |
@@ -76,6 +76,8 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | `SupertypeGroup` | `supertype` (required), `completeness`, `exclusivity`, `strategy`, `merge`, `discriminator`, `note` | subtype names, each with an optional `[strategy: ...]` | top level |
 | `TableGroup` | `color`, `note` | entity names | top level |
 | `DiagramView` | `note`, custom | `Note:`, and categories: `Tables`, `Views`, `Containers`, `TableGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
+| `Note name` (a sticky note) | `color` (`#rgb`, `#rrggbb` or `none`), custom | one string, Markdown | top level, or in a Container with `xdbml: 0.7` |
+| `Dep` (data lineage) | `note`, `color` (`#rgb` or `#rrggbb`), custom | dependencies `a -> b`, one per line, each with optional brackets; `key: value` lines; `Note:` | top level, never in a Container |
 
 A note goes either in the brackets as `note: '...'` or in the body as `Note: '...'`.
 
@@ -151,7 +153,7 @@ Operators: `>` many-to-one, `<` one-to-many, `-` one-to-one, `<>` many-to-many. 
 
 The referenced side names the parent's primary key or one of its unique keys: all the fields of that key, and no other field. When the field on the referenced side is the child's own foreign key, the operator points the wrong way. Declare the referenced field `unique` when it is not the key.
 
-Cardinality: `source` describes the left endpoint and `target` the right one, each as a quoted `'min..max'` string: `'0..1'`, `'1..1'`, `'0..*'`, `'1..*'`, or `'N..M'`. With `>`, the source maximum is `*` and the target maximum is `1`; with `<`, the reverse. Never `'many'`, `'*'` or `'1'`. Without these settings, the cardinality follows from the operator and from whether the foreign key is `not null`.
+Cardinality: `source` describes the left endpoint and `target` the right one, each as a quoted `'min..max'` string: `'0..1'`, `'1..1'`, `'0..*'`, `'1..*'`, or `'N..M'`. With `>`, the source maximum is `*` and the target maximum is `1`; with `<`, the reverse. Never `'many'`, `'*'` or `'1'`. Without these settings, the cardinality follows from the operator, and a foreign key without `not null` makes the parent end optional: `customer_id int` under `>` gives the target `'0..1'`. State cardinality with `source` and `target`, not with DBML's `?` marks (`>?`, `?<`), which a parser reads but tools do not write.
 
 All relationship settings go in the brackets of the `Ref`. An inline `ref:` takes none but `foreign_master`: other settings beside it belong to the field, not to the relationship.
 
@@ -345,7 +347,85 @@ DiagramView order_flow {
 }
 ```
 
-A listed Container brings all of its entities, unless `Tables` names some of them: then it brings only those. Here `sales` brings `orders` and `order_lines` and leaves `returns` out, `billing` brings every entity, and `crm`, not listed, contributes `customers` alone. `Views` narrows the database views of a listed Container the same way, separately. A listed TableGroup or supertype group brings all of its members, whichever Container holds them. Each category appears once, and a diagram view has a unique name.
+A listed Container brings all of its entities, unless `Tables` names some of them: then it brings only those. Here `sales` brings `orders` and `order_lines` and leaves `returns` out, `billing` brings every entity, and `crm`, not listed, contributes `customers` alone. `Views` narrows the database views of a listed Container the same way, separately, and `Notes` its sticky notes. A listed TableGroup or supertype group brings all of its members, whichever Container holds them. Each category appears once, and a diagram view has a unique name.
+
+## Sticky notes
+
+A top-level `Note` with a name is a sticky note: an annotation drawn on the diagram, in the color of its `color` setting (`#rgb`, `#rrggbb`, or `none` for the text alone), or light yellow by default. Its text is Markdown: headings, `**bold**`, `*italic*`, `` `code` ``, links and lists render on the canvas. With `xdbml: 0.7`, a named `Note` in a Container body is a sticky note attached to it: it is drawn inside the Container's frame and moves with it, and the rest of the document names it with its Container, as in `sales.order_states`. The unnamed `Note:` of a Container body stays the Container's own note, and a top-level `Note:` without a name is the note of the project.
+
+```xdbml
+xdbml: 0.7
+
+Container sales [type: schema] {
+  Note: 'Order management'
+
+  Table orders {
+    id     int [pk]
+    status varchar
+  }
+
+  Note order_states [color: #FBCFE8] {
+    '''
+    An order moves from **placed** to **shipped** to **delivered**.
+
+    - a cancelled order keeps its lines
+    - a return points at one order line
+    '''
+  }
+}
+
+Note release_plan [color: none, author: 'data-team'] {
+  'Fields marked deprecated leave the model in release 4.2.'
+}
+
+DiagramView ordering {
+  Tables {
+    sales.orders
+  }
+  Notes {
+    sales.order_states
+  }
+}
+```
+
+A sticky note takes no position and no size: the diagram places it and sizes it to its text. Settings other than `color` are custom properties.
+
+## Data lineage
+
+A `Dep` records that data is computed from other data: an entity, a View or a field is produced from another by a job, a dbt model or a query that runs outside the model. The arrow points from upstream to downstream, `a -> b`, and `b <- a` states the same dependency. An end names an entity, a View, or a field of either, with its Container where it sits in one, and a nested field with its path, as in a `Ref`: `events.payload.customer.id`, `orders.line_items.[*].sku`. A dependency states no cardinality and constrains no value: it never replaces a `Ref`, which records how rows connect.
+
+```xdbml
+Table raw_customers {
+  id         int [pk]
+  first_name varchar
+  last_name  varchar
+  signed_up  date
+}
+
+Table stg_customers [dep: <- raw_customers] {
+  customer_id int [pk, dep: <- raw_customers.id]
+  full_name   varchar
+}
+
+Table daily_signups {
+  day       date [pk, dep: <- raw_customers.signed_up]
+  customers int
+}
+
+Dep: raw_customers -> daily_signups.customers [note: 'COUNT(*) per day']
+
+Dep build_full_name [owner: 'analytics'] {
+  raw_customers.first_name -> stg_customers.full_name
+  raw_customers.last_name  -> stg_customers.full_name
+  Note: '''
+    ~~~sql
+    SELECT first_name || ' ' || last_name AS full_name FROM raw_customers
+    ~~~
+  '''
+}
+```
+
+The short form, `Dep name: a -> b [settings]`, states one dependency; its name is optional. A block gathers dependencies into one downstream entity or View, all between entities or all naming a field at one end at least; a `key: value` line or a `Note:` in its body is a setting of the Dep, and brackets after a dependency hold settings of that dependency alone. Inline, `dep: <- source` or `dep: -> target` on an entity or a View names an entity or a View, and on a field names a field, qualified with its entity. A field never depends on itself, and a dependency is stated once in the document. A `Dep` stands at the top level; `use *` brings the Deps of a file, and a selective import brings none. Write the transformation in the note: xDBML 0.7 records which element feeds which, not the expression that computes it.
 
 ## Nesting and polymorphism
 
@@ -476,6 +556,26 @@ Entity customers [x_owner: 'data-team@acme.com', x_retention_days: 2555] {
 }
 ```
 
+Write settings in the brackets of the element they describe. A `Metadata` block sets a note, a color and custom properties on an element declared elsewhere, in the same file or, where it helps most, in an imported file you do not edit. It goes at the top level and names the kind of element and the element:
+
+```xdbml
+Table customers {
+  id    int [pk]
+  email varchar
+}
+
+Metadata Table customers {
+  note: 'Customers of record'
+  x_owner: 'data-team@acme.com'
+}
+
+Metadata Column customers.email {
+  x_classification: 'confidential'
+}
+```
+
+The kinds are `Table`, `Column`, `TableGroup` and `Note`, and with `xdbml: 0.7` also `Container`, `View` and `DiagramView`. A block takes `note`, the element's color (`headercolor` on a Table or a View, `color` on a TableGroup, a sticky note or a Container), and custom properties. It does not take `synonyms`, `business_term`, `tags`, `granularity`, or a field setting such as `pk`: those read as custom properties there, with a warning.
+
 ## Common mistakes
 
 A missing comma between settings on separate lines.
@@ -501,6 +601,56 @@ Ref customer_vehicles: vehicles.customer_id > customers.customer_id [
   source: '0..*',
   target: '1..1'
 ]
+```
+
+A dependency written with a relationship operator. A `Dep` takes an arrow, `->` or `<-`, with no space inside.
+
+```xdbml
+Table raw_orders {
+  id int [pk]
+}
+
+Table stg_orders {
+  order_id int [pk]
+}
+
+// Wrong (parse-error): '>' is the operator of a relationship
+Dep: raw_orders > stg_orders
+
+// Right
+Dep: raw_orders -> stg_orders
+```
+
+An inline `dep` on a field that names an entity. On a field, `dep` names a field; a dependency between entities goes in the entity's brackets.
+
+```xdbml
+Table raw_orders {
+  id int [pk]
+}
+
+// Wrong (dep-wrong-kind): a field depends on a field
+Table stg_orders {
+  order_id int [pk, dep: <- raw_orders]
+}
+
+// Right
+Table stg_orders [dep: <- raw_orders] {
+  order_id int [pk, dep: <- raw_orders.id]
+}
+```
+
+A sticky note without a name. A top-level `Note` without a name is the note of the project, and takes no settings.
+
+```xdbml
+// Wrong (parse-error): settings belong to a sticky note, which has a name
+Note [color: #FDE68A] {
+  'Orders are archived after two years'
+}
+
+// Right
+Note archiving [color: #FDE68A] {
+  'Orders are archived after two years'
+}
 ```
 
 A reversed relationship. The right side names the child's foreign key instead of the parent's key.
@@ -956,12 +1106,12 @@ Entity suppliers {
 
 ## Checklist before you answer
 
-1. The first line is `xdbml: 0.6`.
+1. The first line is `xdbml: 0.7`.
 2. Every `[ ]` holding two or more settings has a comma between each two of them, across line breaks too.
 3. No comma or semicolon follows an item in `{ }`.
 4. In every relationship between attributes, the referenced side -- the right side of `>`, the left side of `<` -- names all the fields of the parent's primary key or of one of its unique keys, and no other field.
 5. Relationship settings sit in a `Ref`, not beside an inline `ref:`. Cardinalities are quoted `'min..max'` strings: `source` for the left end, `target` for the right end.
-6. `Ref`, `Type`, `SupertypeGroup`, `TableGroup`, `TablePartial` and `DiagramView` declarations sit at the top level.
+6. `Ref`, `Dep`, `Metadata`, `Type`, `SupertypeGroup`, `TableGroup`, `TablePartial` and `DiagramView` declarations sit at the top level.
 7. A View body holds `source_query:`, fields and `Note:`, and nothing else.
 8. A key sits inline only on one unnamed field, and otherwise in `constraints`; each key is declared once, and primary key fields carry `not null`.
 9. Strings use single quotes, with each `'` inside escaped or the string in `'''...'''`; database expressions use backticks; multi-word types use double quotes.
@@ -975,7 +1125,7 @@ To check a schema, run it through an xDBML validator when one is available, or p
 ## Complete example
 
 ```xdbml
-xdbml: 0.6
+xdbml: 0.7
 
 Project service_network {
   targets: PostgreSQL

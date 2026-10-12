@@ -91,14 +91,32 @@ Ref: orders.customer_id > customers.id
 
 The four operators map to defaults:
 
-| Operator | Meaning | Source glyph | Target glyph |
+| Operator | Meaning | Source | Target |
 |---|---|---|---|
-| `>` | many-to-one | crow's foot | bar |
-| `<` | one-to-many | bar | crow's foot |
-| `-` | one-to-one | bar | bar |
-| `<>` | many-to-many | crow's foot | crow's foot |
+| `>` | many-to-one | `1..*` | `1..1` |
+| `<` | one-to-many | `1..1` | `1..*` |
+| `-` | one-to-one | `1..1` | `1..1` |
+| `<>` | many-to-many | `0..*` | `0..*` |
 
-The operators can't express optionality (the min is always 1 by default), so all four operator-only cases produce mandatory participation. If you need an optional side, use explicit `[source: '0..*']`.
+**Optional ends.** Two things make an end optional, which draws its ring:
+
+- A `?` written against the operator, as in DBML: `>?` makes the target end optional, `?<` the source end, `?-?` both. The end keeps its maximum, so `>?` gives `1..*` and `0..1`.
+- A foreign key that may hold null makes the parent end optional, since a child whose foreign key is null has no parent. A field is nullable when it lacks `not null` and belongs to no primary key.
+
+```xdbml
+Entity orders {
+  id          int [pk]
+  customer_id int                 // nullable
+  store_id    int [not null]
+}
+
+Ref: orders.customer_id > customers.id   // 1..* and 0..1: an order may have no customer
+Ref: orders.store_id > stores.id         // 1..* and 1..1
+```
+
+A setting states its end outright, whatever the operator, its marks and the foreign key say. When a `?` and a setting disagree on an end, the diagnostics panel shows a warning: in a document declaring an `xdbml:` version the setting applies, and in one without, which reads as DBML, the `?` applies. Tools that write xDBML state cardinality with settings and write no marks.
+
+Select the relationship to see where each end's range comes from: the inspector's Cardinality section names the setting, the operator, the mark or the nullable foreign key.
 
 ## Non-standard cardinalities
 
@@ -189,7 +207,7 @@ A named relationship (`Ref places: ...`) can show its name at the middle of its 
 
 ## Showing and hiding relationships
 
-The **Display** menu in the diagram toolbar has a checkbox per kind: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**, plus **Relationship names** under Labels. The choices are remembered between sessions. When a relationship kind is hidden, the Display button is highlighted so you know something is off screen.
+The **Display** menu in the diagram toolbar has a checkbox per kind: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**, **Sticky notes** under Annotations, **Dependencies** under Lineage for the curves of data lineage (see [Visual cues](./visual-cues)), and **Relationship names** under Labels. The choices are remembered between sessions. When a relationship kind is hidden, the Display button is highlighted so you know something is off screen.
 
 ## Selection
 

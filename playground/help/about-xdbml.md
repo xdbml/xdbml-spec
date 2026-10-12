@@ -15,7 +15,7 @@ xDBML is a polyglot, vendor-neutral data-modeling language: one syntax for descr
 
 **[The 5-minute introduction](https://xdbml.org/learn/)** is the quickest way in. Reads in five minutes; covers the core concepts and the basic syntax. If you've used DBML before, much of it will feel familiar; the introduction calls out the additions.
 
-**[The specification](https://xdbml.org/spec/v0.1)** is the authoritative reference. Goes section by section through the grammar, the type system, settings, references, and edge cases. The current version is the v0.1 draft; the specification page links to all versions as they're published.
+**[The specification](https://xdbml.org/spec/current)** is the authoritative reference. Goes section by section through the grammar, the type system, settings, references, and edge cases. The current version is the v0.1 draft; the specification page links to all versions as they're published.
 
 **[The grammar](https://xdbml.org/grammar/)** is the formal ANTLR4 definition of the language. Useful if you're building tools that need to parse xDBML, or if you want absolute precision about what is and isn't accepted by the parser.
 

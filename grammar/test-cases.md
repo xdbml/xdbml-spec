@@ -1,6 +1,6 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.6.5. Every case runs in the reference parser's test suite.
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.7. Every case runs in the reference parser's test suite.
 ---
 
 
@@ -662,6 +662,70 @@ Ref: pets.owner_id > people.id [
 ]
 ```
 
+### VALID -- optional marks on the operator, short, long and inline (DBML, v0.7)
+
+```
+Table users {
+  id int [pk]
+}
+
+Table posts {
+  id          int [pk]
+  author_id   int
+  owner_id    int
+  reviewer_id int
+  editor_id   int [ref: ?>? users.id]
+}
+
+Ref: posts.author_id >? users.id
+Ref: users.id ?< posts.owner_id
+Ref pair {
+  posts.reviewer_id -? users.id [delete: cascade]
+}
+```
+
+### VALID with a warning -- a ? and a setting that disagree on an end (v0.7)
+
+```
+xdbml: 0.7
+
+Entity customers {
+  id int [pk]
+}
+
+Entity orders {
+  id          int [pk]
+  customer_id int [not null]
+}
+
+Ref: orders.customer_id >? customers.id [target: '1..1']
+```
+
+### INVALID -- a ? apart from the operator (DBML, v0.7)
+
+```
+Table users {
+  id int [pk]
+}
+
+Table posts {
+  author_id int
+}
+
+Ref: posts.author_id > ? users.id
+```
+
+### VALID -- a ? on a relationship between entities (v0.7)
+
+```
+xdbml: 0.7
+
+Entity Customer { }
+Entity Order { }
+
+Ref: Customer >? Order
+```
+
 ---
 
 ## §17.11 Edge
@@ -1034,7 +1098,7 @@ reuse {
 } from './catalog'
 ```
 
-The import list is a list body (§3.9, §27.2): the single-line form of the next case imports the same three declarations. The two directives go in separate documents, since importing one declaration twice into one document declares it twice.
+The import list is a list body (§3.9, §28.2): the single-line form of the next case imports the same three declarations. The two directives go in separate documents, since importing one declaration twice into one document declares it twice.
 
 ### VALID -- comma-separated single-line import list
 
@@ -1086,17 +1150,17 @@ xdbml: 0.2
 reuse * from '/absolute/path/to/file.xdbml'
 ```
 
-Expected error: "import path must begin with './' or '../' (relative paths only in v0.2 phase 1)."
+Expected error: "an absolute path; a module source is read relative to the importing file, as in DBML (§28.13)."
 
-### INVALID -- URL path (deferred to a later phase)
+### INVALID -- a URL with a scheme other than https (§28.14)
 
 ```
-xdbml: 0.2
+xdbml: 0.3
 
-reuse * from 'https://example.com/schemas/users.xdbml'
+reuse * from 'http://example.com/schemas/users.xdbml'
 ```
 
-Expected error: "URL imports are reserved for a later phase; v0.2 phase 1 supports relative paths only."
+Expected error: "Module source scheme 'http:' is not allowed; remote sources must use 'https://'."
 
 ### INVALID -- v0.1 file using v0.2-only constructs
 
@@ -1389,6 +1453,935 @@ line string'''
 
 ---
 
+## §19 Sticky notes (v0.7)
+
+### VALID -- a sticky note with a color and custom properties (DBML)
+
+```
+Table orders {
+  id int [pk]
+}
+
+Note design_decision [color: #F4D03F, author: "docs"] {
+  '''
+  ## Line items stay in orders
+
+  Reads outnumber writes **100 to 1**.
+  '''
+}
+```
+
+### VALID -- color none, a quoted name, and a qualified name in the implicit Container (DBML)
+
+```
+Table core.users {
+  id int [pk]
+}
+
+Note "Release plan" [color: none] {
+  'Deprecated fields leave in release 4.2.'
+}
+
+Note core.legend {
+  'Every table of core belongs to the web shop.'
+}
+```
+
+### VALID -- a sticky note in a Container, beside the Container's own note (v0.7)
+
+```
+xdbml: 0.7
+
+Container sales [type: schema] {
+  Note: 'Order management'
+
+  Entity orders {
+    id     int [pk]
+    status varchar
+  }
+
+  Note order_states [color: #FBCFE8] {
+    'An order moves from placed to shipped to delivered.'
+  }
+}
+
+DiagramView order_flow {
+  Tables {
+    sales.orders
+  }
+  Notes {
+    sales.order_states
+  }
+}
+
+Metadata Note sales.order_states {
+  owner: 'ops'
+}
+```
+
+### VALID -- a top-level Note without a name is the note of the project
+
+```
+Table orders {
+  id int [pk]
+}
+
+Note: 'Reference model of the web shop'
+```
+
+### VALID with a warning -- a second note of the project (duplicate-project-note, §19.5)
+
+```
+Project shop {
+  Note: 'Reference model'
+}
+
+Note: 'Maintained by the data team'
+```
+
+### INVALID -- a sticky note in a Container, without xdbml: 0.7 (§19.4)
+
+```
+Container sales [type: schema] {
+  Note order_states {
+    'placed, shipped, delivered'
+  }
+}
+```
+
+### INVALID -- a color of another form (invalid-note-color, §19.3)
+
+```
+Note reminder [color: red] {
+  'Review the owners'
+}
+```
+
+### INVALID -- settings on a Note without a name (§19.5)
+
+```
+Note [color: #F4D03F] {
+  'Reference model'
+}
+```
+
+### INVALID -- a sticky note with an empty body (§19.2)
+
+```
+Note reminder {
+}
+```
+
+### INVALID -- two sticky notes of one name (duplicate-declaration, §19.2)
+
+```
+Note reminder {
+  'one'
+}
+
+Note reminder {
+  'two'
+}
+```
+
+## §24.7 Metadata blocks (v0.7)
+
+### VALID -- Table, Column, TableGroup and Note blocks (DBML)
+
+```
+Table users [owner: 'jane'] {
+  id    int [pk]
+  email varchar
+}
+
+TableGroup accounts {
+  users
+}
+
+Note reminder {
+  'Review the owners'
+}
+
+Metadata Table users {
+  owner: 'data-team'
+  note: 'Accounts of the web shop'
+  headercolor: #3498DB
+}
+
+Metadata Column users.email {
+  classification: 'confidential'
+}
+
+Metadata TableGroup accounts {
+  color: #2ECC71
+}
+
+Metadata Note reminder {
+  color: none
+}
+```
+
+### VALID -- Container, View, DiagramView and the entity and field synonyms (v0.7)
+
+```
+xdbml: 0.7
+
+Container sales [type: schema] {
+  Entity orders {
+    id   int [pk]
+    addr object {
+      city varchar
+    }
+  }
+  View open_orders {
+    id int
+  }
+}
+
+DiagramView order_flow {
+  Tables {
+    sales.orders
+  }
+}
+
+Metadata Container sales {
+  note: 'Sales schema'
+  color: #E67E22
+}
+
+Metadata Entity sales.orders {
+  x_owner: 'sales-ops'
+}
+
+Metadata Field orders.addr.city {
+  note: 'City of delivery'
+}
+
+Metadata View open_orders {
+  headercolor: #95A5A6
+}
+
+Metadata DiagramView order_flow {
+  note: 'Order lifecycle'
+}
+```
+
+### INVALID -- an xDBML kind without a version declaration
+
+```
+Table users {
+  id int [pk]
+}
+
+Metadata Entity users {
+  owner: 'x'
+}
+```
+
+### INVALID -- a target that names nothing (DBML)
+
+```
+Table users {
+  id int [pk]
+}
+
+Metadata Column users.nickname {
+  owner: 'x'
+}
+```
+
+### INVALID -- a flag in the body (DBML)
+
+```
+Table users {
+  id int
+}
+
+Metadata Column users.id {
+  pk
+}
+```
+
+### INVALID -- a Metadata block inside a Container
+
+```
+xdbml: 0.7
+
+Container core [type: schema] {
+  Table users {
+    id int
+  }
+  Metadata Table users {
+    owner: 'x'
+  }
+}
+```
+
+### VALID with a warning -- a block that changes the entity's own value (DBML)
+
+```
+Table users [owner: 'jane'] {
+  id int [pk]
+}
+
+Metadata Table users {
+  owner: 'scott'
+}
+```
+
+### VALID with a warning -- synonyms in a Metadata block read as a custom property
+
+```
+xdbml: 0.7
+
+Entity customers {
+  id int [pk]
+}
+
+Metadata Entity customers {
+  synonyms: 'clients'
+}
+```
+
+### VALID with a warning -- a setting written twice in one list
+
+```
+Table users [owner: 'a', owner: 'b'] {
+  id int [pk]
+}
+```
+
+---
+
+## §26 Records -- DBML 10.3.1 forms (v0.7)
+
+### VALID -- example flag on a top-level declaration, after the column list (DBML)
+
+```
+Table users {
+  id   int [pk]
+  name varchar
+}
+
+records users (id, name) [example] {
+  1, 'Alice'
+  2, 'Bob'
+}
+```
+
+### VALID -- example flag inside a table, with and without a column list (DBML)
+
+```
+Table users {
+  id   int [pk]
+  name varchar
+  records [example] {
+    1, 'Alice'
+  }
+}
+
+Table orders {
+  id      int [pk]
+  user_id int
+  total   decimal
+  records (id, user_id) [example] {
+    10, 1
+  }
+}
+```
+
+### VALID -- column list on records inside an entity
+
+```
+xdbml: 0.7
+
+Entity users {
+  id    int [pk]
+  name  varchar
+  email varchar
+  records (id, email) {
+    1, 'alice@example.com'
+    2, 'bob@example.com'
+  }
+}
+```
+
+### VALID -- empty fields read as null (DBML)
+
+```
+Table events {
+  id      int [pk]
+  kind    varchar
+  payload varchar
+}
+
+records events (id, kind, payload) {
+  1, , 'no kind'
+  , 'orphan', 'no id'
+  3, 'last payload empty',
+}
+```
+
+### INVALID -- a second records block inside an entity
+
+```
+Table users {
+  id int [pk]
+  records {
+    1
+  }
+  records {
+    2
+  }
+}
+```
+
+### INVALID -- a records block inside an entity and a top-level declaration for it
+
+```
+xdbml: 0.7
+
+Entity users {
+  id   int [pk]
+  name varchar
+  records {
+    1, 'Alice'
+  }
+}
+
+records users (id, name) [example] {
+  2, 'Bob'
+}
+```
+
+### VALID with a warning -- a second records block in a document declaring 0.6
+
+```
+xdbml: 0.6
+
+Entity users {
+  id   int [pk]
+  name varchar
+}
+
+records users (id) {
+  1
+}
+
+records users (name) {
+  'Alice'
+}
+```
+
+### INVALID -- the brackets before the column list
+
+```
+Table users {
+  id int [pk]
+  records [example] (id) {
+    1
+  }
+}
+```
+
+### INVALID -- a column of the list that is not a field of the entity
+
+```
+xdbml: 0.7
+
+Entity users {
+  id int [pk]
+  records (id, nickname) {
+    1, 'Al'
+  }
+}
+```
+
+---
+
+## §27 Data lineage (v0.7)
+
+### VALID -- the three forms of DBML, in a document without a version
+
+```
+Table raw_orders {
+  id         int [pk]
+  amount_usd decimal(12, 2)
+}
+
+Table stg_orders [dep: <- raw_orders] {
+  order_id int [pk, dep: <- raw_orders.id]
+  revenue  decimal(12, 2)
+}
+
+Table fct_orders {
+  order_id int [pk]
+  revenue  decimal(12, 2)
+}
+
+Dep: raw_orders.amount_usd -> stg_orders.revenue [note: 'Converted to the reporting currency']
+Dep order_revenue: fct_orders.revenue <- stg_orders.revenue
+
+Dep build_fct_orders [owner: 'analytics', color: #d97706] {
+  stg_orders -> fct_orders
+  materialized: 'table'
+  Note: '''
+    One row per order.
+  '''
+}
+```
+
+### VALID -- entity to field and field to entity, a table built from its own previous state, and a cycle
+
+```
+Table orders {
+  id         int [pk]
+  line_items json
+}
+
+Table order_lines {
+  order_id int
+  sku      varchar
+}
+
+Table daily_kpis {
+  day         date [pk]
+  order_count int
+}
+
+Dep: orders -> daily_kpis.order_count
+Dep: orders.line_items -> order_lines
+Dep: daily_kpis -> daily_kpis
+Dep: order_lines -> orders
+```
+
+### VALID -- a block gathers the source fields of one target field, each with settings of its own
+
+```
+Table customers {
+  id         int [pk]
+  first_name varchar
+  last_name  varchar
+}
+
+Table dim_customer {
+  id        int [pk]
+  full_name varchar
+}
+
+Dep full_name [note: 'Concatenates the first and the last name'] {
+  customers.first_name -> dim_customer.full_name [color: #0891b2]
+  customers.last_name  -> dim_customer.full_name
+}
+```
+
+### VALID -- Views, nested fields and a Container (§27.1)
+
+```
+xdbml: 0.7
+
+Container stripe [type: database, target: 'Stripe API'] {
+  Entity charges {
+    id     varchar [pk]
+    amount int
+  }
+}
+
+Collection events {
+  _id     objectId [pk]
+  payload object {
+    customer object {
+      id int
+    }
+  }
+  items array [object {
+    sku varchar
+  }]
+}
+
+Table payments {
+  id           varchar [pk]
+  amount_cents int
+}
+
+View payment_summary {
+  customer_id int
+  total       int
+}
+
+Dep: stripe.charges.amount -> payments.amount_cents
+Dep: events.payload.customer.id -> payment_summary.customer_id
+Dep: events.items.[*].sku -> payments.id
+Dep: payments -> payment_summary
+```
+
+### VALID -- an alias names the entity, two Deps share a name, and `dep` names a field
+
+```
+Table very_long_orders_table as O {
+  id  int [pk]
+  dep varchar
+}
+
+Table summary {
+  id int [pk]
+}
+
+Dep load: O.id -> summary.id
+Dep load: O -> summary
+```
+
+### VALID with a warning -- a block with no dependency declares nothing (empty-dep, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Dep nothing_yet {
+  note: 'To be mapped'
+}
+```
+
+### VALID with a warning -- `dep` without an arrow stays a custom property in a v0.6 document (invalid-dep-value, §27.9)
+
+```
+xdbml: 0.6
+
+Table orders [dep: 'nightly batch'] {
+  id int [pk]
+}
+```
+
+### INVALID -- `dep` without an arrow in a document without a version (invalid-dep-value, §27.2)
+
+```
+Table orders [dep: 'nightly batch'] {
+  id int [pk]
+}
+```
+
+### INVALID -- a Dep in a Container (§27.4)
+
+```
+xdbml: 0.7
+
+Container sales {
+  Entity orders {
+    id int
+  }
+  Dep: orders -> orders
+}
+```
+
+### INVALID -- a Dep in the body of a table (§27.4)
+
+```
+Table orders {
+  id int
+  Dep: orders -> orders
+}
+```
+
+### INVALID -- an endpoint that names no element (unresolved-dep-endpoint, §27.1)
+
+```
+Table orders {
+  id int
+}
+
+Dep: payments.amount -> orders.id
+```
+
+### INVALID -- an endpoint that names a field the entity does not declare (unresolved-dep-endpoint, §27.1)
+
+```
+Table orders {
+  id int
+}
+
+Table payments {
+  id int
+}
+
+Dep: payments.amount -> orders.id
+```
+
+### INVALID -- an endpoint that names an Edge (invalid-dep-endpoint, §27.1)
+
+```
+xdbml: 0.7
+
+Table person {
+  id int [pk]
+}
+
+Edge knows [source: person, target: person] {
+  since date
+}
+
+Dep: person -> knows
+```
+
+### INVALID -- a composite endpoint (invalid-dep-endpoint, §27.1)
+
+```
+Table orders {
+  a int
+  b int
+}
+
+Table totals {
+  t int
+}
+
+Dep: orders.(a, b) -> totals.t
+```
+
+### INVALID -- a relationship operator in a dependency (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep: a > b
+```
+
+### INVALID -- a space inside the arrow (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep: a - > b
+```
+
+### INVALID -- three endpoints in one dependency (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Table c {
+  id int
+}
+
+Dep: a -> b -> c
+```
+
+### INVALID -- two upstream elements in one dependency (§27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Table c {
+  id int
+}
+
+Dep: a, b -> c
+```
+
+### INVALID -- a block whose dependencies feed two elements (dep-mixed-downstream, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Table c {
+  id int
+}
+
+Dep load {
+  a -> b
+  a -> c
+}
+```
+
+### INVALID -- a block mixing a dependency between entities with one naming a field (dep-mixed-level, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep load {
+  a -> b
+  a.id -> b.id
+}
+```
+
+### INVALID -- an inline dep on a field naming an entity (dep-wrong-kind, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int [dep: <- a]
+}
+```
+
+### INVALID -- an inline dep on an entity naming a field (dep-wrong-kind, §27.2)
+
+```
+Table a {
+  id int
+}
+
+Table b [dep: <- a.id] {
+  id int
+}
+```
+
+### INVALID -- a dep on a TablePartial (dep-in-partial, §27.2)
+
+```
+Table a {
+  id int
+}
+
+TablePartial audited [dep: <- a] {
+  loaded_at timestamp
+}
+```
+
+### INVALID -- a color that is no hex code (invalid-dep-color, §27.3)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep: a -> b [color: none]
+```
+
+### INVALID -- a field depending on itself (dep-self-loop, §27.4)
+
+```
+Table a {
+  id int
+}
+
+Dep: a.id -> a.id
+```
+
+### INVALID -- a dependency stated twice, inline and as a Dep (duplicate-dep, §27.4)
+
+```
+Table a {
+  id int
+}
+
+Table b [dep: <- a] {
+  id int
+}
+
+Dep: a -> b
+```
+
+### INVALID -- a Dep name qualified with a Container (§27.4)
+
+```
+Table a {
+  id int
+}
+
+Dep sales.load: a -> a
+```
+
+## §28.13 Module specifiers -- DBML 10.3.1 resolution (v0.7)
+
+The cases import from `grammar/fixtures/`, where `legacy.dbml` is a DBML file with no `.xdbml` twin.
+
+### VALID -- an import without an extension reads a .dbml file
+
+```
+xdbml: 0.7
+
+use { table legacy_orders } from './legacy'
+```
+
+### VALID -- an explicit .dbml extension
+
+```
+xdbml: 0.7
+
+use { table legacy_orders } from './legacy.dbml'
+```
+
+### VALID -- a specifier without ./, read relative to the importing file as in DBML
+
+```
+use { table products } from 'catalog'
+```
+
+### VALID -- a first folder that looks like a host is a folder (a clone keeps the case offline)
+
+```
+xdbml: 0.7
+
+use { entity products } from 'acme.com/catalog' {
+  Entity products {
+    id int [pk]
+  }
+}
+```
+
+### INVALID -- a Windows drive path, absolute, that no host resolves
+
+```
+xdbml: 0.7
+
+use * from 'C:\\models\\catalog'
+```
+
+Expected error: "an absolute path; a module source is read relative to the importing file, as in DBML (§28.13)."
+
+### INVALID -- a specifier naming no file under either extension
+
+```
+xdbml: 0.7
+
+use * from './missing'
+```
+
+Expected error: "Failed to read referenced module file '.../missing.xdbml' or '.../missing.dbml'."
+
 ## §12 SupertypeGroup (v0.5)
 
 ### VALID -- one group with completeness and exclusivity
@@ -1553,7 +2546,7 @@ SupertypeGroup business_role [supertype: Party, exclusivity: overlapping, discri
 ### INVALID -- a newer version than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.7
+xdbml: 0.8
 
 Entity A { id int [pk] }
 ```
@@ -1834,7 +2827,7 @@ Entity A { id int [pk] }
 ### INVALID -- a patch release newer than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.6.99
+xdbml: 0.7.99
 
 Entity A { id int [pk] }
 ```

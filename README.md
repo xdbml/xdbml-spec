@@ -9,7 +9,7 @@
 
 A single xDBML document expresses entities, tables, attributes, columns, fields, data types, nested structures, relationships, polymorphism, named reusable types, classification tags, business-glossary references, validation constraints, synonyms, and the polyglot target-native vocabulary that real enterprise data architectures use. It round-trips cleanly to engine-native DDL (Oracle, PostgreSQL, SQL Server, Databricks, Snowflake, MongoDB, Cassandra, Neo4j, etc.), to serialization schemas (Avro, Parquet), and to API contracts (JSON Schema, OpenAPI, GraphQL).
 
-xDBML is a strict superset of [DBML 3.13.6](https://dbml.dbdiagram.io), the Database Markup Language maintained by Holistics under Apache 2.0, and **extends DBML** with the constructs it cannot currently express: explicit namespace levels, nested hierarchical types, structural polymorphism, first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
+xDBML is a strict superset of [DBML 10.3.1](https://dbml.dbdiagram.io), the Database Markup Language maintained by Holistics under Apache 2.0, and **extends DBML** with the constructs it cannot currently express: explicit namespace levels, nested hierarchical types, structural polymorphism, first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, and a structured custom-properties mechanism.
 
 ## Designed for AI interactions
 
@@ -25,7 +25,7 @@ xDBML occupies the **schema layer of the modern data stack**. It carries **decla
 
 The same xDBML document feeds an ODCS contract's schema section, an Apache Ossie semantic model's datasets, a SHACL validator's target shapes, and the SQL DDL that creates them.
 
-xDBML is currently a draft v0.3 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
+xDBML is currently a draft v0.7 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
 
 ## Design philosophy
 
@@ -90,8 +90,9 @@ It exposes two tools: `render_xdbml` (renders a schema to SVG, plus a PNG the mo
 - [xdbml.org](https://xdbml.org) -- canonical home, with the playground 
 - [`xDBML_in_5_minutes.md`](./xDBML_in_5_minutes.md) -- a fast-read introduction with worked examples
 - [`faq.md`](./faq.md) -- frequently asked questions about scope, language design, and adoption
-- [`spec/v0.6.md`](./spec/v0.6.md) -- the current v0.6 language specification (adds constraints: named, composite and nested keys, and checks in one block). Published at [xdbml.org/spec/current](https://xdbml.org/spec/current), which always serves the newest draft, and at its own permanent URL [xdbml.org/spec/v0.6](https://xdbml.org/spec/v0.6)
-- [`spec/v0.5.md`](./spec/v0.5.md) -- the previous v0.5 specification, still supported (supertype groups)
+- [`spec/v0.7.md`](./spec/v0.7.md) -- the current v0.7 language specification (reads DBML 10.3.1: records, the `?` marks of relationship operators, custom properties and `Metadata` blocks, sticky notes, data lineage with `Dep`, module specifiers). Published at [xdbml.org/spec/current](https://xdbml.org/spec/current), which always serves the newest draft, and at its own permanent URL [xdbml.org/spec/v0.7](https://xdbml.org/spec/v0.7)
+- [`spec/v0.6.md`](./spec/v0.6.md) -- the previous v0.6 specification, still supported (constraints: named, composite and nested keys, and checks in one block)
+- [`spec/v0.5.md`](./spec/v0.5.md) -- the v0.5 specification, still supported (supertype groups)
 - [`spec/v0.4.md`](./spec/v0.4.md) -- the v0.4 specification, still supported (foreign master relationship type, conceptual relationship properties)
 - [`spec/v0.3.md`](./spec/v0.3.md) -- the v0.3 specification, still supported (remote module sources over HTTPS)
 - [`spec/v0.2.md`](./spec/v0.2.md) -- the v0.2 specification, still supported (module system, scalar Named Types, field-level imports)

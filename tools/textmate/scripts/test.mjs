@@ -169,6 +169,9 @@ async function main () {
   for (const [line, word, expected] of [
     ['  constraints {', 'constraints', true], ['  indexes {', 'indexes', true], ['  checks {', 'checks', true],
     ['  records {', 'records', true], ['  constraints varchar', 'constraints', false],
+    // v0.7 (spec 26.1, 26.5): a column list or the example flag after records.
+    ['  records (id, name) {', 'records', true], ['  records [example] {', 'records', true],
+    ['  records int', 'records', false],
     // v0.6.5 (spec 15.8): the internal definitions of an entity.
     ['  definitions {', 'definitions', true], ['  Definitions{', 'Definitions', true],
     ['  definitions varchar', 'definitions', false], ['  definitions object {', 'definitions', false],
@@ -184,6 +187,67 @@ async function main () {
       totalFailed++;
     }
   }
+  // Spec 24.7 (v0.7): Metadata and its kind, and metadata as a name.
+  console.log(`\n${CYAN}Metadata blocks${RESET}`);
+  for (const [line, word, scope] of [
+    ['Metadata Table users {', 'Metadata', 'keyword.declaration.xdbml'],
+    ['Metadata Table users {', 'Table', 'keyword.declaration.xdbml'],
+    ['metadata column users.email {', 'column', 'keyword.declaration.xdbml'],
+    ['Metadata Schema sales {', 'Schema', 'keyword.declaration.xdbml'],
+    ['  metadata json', 'metadata', null],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const has = (tok?.scopes ?? []).includes('keyword.declaration.xdbml');
+    if (scope ? has : !has) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${scope ? 'is' : 'is not'} a declaration keyword`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': ${word} expected ${scope ? '' : 'no '}keyword.declaration.xdbml, got ${(tok?.scopes ?? []).join(' ')}`);
+      totalFailed++;
+    }
+  }
+  // Spec 27.2 (v0.7): Dep at the start of a line, and dep as a name.
+  console.log(`\n${CYAN}Dep and the arrows of a dependency${RESET}`);
+  for (const [line, word, scope] of [
+    ['Dep: raw.amount -> stg.revenue', 'Dep', 'keyword.declaration.xdbml'],
+    ['Dep build_orders [owner: \'a\'] {', 'Dep', 'keyword.declaration.xdbml'],
+    ['dep "load it": a -> b', 'dep', 'keyword.declaration.xdbml'],
+    ['  dep int', 'dep', null],
+    ['Dep: raw.amount -> stg.revenue', '->', 'keyword.operator.lineage.xdbml'],
+    ['Dep: stg.revenue <- raw.amount', '<-', 'keyword.operator.lineage.xdbml'],
+    ['  revenue decimal [dep: <- raw.amount]', '<-', 'keyword.operator.lineage.xdbml'],
+    ['  revenue decimal [dep: <- raw.amount]', 'dep', 'variable.parameter.setting.xdbml'],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const scopes = tok?.scopes ?? [];
+    const want = scope ?? 'keyword.declaration.xdbml';
+    const has = scopes.includes(want);
+    if (scope ? has : !has) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${scope ? `is ${scope}` : 'is no declaration keyword'}`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': ${word} expected ${scope ? '' : 'no '}${want}, got ${scopes.join(' ')}`);
+      totalFailed++;
+    }
+  }
+  // Spec 11.1 (v0.7): a `?` against the operator is part of it.
+  console.log(`\n${CYAN}Optional marks on cardinality operators${RESET}`);
+  for (const [line, op] of [
+    ['Ref: b.a_id >? a.id', '>?'], ['Ref: b.a_id ?> a.id', '?>'], ['Ref: a.id ?<? b.a_id', '?<?'],
+    ['Ref: b.a_id ?-? a.id', '?-?'], ['  x int [ref: >? a.id]', '>?'],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(op);
+    const tok = toks.find((t) => t.startIndex === at && t.endIndex === at + op.length);
+    if (tok && tok.scopes.includes('keyword.operator.cardinality.xdbml')) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${op} is one cardinality operator`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': expected ${op} as one keyword.operator.cardinality.xdbml token`);
+      totalFailed++;
+    }
+  }
   // Spec 3.10 (v0.6.1): `Note` is a declaration keyword before ':' or '{',
   // or before a name and '{'; a field named `note` is not, and the type
   // after it is not taken for a declared name.
@@ -191,6 +255,8 @@ async function main () {
   for (const [line, expected] of [
     ["  Note: 'One row per order'", true], ["  Note { 'text' }", true], ['Note schema_notes {', true],
     ["NOTE: 'x'", true], ['  note varchar', false], ['  Note varchar [not null]', false], ['  notes varchar', false],
+    ['Note legend [color: #F4D03F] {', true], ['Note core.legend {', true], ['Note "Release plan" [color: none] {', true],
+    ["Note legend: 'x'", true], ["  note varchar [note: 'x']", false],
   ]) {
     const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
     const at = line.search(/\S/);

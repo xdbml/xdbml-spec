@@ -32,6 +32,8 @@
  */
 
 import {
+  collectLineage,
+  depColor,
   diagramViewMembers,
   effectiveFieldList,
   effectiveFields,
@@ -40,19 +42,26 @@ import {
   hasPartialInjection,
   injectedPartials,
   isQualifiedName,
+  metadataColor,
+  metadataIndex,
   joinName,
   primaryKey,
   quoteNameSegment,
+  refCardinalityIn,
   resolveSupertypeGroups,
   splitName,
+  stickyNotes,
   tablePartials,
 } from '@xdbml/parse';
 import type {
   ContainerDeclaration,
+  EndCardinality,
+  MetadataIndex,
   EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
   IndexesBlock,
+  NoteDeclaration,
   RefDeclaration,
   RefValue,
   ScalarType,
@@ -64,6 +73,8 @@ import type {
   ViewDeclaration,
   XDbmlDocument,
 } from '@xdbml/parse';
+import { layoutNoteText, type NoteText } from './note-text.ts';
+import { depExtent, layoutDeps } from '../geometry/dep-path.ts';
 
 /* -------------------------------------------------------------------------
  * Output shape
@@ -77,6 +88,14 @@ export interface DiagramModel {
   edges: EdgeLayout[];
   /** Supertype groups (spec §12), drawn as a half-circle below the supertype. */
   supertypeGroups: SupertypeGroupLayout[];
+  /** Sticky notes (spec §19), drawn as boxes holding their Markdown text. */
+  notes: NoteLayout[];
+  /**
+   * Data lineage (spec §27): each Dep, drawn as curves from upstream to
+   * downstream. A model built before v0.7 may lack it; readers take a
+   * missing list as empty.
+   */
+  deps: DepLayout[];
   /** Overall canvas size needed to hold the laid-out content. */
   width: number;
   height: number;
@@ -102,6 +121,51 @@ export interface SupertypeGroupLayout {
   unresolved: boolean;
   /** The declaration this group was built from. */
   decl: SupertypeGroupDeclaration;
+}
+
+/**
+ * A sticky note (spec §19.2), sized to its text (§19.6). Positioned like an
+ * entity: by the column layout, an arrangement, or a user's drag.
+ */
+export interface NoteLayout {
+  /** `note:<name>`: kept apart from entity ids in the positions map. */
+  id: string;
+  /** The note's id in the model: `sales.order_states` in a Container (§19.4), the name as declared at the top level. */
+  name: string;
+  /** The Container whose frame holds the note and carries it (§19.4). */
+  containerName?: string;
+  /** The color from the note's brackets or a Metadata block (§19.3, §24.7.4); undefined for the default. */
+  color?: string;
+  /** `color: none`: the text alone, with no box (§19.3). */
+  transparent: boolean;
+  /** The text, in lines that fit the box. */
+  text: NoteText;
+  bounds: Rect;
+  decl: NoteDeclaration;
+}
+
+/**
+ * A Dep (spec §27), resolved against the boxes on the canvas. Each
+ * dependency draws as a curve with an arrowhead at its downstream end
+ * (§27.7); the geometry follows the boxes' current bounds and is computed
+ * at draw time by `layoutDep()` (geometry/dep-path.ts).
+ */
+export interface DepLayout {
+  /** `dep:<n>`, the id `collectLineage()` of @xdbml/parse gives the Dep. */
+  id: string;
+  /** The Dep's name, drawn at its junction when names are shown. */
+  name?: string;
+  /** The Dep's `color` (§27.3); undefined for the theme's lineage color. */
+  color?: string;
+  dependencies: DepLineLayout[];
+}
+
+/** One dependency of a Dep. An end that names no box on the canvas is undefined. */
+export interface DepLineLayout {
+  upstream?: FieldLocator;
+  downstream?: FieldLocator;
+  /** The `color` in the brackets after the dependency in a block (§27.3). */
+  color?: string;
 }
 
 export interface ContainerLayout {
@@ -304,9 +368,19 @@ export interface RefLayout {
   /** Resolved entity+field locator. May be undefined if resolution failed. */
   source?: FieldLocator;
   target?: FieldLocator;
-  /** Cardinality endpoint strings, '1..1' / '0..*' etc., if provided in settings. */
+  /**
+   * Cardinality endpoint strings, '1..1' / '0..*' etc., when a `source:` or
+   * `target:` setting states the end's cardinality. Drawn as labels.
+   */
   sourceCardinality?: string;
   targetCardinality?: string;
+  /**
+   * The cardinality of each end as @xdbml/parse states it (spec §11.7,
+   * §11.8, v0.7): from the operator and its `?` marks, the settings, and a
+   * nullable foreign key at the child end. Drawn as crow's-foot glyphs.
+   */
+  sourceEnd?: EndCardinality;
+  targetEnd?: EndCardinality;
   /** True when either endpoint couldn't be resolved against current entities. */
   unresolved: boolean;
 }
@@ -356,6 +430,16 @@ export const EDGE_COLLAPSED_WIDTH = 168;
 const EDGE_SELF_GAP = 64;          // horizontal gap from a node to its self-edge box
 const EDGE_PARALLEL_SPREAD = 104;  // perpendicular spread between parallel edges
 const EDGE_SELF_SPREAD = 16;       // vertical gap between stacked self-edge boxes
+/** Inner padding of a sticky note, around its text (spec §19.6). */
+export const NOTE_PADDING = 12;
+/**
+ * The widths a sticky note takes, narrowest first. A note takes the first
+ * width at which its box is no taller than wide, so a long text widens the
+ * note before it grows into a column; the widest takes any height.
+ */
+export const NOTE_WIDTHS = [220, 280, 340] as const;
+/** A note is at least half as tall as it is wide, so a line of text still reads as a note. */
+const NOTE_MIN_RATIO = 0.5;
 
 /* -------------------------------------------------------------------------
  * Target -> accent color
@@ -512,8 +596,9 @@ export function buildDiagram (
   }
 
   // TablePartials by name (spec §17.1). An entity or an Edge that writes
-  // `~name` holds the partial's fields, so its box lists them.
-  const partialScope: PartialScope = { doc, partials: tablePartials(doc) };
+  // `~name` holds the partial's fields, so its box lists them. The
+  // Metadata blocks of the document (spec §24.7) set colors too.
+  const partialScope: PartialScope = { doc, partials: tablePartials(doc), metadata: metadataIndex(doc) };
 
   // Build a map from entity-id -> color from TableGroup membership.
   //
@@ -546,7 +631,9 @@ export function buildDiagram (
     }
     for (const stmt of doc.statements) {
       if (stmt.kind !== 'TableGroupDeclaration') continue;
-      const color = settingValueAsString(stmt.settings, 'color');
+      // A Metadata block's color applies over the group's own (spec §24.7.4).
+      const color = metadataColor(partialScope.metadata.tableGroup(stmt.name), 'color')
+        ?? settingValueAsString(stmt.settings, 'color');
       if (!color) continue;
       for (const member of stmt.members) {
         // Member can be `entity` or `container.entity`. Try qualified
@@ -571,6 +658,13 @@ export function buildDiagram (
     }
   }
 
+  // Sticky notes (spec §19), sized to their text. A note in a Container
+  // stacks below the Container's entities; the others take a column of
+  // their own after every other column.
+  const noteLayouts: NoteLayout[] = buildNotes(doc, partialScope.metadata);
+  const notesOf = (containerName: string | undefined): NoteLayout[] =>
+    noteLayouts.filter((n) => n.containerName === containerName);
+
   // Place each container's entities in a vertical column.
   const entityLayouts: EntityLayout[] = [];
   const containerLayouts: ContainerLayout[] = [];
@@ -588,7 +682,8 @@ export function buildDiagram (
     //   2. Color derived from the `target:` setting via TARGET_COLORS.
     //   3. Neutral slate when neither applies.
     // This mirrors the entity headerColor / TableGroup color pattern.
-    const ownColor = settingValueAsString(container.settings, 'color');
+    const ownColor = metadataColor(partialScope.metadata.container(container.name), 'color')
+      ?? settingValueAsString(container.settings, 'color');
     const accentColor = ownColor ?? colorForTarget(target);
 
     const innerLeft = cursorX + CONTAINER_PADDING;
@@ -601,11 +696,16 @@ export function buildDiagram (
       // that of the last TablePartial it injects (spec §17.1) >
       // TableGroup membership color > undefined (renderer uses its
       // default keyword-based tinting).
-      const ownColor = headerColorOf(entity, partialScope);
+      const ownColor = headerColorOf(entity, partialScope, container.name);
       const headerColor = ownColor ?? tableGroupColors.get(entityId);
       const layout = buildEntityLayout(entity, innerLeft, entityCursorY, container.name, collapsedPaths, typeTable, headerColor, partialScope);
       entityLayouts.push(layout);
       entityCursorY = layout.bounds.y + layout.bounds.height + ENTITY_GAP_Y;
+    }
+    const containerNotes = notesOf(container.name);
+    for (const note of containerNotes) {
+      note.bounds = { ...note.bounds, x: innerLeft, y: entityCursorY };
+      entityCursorY += note.bounds.height + ENTITY_GAP_Y;
     }
 
     // Container height = header band + top padding + entity content +
@@ -620,7 +720,8 @@ export function buildDiagram (
     // than the equivalent bounds produced by `applyUserPositions`.
     // Now both paths agree.
     const containerHeight = (entityCursorY - innerTop) + CONTAINER_PADDING * 2 + CONTAINER_HEADER_HEIGHT
-      - (containerEntities.length > 0 ? ENTITY_GAP_Y : 0);
+      - (containerEntities.length + containerNotes.length > 0 ? ENTITY_GAP_Y : 0);
+    const innerWidth = Math.max(ENTITY_WIDTH, ...containerNotes.map((n) => n.bounds.width));
 
     const containerLayout: ContainerLayout = {
       id: `container:${container.name}`,
@@ -632,7 +733,7 @@ export function buildDiagram (
       bounds: {
         x: cursorX,
         y: CANVAS_MARGIN,
-        width: ENTITY_WIDTH + CONTAINER_PADDING * 2,
+        width: innerWidth + CONTAINER_PADDING * 2,
         height: Math.max(containerHeight, CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING * 2),
       },
     };
@@ -656,6 +757,16 @@ export function buildDiagram (
     cursorX += ENTITY_WIDTH + CONTAINER_GAP_X;
   }
 
+  // Sticky notes outside any Container, in a column of their own.
+  {
+    const free = notesOf(undefined);
+    const placed = placeNoteColumn(free, cursorX);
+    if (free.length > 0) {
+      maxBottom = Math.max(maxBottom, placed.bottom);
+      cursorX = placed.right + CONTAINER_GAP_X;
+    }
+  }
+
   // Resolve refs against the entities we just placed.
   const entityByName = new Map<string, EntityLayout>();
   for (const e of entityLayouts) {
@@ -670,7 +781,21 @@ export function buildDiagram (
   // declaration use. Keeping one definition of the order is what stops the
   // two from drifting apart.
   const refLayouts: RefLayout[] = collectRefDeclarations(doc)
-    .map((decl, index) => buildRefLayout(decl, entityByName, index));
+    .map((decl, index) => buildRefLayout(decl, entityByName, index, doc));
+
+  // Data lineage (spec §27), in the order and under the ids of
+  // collectLineage(). An endpoint resolves as a relationship endpoint does
+  // (§11.16.3), against the entities and the Views on the canvas.
+  const depLayouts: DepLayout[] = collectLineage(doc).map((l) => ({
+    id: l.id,
+    ...(l.name !== undefined ? { name: l.name } : {}),
+    ...(depColor(l.settings) ? { color: depColor(l.settings) } : {}),
+    dependencies: l.dependencies.map((d) => ({
+      upstream: locateRefEndpoint(d.upstream, entityByName),
+      downstream: locateRefEndpoint(d.downstream, entityByName),
+      ...(depColor(d.settings) ? { color: depColor(d.settings) } : {}),
+    })),
+  }));
 
 
   // Mark the four relationship role markers of spec 11.12 on the fields
@@ -759,11 +884,24 @@ export function buildDiagram (
   let shownEntities = entityLayouts;
   let shownRefs = refLayouts;
   let shownContainers = containerLayouts;
+  let shownNotes = noteLayouts;
+  let shownDeps = depLayouts;
   if (boxIds) {
+    // A diagram view lists no dependency: it shows each dependency whose
+    // two ends lie in its members (§18.4, §27.7).
+    shownDeps = depLayouts
+      .map((d) => ({
+        ...d,
+        dependencies: d.dependencies.filter((x) =>
+          !!x.upstream && !!x.downstream && boxIds.has(x.upstream.entityId) && boxIds.has(x.downstream.entityId)),
+      }))
+      .filter((d) => d.dependencies.length > 0);
     shownEntities = entityLayouts.filter((e) => boxIds.has(e.id));
     shownRefs = refLayouts.filter((r) =>
       !!r.source && !!r.target && boxIds.has(r.source.entityId) && boxIds.has(r.target.entityId));
-    const restacked = restackColumns(shownEntities, containerLayouts);
+    const noteIds = new Set(members?.notes ?? []);
+    shownNotes = noteLayouts.filter((n) => noteIds.has(n.name));
+    const restacked = restackColumns(shownEntities, containerLayouts, shownNotes);
     shownContainers = restacked.containers;
     cursorX = restacked.width;
     maxBottom = restacked.bottom;
@@ -830,6 +968,17 @@ export function buildDiagram (
     width = Math.max(width, e.box.bounds.x + e.box.bounds.width + CANVAS_MARGIN);
     height = Math.max(height, e.box.bounds.y + e.box.bounds.height + CANVAS_MARGIN);
   }
+  for (const n of shownNotes) {
+    width = Math.max(width, n.bounds.x + n.bounds.width + CANVAS_MARGIN);
+    height = Math.max(height, n.bounds.y + n.bounds.height + CANVAS_MARGIN);
+  }
+  // A dependency between two boxes of one column loops out past them
+  // (spec §27.7): the canvas holds the loop.
+  {
+    const reach = depExtent(layoutDeps(shownDeps, shownEntities));
+    width = Math.max(width, Math.ceil(reach.right) + CANVAS_MARGIN);
+    height = Math.max(height, Math.ceil(reach.bottom) + CANVAS_MARGIN);
+  }
 
   return {
     containers: shownContainers,
@@ -837,38 +986,107 @@ export function buildDiagram (
     refs: shownRefs,
     edges,
     supertypeGroups,
+    notes: shownNotes,
+    deps: shownDeps,
     width,
     height,
   };
 }
 
+/* -------------------------------------------------------------------------
+ * Sticky notes (spec §19)
+ * ----------------------------------------------------------------------- */
+
+const NOTE_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/**
+ * The sticky notes of a document, sized to their text and placed at the
+ * origin. The color comes from a Metadata block, then from the note's own
+ * brackets (spec §24.7.4); a value that is no color leaves the default.
+ */
+function buildNotes (doc: XDbmlDocument, metadata: MetadataIndex): NoteLayout[] {
+  return stickyNotes(doc).map((p) => {
+    const raw = metadataColor(metadata.note(p.id), 'color') ?? settingValueAsString(p.decl.settings, 'color');
+    const transparent = raw?.toLowerCase() === 'none';
+    const color = raw && !transparent && NOTE_COLOR.test(raw) ? raw : undefined;
+    const size = sizeNote(p.decl.body);
+    return {
+      id: `note:${p.id}`,
+      name: p.id,
+      containerName: p.container?.name,
+      color,
+      transparent,
+      text: size.text,
+      bounds: { x: 0, y: 0, width: size.width, height: size.height },
+      decl: p.decl,
+    };
+  });
+}
+
+/**
+ * The size of a sticky note: the first width of NOTE_WIDTHS at which the
+ * box is no taller than wide, and a height that holds the text, at least
+ * NOTE_MIN_RATIO of the width.
+ */
+export function sizeNote (body: string): { width: number; height: number; text: NoteText } {
+  let last: { width: number; height: number; text: NoteText } | undefined;
+  for (const width of NOTE_WIDTHS) {
+    const text = layoutNoteText(body, width - NOTE_PADDING * 2);
+    const height = Math.max(Math.ceil(width * NOTE_MIN_RATIO), text.height + NOTE_PADDING * 2);
+    last = { width, height, text };
+    if (height <= width) break;
+  }
+  return last as { width: number; height: number; text: NoteText };
+}
+
+/** Stack notes in a column whose left edge is `x`, from the top margin. */
+function placeNoteColumn (notes: NoteLayout[], x: number): { right: number; bottom: number } {
+  let y = CANVAS_MARGIN;
+  let right = x;
+  for (const n of notes) {
+    n.bounds = { ...n.bounds, x, y };
+    y += n.bounds.height + ENTITY_GAP_Y;
+    right = Math.max(right, x + n.bounds.width);
+  }
+  return { right, bottom: y };
+}
+
 /**
  * Stack the entities shown in a diagram view again, one column per
- * Container in declaration order and a last column for entities outside
- * any Container, as `buildDiagram` lays out the full diagram. Moves the
- * entity bounds in place and returns the Containers that hold one, with
- * new bounds. Field rows are relative to their entity, so they follow.
+ * Container in declaration order, a column for entities outside any
+ * Container and a last one for sticky notes outside any Container, as
+ * `buildDiagram` lays out the full diagram; a Container's notes stack below
+ * its entities. Moves the bounds in place and returns the Containers that
+ * hold an entity or a note, with new bounds. Field rows are relative to
+ * their entity, so they follow.
  */
 function restackColumns (
   entities: EntityLayout[],
   containers: ContainerLayout[],
+  notes: NoteLayout[] = [],
 ): { containers: ContainerLayout[]; width: number; bottom: number } {
   const out: ContainerLayout[] = [];
   let cursorX = CANVAS_MARGIN;
   let bottom = CANVAS_MARGIN;
   for (const container of containers) {
     const own = entities.filter((e) => e.containerName === container.name);
-    if (own.length === 0) continue;
+    const ownNotes = notes.filter((n) => n.containerName === container.name);
+    if (own.length === 0 && ownNotes.length === 0) continue;
     const innerTop = CANVAS_MARGIN + CONTAINER_HEADER_HEIGHT + CONTAINER_PADDING;
     let y = innerTop;
     for (const e of own) {
       e.bounds = { ...e.bounds, x: cursorX + CONTAINER_PADDING, y };
       y += e.bounds.height + ENTITY_GAP_Y;
     }
+    for (const n of ownNotes) {
+      n.bounds = { ...n.bounds, x: cursorX + CONTAINER_PADDING, y };
+      y += n.bounds.height + ENTITY_GAP_Y;
+    }
     const height = (y - innerTop) - ENTITY_GAP_Y + CONTAINER_PADDING * 2 + CONTAINER_HEADER_HEIGHT;
+    const innerWidth = Math.max(ENTITY_WIDTH, ...ownNotes.map((n) => n.bounds.width));
     const placed: ContainerLayout = {
       ...container,
-      bounds: { x: cursorX, y: CANVAS_MARGIN, width: ENTITY_WIDTH + CONTAINER_PADDING * 2, height },
+      bounds: { x: cursorX, y: CANVAS_MARGIN, width: innerWidth + CONTAINER_PADDING * 2, height },
     };
     out.push(placed);
     bottom = Math.max(bottom, placed.bounds.y + placed.bounds.height);
@@ -883,6 +1101,12 @@ function restackColumns (
     }
     bottom = Math.max(bottom, y);
     cursorX += ENTITY_WIDTH + CONTAINER_GAP_X;
+  }
+  const free = notes.filter((n) => !n.containerName);
+  if (free.length > 0) {
+    const placed = placeNoteColumn(free, cursorX);
+    bottom = Math.max(bottom, placed.bottom);
+    cursorX = placed.right + CONTAINER_GAP_X;
   }
   return { containers: out, width: cursorX, bottom };
 }
@@ -1019,6 +1243,8 @@ function emptyDiagram (): DiagramModel {
     refs: [],
     edges: [],
     supertypeGroups: [],
+    notes: [],
+    deps: [],
     width: 400,
     height: 200,
   };
@@ -1083,11 +1309,18 @@ function edgeAsEntityLike (edge: EdgeDeclaration): EntityLike {
 }
 
 /**
- * The header color an entity declares, or receives from a TablePartial it
- * injects (spec §17.1): its own `headercolor`, otherwise that of the last
- * partial injected that declares one.
+ * The header color of an entity or a View: the one a Metadata block sets
+ * (spec §24.7.4), otherwise its own `headercolor`, otherwise that of the
+ * last TablePartial injected that declares one (spec §17.1).
  */
-function headerColorOf (entity: EntityLike, scope: PartialScope): string | undefined {
+function headerColorOf (entity: EntityLike, scope: PartialScope, containerName?: string): string | undefined {
+  const fromBlock = entity.keyword === 'Edge'
+    ? undefined
+    : metadataColor(
+      entity.isView ? scope.metadata.view(entity.name, containerName) : scope.metadata.entity(entity.name, containerName),
+      'headercolor',
+    );
+  if (fromBlock) return fromBlock;
   const setting = effectiveHeaderColor(entity, scope.partials);
   return setting ? settingValueAsString([setting], 'headercolor') : undefined;
 }
@@ -1096,6 +1329,8 @@ function headerColorOf (entity: EntityLike, scope: PartialScope): string | undef
 interface PartialScope {
   doc: XDbmlDocument;
   partials: ReadonlyMap<string, TablePartialDeclaration>;
+  /** The settings Metadata blocks apply (spec §24.7). */
+  metadata: MetadataIndex;
 }
 
 function buildEntityLayout (
@@ -1680,11 +1915,17 @@ function buildRefLayout (
   ref: RefDeclaration,
   entityByName: Map<string, EntityLayout>,
   index: number,
+  doc?: XDbmlDocument,
 ): RefLayout {
   const source = locateRefEndpoint(ref.spec.source, entityByName);
   const target = locateRefEndpoint(ref.spec.target, entityByName);
-  const sourceCardinality = settingValueAsString(ref.settings, 'source');
-  const targetCardinality = settingValueAsString(ref.settings, 'target');
+  // Spec §11.7, §11.8 (v0.7): each end's cardinality, with its origin. A
+  // label shows only a range that a setting states and that applies.
+  const card = doc ? refCardinalityIn(doc, ref) : undefined;
+  const labelOf = (end: 'source' | 'target'): string | undefined =>
+    !card || card[end].origin === 'setting' ? settingValueAsString(ref.settings, end) : undefined;
+  const sourceCardinality = labelOf('source');
+  const targetCardinality = labelOf('target');
   return {
     id: `ref:${index}`,
     operator: ref.spec.operator,
@@ -1697,6 +1938,7 @@ function buildRefLayout (
     target,
     sourceCardinality,
     targetCardinality,
+    ...(card ? { sourceEnd: card.source, targetEnd: card.target } : {}),
     unresolved: !source || !target,
   };
 }
@@ -1721,7 +1963,7 @@ function buildRefLayout (
  * block has it, and nothing else. Spec 11.9 allows no setting beside an
  * inline `ref:` except that flag (11.10.2), so the rest of the field's
  * settings describe the field rather than the relationship and would be
- * wrong to copy here. Cardinality still comes from the operator alone.
+ * wrong to copy here. The `?` marks of the operator come along (v0.7).
  *
  * Span borrows the RefValue's span. The layout doesn't read it but
  * future inspector navigation might.
@@ -1866,6 +2108,9 @@ function synthesizeRefFromInline (
         span: refValue.span,
       },
       operator: refValue.operator,
+      // The `?` marks of the inline form (spec §11.1, v0.7).
+      ...(refValue.sourceOptional ? { sourceOptional: true as const } : {}),
+      ...(refValue.targetOptional ? { targetOptional: true as const } : {}),
       target: refValue.target,
       span: refValue.span,
     },
@@ -1962,7 +2207,8 @@ function settingValueAsString (settings: ReadonlyArray<Setting>, name: string): 
 
 /**
  * Per-entity position override. Keyed by `EntityLayout.id` (which is
- * `containerName.entityName` or just `entityName` for orphans).
+ * `containerName.entityName` or just `entityName` for orphans), and by
+ * `NoteLayout.id` (`note:<name>`) for a sticky note.
  *
  * Positions are in SVG coordinates -- same coordinate system the layout
  * function produces. Storing in SVG units rather than viewport pixels
@@ -2052,9 +2298,17 @@ export function applyUserPositions (
     };
   });
 
-  // Index entities by their containerName for the container-recomputation pass.
-  const byContainer = new Map<string, EntityLayout[]>();
-  for (const e of newEntities) {
+  // Sticky notes move like entities (spec §19.6), under ids of their own.
+  const newNotes: NoteLayout[] = (diagram.notes ?? []).map((note) => {
+    const override = userPositions.get(note.id);
+    if (!override) return note;
+    return { ...note, bounds: { ...note.bounds, x: override.x, y: override.y } };
+  });
+
+  // Index entities and attached notes by their containerName for the
+  // container-recomputation pass.
+  const byContainer = new Map<string, Array<{ bounds: Rect }>>();
+  for (const e of [...newEntities, ...newNotes]) {
     if (!e.containerName) continue;
     const list = byContainer.get(e.containerName) ?? [];
     list.push(e);
@@ -2104,7 +2358,7 @@ export function applyUserPositions (
     if (c.bounds.x + c.bounds.width > canvasMaxX) canvasMaxX = c.bounds.x + c.bounds.width;
     if (c.bounds.y + c.bounds.height > canvasMaxY) canvasMaxY = c.bounds.y + c.bounds.height;
   }
-  for (const e of newEntities) {
+  for (const e of [...newEntities, ...newNotes]) {
     if (e.bounds.x + e.bounds.width > canvasMaxX) canvasMaxX = e.bounds.x + e.bounds.width;
     if (e.bounds.y + e.bounds.height > canvasMaxY) canvasMaxY = e.bounds.y + e.bounds.height;
   }
@@ -2121,6 +2375,10 @@ export function applyUserPositions (
     if (b.x + b.width > canvasMaxX) canvasMaxX = b.x + b.width;
     if (b.y + b.height > canvasMaxY) canvasMaxY = b.y + b.height;
   }
+  // The curves of the Deps, which may loop out past the boxes (spec §27.7).
+  const reach = depExtent(layoutDeps(diagram.deps ?? [], newEntities));
+  canvasMaxX = Math.max(canvasMaxX, Math.ceil(reach.right));
+  canvasMaxY = Math.max(canvasMaxY, Math.ceil(reach.bottom));
 
   return {
     containers: newContainers,
@@ -2128,6 +2386,8 @@ export function applyUserPositions (
     refs: diagram.refs,
     edges: newEdges,
     supertypeGroups: diagram.supertypeGroups,
+    notes: newNotes,
+    deps: diagram.deps ?? [],
     width: Math.max(diagram.width, canvasMaxX + CANVAS_MARGIN),
     height: Math.max(diagram.height, canvasMaxY + CANVAS_MARGIN),
   };

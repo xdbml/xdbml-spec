@@ -168,5 +168,33 @@ function revealPosition (line: number, column: number): void {
   ed.focus();
 }
 
-defineExpose({ revealPosition });
+/**
+ * Apply text edits made outside the editor, such as the sticky note the
+ * diagram toolbar adds (spec §19), as one step of Monaco's undo history,
+ * and reveal `revealOffset` in the edited text. Offsets are those of the
+ * current text; Monaco applies the edits against it together.
+ */
+function applyEdits (edits: ReadonlyArray<{ offset: number; length: number; text: string }>, revealOffset?: number): void {
+  const ed = editor.value;
+  const model = ed?.getModel();
+  if (!ed || !model) return;
+  const ops = edits.map((e) => {
+    const start = model.getPositionAt(e.offset);
+    const end = model.getPositionAt(e.offset + e.length);
+    return {
+      range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+      text: e.text,
+      forceMoveMarkers: true,
+    };
+  });
+  ed.pushUndoStop();
+  ed.executeEdits('xdbml-playground', ops);
+  ed.pushUndoStop();
+  if (revealOffset !== undefined) {
+    const at = model.getPositionAt(revealOffset);
+    ed.revealPositionInCenter(at);
+  }
+}
+
+defineExpose({ revealPosition, applyEdits });
 </script>

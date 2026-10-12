@@ -28,6 +28,7 @@ import type {
   FieldDeclaration,
   ImportItem,
   ImportSpec,
+  MetadataDeclaration,
   ModuleImportDirective,
   ObjectType,
   ParseOptions,
@@ -39,6 +40,8 @@ import type {
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { joinName, quoteNameSegment, splitName } from './names.ts';
 import { entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
+import { resolveStickyNote, stickyNotes } from './notes.ts';
+import { metadataForImport } from './metadata.ts';
 import type { LocalTypes } from './definitions.ts';
 
 /**
@@ -51,17 +54,21 @@ import type { LocalTypes } from './definitions.ts';
  *
  * Inside a Container body, each `ModuleImportDirective` is replaced by its
  * `clone.statements` as `ContainerBodyItem`s. Note that the spec table in
- * §27.6 guarantees that clone-block content for entity/edge/view/enum
+ * §28.6 guarantees that clone-block content for entity/edge/view/enum
  * imports is shape-compatible with `ContainerBodyItem`; other shapes
  * (e.g., a TablePartial clone inside a Container directive) would be
  * semantically invalid per the spec and would surface as a downstream
  * type error rather than being caught here.
  *
- * Field-level imports (spec §27.8) get a special transform: the clone
+ * Field-level imports (spec §28.8) get a special transform: the clone
  * block holds a bare `FieldDeclaration`, which `flatten()` lifts into a
  * synthetic `TypeDeclaration` at file scope. Downstream consumers see
  * a normal Named Type and can use it as a field type without learning
  * about the field-import construct.
+ *
+ * Metadata blocks (spec §24.7) are the exception to "same position": the
+ * flattened document lists them after every other statement, in their
+ * order of precedence, those an import brings marked `imported`.
  *
  * Provenance information is lost in the flattened view. Consumers that
  * want to know where each declaration came from should walk the original
@@ -69,19 +76,48 @@ import type { LocalTypes } from './definitions.ts';
  */
 export function flatten (doc: XDbmlDocument): XDbmlDocument {
   const statements: TopLevelStatement[] = [];
-  for (const stmt of doc.statements) {
-    flattenTopLevel(stmt, statements);
-  }
+  const metadata: MetadataDeclaration[] = [];
+  flattenInto(doc.statements, statements, metadata);
   return {
     ...doc,
-    statements,
+    statements: [...statements, ...metadata],
   };
+}
+
+/**
+ * Flatten a list of statements into `out`, and append its Metadata blocks
+ * to `metadata` in their order of precedence (spec §24.7.4): those its
+ * imports bring, a later import after an earlier one and each import's own
+ * imports before its own blocks, then its own blocks in source order. A
+ * Metadata block declares nothing and holds no position of its own, so the
+ * flattened document lists every block after the other statements, where
+ * "a later block wins" reads the precedence directly.
+ */
+function flattenInto (
+  stmts: ReadonlyArray<TopLevelStatement | FieldDeclaration>,
+  out: TopLevelStatement[],
+  metadata: MetadataDeclaration[],
+): void {
+  const own: MetadataDeclaration[] = [];
+  for (const stmt of stmts) flattenTopLevel(stmt, out, metadata, own);
+  metadata.push(...own);
+}
+
+/** A Metadata block an import brought, marked so (§24.7.4). */
+function importedBlock (block: MetadataDeclaration): MetadataDeclaration {
+  return block.imported ? block : { ...block, imported: true };
 }
 
 function flattenTopLevel (
   stmt: TopLevelStatement | FieldDeclaration,
   out: TopLevelStatement[],
+  importedMetadata: MetadataDeclaration[],
+  ownMetadata: MetadataDeclaration[],
 ): void {
+  if (stmt.kind === 'MetadataDeclaration') {
+    ownMetadata.push(stmt);
+    return;
+  }
   if (stmt.kind === 'FieldDeclaration') {
     // A bare FieldDeclaration only appears at the top level via the field-
     // import path -- the parser only accepts it inside a clone block. Lift
@@ -96,23 +132,32 @@ function flattenTopLevel (
     // with nested directives, although the spec doesn't currently expect
     // multi-level nesting in v0.2 phase 1).
     if (stmt.clone) {
-      for (const inner of stmt.clone.statements) {
-        flattenTopLevel(inner, out);
-      }
+      const brought: MetadataDeclaration[] = [];
+      flattenInto(stmt.clone.statements, out, brought);
+      importedMetadata.push(...brought.map(importedBlock));
     }
     return;
   }
   if (stmt.kind === 'ContainerDeclaration') {
     // A `reuse *` inside a Container body can clone a DiagramView into it.
     // A DiagramView is top-level only (spec §18.1), so it moves out to the
-    // top level, after its Container.
+    // top level, after its Container, and so does a Dep (§27.4).
     const flat = flattenContainer(stmt);
-    const hoisted = flat.body.filter((b) => (b as { kind: string }).kind === 'DiagramViewDeclaration');
-    if (hoisted.length === 0) {
+    // A Metadata block is top-level only too (spec §24.7); one that a
+    // Container-scoped import brings joins the imported blocks.
+    const blocks = flat.body.filter((b) => (b as { kind: string }).kind === 'MetadataDeclaration') as unknown as MetadataDeclaration[];
+    importedMetadata.push(...blocks.map(importedBlock));
+    // A `use *` in a Container body brings the Deps of its file, which are
+    // top-level too (spec §27.4, §28.2).
+    const hoisted = flat.body.filter((b) => {
+      const kind = (b as { kind: string }).kind;
+      return kind === 'DiagramViewDeclaration' || kind === 'DepDeclaration';
+    });
+    if (hoisted.length === 0 && blocks.length === 0) {
       out.push(flat);
       return;
     }
-    out.push({ ...flat, body: flat.body.filter((b) => !hoisted.includes(b)) });
+    out.push({ ...flat, body: flat.body.filter((b) => !hoisted.includes(b) && !(blocks as unknown[]).includes(b)) });
     for (const view of hoisted) out.push(view as unknown as TopLevelStatement);
     return;
   }
@@ -223,7 +268,7 @@ export type ParseFn = (
  *   - `kind: 'resolved'`  -- the file was opened, parsed, and a clone
  *     block was synthesized
  *   - `kind: 'cycle'`     -- the resolution chain already contains this
- *     file; per spec §27.15 cycles are allowed, so we return an empty
+ *     file; per spec §28.15 cycles are allowed, so we return an empty
  *     clone block and let name resolution (P6+) handle the actual
  *     cross-file linking
  *   - `kind: 'no-resolver'` -- no `readFile` was supplied; caller should
@@ -238,9 +283,10 @@ export type ImportResolution =
  * Resolve a directive's reference. Returns an `ImportResolution` indicating
  * what happened. The caller decides how to act (set `clone`, fail, etc).
  *
- * Path resolution: the directive's `from` is relative to the importer's
- * `filePath`. If `from` doesn't end with `.xdbml`, that extension is
- * appended. Returns the absolute resolved path on success.
+ * Path resolution (§28.13): `moduleCandidates` turns the directive's `from`
+ * into one or more keys, tried in order with `readFile`; the first one read
+ * is the resolved path. A thrown error moves to the next candidate, and the
+ * error reports every candidate when none is read.
  *
  * Cycles: if the resolved path is already in `resolutionStack`, returns
  * `kind: 'cycle'` without recursing.
@@ -258,10 +304,33 @@ export function resolveImport (
     return { kind: 'no-resolver' };
   }
 
-  const resolvedPath = resolveModulePath(directive.from, options.filePath);
-
-  if (resolutionStack.has(resolvedPath)) {
-    return { kind: 'cycle', resolvedPath };
+  // §28.13: without an extension, '<path>.xdbml' then '<path>.dbml'. A
+  // candidate already on the resolution stack exists (it is being parsed),
+  // so it is the file the search would find: the import closes a cycle.
+  const candidates = moduleCandidates(directive.from, options.filePath, options.resolveSpecifier);
+  let resolvedPath: string | undefined;
+  let referencedSource = '';
+  const failures: string[] = [];
+  for (const candidate of candidates) {
+    if (resolutionStack.has(candidate)) {
+      return { kind: 'cycle', resolvedPath: candidate };
+    }
+    try {
+      referencedSource = options.readFile(candidate);
+      resolvedPath = candidate;
+      break;
+    } catch (e) {
+      failures.push((e as Error).message ?? String(e));
+    }
+  }
+  if (resolvedPath === undefined) {
+    const tried = candidates.map((c) => `'${c}'`).join(' or ');
+    const hint = bareHostHint(directive.from);
+    throw new Error(
+      `Failed to read referenced module file ${tried} ` +
+      `(directive '${directive.mode} { ... } from \"${directive.from}\"' in '${options.filePath ?? '<no filePath>'}'). ` +
+      `Cause: ${failures[0]}` + (hint ? ` ${hint}` : ''),
+    );
   }
 
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
@@ -270,18 +339,6 @@ export function resolveImport (
       `Module resolution depth limit (${maxDepth}) exceeded while resolving '${directive.from}' ` +
       `from '${options.filePath ?? '<no filePath>'}'. ` +
       `Increase maxDepth in ParseOptions if your module graph is genuinely this deep.`,
-    );
-  }
-
-  let referencedSource: string;
-  try {
-    referencedSource = options.readFile(resolvedPath);
-  } catch (e) {
-    const inner = (e as Error).message ?? String(e);
-    throw new Error(
-      `Failed to read referenced module file '${resolvedPath}' ` +
-      `(directive '${directive.mode} { ... } from \"${directive.from}\"' in '${options.filePath ?? '<no filePath>'}'). ` +
-      `Cause: ${inner}`,
     );
   }
 
@@ -328,7 +385,7 @@ export function resolveImport (
  * import spec. Applies aliases by renaming the extracted declaration.
  *
  * For `ImportAll`: every TopLevelStatement except ProjectDeclaration
- * (per spec §27.4, Project declarations cannot be imported).
+ * (per spec §28.4, Project declarations cannot be imported).
  *
  * For `ImportList`: each item is matched by element-type + source path.
  * Items not found in the source produce nothing (silent for P5; a
@@ -340,23 +397,36 @@ function extractImports (
 ): (TopLevelStatement | FieldDeclaration)[] {
   if (spec.kind === 'ImportAll') {
     // ImportAll never matches field imports (the `*` form is for top-level
-    // declarations only per spec §27.2). Return the source's top-level
+    // declarations only per spec §28.2). Return the source's top-level
     // statements minus Project.
+    // A Note without a name is the note of the source's project and stays
+    // there with its Project block (spec §19.5, §28.1).
     return sourceDoc.statements
-      .filter((s) => s.kind !== 'ProjectDeclaration')
+      .filter((s) => s.kind !== 'ProjectDeclaration' && !(s.kind === 'NoteDeclaration' && s.name === undefined))
       .map((s) => s); // shallow-clone-able; we don't mutate them
   }
   // ImportList: process each item.
   const out: (TopLevelStatement | FieldDeclaration)[] = [];
+  const landed: { decl: object; name: string }[] = [];
   for (const item of spec.items) {
     const found = findImportTarget(item, sourceDoc);
     if (found) {
-      out.push(applyAlias(found, item));
+      const placed = applyAlias(found, item);
+      out.push(placed);
+      if (placed.kind !== 'FieldDeclaration' && 'name' in placed && typeof placed.name === 'string') {
+        // The name the element takes here, in the form of names.ts: a
+        // DiagramView keeps its own as written.
+        const raw = placed.kind === 'DiagramViewDeclaration';
+        landed.push({ decl: found, name: raw ? quoteNameSegment(placed.name) : placed.name });
+      }
     }
     // Silent skip on not-found. The spec leaves diagnostics to name
-    // resolution (§27.13). In practice, users notice missing entities
+    // resolution (§28.13). In practice, users notice missing entities
     // because their references downstream become unresolved.
   }
+  // Spec §24.7.5: the Metadata blocks of the source file that target an
+  // imported element come with it, renamed to the name it takes here.
+  out.push(...metadataForImport(flatten(sourceDoc), landed));
   return out;
 }
 
@@ -388,7 +458,10 @@ function extractImports (
  *   - 'tablepartial':
  *       TablePartialDeclaration with matching name (top-level only).
  *   - 'note':
- *       NoteDeclaration with matching name (top-level only).
+ *       Sticky note with matching name; supports the dotted path
+ *       'sales.order_states' for a note in a Container (spec §19.4), and a
+ *       bare name for a top-level note or the one note of that name in a
+ *       Container. A Note without a name is never imported (§19.5).
  *   - 'field':
  *       FieldDeclaration found by walking a dotted path through
  *       containers, entities, and nested type expressions (object types,
@@ -486,9 +559,11 @@ function findImportTarget (
     );
   }
   if (item.elementType === 'note') {
-    return doc.statements.find(
-      (s) => s.kind === 'NoteDeclaration' && s.name === path,
-    );
+    // Sticky notes (spec §19.2, §19.4) resolve as in a diagram view: the
+    // id first, then a bare name at the top level, then the one note of
+    // that name in a Container. The note lands at the top level.
+    const r = resolveStickyNote(stickyNotes(doc), names.join('.'));
+    return r.ok ? r.note.decl : undefined;
   }
   // Container / Schema: top-level, bare name.
   if (item.elementType === 'container' || item.elementType === 'schema') {
@@ -545,7 +620,7 @@ function findImportTarget (
   // a qualified name (`enum core.job_status`, the DBML form) matches its
   // full dotted path and imports under its bare name, like the
   // container-scoped form: the source container does not survive into
-  // the importing file (spec §27.16).
+  // the importing file (spec §28.16).
   if (item.elementType === 'enum') {
     if (segments.length > 1) {
       const qualifiedTopLevel = doc.statements.find(
@@ -580,7 +655,7 @@ function findImportTarget (
  * object types to find a FieldDeclaration in a referenced source document.
  * Returns undefined when any segment fails to resolve.
  *
- * Path shapes accepted (per spec §27.8):
+ * Path shapes accepted (per spec §28.8):
  *   - `entity.field`                    -- top-level entity
  *   - `container.entity.field`          -- container-qualified entity
  *   - `entity.field.sub`                -- nested via ObjectType
@@ -803,8 +878,8 @@ function applyAlias (
 ): TopLevelStatement | FieldDeclaration {
   if (!item.alias) return stmt;
   // Declarations that other declarations reference hold their names in
-  // the form of names.ts; a Note, a DiagramView and a field keep the
-  // alias as written.
+  // the form of names.ts; a DiagramView and a field keep the alias as
+  // written.
   const declared = quoteNameSegment(item.alias);
   switch (stmt.kind) {
     case 'EntityDeclaration':
@@ -828,7 +903,7 @@ function applyAlias (
     case 'TablePartialDeclaration':
       return { ...stmt, name: declared };
     case 'NoteDeclaration':
-      return { ...stmt, name: item.alias };
+      return { ...stmt, name: declared };
     case 'FieldDeclaration':
       return { ...stmt, name: item.alias };
     default:
@@ -837,19 +912,20 @@ function applyAlias (
 }
 
 /* -------------------------------------------------------------------------
- * Module source classification (spec §27.14, "Remote module sources")
+ * Module source classification (spec §28.13 "Module specifiers", §28.14
+ * "Remote module sources")
  *
- * A `from` source is recognized purely by its scheme. A source beginning
- * with 'https://' is a remote (URL) source; anything else is a relative
- * path, resolved exactly as in v0.2. Disallowed forms -- a non-https
- * scheme, a protocol-relative '//host/...' source, embedded credentials,
- * or a bare host such as 'github.com/owner/repo/...' -- are rejected here
- * so the parser can surface a located error at the source string.
+ * A `from` source is an 'https://' URL (remote), an absolute path, or a
+ * specifier read relative to the importing file, as DBML 10.3 reads it:
+ * './lib', 'lib', 'sub/lib' and '@shared/users' are all relative. The
+ * disallowed forms -- a non-https scheme, a protocol-relative '//host/...'
+ * source, embedded credentials -- are rejected here so the parser can
+ * surface a located error at the source string.
  *
  * This is pure, synchronous classification. The actual network fetch is
  * delegated to ParseOptions.readFile (the host's resolver). The obligations
  * on a fetcher (SSRF defenses, https-only redirects, size and time limits)
- * live with that resolver, not here; see spec §27.14.5.
+ * live with that resolver, not here; see spec §28.14.5.
  * ----------------------------------------------------------------------- */
 
 /** Raised when a `from` source string is structurally disallowed. */
@@ -862,14 +938,18 @@ export class ModuleSourceError extends Error {
 
 export type ModuleSource =
   | { kind: 'relative'; from: string }
+  | { kind: 'absolute'; from: string }
   | { kind: 'url'; href: string };
 
 const SCHEME_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
+// A Windows drive ('C:\models', 'C:/models'). One letter before the colon:
+// no URL scheme in use is a single letter, so 'C:' never reads as one.
+const DRIVE_RE = /^[A-Za-z]:/;
 // A scheme-less first path segment that looks like a public host. Used only
-// to give a clearer error than "file not found" when someone pastes a URL
-// without its scheme. Deliberately conservative: it requires a dot-separated
-// label ending in an alphabetic TLD, so version directories like 'v1.2/...'
-// and ordinary relative roots like 'lib/...' are NOT treated as hosts.
+// to add a hint when such a source names no file: until v0.7 it was
+// rejected outright, and DBML reads it as a relative folder. Deliberately
+// conservative: it requires a dot-separated label ending in an alphabetic
+// TLD, so version directories like 'v1.2/...' are not treated as hosts.
 const BARE_HOST_RE = /^([a-z0-9-]+\.)+[a-z]{2,}$/i;
 
 /** True when a resolved key is a remote (https) URL rather than a path. */
@@ -888,6 +968,12 @@ export function classifyModuleSource (from: string): ModuleSource {
       `Protocol-relative module source ${JSON.stringify(from)} is not allowed; ` +
       `use an explicit 'https://' URL or a relative path.`,
     );
+  }
+
+  // An absolute path: POSIX ('/models/lib'), a Windows drive ('C:\models'),
+  // or a UNC share ('\\server\share'). Only the host application resolves it.
+  if (from.startsWith('/') || from.startsWith('\\\\') || DRIVE_RE.test(from)) {
+    return { kind: 'absolute', from };
   }
 
   const schemeMatch = SCHEME_RE.exec(from);
@@ -916,34 +1002,46 @@ export function classifyModuleSource (from: string): ModuleSource {
     return { kind: 'url', href: url.href };
   }
 
-  // No scheme. Reject an obvious bare host (domain-like first segment
-  // followed by a path) rather than silently treating it as a relative file.
-  const slash = from.indexOf('/');
-  if (slash > 0) {
-    const firstSegment = from.slice(0, slash);
-    if (BARE_HOST_RE.test(firstSegment)) {
-      throw new ModuleSourceError(
-        `Module source ${JSON.stringify(from)} looks like a bare host; ` +
-        `prefix it with 'https://' to use it as a remote source, ` +
-        `or write './${from}' if you really mean a relative path.`,
-      );
-    }
-  }
-
   return { kind: 'relative', from };
 }
 
 /**
- * Resolve a `from` source against the importer's `filePath`, returning a
- * stable key for `readFile` and for cycle detection.
+ * A hint for a relative source that names no file and whose first segment
+ * looks like a host ('github.com/acme/schemas/core'): the author probably
+ * meant a remote source. Empty for any other source.
+ */
+export function bareHostHint (from: string): string {
+  const slash = from.indexOf('/');
+  if (slash <= 0 || !BARE_HOST_RE.test(from.slice(0, slash))) return '';
+  return `'${from.slice(0, slash)}' reads as a folder next to the importing file; ` +
+    `to import over HTTPS, write 'https://${from}'.`;
+}
+
+/**
+ * The file a specifier names, with the extension search of §28.13: a path
+ * ending in '.xdbml' or '.dbml' is read as written, any other path is
+ * tried as '<path>.xdbml', then '<path>.dbml'.
+ */
+function withExtensions (p: string): string[] {
+  return /\.x?dbml$/.test(p) ? [p] : [`${p}.xdbml`, `${p}.dbml`];
+}
+
+/**
+ * Resolve a `from` source against the importer's `filePath`, returning the
+ * keys to try with `readFile`, in order. A key is also what cycle detection
+ * compares.
  *
- *   - A remote (https) source resolves to its normalized href. No '.xdbml'
+ *   - A remote (https) source resolves to its normalized href. No extension
  *     is appended (a raw-content URL may carry a query string).
- *   - A relative source whose importer is itself a remote module resolves
- *     against the importer's base URL per RFC 3986 (spec §27.14.1). A remote
- *     module therefore can never reach the local filesystem.
- *   - A relative source with a local importer resolves on the filesystem,
- *     exactly as in v0.2.
+ *   - A source whose importer is itself a remote module resolves against
+ *     the importer's base URL per RFC 3986 (spec §28.14.1), without the
+ *     host's `resolveSpecifier`. A remote module therefore can never reach
+ *     the local filesystem: a drive or UNC path there is an error.
+ *   - Any other source goes to the host's `resolveSpecifier` first, as DBML
+ *     10.3 hands it to `resolveFileSpecifier`. A key returned is used as is.
+ *   - Otherwise a relative source resolves against the importer's directory,
+ *     with or without a leading './', and an absolute path is an error, as
+ *     in DBML's default project layout.
  *
  * Uses pure string / WHATWG-URL manipulation (no node:path) so the same
  * code runs in Node and the browser. A local path may use backslashes, as
@@ -952,39 +1050,50 @@ export function classifyModuleSource (from: string): ModuleSource {
  * Node's fs accepts on Windows. Until v0.6.4 a backslash path lost its
  * directory, so './lib' was read from the working directory instead.
  */
-function resolveModulePath (
+export function moduleCandidates (
   fromClause: string,
   importerPath: string | undefined,
-): string {
+  resolveSpecifier?: (specifier: string, importerPath: string | undefined) => string | undefined,
+): string[] {
   const source = classifyModuleSource(fromClause);
 
   // Remote (URL) source: the normalized href IS the resolution key.
   if (source.kind === 'url') {
-    return source.href;
+    return [source.href];
   }
 
-  // Relative source under a remote importer: resolve against its base URL.
+  const path = source.from.replace(/\\/g, '/');
+
+  // Any other source under a remote importer: resolve against its base URL.
   if (importerPath && isUrlKey(importerPath)) {
-    let rel = source.from;
-    if (!rel.endsWith('.xdbml')) rel = `${rel}.xdbml`;
+    if (source.kind === 'absolute' && (path.startsWith('//') || DRIVE_RE.test(path))) {
+      throw new ModuleSourceError(
+        `Module source ${JSON.stringify(fromClause)} is a local path inside the remote module ` +
+        `'${importerPath}'; a remote module can only import paths relative to its own URL (§28.14.1).`,
+      );
+    }
     // WHATWG URL resolution normalizes host case and dot-segments, which is
     // also what we want for the cycle-detection / de-duplication key.
-    return new URL(rel, importerPath).href;
+    return withExtensions(path).map((p) => new URL(p, importerPath).href);
   }
 
-  // Local relative source (v0.2 behavior, with Windows separators read as
-  // forward slashes from v0.6.4).
-  let withExt = toForwardSlashes(source.from);
-  if (!withExt.endsWith('.xdbml')) {
-    withExt = `${withExt}.xdbml`;
+  const mapped = resolveSpecifier?.(source.from, importerPath);
+  if (mapped !== undefined) return [toForwardSlashes(mapped)];
+
+  if (source.kind === 'absolute') {
+    throw new ModuleSourceError(
+      `Module source ${JSON.stringify(fromClause)} is an absolute path; a module source is read ` +
+      `relative to the importing file, as in DBML. Write a relative path, or resolve this one ` +
+      `in the host application (ParseOptions.resolveSpecifier).`,
+    );
   }
-  // Absolute path, POSIX or with a Windows drive letter: return as-is.
-  if (withExt.startsWith('/') || /^[A-Za-z]:\//.test(withExt)) return withExt;
+
+  const candidates = withExtensions(path);
   // No importer context: return as-is (resolver handles it).
-  if (!importerPath) return withExt;
+  if (!importerPath) return candidates;
   // Resolve relative to importer's directory.
   const importerDir = posixDirname(toForwardSlashes(importerPath));
-  return posixJoin(importerDir, withExt);
+  return candidates.map((p) => posixJoin(importerDir, p));
 }
 
 /**

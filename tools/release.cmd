@@ -24,7 +24,7 @@ REM  version, metadata first and tarball later, so after each publish the
 REM  script waits until both are served (up to 45 minutes), and retries each
 REM  npm install for up to 15 minutes. The last step commits, pushes, and runs
 REM  tools\github-release.cmd, which tags and publishes the GitHub release,
-REM  then deletes the markers.
+REM  then deletes the markers. A minor release X.Y.0 is tagged vX.Y.
 REM ===========================================================================
 
 if "%~1"=="" (
@@ -33,6 +33,11 @@ if "%~1"=="" (
   exit /b 1
 )
 set VER=%~1
+REM The GitHub release and its tag name a minor release by its minor version,
+REM as the CHANGELOG does: 0.7.0 is tagged v0.7, from the section "## v0.7",
+REM like v0.4, v0.5 and v0.6; a patch release, 0.6.7, keeps all three numbers.
+set REL=%VER%
+if "%VER:~-2%"==".0" set REL=%VER:~0,-2%
 set ROOT=%CD%
 REM Markers of the packages this script published at this version, so a
 REM rerun waits for npm to serve them instead of publishing them again.
@@ -40,7 +45,7 @@ set MARK=%TEMP%\xdbml-release-%VER%
 
 echo.
 echo ============================================================
-echo  Releasing %VER%
+echo  Releasing %VER%, tag v%REL%
 echo  Repo: %ROOT%
 echo ============================================================
 
@@ -151,7 +156,7 @@ if errorlevel 1 (
   echo   nothing to commit.
 )
 call git push || goto :fail
-call "%ROOT%\tools\github-release.cmd" %VER% || goto :fail
+call "%ROOT%\tools\github-release.cmd" %REL% || goto :fail
 del "%MARK%-parse.published" "%MARK%-render.published" >nul 2>&1
 
 echo.

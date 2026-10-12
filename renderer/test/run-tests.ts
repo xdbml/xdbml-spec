@@ -23,8 +23,18 @@ import {
   autoArrange,
   serializeDiagram,
   layoutSupertypeGroups,
+  parseMarkdown,
+  parseInline,
+  layoutNoteText,
+  sizeNote,
+  NOTE_WIDTHS,
+  defaultTheme,
+  layoutDeps,
   type DiagramModel,
 } from '../src/index.ts';
+import { ENTITY_NAME_FONT_SIZE, FIELD_FONT_SIZE } from '../src/svg/metrics.ts';
+import { buildOverlay } from '../src/interactive/overlay.ts';
+import { depEnds, depExtent } from '../src/geometry/dep-path.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const examplesDir = join(here, '..', '..', 'examples');
@@ -590,6 +600,290 @@ Ref: other.b > "my.table"."user.id"`);
   const dends = dotted.refs.map((r) => `${r.target?.entityId}.${r.target?.fieldName}${r.unresolved ? '?' : ''}`).join(' ');
   check('quoted: each Ref reaches its own entity and field',
     dends === 'my.table.id "my.table"."user.id"', dends);
+}
+
+/* ---- v0.7: cardinality from the operator, its ? marks, the settings and a nullable FK (spec §11.7, §11.8) ---- */
+{
+  const build = (src: string): DiagramModel => buildDiagram(flatten(parse(src)));
+  const ends = (m: DiagramModel): string =>
+    m.refs.map((r) => `${r.sourceEnd?.text ?? '-'}:${r.sourceEnd?.origin}/${r.targetEnd?.text ?? '-'}:${r.targetEnd?.origin}`).join(' | ');
+  const base = `Table a {
+  id int [pk]
+}
+Table b {
+  id    int [pk]
+  a_n   int
+  a_nn  int [not null]
+}
+`;
+  const m1 = build(`${base}Ref: b.a_nn > a.id
+Ref: b.a_n > a.id
+Ref: b.a_nn >? a.id
+Ref: b.a_nn ?> a.id
+Ref: a.id < b.a_n
+Ref: b.a_nn <> a.id`);
+  check('cardinality §11.8: >, nullable >, >?, ?>, nullable <, <>',
+    ends(m1) === [
+      '1..*:operator/1..1:operator',
+      '1..*:operator/0..1:nullable-foreign-key',
+      '1..*:operator/0..1:optional-mark',
+      '0..*:optional-mark/1..1:operator',
+      '0..1:nullable-foreign-key/1..*:operator',
+      '0..*:operator/0..*:operator',
+    ].join(' | '), ends(m1));
+
+  const m2 = build(`${base}Table c {
+  x int [ref: >? a.id]
+}`);
+  check('cardinality §11.1: the ? of an inline ref reaches the diagram',
+    m2.refs[0]?.targetEnd?.text === '0..1' && m2.refs[0]?.targetEnd?.origin === 'optional-mark', ends(m2));
+
+  const m3 = build(`xdbml: 0.7
+${base}Ref: b.a_n > a.id [target: '1..1']`);
+  check('cardinality §11.7: a setting states the end, and its label is drawn',
+    m3.refs[0]?.targetEnd?.origin === 'setting' && m3.refs[0]?.targetCardinality === '1..1', ends(m3));
+  check('cardinality §11.7: an end stated by the operator carries no label',
+    m1.refs.every((r) => r.sourceCardinality === undefined && r.targetCardinality === undefined));
+
+  const m4 = build(`xdbml: 0.7
+Entity Customer { }
+Entity Order { }
+Ref: Customer > Order
+Ref: Customer >? Order`);
+  check('cardinality §11.16: an entity-level end is unstated until a ? states its minimum',
+    ends(m4) === '-:unstated/-:unstated | -:unstated/-:optional-mark', ends(m4));
+  const svg4 = renderToSVG(flatten(parse(`xdbml: 0.7
+Entity Customer { }
+Entity Order { }
+Ref: Customer >? Order`)));
+  check('cardinality §11.16: the open ring alone at an end a ? marks on an entity-level Ref',
+    (svg4.match(/<circle[^>]*r="2\.5"/g) ?? []).length === 1);
+}
+
+/* ---- v0.7: colors that Metadata blocks set (spec §24.7) ---- */
+{
+  const build = (src: string): DiagramModel => buildDiagram(flatten(parse(src)));
+  const m = build(`xdbml: 0.7
+Container sales [type: schema, color: '#111111'] {
+  Table orders [headercolor: '#222222'] {
+    id int
+  }
+  View open_orders {
+    id int
+  }
+}
+Table users {
+  id int
+}
+Table audit {
+  id int
+}
+TableGroup people [color: '#333333'] {
+  users
+  audit
+}
+Metadata Container sales {
+  color: #AA0000
+}
+Metadata Table sales.orders {
+  headercolor: #00AA00
+}
+Metadata View open_orders {
+  headercolor: #0000AA
+}
+Metadata TableGroup people {
+  color: #ABCDEF
+}
+Metadata Table audit {
+  headercolor: #FEDCBA
+}`);
+  const header = (id: string): string | undefined => m.entities.find((e) => e.id === id)?.headerColor;
+  check('metadata §24.7.4: a block sets an entity\'s header color over its own', header('sales.orders') === '#00AA00', String(header('sales.orders')));
+  check('metadata §24.7.4: a block sets a View\'s header color', header('sales.open_orders') === '#0000AA', String(header('sales.open_orders')));
+  check('metadata §24.7.4: a block sets a TableGroup\'s color, which its members take', header('users') === '#ABCDEF', String(header('users')));
+  check('metadata §24.7.4: an entity\'s header color from a block applies over its group\'s', header('audit') === '#FEDCBA', String(header('audit')));
+  const sales = m.containers.find((c) => c.name === 'sales');
+  check('metadata §24.7.4: a block sets a Container\'s color over its own', sales?.accentColor === '#AA0000', String(sales?.accentColor));
+}
+
+/* ---- Sticky notes (spec §19, v0.7) --------------------------------- */
+{
+  const md = (t: string) => JSON.stringify(parseMarkdown(t));
+  check('markdown: a heading, a paragraph joined with a space, and a list',
+    md('# Title\nline one\nline two\n\n- a\n- **b**') === JSON.stringify([
+      { kind: 'heading', level: 1, inlines: [{ text: 'Title' }] },
+      { kind: 'paragraph', inlines: [{ text: 'line one line two' }] },
+      { kind: 'list', ordered: false, start: 1, items: [
+        [{ kind: 'paragraph', inlines: [{ text: 'a' }] }],
+        [{ kind: 'paragraph', inlines: [{ text: 'b', strong: true }] }],
+      ] },
+    ]), md('# Title\nline one\nline two\n\n- a\n- **b**'));
+  check('markdown: emphasis, code, links, strikethrough and an escape',
+    JSON.stringify(parseInline('*a* __b__ `c` [d](https://x.org) ~~e~~ \\*f')) === JSON.stringify([
+      { text: 'a', em: true }, { text: ' ' }, { text: 'b', strong: true }, { text: ' ' }, { text: 'c', code: true }, { text: ' ' },
+      { text: 'd', href: 'https://x.org' }, { text: ' ' }, { text: 'e', strike: true }, { text: ' *f' },
+    ]), JSON.stringify(parseInline('*a* __b__ `c` [d](https://x.org) ~~e~~ \\*f')));
+  check('markdown: an underscore inside a word stays (snake_case)',
+    JSON.stringify(parseInline('order_line_id and _x_')) === JSON.stringify([{ text: 'order_line_id and ' }, { text: 'x', em: true }]));
+  check('markdown: a nested list, a quote, a fenced code block and a rule',
+    parseMarkdown('1. one\n   - sub\n2. two\n\n> quoted\n\n```\nSELECT 1;\n```\n\n---').map((b) => b.kind).join(',') === 'list,quote,code,rule');
+  check('markdown: a table stays as written',
+    JSON.stringify(parseMarkdown('| a | b |\n|---|---|')) === JSON.stringify([{ kind: 'verbatim', lines: ['| a | b |', '|---|---|'] }]));
+
+  const short = sizeNote('Short');
+  check('note size: a short note takes the narrowest width and the minimum height', short.width === NOTE_WIDTHS[0] && short.height === NOTE_WIDTHS[0] / 2,
+    `${short.width}x${short.height}`);
+  const long = sizeNote(Array.from({ length: 40 }, (_, i) => `Sentence number ${i} about the model.`).join(' '));
+  check('note size: a long note widens before it grows', long.width === NOTE_WIDTHS[NOTE_WIDTHS.length - 1] && long.height > long.width,
+    `${long.width}x${long.height}`);
+  const mid = sizeNote(Array.from({ length: 12 }, (_, i) => `Sentence ${i} here.`).join(' '));
+  check('note size: a box is no taller than wide when a width allows it', mid.height <= mid.width, `${mid.width}x${mid.height}`);
+  const sized = layoutNoteText('# Title\n## Sub\nBody text\n\n- item', 200).lines;
+  check('note text: the body is the size of a field name, and no heading is larger than an entity name',
+    sized.filter((l) => l.weight === 400).every((l) => l.size === FIELD_FONT_SIZE)
+      && sized.every((l) => l.size <= ENTITY_NAME_FONT_SIZE),
+    sized.map((l) => `${l.size}/${l.weight}`).join(','));
+  const lines = layoutNoteText('A **bold** word and [a link](https://xdbml.org).', 120).lines;
+  check('note text: lines fit the width', lines.length > 1 && lines.every((l) => l.runs.length > 0));
+  check('note text: a style change inside a word is no place to break',
+    layoutNoteText('[guide](https://x.org).', 40).lines.every((l) => l.runs.map((r) => r.text).join('') !== '.'));
+
+  const src = `xdbml: 0.7
+Container sales [type: schema] {
+  Entity orders { id int [pk] }
+  Note states [color: #FBCFE8, owner: 'ops'] { 'placed, shipped' }
+}
+Note legend { 'Legend' }
+Note plain [color: none] { 'Plain' }
+Note odd [color: red] { 'Odd' }
+Note meta [color: #111111] { 'Meta' }
+Metadata Note meta { color: #222222 }
+DiagramView sales_only { Containers { sales } }
+DiagramView legend_only { Notes { legend } }`;
+  const m = buildDiagram(flatten(parse(src)));
+  const note = (id: string) => m.notes.find((n) => n.id === `note:${id}`);
+  check('notes: one layout per sticky note, in declaration order',
+    m.notes.map((n) => n.name).join(',') === 'sales.states,legend,plain,odd,meta', m.notes.map((n) => n.name).join(','));
+  check('notes: a note in a Container stacks below its entities, inside the frame', (() => {
+    const c = m.containers[0].bounds; const n = note('sales.states')!.bounds; const e = m.entities[0].bounds;
+    return note('sales.states')!.containerName === 'sales' && n.y > e.y + e.height && c.y + c.height >= n.y + n.height && c.x < n.x;
+  })());
+  check('notes: the colors of the brackets, none, and the default for a value that is no color',
+    note('sales.states')?.color === '#FBCFE8' && note('plain')?.transparent === true && note('plain')?.color === undefined
+      && note('odd')?.color === undefined && note('legend')?.color === undefined);
+  check('notes: a Metadata color applies over the brackets (§24.7.4)', note('meta')?.color === '#222222', String(note('meta')?.color));
+  const svg = serializeDiagram(m);
+  check('notes: drawn with a title, the default fill and the folded corner',
+    svg.includes('<title>legend</title>') && svg.includes(`fill="${defaultTheme.note.fill}"`) && svg.includes('fill-opacity="0.14"'));
+  check('notes: a note with color none draws no box', (() => {
+    const at = svg.indexOf('<title>plain</title>');
+    const end = svg.indexOf('</g>', at);
+    return at > 0 && !svg.slice(at, end).includes('<path');
+  })());
+  const dv = buildDiagram(flatten(parse(src)), new Set(), { diagramView: 'sales_only' });
+  check('notes: a diagram view draws the notes of a listed Container (§18.2)', dv.notes.map((n) => n.name).join(',') === 'sales.states');
+  const lv = buildDiagram(flatten(parse(src)), new Set(), { diagramView: 'legend_only' });
+  check('notes: a diagram view of a note alone draws it and no entity', lv.notes.map((n) => n.name).join(',') === 'legend' && lv.entities.length === 0);
+  const arranged = autoArrange(m, 'relational');
+  check('notes: the arrangement positions every note', m.notes.every((n) => arranged.has(n.id)));
+  const placed = applyUserPositions(m, new Map([['note:legend', { x: 900, y: 700 }]]));
+  check('notes: a user position moves a note and grows the canvas',
+    placed.notes.find((n) => n.id === 'note:legend')?.bounds.x === 900 && placed.width >= 900 + NOTE_WIDTHS[0]);
+  const onlyNotes = buildDiagram(flatten(parse("Note a { 'x' }\nNote b { 'y' }")));
+  check('notes: a document of notes alone is arranged', autoArrange(onlyNotes, 'relational').size === 2);
+}
+
+/* ---- Data lineage (spec §27, v0.7) -------------------------------- */
+{
+  const src = [
+    'xdbml: 0.7',
+    'Table raw {', '  id int [pk]', '  amount int', '}',
+    'Table customers {', '  first varchar', '  last varchar', '}',
+    'Table dim {', '  full varchar', '}',
+    'Table stg [dep: <- raw] {', '  revenue int [dep: <- raw.amount]', '}',
+    'View kpis {', '  n int', '}',
+    'Dep: stg -> kpis.n [color: #123456]',
+    'Dep full_name {', '  customers.first -> dim.full', '  customers.last -> dim.full [color: #abcdef]', '}',
+    'Dep: dim -> dim',
+    'DiagramView raw_side {', '  Tables {', '    raw', '    stg', '  }', '}',
+  ].join('\n');
+  const m = buildDiagram(flatten(parse(src)));
+  check('lineage: one layout per Dep, under the ids of collectLineage',
+    m.deps.map((d) => d.id).join(',') === 'dep:0,dep:1,dep:2,dep:3,dep:4', m.deps.map((d) => d.id).join(','));
+  check('lineage: a field end and a View end resolve',
+    m.deps[0].dependencies[0].downstream?.entityId === 'kpis' && m.deps[0].dependencies[0].downstream?.fieldName === 'n'
+      && m.deps[0].dependencies[0].upstream?.fieldName === undefined);
+  check('lineage: the color of a Dep and of one dependency', m.deps[0].color === '#123456' && m.deps[1].dependencies[1].color === '#abcdef' && m.deps[1].color === undefined);
+  const placed = applyUserPositions(m, autoArrange(m, 'relational'));
+  const geo = layoutDeps(placed.deps, placed.entities);
+  const full = geo.find((g) => g.dep.id === 'dep:1');
+  check('lineage: two dependencies into one field meet at one junction with one arrowhead',
+    !!full && full.curves.length === 2 && full.junctions.length === 1 && full.arrows.length === 1 && full.trunks.length === 1);
+  check('lineage: a dependency draws as a curve', geo.every((g) => g.curves.every((c) => / C /.test(c.d))));
+  const self = geo.find((g) => g.dep.id === 'dep:2');
+  check('lineage: an entity that depends on itself draws a loop', !!self && self.curves.length === 1 && self.arrows.length === 1);
+  check('lineage: the name of a Dep goes at its junction', !!full?.label && Math.abs(full.label.x - full.junctions[0].x) < 0.01);
+  const svg = serializeDiagram(placed, { showRelationshipNames: true });
+  check('lineage: drawn in the default lineage color, the Dep color and the dependency color',
+    svg.includes(`stroke="${defaultTheme.lineage.line}"`) && svg.includes('stroke="#123456"') && svg.includes('stroke="#abcdef"'));
+  check('lineage: the name of a Dep shows with the names', svg.includes('>full_name</text>'));
+  check('lineage: no name without the names option', !serializeDiagram(placed).includes('>full_name</text>'));
+  check('lineage: a Dep counts as a link when arranging', (() => {
+    const lonely = buildDiagram(flatten(parse('Table a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a -> b')));
+    const pos = autoArrange(lonely, 'relational');
+    const a = pos.get('a');
+    const b = pos.get('b');
+    return !!a && !!b && Math.abs(a.y - b.y) < 1;
+  })());
+  const dv = buildDiagram(flatten(parse(src)), new Set(), { diagramView: 'raw_side' });
+  check('lineage: a diagram view draws the dependencies between its members only (§18.4)',
+    dv.deps.map((d) => d.id).join(',') === 'dep:3,dep:4', dv.deps.map((d) => d.id).join(','));
+  check('lineage: a prebuilt model without deps still renders', serializeDiagram({ ...placed, deps: undefined as unknown as DiagramModel['deps'] }).includes('<svg'));
+
+  // Selection (spec §27.7): the rows of the fields at the ends tinted, the
+  // boxes named with no field outlined, the curves and arrowheads in blue.
+  const ends0 = depEnds(placed.deps[0], placed.entities);
+  check('lineage: the ends of a Dep, a field row and a box', JSON.stringify(ends0) === JSON.stringify({ fields: [{ entityId: 'kpis', path: 'n' }], entities: ['stg'] }), JSON.stringify(ends0));
+  const tinted = serializeDiagram(placed, { highlightedFields: depEnds(placed.deps[1], placed.entities).fields });
+  check('lineage: the field rows at the ends of a selected Dep take the selection tint',
+    (tinted.match(new RegExp(`fill="${defaultTheme.row.selectFill}"`, 'g')) ?? []).length === 3);
+  const overlay = buildOverlay(placed, { kind: 'dep', id: 'dep:0' }, defaultTheme);
+  check('lineage: a selected Dep draws its arrowhead in the selection color and outlines the box it names',
+    overlay.includes(`<polygon points=`) && /<polygon[^>]*fill="#2563eb"/.test(overlay)
+      && overlay.includes(`stroke="${defaultTheme.row.selectStrip}" stroke-width="2" pointer-events="none"`));
+
+  // A loop between two boxes of one column stays on the canvas.
+  const stacked = applyUserPositions(m, new Map([['raw', { x: 40, y: 40 }], ['stg', { x: 40, y: 300 }]]));
+  const reach = depExtent(layoutDeps(stacked.deps, stacked.entities));
+  check('lineage: the canvas holds a loop that bows out past the boxes',
+    reach.right > 40 + 280 && stacked.width >= reach.right, `${reach.right} / ${stacked.width}`);
+
+  // Arrangement: sources on the left, targets on the right.
+  const chain = buildDiagram(flatten(parse('Table c {\n  x int\n}\nTable b {\n  x int\n}\nTable a {\n  x int\n}\nDep: a -> b\nDep: b.x -> c.x')));
+  const cp = autoArrange(chain, 'relational');
+  check('lineage: a chain arranges left to right, source first',
+    (cp.get('a')?.x ?? 0) < (cp.get('b')?.x ?? 0) && (cp.get('b')?.x ?? 0) < (cp.get('c')?.x ?? 0),
+    JSON.stringify([...cp]));
+  const blocks = buildDiagram(flatten(parse([
+    'xdbml: 0.7',
+    'Container marts {', '  Table m {', '    x int', '  }', '}',
+    'Container raw {', '  Table r {', '    x int', '  }', '}',
+    'Container other {', '  Table o {', '    x int', '  }', '}',
+    'Dep: raw.r -> marts.m',
+  ].join('\n'))));
+  const bp = autoArrange(blocks, 'relational');
+  check('lineage: the Container of a source stands left of the Container it feeds, and an unlinked one below',
+    (bp.get('raw.r')?.x ?? 0) < (bp.get('marts.m')?.x ?? 0) && (bp.get('other.o')?.y ?? 0) > (bp.get('marts.m')?.y ?? 0),
+    JSON.stringify([...bp]));
+  const web = buildDiagram(flatten(parse([
+    'Table a {', '  id int [pk]', '}', 'Table b {', '  id int [pk]', '  a_id int [ref: > a.id]', '}',
+    'Table c {', '  id int [pk]', '  b_id int [ref: > b.id]', '}', 'Table d {', '  id int [pk]', '  c_id int [ref: > c.id]', '}',
+    'Table e {', '  id int [pk]', '  d_id int [ref: > d.id]', '}',
+    'Dep: d -> a',
+  ].join('\n'))));
+  const wp = autoArrange(web, 'relational');
+  check('lineage: in a relational web that lineage does not lead, the source of a Dep stands left of its target',
+    (wp.get('d')?.x ?? 0) < (wp.get('a')?.x ?? 0), JSON.stringify([...wp]));
 }
 
 /* ---- Report -------------------------------------------------------- */
