@@ -1,106 +1,108 @@
-xDBML 0.6.7 -- quoted names in every name position, diagnostics copy
-Base: origin/main dc273bc (release 0.6.6). Built 2026-10-10.
-Edited in place in the clone: there is no archive to unzip.
+xDBML 0.7.0 -- merge dev/0.7 into main, release, publish the extension
+Base: origin/dev/0.7 9c5deaf ("Topic 6 -- Import specifiers and Topic 7 --
+Closing"). Built 2026-10-12.
 
-WHAT IT DOES
-------------
-  1. Quoted names everywhere a name stands (3.2). @xdbml/parse read a
-     quoted identifier only as the name of a declaration and after a dot
-     in a path. It now reads one at the head of a path (constraints key
-     lines, indexes, both ends of a Ref, inline or long), in the fields of
-     a composite Ref, in each segment of a dotted entity, Enum or type
-     name, as a TableGroup member, in a top-level records declaration and
-     its columns, after ~, in an import path and alias, in a tuple element
-     or polymorphic alternative, and as the name of a Ref. The reported
-     playground link (constraints { ("Work Order ID", "Part ID") [pk] })
-     now parses clean. Checked against @dbml/core 3.13.6: every form DBML
-     accepts now parses; ~"name" is the one form xDBML accepts and DBML
-     rejects.
-  2. A dot inside quotes is part of the name. "my.table" is one entity;
-     my.table is entity table of Container my; a document may declare
-     both. The AST holds a qualified name with each segment that holds a
-     dot or a double quote written in quotes, as in the source; any other
-     name reads exactly as before. New file parser/src/names.ts defines the
-     form; @xdbml/parse exports joinName, splitName, quoteNameSegment,
-     nameQualifier, lastNameSegment and isQualifiedName.
-  3. Playground diagnostics panel: text can be selected and copied with
-     Ctrl/Cmd+C (a click that ends a selection no longer jumps to the
-     source, which took the focus to the editor and lost the selection),
-     and a Copy button in the header copies every diagnostic, one per line.
-  4. SUPPORTED_XDBML_VERSION = '0.6.7'; CHANGELOG section v0.6.7.
+This delivery writes five files into the clone, on dev/0.7:
+  PR-0.7.md            the description of the pull request
+  apply.cmd            the three steps below
+  APPLY.txt            this file
+  tools\release.cmd    tags a minor release vX.Y, see below
+  tools\RELEASE.md     one paragraph on that rule
 
-ONE POINT LEFT FOR YOU
-----------------------
-  20.1 writes a map key as .["literal_key"] (example flags.["dark_mode"]),
-  while the grammar and the parser read single quotes, .['dark_mode'];
-  the double-quoted form fails with "Unexpected token inside path
-  bracket". Unchanged in this delivery.
+THE WHOLE DEPLOYMENT, IN THREE COMMANDS
+---------------------------------------
+From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on dev/0.7:
 
-HOW TO RELEASE
---------------
-From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec):
+  apply.cmd            gate, commit this delivery, open the pull request
+  apply.cmd release    merge the pull request, release 0.7.0, tag v0.7
+  apply.cmd vscode     publish the VS Code extension 0.7.0
 
-    apply.cmd
+Each step stops at the first failure, says what failed, and can be rerun
+once the cause is fixed. Nothing is published before step 2.
 
-apply.cmd runs the gate (npm run check, mcp type-check) and prints:
+Needed once, if not set up yet:
+  GitHub CLI   winget install GitHub.cli   then   gh auth login
+  npm          npm login, with publish rights on @xdbml
+  wrangler     cd mcp, then npx wrangler login
+  vsce         npx @vscode/vsce login xdbml, with a Personal Access Token
+               of the xdbml publisher; or upload the .vsix by hand
 
-    git add -A
-    git commit -m "0.6.7: quoted names in every name position, diagnostics copy"
-    tools\release-preflight.cmd 0.6.7
-    tools\release.cmd 0.6.7
+STEP 1 -- apply.cmd
+-------------------
+  1. Checks that the GitHub CLI is logged in, that the clone is on dev/0.7
+     and in step with origin/dev/0.7, that main has no commit dev/0.7
+     lacks, and that nothing outside this delivery is uncommitted.
+  2. Runs the gate: npm run check, then the MCP type-check. Most of the
+     step's time goes here.
+  3. Commits apply.cmd, APPLY.txt, tools\release.cmd and tools\RELEASE.md
+     as "0.7.0: deployment script; release.cmd tags a minor release vX.Y",
+     and pushes dev/0.7.
+  4. Opens the pull request dev/0.7 into main, titled "xDBML 0.7: DBML
+     10.3.1 baseline", with PR-0.7.md as its description, then deletes
+     PR-0.7.md: from then on the text lives in the pull request, and the
+     release commits with git add -A. To change the text before it goes
+     up, edit PR-0.7.md before running apply.cmd; afterwards, edit it on
+     GitHub. If the pull request exists already, the step prints its URL.
 
-git add -A is safe here: the only untracked file is parser\src\names.ts,
-which belongs to the delivery. release.cmd publishes @xdbml/parse then
-@xdbml/render at 0.6.7 (the renderer imports the new name helpers, and
-release.cmd repoints its @xdbml/parse range before building), deploys the
-MCP server and the rendering API, commits the version bumps as "release
-0.6.7", pushes main, and publishes the GitHub release from the v0.6.7
-section of the CHANGELOG.
+  Then read the pull request on GitHub. CI runs on it, on Node 22 and 24.
+  You may also merge it on GitHub yourself: step 2 sees that it is merged
+  and goes on from there.
 
-WHAT CHANGED
-------------
-parser\src\names.ts (new)
-  The form of a qualified name, and joinName/splitName and the helpers.
-parser\src\parser.ts
-  parseQualifiedName and parseDeclaredName; quoted path heads, composite
-  fields, entity/enum/type names, TableGroup, SupertypeGroup and
-  DiagramView members, records, ~name, import paths and aliases, setting
-  values, tuple elements, polymorphic alternatives, Ref names. Alias
-  rewriting splits names with splitName. SUPPORTED_XDBML_VERSION 0.6.7.
-parser\src\name-resolver.ts, constraints.ts, relationships.ts,
-supertypes.ts, diagram-views.ts, module-resolver.ts, index.ts
-  Names joined and split with names.ts instead of '.'; keyPathString and
-  pathToString quote a field name that holds a dot; exports.
-renderer\src\layout\layout.ts, renderer\src\geometry\ref-path.ts
-  Row paths, relationship endpoints, key marks and TableGroup members in
-  the form of names.ts.
-playground\src\components\inspector\ast-lookup.ts, RefInspector.vue,
-FieldInspector.vue
-  Entity, Edge and field lookup and the displayed paths use names.ts.
-playground\src\components\diagnostics\DiagnosticsPanel.vue,
-playground\help\diagnostics-panel.md
-  Selection and Copy.
-grammar\xDBML.g4
-  nameSegment (IDENTIFIER | quotedIdentifier) in every name rule, path
-  head, qualified name, entity reference, composite fields, import path
-  and alias, ~name, Project and Ref names, setting values.
-grammar\test-cases.md
-  Three cases: quoted names in a key, an index, a relationship and a
-  TableGroup; "my.table" beside my.table; "my.table".id unresolved.
-spec\v0.6.md
-  3.2: where a quoted identifier stands, how a qualified name reads, the
-  state before v0.6.7. 20.1, 20.2: quoted path head. Appendix B: names.
-  "What's new in v0.6": one sentence for v0.6.7.
-public\llms.txt, mcp\src\reference.ts
-  One line in "Quoting" (reference.ts regenerated).
-parser\test\run-tests.ts (520), renderer\test\run-tests.ts (292)
-  29 parser tests in "v0.6.7 quoted names", 3 corpus cases, 5 renderer
-  tests; the unsupported-version test moves to xdbml: 0.6.8.
-CHANGELOG.md
-  "## v0.6.7 -- 2026", Status current, Released 2026-10-10, with a
-  compatibility section. v0.6.6 becomes "superseded by v0.6.7".
-APPLY.txt, apply.cmd
-  This delivery. apply.cmd has no guards any more: it runs the gate.
+STEP 2 -- apply.cmd release
+---------------------------
+  1. Waits for the checks of the pull request (gh pr checks --watch) and
+     stops if one fails.
+  2. Merges the pull request with a merge commit, which keeps the topic
+     commits in the history of main.
+  3. Checks out main and pulls it.
+  4. tools\release-preflight.cmd 0.7.0: npm login, 0.7.0 free on npm,
+     wrangler, MCP reference in sync with llms.txt, every test suite.
+  5. Sets "**Released**: unreleased" in the v0.7 section of CHANGELOG.md
+     to today's date.
+  6. tools\release.cmd 0.7.0: publishes @xdbml/parse and @xdbml/render
+     0.7.0, deploys the MCP server and the rendering API, commits the
+     version bumps and the date as "release 0.7.0", pushes main, then tags
+     v0.7 and publishes the GitHub release from "## v0.7" in CHANGELOG.md.
 
-No golden changes. No VS Code extension 0.6.7: the highlighter already
-colors quoted identifiers, and no keyword changed.
+  The merge pushes main, so deploy.yml publishes xdbml.org with the v0.7
+  specification a few minutes later. Until release.cmd finishes, the site
+  and llms.txt describe 0.7 while npm and the MCP server still serve
+  0.6.7.
+
+  If release.cmd stops: fix the cause it names, then rerun
+      tools\release.cmd 0.7.0
+  directly, not apply.cmd release. release.cmd skips a package it has
+  already published, while the preflight refuses a version on npm.
+
+STEP 3 -- apply.cmd vscode
+--------------------------
+  Publishes tools\vscode-extension\xdbml-0.7.0.vsix, committed with
+  Topic 7, with vsce. Without a vsce login, the step prints how to log in,
+  and where to upload the file by hand:
+      https://marketplace.visualstudio.com/manage/publishers/xdbml
+
+WHAT CHANGED IN THIS DELIVERY
+-----------------------------
+tools\release.cmd
+  A minor release is tagged with its minor version, as its CHANGELOG
+  section is named: release.cmd 0.7.0 runs github-release.cmd 0.7, which
+  tags v0.7 from "## v0.7", like v0.4, v0.5 and v0.6. A patch release
+  keeps three numbers: 0.6.7 is tagged v0.6.7. Before this change,
+  release.cmd 0.7.0 would have published and pushed, then stopped at its
+  last step, looking for a "## v0.7.0" section.
+tools\RELEASE.md
+  One paragraph on the same rule.
+PR-0.7.md
+  The pull request description: the topics and their commits, the
+  language changes, compatibility (the readings that change in every
+  document, the API unions that gain members), tooling, verification, and
+  what follows the merge.
+apply.cmd, APPLY.txt
+  This deployment.
+
+AFTERWARDS, IF YOU WANT
+-----------------------
+  Delete the branch:   git push origin --delete dev/0.7
+                       git branch -d dev/0.7
+  Outside this repo: the Hackolade DBML import plugin, to move from
+  @dbml/parse 8.2.5 to 10.3.1.

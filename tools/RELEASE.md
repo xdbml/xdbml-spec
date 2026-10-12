@@ -35,6 +35,11 @@ republished.
 6. commits the version bumps, pushes, and runs `github-release.cmd`, which
    tags the commit and publishes the GitHub release from the CHANGELOG
 
+A minor release is tagged with its minor version, as its CHANGELOG section is
+named: `tools\release.cmd 0.7.0` runs `github-release.cmd 0.7`, which tags
+`v0.7` from `## v0.7`, like v0.4, v0.5 and v0.6. A patch release keeps all
+three numbers: `0.6.7` is tagged `v0.6.7` from `## v0.6.7`.
+
 After a failure, fix the cause and rerun the same command. A package already
 on npm at that version is not installed, tested or published again, and every
 other step can run twice, so the script resumes where it stopped.
