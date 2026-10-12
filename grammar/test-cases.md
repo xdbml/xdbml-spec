@@ -1150,17 +1150,17 @@ xdbml: 0.2
 reuse * from '/absolute/path/to/file.xdbml'
 ```
 
-Expected error: "import path must begin with './' or '../' (relative paths only in v0.2 phase 1)."
+Expected error: "an absolute path; a module source is read relative to the importing file, as in DBML (§28.13)."
 
-### INVALID -- URL path (deferred to a later phase)
+### INVALID -- a URL with a scheme other than https (§28.14)
 
 ```
-xdbml: 0.2
+xdbml: 0.3
 
-reuse * from 'https://example.com/schemas/users.xdbml'
+reuse * from 'http://example.com/schemas/users.xdbml'
 ```
 
-Expected error: "URL imports are reserved for a later phase; v0.2 phase 1 supports relative paths only."
+Expected error: "Module source scheme 'http:' is not allowed; remote sources must use 'https://'."
 
 ### INVALID -- v0.1 file using v0.2-only constructs
 
@@ -2323,6 +2323,64 @@ Table a {
 
 Dep sales.load: a -> a
 ```
+
+## §28.13 Module specifiers -- DBML 10.3.1 resolution (v0.7)
+
+The cases import from `grammar/fixtures/`, where `legacy.dbml` is a DBML file with no `.xdbml` twin.
+
+### VALID -- an import without an extension reads a .dbml file
+
+```
+xdbml: 0.7
+
+use { table legacy_orders } from './legacy'
+```
+
+### VALID -- an explicit .dbml extension
+
+```
+xdbml: 0.7
+
+use { table legacy_orders } from './legacy.dbml'
+```
+
+### VALID -- a specifier without ./, read relative to the importing file as in DBML
+
+```
+use { table products } from 'catalog'
+```
+
+### VALID -- a first folder that looks like a host is a folder (a clone keeps the case offline)
+
+```
+xdbml: 0.7
+
+use { entity products } from 'acme.com/catalog' {
+  Entity products {
+    id int [pk]
+  }
+}
+```
+
+### INVALID -- a Windows drive path, absolute, that no host resolves
+
+```
+xdbml: 0.7
+
+use * from 'C:\\models\\catalog'
+```
+
+Expected error: "an absolute path; a module source is read relative to the importing file, as in DBML (§28.13)."
+
+### INVALID -- a specifier naming no file under either extension
+
+```
+xdbml: 0.7
+
+use * from './missing'
+```
+
+Expected error: "Failed to read referenced module file '.../missing.xdbml' or '.../missing.dbml'."
 
 ## §12 SupertypeGroup (v0.5)
 

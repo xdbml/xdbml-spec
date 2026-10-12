@@ -6,7 +6,7 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 
 ## Ground rules
 
-- The first line of every document is `xdbml: 0.6`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
+- The first line of every document is `xdbml: 0.7`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
 - Comments are `//` to the end of the line, or `/* ... */`. `#` and `--` are errors.
 - Keywords match any casing, and names are case-sensitive. Write construct keywords capitalized (`Entity`, `Table`, `View`, `Ref`), settings and type keywords in lowercase.
 - A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks, and so do `records (` and `records [`.
@@ -1106,12 +1106,12 @@ Entity suppliers {
 
 ## Checklist before you answer
 
-1. The first line is `xdbml: 0.6`.
+1. The first line is `xdbml: 0.7`.
 2. Every `[ ]` holding two or more settings has a comma between each two of them, across line breaks too.
 3. No comma or semicolon follows an item in `{ }`.
 4. In every relationship between attributes, the referenced side -- the right side of `>`, the left side of `<` -- names all the fields of the parent's primary key or of one of its unique keys, and no other field.
 5. Relationship settings sit in a `Ref`, not beside an inline `ref:`. Cardinalities are quoted `'min..max'` strings: `source` for the left end, `target` for the right end.
-6. `Ref`, `Dep`, `Type`, `SupertypeGroup`, `TableGroup`, `TablePartial` and `DiagramView` declarations sit at the top level.
+6. `Ref`, `Dep`, `Metadata`, `Type`, `SupertypeGroup`, `TableGroup`, `TablePartial` and `DiagramView` declarations sit at the top level.
 7. A View body holds `source_query:`, fields and `Note:`, and nothing else.
 8. A key sits inline only on one unnamed field, and otherwise in `constraints`; each key is declared once, and primary key fields carry `not null`.
 9. Strings use single quotes, with each `'` inside escaped or the string in `'''...'''`; database expressions use backticks; multi-word types use double quotes.
@@ -1125,7 +1125,7 @@ To check a schema, run it through an xDBML validator when one is available, or p
 ## Complete example
 
 ```xdbml
-xdbml: 0.6
+xdbml: 0.7
 
 Project service_network {
   targets: PostgreSQL

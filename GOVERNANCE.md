@@ -111,7 +111,7 @@ The role of editor exists because language specifications are read documents -- 
 
 ## 5. Relationship with DBML upstream
 
-xDBML is a strict superset of [DBML 3.13.6](https://dbml.dbdiagram.io), the Database Markup Language designed and maintained by [Holistics](https://www.holistics.io) under Apache License 2.0.
+xDBML is a strict superset of [DBML 10.3.1](https://dbml.dbdiagram.io), the Database Markup Language designed and maintained by [Holistics](https://www.holistics.io) under Apache License 2.0.
 
 The relationship between the two projects is intended to be cooperative, not competitive. The xDBML project commits to:
 
@@ -238,7 +238,7 @@ For documents declaring a specific version (e.g., `xdbml: 0.1`):
 
 - The behavior of every construct present in that version is preserved across all subsequent MINOR and PATCH versions of the same MAJOR.
 - Newer parsers must continue to accept documents declaring older MINOR versions, with their original semantics.
-- Documents declaring no version are treated as DBML 3.13.6 by every xDBML parser, preserving full compatibility with the upstream.
+- Documents declaring no version are treated as DBML 10.3.1 by every xDBML parser, preserving full compatibility with the upstream.
 
 ### 9.2 Deprecation policy
 

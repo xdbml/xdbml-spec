@@ -24,6 +24,12 @@ Should show: a moderately complex schema like the e-commerce example, with at le
 
 [**Supertype groups**](./supertype-groups): the half-circle between a supertype and its subtypes, and what the cross and the bar inside it mean.
 
+[**Diagram views**](./diagram-views): named subsets of the diagram, one subject at a time.
+
+[**Sticky notes**](./sticky-notes): the annotations drawn on the canvas, their Markdown text and their colors.
+
+[**Data lineage**](./data-lineage): the curves from the entities and fields that data is computed from to those computed from them.
+
 [**Nested fields**](./nested-fields): how objects, arrays, polymorphism alternatives, maps, sets, and tuples are visualized inside an entity card. Includes the expand/collapse caret and synthetic-row notation.
 
 [**Visual cues at a glance**](./visual-cues): a compact reference table of every visual signal in the diagram. Bookmark this one if you're skimming.

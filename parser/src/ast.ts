@@ -1204,7 +1204,8 @@ export interface ParseOptions {
    * for remote (v0.3) sources (when a directive's `from` is a URL, or a
    * relative reference inside a remote module resolves to one). The function
    * should return the source text for that key, or throw if it is missing
-   * or unreadable.
+   * or unreadable. When the source has no extension, the parser asks for
+   * `<path>.xdbml`, then for `<path>.dbml` if the first call throws (§28.13).
    *
    * Because this reader is synchronous, a host that supports remote sources
    * must return the fetched text from a cache it populated beforehand. The
@@ -1217,6 +1218,19 @@ export interface ParseOptions {
    * embedded in the importing file.
    */
   readFile?: (pathOrUrl: string) => string;
+
+  /**
+   * Host mapping of module specifiers (v0.7, spec §28.13), the counterpart
+   * of DBML 10.3's `resolveFileSpecifier`. Called with the string after
+   * `from` and the importer's `filePath` for every source that is not an
+   * `https://` URL, when the importer is a local file; never inside a
+   * remote module (§28.14.1). Return the key to hand to `readFile`, used as
+   * is (no extension search), or `undefined` to apply the default
+   * resolution: relative to the importing file, with an absolute path
+   * rejected. A host maps, say, `@shared/users` to a library folder, or
+   * accepts absolute paths, here.
+   */
+  resolveSpecifier?: (specifier: string, importerPath: string | undefined) => string | undefined;
 
   /**
    * Maximum recursion depth when resolving directives. Each `from` traversal

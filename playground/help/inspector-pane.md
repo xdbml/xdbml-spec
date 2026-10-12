@@ -39,7 +39,7 @@ Once closed manually, the inspector stays hidden until you make a new selection.
 
 ## What's in each kind of inspector
 
-The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD`, `REF`, `SUPERTYPE GROUP`, `DIAGRAM`, `DIAGRAM VIEW`) and the element's name. Below that, the body is organized into labeled sections that vary by kind.
+The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD`, `REF`, `SUPERTYPE GROUP`, `STICKY NOTE`, `DEP`, `DIAGRAM`, `DIAGRAM VIEW`) and the element's name. Below that, the body is organized into labeled sections that vary by kind.
 
 **Container inspector** shows:
 - Identification: keyword (Container / Schema / Database / etc.), name, member count
@@ -64,9 +64,23 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - Note: the field's `Note: '...'` body if present
 
 **Relationship inspector** shows:
-- Identification: operator (`>` `<` `-` `<>`), source and target (a field path, or an entity for a conceptual relationship), the name if the Ref was declared with one, the type (foreign key or foreign master), the reading direction (source to target, target to source, both ways, or not stated), and the constraint type (identifying or non-identifying) when stated
+- Identification: operator (`>` `<` `-` `<>`, with its `?` marks when written), source and target (a field path, or an entity for a conceptual relationship), the name if the Ref was declared with one, the type (foreign key or foreign master), the reading direction (source to target, target to source, both ways, or not stated), and the constraint type (identifying or non-identifying) when stated
+- Cardinality: the range of each end and what states it: a `source:` or `target:` setting, the operator, a `?` mark, or a nullable foreign key. A note explains which applies when a mark and a setting disagree. See [**Relationships & crow's foot notation**](./relationships-crows-foot)
 - Reading, when any is written: the roles and verbs of each end and the cardinalities, read back as sentences
 - Settings: any other settings on the Ref declaration
+
+**Sticky note inspector** shows:
+- Identification: the note's name, its Container when it has one, and its color, or "Default"
+- Custom properties, when the note has any
+- Text: the note's Markdown, rendered
+- See [**Sticky notes**](./sticky-notes)
+
+**Dep inspector** shows:
+- Identification: the Dep's name when it has one, its form (short, block, or inline on an entity, a View or a field), and its color
+- Dependencies: each read back as a sentence that names the elements, such as "`fct_orders.revenue` is computed from `stg_orders.amount`", with the note and settings of a dependency that carries its own
+- Transformation: the note of the Dep, rendered as Markdown, so a query in a code block keeps its layout
+- Custom properties, when the Dep has any
+- See [**Data lineage**](./data-lineage)
 
 **Supertype group inspector** shows:
 - Identification: the group name, the supertype, completeness and exclusivity ("Unstated" when absent), and a sentence reading them back, such as "Every Party is exactly one of: Person, Organization."
@@ -79,6 +93,8 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - On Main ERD: the Project's name and targets ("None declared" without a `Project`); counts of the entities, database views, Containers, relationships and Edges of the model; the names of its diagram views; and the Project's note
 - On a diagram view: its members, with the Containers framed around them; its categories as written; its custom properties; and its note (see [**Diagram views**](./diagram-views))
 - Switching the Diagram menu while this pane is open shows the diagram you switch to
+
+A setting or a note that a `Metadata` block sets (spec §24.7) shows among the element's own, with a small **Metadata** badge. See [**Metadata blocks**](./metadata-blocks).
 
 ## Links between panes
 
@@ -96,7 +112,7 @@ Every inspector has an **Edit in source** button at the bottom. Clicking it move
 - A field is buried deep in nested structure and you don't want to scroll through the editor to find it
 - You're following a relationship from one entity to another and want to inspect the declaration
 
-The button works on all four inspector kinds.
+The button works on every inspector kind: on the diagram, it goes to the `Project` declaration or to the diagram view.
 
 ## Resizing the pane
 

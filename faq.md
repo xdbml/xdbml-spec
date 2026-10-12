@@ -39,7 +39,7 @@ No, and this is by design. xDBML is not the round-trip format between an xDBML t
 
 xDBML carries the parts of that model with meaning across boundaries: structural shape, types, relationships, declarative constraints, classifications, and AI-readiness metadata. Operational and procedural features stay native.
 
-The diagram in the [scope section of the specification](/spec/v0.2#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
+The diagram in the [scope section of the specification](/spec/current#_1-1-scope) shows the two distinct flows: xDBML between humans/AI and the tool on one side, native DDL or schema between the tool and the target instance on the other.
 
 What this means in practice:
 
@@ -71,7 +71,7 @@ What xDBML deliberately is NOT is the persistent model artifact that a data mode
 
 ## How does xDBML relate to DBML?
 
-xDBML is a **strict superset of DBML 3.13.6** under Apache License 2.0. Every valid DBML document parses correctly under xDBML rules, and every DBML construct (used in a way valid in DBML) means the same thing in xDBML as in DBML. To opt into xDBML extensions, add `xdbml: 0.2` at the top of a DBML document. The version directive selects which semantics apply: a file with no directive is treated as DBML; a file with `xdbml: 0.2` opts into the full xDBML feature set.
+xDBML is a **strict superset of DBML 10.3.1** under Apache License 2.0. Every valid DBML document parses correctly under xDBML rules, and every DBML construct (used in a way valid in DBML) means the same thing in xDBML as in DBML. To opt into xDBML extensions, add `xdbml: 0.7` at the top of a DBML document. The version directive selects which semantics apply: a file with no directive is treated as DBML; a file with `xdbml: 0.7` opts into the full v0.7 feature set.
 
 xDBML extends DBML with constructs DBML cannot currently express: explicit namespace levels (Containers), nested hierarchical types, structural polymorphism (oneOf/anyOf/allOf), first-class JSON columns with known shape, precise relationship cardinality, property-bearing graph edges, views, AI-readiness metadata, scalar Named Types, an enriched module system (`use`/`reuse` with optional clone blocks for file autonomy), and a structured custom-properties mechanism.
 
@@ -163,7 +163,7 @@ xDBML works one layer down. It is the schema itself -- precisely typed, polyglot
 
 ## Who maintains xDBML?
 
-xDBML is currently a draft v0.3 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
+xDBML is currently a draft v0.7 specification stewarded by [Hackolade](https://hackolade.com) (IntegrIT SA/NV) pending evolution to neutral foundation governance. The path is documented in the [governance model](/governance). The spec, grammar, examples, and reference implementations are published under Apache License 2.0 at [github.com/xdbml/xdbml-spec](https://github.com/xdbml/xdbml-spec).
 
 ## How can I contribute?
 

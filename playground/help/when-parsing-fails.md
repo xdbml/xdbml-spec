@@ -95,7 +95,7 @@ Sometimes you've made many edits and the file is in a state where every fix crea
 
 **Comment out problematic blocks.** Wrap suspect sections in `/* ... */` block comments. The parser ignores commented content. Re-enable section by section until you find which block is broken.
 
-**Start a new file.** Select all (`Ctrl + A`), delete, and type `xdbml: 0.1` as the version declaration. From an empty schema you can rebuild deliberately.
+**Start a new file.** Select all (`Ctrl + A`), delete, and type `xdbml: 0.7` as the version declaration. From an empty schema you can rebuild deliberately.
 
 The schema is preserved in local storage at all times, so opening the playground tomorrow won't lose your half-broken state. You don't have to fix it now; you can come back to it.
 

@@ -41,7 +41,7 @@ The xDBML project is actively evolving. The playground tracks the language; feat
 
 **Improved auto-layout.** Better defaults for large schemas; possibly a choice between layout strategies (relational, document-tree-style, graph-style).
 
-**More bundled examples.** The current fourteen cover the main modeling styles, but examples of specific patterns (event-sourcing, CDC streams, multi-tenancy) would be useful additions.
+**More bundled examples.** The current eighteen cover the main modeling styles, but examples of specific patterns (event-sourcing, CDC streams, multi-tenancy) would be useful additions.
 
 ## What's NOT on the roadmap
 

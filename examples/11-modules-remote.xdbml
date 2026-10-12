@@ -23,8 +23,9 @@
 //    - Point at the RAW-content host (raw.githubusercontent.com/...), NOT the
 //      human-facing `github.com/.../blob/...` page, which returns HTML.
 //    - Only `https://` is accepted. A non-https scheme, a protocol-relative
-//      `//host/...` source, a bare host like `github.com/owner/repo/...`, or
-//      credentials embedded in the URL are rejected with a located error.
+//      `//host/...` source, or credentials embedded in the URL are rejected
+//      with a located error. A bare host like `github.com/owner/repo/...`
+//      has no scheme: it names a local folder, as in DBML (spec §28.13).
 //    - A purely live import (reference-only, no clone block) is demonstrated
 //      interactively in the playground, where a fetching resolver retrieves
 //      the bytes. It is intentionally not used here so this file stays

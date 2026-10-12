@@ -5,6 +5,7 @@
  * License:   Apache License 2.0
  * Spec:      xDBML Specification v0.7 (xdbml.org/spec/current)
  * Upstream:  github.com/holistics/dbml (Apache 2.0)
+ * Baseline:  DBML 10.3.1 (spec Appendix D); DBML 3.13.6 through v0.6
  *
  * This grammar layers xDBML extensions on top of the Holistics DBML
  * ANTLR4 grammar. It declares new tokens, new top-level rules, and

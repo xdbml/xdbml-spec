@@ -1,6 +1,6 @@
 # @xdbml/parse
 
-The parser for [xDBML](https://xdbml.org) (eXtended Database Markup Language), a strict superset of DBML 3.13.6 for describing the shape and meaning of structured and semi-structured data. It turns xDBML source into an abstract syntax tree, resolves module imports, and resolves names, with precise line and column diagnostics.
+The parser for [xDBML](https://xdbml.org) (eXtended Database Markup Language), a strict superset of DBML 10.3.1 for describing the shape and meaning of structured and semi-structured data. It turns xDBML source into an abstract syntax tree, resolves module imports, and resolves names, with precise line and column diagnostics.
 
 Framework-free and dependency-free, it runs anywhere JavaScript runs: the browser, Node, Cloudflare Workers. It powers the [playground](https://xdbml.org/playground/), the hosted render API, and the MCP server.
 

@@ -283,9 +283,10 @@ export type ImportResolution =
  * Resolve a directive's reference. Returns an `ImportResolution` indicating
  * what happened. The caller decides how to act (set `clone`, fail, etc).
  *
- * Path resolution: the directive's `from` is relative to the importer's
- * `filePath`. If `from` doesn't end with `.xdbml`, that extension is
- * appended. Returns the absolute resolved path on success.
+ * Path resolution (§28.13): `moduleCandidates` turns the directive's `from`
+ * into one or more keys, tried in order with `readFile`; the first one read
+ * is the resolved path. A thrown error moves to the next candidate, and the
+ * error reports every candidate when none is read.
  *
  * Cycles: if the resolved path is already in `resolutionStack`, returns
  * `kind: 'cycle'` without recursing.
@@ -303,10 +304,33 @@ export function resolveImport (
     return { kind: 'no-resolver' };
   }
 
-  const resolvedPath = resolveModulePath(directive.from, options.filePath);
-
-  if (resolutionStack.has(resolvedPath)) {
-    return { kind: 'cycle', resolvedPath };
+  // §28.13: without an extension, '<path>.xdbml' then '<path>.dbml'. A
+  // candidate already on the resolution stack exists (it is being parsed),
+  // so it is the file the search would find: the import closes a cycle.
+  const candidates = moduleCandidates(directive.from, options.filePath, options.resolveSpecifier);
+  let resolvedPath: string | undefined;
+  let referencedSource = '';
+  const failures: string[] = [];
+  for (const candidate of candidates) {
+    if (resolutionStack.has(candidate)) {
+      return { kind: 'cycle', resolvedPath: candidate };
+    }
+    try {
+      referencedSource = options.readFile(candidate);
+      resolvedPath = candidate;
+      break;
+    } catch (e) {
+      failures.push((e as Error).message ?? String(e));
+    }
+  }
+  if (resolvedPath === undefined) {
+    const tried = candidates.map((c) => `'${c}'`).join(' or ');
+    const hint = bareHostHint(directive.from);
+    throw new Error(
+      `Failed to read referenced module file ${tried} ` +
+      `(directive '${directive.mode} { ... } from \"${directive.from}\"' in '${options.filePath ?? '<no filePath>'}'). ` +
+      `Cause: ${failures[0]}` + (hint ? ` ${hint}` : ''),
+    );
   }
 
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
@@ -315,18 +339,6 @@ export function resolveImport (
       `Module resolution depth limit (${maxDepth}) exceeded while resolving '${directive.from}' ` +
       `from '${options.filePath ?? '<no filePath>'}'. ` +
       `Increase maxDepth in ParseOptions if your module graph is genuinely this deep.`,
-    );
-  }
-
-  let referencedSource: string;
-  try {
-    referencedSource = options.readFile(resolvedPath);
-  } catch (e) {
-    const inner = (e as Error).message ?? String(e);
-    throw new Error(
-      `Failed to read referenced module file '${resolvedPath}' ` +
-      `(directive '${directive.mode} { ... } from \"${directive.from}\"' in '${options.filePath ?? '<no filePath>'}'). ` +
-      `Cause: ${inner}`,
     );
   }
 
@@ -900,14 +912,15 @@ function applyAlias (
 }
 
 /* -------------------------------------------------------------------------
- * Module source classification (spec §28.14, "Remote module sources")
+ * Module source classification (spec §28.13 "Module specifiers", §28.14
+ * "Remote module sources")
  *
- * A `from` source is recognized purely by its scheme. A source beginning
- * with 'https://' is a remote (URL) source; anything else is a relative
- * path, resolved exactly as in v0.2. Disallowed forms -- a non-https
- * scheme, a protocol-relative '//host/...' source, embedded credentials,
- * or a bare host such as 'github.com/owner/repo/...' -- are rejected here
- * so the parser can surface a located error at the source string.
+ * A `from` source is an 'https://' URL (remote), an absolute path, or a
+ * specifier read relative to the importing file, as DBML 10.3 reads it:
+ * './lib', 'lib', 'sub/lib' and '@shared/users' are all relative. The
+ * disallowed forms -- a non-https scheme, a protocol-relative '//host/...'
+ * source, embedded credentials -- are rejected here so the parser can
+ * surface a located error at the source string.
  *
  * This is pure, synchronous classification. The actual network fetch is
  * delegated to ParseOptions.readFile (the host's resolver). The obligations
@@ -925,14 +938,18 @@ export class ModuleSourceError extends Error {
 
 export type ModuleSource =
   | { kind: 'relative'; from: string }
+  | { kind: 'absolute'; from: string }
   | { kind: 'url'; href: string };
 
 const SCHEME_RE = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
+// A Windows drive ('C:\models', 'C:/models'). One letter before the colon:
+// no URL scheme in use is a single letter, so 'C:' never reads as one.
+const DRIVE_RE = /^[A-Za-z]:/;
 // A scheme-less first path segment that looks like a public host. Used only
-// to give a clearer error than "file not found" when someone pastes a URL
-// without its scheme. Deliberately conservative: it requires a dot-separated
-// label ending in an alphabetic TLD, so version directories like 'v1.2/...'
-// and ordinary relative roots like 'lib/...' are NOT treated as hosts.
+// to add a hint when such a source names no file: until v0.7 it was
+// rejected outright, and DBML reads it as a relative folder. Deliberately
+// conservative: it requires a dot-separated label ending in an alphabetic
+// TLD, so version directories like 'v1.2/...' are not treated as hosts.
 const BARE_HOST_RE = /^([a-z0-9-]+\.)+[a-z]{2,}$/i;
 
 /** True when a resolved key is a remote (https) URL rather than a path. */
@@ -951,6 +968,12 @@ export function classifyModuleSource (from: string): ModuleSource {
       `Protocol-relative module source ${JSON.stringify(from)} is not allowed; ` +
       `use an explicit 'https://' URL or a relative path.`,
     );
+  }
+
+  // An absolute path: POSIX ('/models/lib'), a Windows drive ('C:\models'),
+  // or a UNC share ('\\server\share'). Only the host application resolves it.
+  if (from.startsWith('/') || from.startsWith('\\\\') || DRIVE_RE.test(from)) {
+    return { kind: 'absolute', from };
   }
 
   const schemeMatch = SCHEME_RE.exec(from);
@@ -979,34 +1002,46 @@ export function classifyModuleSource (from: string): ModuleSource {
     return { kind: 'url', href: url.href };
   }
 
-  // No scheme. Reject an obvious bare host (domain-like first segment
-  // followed by a path) rather than silently treating it as a relative file.
-  const slash = from.indexOf('/');
-  if (slash > 0) {
-    const firstSegment = from.slice(0, slash);
-    if (BARE_HOST_RE.test(firstSegment)) {
-      throw new ModuleSourceError(
-        `Module source ${JSON.stringify(from)} looks like a bare host; ` +
-        `prefix it with 'https://' to use it as a remote source, ` +
-        `or write './${from}' if you really mean a relative path.`,
-      );
-    }
-  }
-
   return { kind: 'relative', from };
 }
 
 /**
- * Resolve a `from` source against the importer's `filePath`, returning a
- * stable key for `readFile` and for cycle detection.
+ * A hint for a relative source that names no file and whose first segment
+ * looks like a host ('github.com/acme/schemas/core'): the author probably
+ * meant a remote source. Empty for any other source.
+ */
+export function bareHostHint (from: string): string {
+  const slash = from.indexOf('/');
+  if (slash <= 0 || !BARE_HOST_RE.test(from.slice(0, slash))) return '';
+  return `'${from.slice(0, slash)}' reads as a folder next to the importing file; ` +
+    `to import over HTTPS, write 'https://${from}'.`;
+}
+
+/**
+ * The file a specifier names, with the extension search of §28.13: a path
+ * ending in '.xdbml' or '.dbml' is read as written, any other path is
+ * tried as '<path>.xdbml', then '<path>.dbml'.
+ */
+function withExtensions (p: string): string[] {
+  return /\.x?dbml$/.test(p) ? [p] : [`${p}.xdbml`, `${p}.dbml`];
+}
+
+/**
+ * Resolve a `from` source against the importer's `filePath`, returning the
+ * keys to try with `readFile`, in order. A key is also what cycle detection
+ * compares.
  *
- *   - A remote (https) source resolves to its normalized href. No '.xdbml'
+ *   - A remote (https) source resolves to its normalized href. No extension
  *     is appended (a raw-content URL may carry a query string).
- *   - A relative source whose importer is itself a remote module resolves
- *     against the importer's base URL per RFC 3986 (spec §28.14.1). A remote
- *     module therefore can never reach the local filesystem.
- *   - A relative source with a local importer resolves on the filesystem,
- *     exactly as in v0.2.
+ *   - A source whose importer is itself a remote module resolves against
+ *     the importer's base URL per RFC 3986 (spec §28.14.1), without the
+ *     host's `resolveSpecifier`. A remote module therefore can never reach
+ *     the local filesystem: a drive or UNC path there is an error.
+ *   - Any other source goes to the host's `resolveSpecifier` first, as DBML
+ *     10.3 hands it to `resolveFileSpecifier`. A key returned is used as is.
+ *   - Otherwise a relative source resolves against the importer's directory,
+ *     with or without a leading './', and an absolute path is an error, as
+ *     in DBML's default project layout.
  *
  * Uses pure string / WHATWG-URL manipulation (no node:path) so the same
  * code runs in Node and the browser. A local path may use backslashes, as
@@ -1015,39 +1050,50 @@ export function classifyModuleSource (from: string): ModuleSource {
  * Node's fs accepts on Windows. Until v0.6.4 a backslash path lost its
  * directory, so './lib' was read from the working directory instead.
  */
-function resolveModulePath (
+export function moduleCandidates (
   fromClause: string,
   importerPath: string | undefined,
-): string {
+  resolveSpecifier?: (specifier: string, importerPath: string | undefined) => string | undefined,
+): string[] {
   const source = classifyModuleSource(fromClause);
 
   // Remote (URL) source: the normalized href IS the resolution key.
   if (source.kind === 'url') {
-    return source.href;
+    return [source.href];
   }
 
-  // Relative source under a remote importer: resolve against its base URL.
+  const path = source.from.replace(/\\/g, '/');
+
+  // Any other source under a remote importer: resolve against its base URL.
   if (importerPath && isUrlKey(importerPath)) {
-    let rel = source.from;
-    if (!rel.endsWith('.xdbml')) rel = `${rel}.xdbml`;
+    if (source.kind === 'absolute' && (path.startsWith('//') || DRIVE_RE.test(path))) {
+      throw new ModuleSourceError(
+        `Module source ${JSON.stringify(fromClause)} is a local path inside the remote module ` +
+        `'${importerPath}'; a remote module can only import paths relative to its own URL (§28.14.1).`,
+      );
+    }
     // WHATWG URL resolution normalizes host case and dot-segments, which is
     // also what we want for the cycle-detection / de-duplication key.
-    return new URL(rel, importerPath).href;
+    return withExtensions(path).map((p) => new URL(p, importerPath).href);
   }
 
-  // Local relative source (v0.2 behavior, with Windows separators read as
-  // forward slashes from v0.6.4).
-  let withExt = toForwardSlashes(source.from);
-  if (!withExt.endsWith('.xdbml')) {
-    withExt = `${withExt}.xdbml`;
+  const mapped = resolveSpecifier?.(source.from, importerPath);
+  if (mapped !== undefined) return [toForwardSlashes(mapped)];
+
+  if (source.kind === 'absolute') {
+    throw new ModuleSourceError(
+      `Module source ${JSON.stringify(fromClause)} is an absolute path; a module source is read ` +
+      `relative to the importing file, as in DBML. Write a relative path, or resolve this one ` +
+      `in the host application (ParseOptions.resolveSpecifier).`,
+    );
   }
-  // Absolute path, POSIX or with a Windows drive letter: return as-is.
-  if (withExt.startsWith('/') || /^[A-Za-z]:\//.test(withExt)) return withExt;
+
+  const candidates = withExtensions(path);
   // No importer context: return as-is (resolver handles it).
-  if (!importerPath) return withExt;
+  if (!importerPath) return candidates;
   // Resolve relative to importer's directory.
   const importerDir = posixDirname(toForwardSlashes(importerPath));
-  return posixJoin(importerDir, withExt);
+  return candidates.map((p) => posixJoin(importerDir, p));
 }
 
 /**

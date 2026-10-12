@@ -1,7 +1,7 @@
 ---
 layout: home
 title: xDBML
-description: A unified, open markup language to describe the semantics of structured and semi-structured data across relational, document, columnar, graph, and exchange formats. One declarative source, many target-native outputs. Strict superset of DBML 3.13.6, designed for AI-assisted data modeling, AI-mediated schema interchange, and metadata-as-code.
+description: A unified, open markup language to describe the semantics of structured and semi-structured data across relational, document, columnar, graph, and exchange formats. One declarative source, many target-native outputs. Strict superset of DBML 10.3.1, designed for AI-assisted data modeling, AI-mediated schema interchange, and metadata-as-code.
 titleTemplate: eXtended Database Markup Language
 
 hero:
@@ -58,7 +58,7 @@ features:
 
   - icon: 🆓
     title: Open standard
-    details: "Apache License 2.0, stewarded by Hackolade pending evolution to neutral foundation governance, and free to use, extend, and implement. <br>A strict superset of DBML 3.13.6: every valid DBML document is valid xDBML, and you upgrade in place by adding 'xdbml: 0.3' at the top."
+    details: "Apache License 2.0, stewarded by Hackolade pending evolution to neutral foundation governance, and free to use, extend, and implement. <br>A strict superset of DBML 10.3.1: every valid DBML document is valid xDBML, and you upgrade in place by adding 'xdbml: 0.7' at the top."
 
   - icon: 🛠️
     title: Tools and services
@@ -74,7 +74,7 @@ features:
 :::
 
 ```xdbml
-xdbml: 0.3
+xdbml: 0.7
 
 // Schema spans two storage engines: Oracle for customer master data,
 // MongoDB for order documents. xDBML expresses both in one document
@@ -189,7 +189,7 @@ xDBML is a format, not a tool, but a small open ecosystem makes it easy to autho
 
 ## Project status
 
-xDBML is currently a draft v0.3 specification stewarded by [Hackolade](https://hackolade.com), with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0. The path to neutral foundation governance is described in the [governance model](/governance).
+xDBML is currently a draft v0.7 specification stewarded by [Hackolade](https://hackolade.com), with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0. The path to neutral foundation governance is described in the [governance model](/governance).
 
 Feedback from real-world use will shape v1.0. [Open an issue](https://github.com/xdbml/xdbml-spec/issues) with comments, proposals, or questions.
 

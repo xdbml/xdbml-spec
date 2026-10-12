@@ -47,11 +47,12 @@ The collapse state persists across page reloads, scoped per field path within ea
 
 ## The diagram toolbar
 
-The diagram's toolbar holds undo and redo for layout changes, and up to three menus:
+The diagram's toolbar holds undo and redo for layout changes, a button that adds a sticky note, and up to three menus:
 
 - **Diagram**, at the left end of the toolbar when the document declares diagram views, switches between the full diagram, Main ERD, and each diagram view. See [**Diagram views**](./diagram-views).
-- **Arrange** lays the diagram out again. **Relational** places related entities near each other and puts each supertype above its subtypes; **Star schema** places the most-referencing entity at the center.
-- **Display** chooses what the diagram draws. Under Relationships: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**. Under Labels: **Relationship names**, which shows the names of named `Ref`s and of supertype groups, off by default. The choices are remembered between sessions, and the Display button is highlighted while a relationship kind is hidden.
+- **Add a sticky note**, the note icon, writes a `Note` into the source, places it at the center of the view and selects it: in the selected Container when the document declares `xdbml: 0.7`, and in the `Notes` of the diagram view on display. See [**Sticky notes**](./sticky-notes).
+- **Arrange** lays the diagram out again. **Relational** places related entities near each other, puts each supertype above its subtypes, and places each entity to the right of the entities it is computed from; **Star schema** places the most-referencing entity at the center.
+- **Display** sets what the diagram draws. Under Relationships: **Foreign key**, **Foreign master**, **Inactive**, **Conceptual** and **Supertype groups**. Under Annotations: **Sticky notes**. Under Lineage: **Dependencies**, the curves of [data lineage](./data-lineage). Under Labels: **Relationship names**, which shows the names of named `Ref`s, of supertype groups and of Deps, off by default. The choices are remembered between sessions, and the Display button is highlighted while something other than the names is hidden.
 
 ## Controls in the corners
 
@@ -63,10 +64,10 @@ The diagram's toolbar holds undo and redo for layout changes, and up to three me
 
 The diagram is a visual summary, not an exhaustive rendering of every detail in the AST. Things that don't appear visually:
 
-- **Notes** are not shown on the diagram. They appear in the inspector when you select the entity, field, or container they're attached to.
+- **Notes of entities, fields and containers** are not shown on the diagram. They appear in the inspector when you select the element they belong to. Sticky notes, the named top-level `Note`s, are drawn: see [**Sticky notes**](./sticky-notes).
 - **Custom `x_*` properties** are not shown on the diagram. They appear in the inspector under a dedicated "Custom properties" section.
 - **Setting values** beyond the flag badges (default values, regex patterns, length constraints, etc.) are not shown on the diagram. They appear in the inspector.
-- **Views and indexes**, when added to xDBML in a future release, will get their own visual treatment.
+- **Indexes and records** are not drawn. The inspector lists an entity's keys and checks under Constraints.
 
 This is intentional. The diagram aims to be readable at a glance; the inspector is where the full detail lives. See [**Inspector pane**](./inspector-pane) for what you can see there.
 

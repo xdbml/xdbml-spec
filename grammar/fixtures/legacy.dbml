@@ -1,0 +1,8 @@
+// Fixture for the module cases of grammar/test-cases.md (spec §28.13): a
+// DBML file, read when an import names './legacy' and no legacy.xdbml
+// exists, as DBML 10.3 multi-file projects are written.
+
+Table legacy_orders {
+  id int [pk]
+  placed_at timestamp
+}

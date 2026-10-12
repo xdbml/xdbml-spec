@@ -1129,10 +1129,10 @@ export class Parser {
     this.advance();
     const from = pathTok.value ?? '';
 
-    // v0.3 §26.14: classify the source string up front so a disallowed form
-    // (non-https scheme, protocol-relative, embedded credentials, bare host)
-    // surfaces as a located error pointing at the string itself, regardless
-    // of whether a resolver is present.
+    // §28.14: classify the source string up front so a disallowed form
+    // (non-https scheme, protocol-relative, embedded credentials) surfaces
+    // as a located error pointing at the string itself, regardless of
+    // whether a resolver is present.
     try {
       classifyModuleSource(from);
     } catch (e) {
@@ -1170,13 +1170,21 @@ export class Parser {
           settings,
           span: this.spanFrom(start),
         };
-        const result = resolveImport(
-          partial,
-          this.options,
-          this.resolutionStack,
-          this.depth,
-          recursiveParse,
-        );
+        let result: ReturnType<typeof resolveImport>;
+        try {
+          result = resolveImport(
+            partial,
+            this.options,
+            this.resolutionStack,
+            this.depth,
+            recursiveParse,
+          );
+        } catch (e) {
+          // An absolute path the host does not resolve, or a local path in
+          // a remote module (§28.13, §28.14.1): located at the string.
+          if (e instanceof ModuleSourceError) throw new ParseError(e.message, pathTok.start);
+          throw e;
+        }
         switch (result.kind) {
           case 'resolved':
             clone = result.clone;

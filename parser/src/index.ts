@@ -21,7 +21,7 @@
  *     and a list of diagnostics (unresolved references, name conflicts).
  *     The AST is not mutated. Flattens the input internally.
  *
- * The parser is DBML-3.13.6 compatible: a document without an `xdbml: ...`
+ * The parser is DBML-10.3.1 compatible: a document without an `xdbml: ...`
  * version header still parses, and DBML constructs are preserved.
  */
 
@@ -34,6 +34,7 @@ export { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSeg
 export {
   classifyModuleSource,
   isUrlKey,
+  moduleCandidates,
   ModuleSourceError,
 } from './module-resolver.ts';
 export type { ModuleSource } from './module-resolver.ts';

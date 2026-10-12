@@ -27,6 +27,7 @@ import {
   metadataIndex, settingValueText, withMetadata,
   projectNote, resolveStickyNote, stickyNotes,
   collectLineage, depColor, depSettings, resolveLineage,
+  classifyModuleSource, moduleCandidates, ParseError,
 } from '../src/index.ts';
 import type { AppliedSetting, DepDeclaration, EndCardinality, EntityDeclaration, FieldDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
 import {
@@ -1476,13 +1477,6 @@ reuse { type Amount } from '${AZ}'`,
       source: `xdbml: 0.2\nuse * from 'https://user:token@example.com/core.xdbml'`,
       options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
       assert: (_doc) => 'parse should have rejected URL with userinfo',
-      expectError: true,
-    },
-    {
-      name: 'v0.3 remote: INVALID -- bare host (no scheme) rejected',
-      source: `xdbml: 0.2\nuse * from 'github.com/acme/schemas/core.xdbml'`,
-      options: { filePath: '/local/e.xdbml', readFile: () => 'xdbml: 0.2\nType T varchar' },
-      assert: (_doc) => 'parse should have rejected bare host source',
       expectError: true,
     },
     (() => {
@@ -6882,6 +6876,196 @@ function runV07LineageTests (): TestResult[] {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7: module specifiers as DBML 10.3 reads them (spec §28.13)
+ *
+ * A specifier other than an https URL is read relative to the importing
+ * file, with or without './'; without an extension the parser asks for
+ * '<path>.xdbml', then '<path>.dbml'. The host may map a specifier first
+ * (ParseOptions.resolveSpecifier, DBML's resolveFileSpecifier); without a
+ * mapping an absolute path is an error, as in DBML's default layout.
+ * ----------------------------------------------------------------------- */
+
+function runV07ModuleSpecifierTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const LIB = 'Table users {\n  id int [pk]\n}';
+  const XLIB = 'xdbml: 0.7\nEntity members {\n  id int [pk]\n}';
+  const reads: string[] = [];
+  const host = (files: Record<string, string>, extra: Partial<ParseOptions> = {}): ParseOptions => ({
+    filePath: '/p/main.xdbml',
+    readFile: (key: string) => {
+      reads.push(key);
+      if (key in files) return files[key];
+      throw new Error(`not found: ${key}`);
+    },
+    ...extra,
+  });
+  const imported = (src: string, options: ParseOptions): string => {
+    reads.length = 0;
+    return flatten(parse(src, options)).statements
+      .filter((x) => x.kind === 'EntityDeclaration')
+      .map((x) => (x as EntityDeclaration).name).join(',');
+  };
+  const failure = (src: string, options: ParseOptions): Error | undefined => {
+    try {
+      parse(src, options);
+      return undefined;
+    } catch (e) {
+      return e as Error;
+    }
+  };
+  const use = (from: string): string => `use * from '${from}'`;
+
+  /* ---- the extension search ---- */
+
+  check('§28.13: ./lib reads lib.xdbml', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.xdbml': XLIB }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: ./lib reads lib.dbml when there is no lib.xdbml, as a DBML project has', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.dbml': LIB }));
+    return got === 'users' && reads.join(' ') === '/p/lib.xdbml /p/lib.dbml' ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.13: ./lib reads lib.xdbml when both files exist', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.xdbml': XLIB, '/p/lib.dbml': LIB }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: ./lib.dbml reads lib.dbml as written (until v0.7 the parser asked for lib.dbml.xdbml)', () => {
+    const got = imported(use('./lib.dbml'), host({ '/p/lib.dbml': LIB }));
+    return got === 'users' && reads.join(' ') === '/p/lib.dbml' ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.13: ./lib.xdbml reads lib.xdbml only', () => {
+    const got = imported(use('./lib.xdbml'), host({ '/p/lib.xdbml': XLIB, '/p/lib.dbml': LIB }));
+    return got === 'members' && reads.join(' ') === '/p/lib.xdbml' ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.13: a file found under neither name is an error naming both', () => {
+    const e = failure(use('./nope'), host({}));
+    return e && /'\/p\/nope\.xdbml' or '\/p\/nope\.dbml'/.test(e.message) ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+
+  /* ---- specifiers without './' ---- */
+
+  check('§28.13: lib without ./ reads the same file as ./lib, as in DBML', () => {
+    const got = imported(use('lib'), host({ '/p/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: sub/lib reads sub/lib next to the importing file', () => {
+    const got = imported(use('sub/lib'), host({ '/p/sub/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: ../lib reads lib in the parent directory', () => {
+    const got = imported(use('../lib'), host({ '/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: @shared-users reads @shared-users next to the importing file by default', () => {
+    const got = imported(use('@shared-users'), host({ '/p/@shared-users.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: backslashes read as forward slashes', () => {
+    const got = imported(use('.\\\\sub\\\\lib'), host({ '/p/sub/lib.dbml': LIB }));
+    return got === 'users' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: a source whose first folder looks like a host is a folder, as in DBML', () => {
+    const got = imported(use('github.com/acme/schemas/core'), host({ '/p/github.com/acme/schemas/core.xdbml': XLIB }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: when that folder holds no such file, the error suggests https://', () => {
+    const e = failure(use('github.com/acme/schemas/core.xdbml'), host({}));
+    return e && e.message.includes("'https://github.com/acme/schemas/core.xdbml'") ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+
+  /* ---- the host's mapping ---- */
+
+  check('§28.13: resolveSpecifier maps @shared/users to a library file', () => {
+    const seen: string[] = [];
+    const got = imported(use('@shared/users'), host({ '/libs/shared/users.dbml': LIB }, {
+      resolveSpecifier: (spec, importer) => {
+        seen.push(`${spec}|${importer}`);
+        return spec.startsWith('@shared/') ? `/libs/shared/${spec.slice(8)}.dbml` : undefined;
+      },
+    }));
+    return got === 'users' && seen.join() === '@shared/users|/p/main.xdbml' ? undefined : `imported '${got}', seen ${seen.join()}`;
+  });
+  check('§28.13: a specifier the host leaves alone resolves by default', () => {
+    const got = imported(use('./lib'), host({ '/p/lib.xdbml': XLIB }, { resolveSpecifier: () => undefined }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: the key the host returns is read as is, with no extension search', () => {
+    imported(use('@lib'), host({ '/libs/lib': LIB }, { resolveSpecifier: () => '/libs/lib' }));
+    return reads.join(' ') === '/libs/lib' ? undefined : `reads ${reads.join(' ')}`;
+  });
+
+  /* ---- absolute paths ---- */
+
+  check('§28.13: an absolute path the host does not map is an error at the string', () => {
+    const e = failure(`xdbml: 0.7\n${use('/models/lib')}`, host({ '/models/lib.xdbml': XLIB }));
+    return e instanceof ParseError && e.position.line === 2 && /absolute path/.test(e.message)
+      ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+  check('§28.13: a host may accept an absolute path', () => {
+    const got = imported(use('/models/lib'), host({ '/models/lib.xdbml': XLIB }, { resolveSpecifier: (s) => `${s}.xdbml` }));
+    return got === 'members' ? undefined : `imported '${got}'`;
+  });
+  check('§28.13: C:\\models\\lib is a Windows path, not a URL scheme c:', () => {
+    const e = failure(use('C:\\\\models\\\\lib'), host({}));
+    return e && /absolute path/.test(e.message) && !/scheme/.test(e.message) ? undefined : `got ${e?.message ?? 'no error'}`;
+  });
+  check('§28.13: the host receives a Windows path as written; the key reads with forward slashes', () => {
+    let seen = '';
+    imported(use('C:\\\\models\\\\lib.xdbml'), host({ 'C:/models/lib.xdbml': XLIB }, { resolveSpecifier: (s) => { seen = s; return s; } }));
+    return seen === 'C:\\models\\lib.xdbml' && reads.join(' ') === 'C:/models/lib.xdbml' ? undefined : `seen ${seen}, reads ${reads.join(' ')}`;
+  });
+  check('§28.13: classifyModuleSource tells absolute paths, URLs and relative specifiers apart', () => {
+    const kinds = ['/x', 'C:/x', 'c:\\x', '\\\\server\\share\\x', 'https://h.example/x', './x', 'x', '@x', 'github.com/x']
+      .map((s) => classifyModuleSource(s).kind).join(' ');
+    return kinds === 'absolute absolute absolute absolute url relative relative relative relative' ? undefined : kinds;
+  });
+  check('§28.14: http:, file: and //host stay rejected', () => {
+    const thrown = ['http://h.example/x', 'file:///x', '//h.example/x'].filter((s) => {
+      try { classifyModuleSource(s); return false; } catch { return true; }
+    });
+    return thrown.length === 3 ? undefined : `rejected only ${thrown.join(', ')}`;
+  });
+
+  /* ---- inside a remote module ---- */
+
+  const BASE = 'https://h.example/acme/v1/';
+  check('§28.14.1: inside a remote module a specifier resolves against its URL, never through the host', () => {
+    const got = imported(use(`${BASE}core.xdbml`), host({
+      [`${BASE}core.xdbml`]: "use * from 'enums'",
+      [`${BASE}enums.dbml`]: LIB,
+    }, { resolveSpecifier: () => { throw new Error('the host was asked'); } }));
+    return got === 'users' && reads.join(' ') === `${BASE}core.xdbml ${BASE}enums.xdbml ${BASE}enums.dbml`
+      ? undefined : `imported '${got}', reads ${reads.join(' ')}`;
+  });
+  check('§28.14.1: a remote module cannot import a Windows or UNC path', () => {
+    const bad = ['C:\\x\\lib', '\\\\server\\share\\lib'].filter((from) => {
+      try { moduleCandidates(from, `${BASE}core.xdbml`); return false; } catch { return true; }
+    });
+    return bad.length === 2 ? undefined : `accepted ${2 - bad.length}`;
+  });
+
+  /* ---- cycles ---- */
+
+  check('§28.15: a cycle through a .dbml file terminates', () => {
+    const got = imported(use('./a'), host({
+      '/p/a.xdbml': "use * from './b'\nTable a {\n  id int\n}",
+      '/p/b.dbml': "use * from './a'\nTable b {\n  id int\n}",
+    }));
+    return got.split(',').sort().join() === 'a,b' ? undefined : `imported '${got}'`;
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -6898,6 +7082,7 @@ function main (): void {
   const metadataTests = runV07MetadataTests();
   const noteTests = runV07StickyNoteTests();
   const lineageTests = runV07LineageTests();
+  const specifierTests = runV07ModuleSpecifierTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -6912,9 +7097,10 @@ function main (): void {
   const mr = report('v0.7 custom properties and Metadata blocks (spec §24.5, §24.7)', metadataTests);
   const nr = report('v0.7 sticky notes and the note of the project (spec §19)', noteTests);
   const lr = report('v0.7 data lineage (spec §27)', lineageTests);
+  const sr = report('v0.7 module specifiers (spec §28.13)', specifierTests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {
