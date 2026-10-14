@@ -940,10 +940,20 @@ export interface DepDeclaration {
   span: Span;
 }
 
-/** One dependency: an upstream element feeds a downstream one (§27.1). */
+/**
+ * One dependency line: one or several upstream elements feed a downstream
+ * one (§27.1). From v0.7.2, in a document that declares a version, a line
+ * may name several upstream ends, `a.x, a.y -> b.z` or `b.z <- a.x, a.y`;
+ * it states one dependency per upstream end, and its settings are written
+ * once for all of them (§27.2). `collectLineage()` expands a line into
+ * those pairs.
+ */
 export interface DepDependency {
   kind: 'DepDependency';
+  /** The first upstream end, as before v0.7.2. */
   upstream: RefEndpoint;
+  /** Every upstream end, in the order written; `upstreams[0]` is `upstream` (v0.7.2). */
+  upstreams: RefEndpoint[];
   downstream: RefEndpoint;
   /** The arrow as written: `->` puts the upstream end first, `<-` the downstream end. */
   arrow: '->' | '<-';
@@ -1094,7 +1104,8 @@ export interface Setting {
    * `not null` (spec §8), and in a document that declares a version,
    * `color` on an entity, a View or an EntityPartial, and in a
    * `Metadata Table` or `Metadata View` block, is `headercolor`, the
-   * header color (spec §7.5, v0.7.1).
+   * header color (spec §7.5, v0.7.1); `dialect` on a View or a Dep is
+   * `source_database` (spec §14.5, §27.3, v0.7.2).
    */
   name: string;
   nameSource: string;

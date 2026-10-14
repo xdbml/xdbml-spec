@@ -7,6 +7,13 @@
  * them into one list, in the order a diagram numbers them, so the renderer,
  * the playground and any generator agree on what `dep:<n>` names.
  *
+ * From v0.7.2, in a document that declares a version, a dependency line
+ * may name several upstream ends; `collectLineage()` expands it into one
+ * pair per upstream end, which share the line (§27.2). A `Dep` may carry
+ * the statement that loads its target, `source_query`, in the language
+ * `source_database` names, and each dependency a `transformation` (§27.3,
+ * §27.10).
+ *
  * `checkLineage()` holds the rules of §27.4 and the validation summary of
  * §27.12 that the grammar cannot express. It takes the endpoint resolver as
  * an argument: name resolution owns the symbol table and the walk into
@@ -15,6 +22,7 @@
 
 import type {
   DepDeclaration,
+  DepDependency,
   DepValue,
   EntityDeclaration,
   FieldDeclaration,
@@ -53,15 +61,98 @@ export interface Lineage {
   decl?: DepDeclaration;
   /** For an inline `dep`: the setting, and the path of the element that carries it. */
   inline?: { setting: Setting; carrier: string; carrierKind: 'entity' | 'view' | 'field' };
+  /**
+   * The statement that loads the downstream element: the first
+   * `source_query` of a block's body (§27.3, v0.7.2). One written in the
+   * brackets is not the Dep's statement. Set only in a document that
+   * declares a version; no parser reads its text (§14.3).
+   */
+  sourceQuery?: string;
+  /**
+   * The language of `sourceQuery`: `source_database`, or its alias
+   * `dialect`, lowercased, as written in any casing (§27.3, v0.7.2). Set
+   * only in a document that declares a version.
+   */
+  sourceDatabase?: string;
   span: Span;
 }
 
+/**
+ * One dependency: one upstream end and one downstream end (§27.1). A line
+ * that names several upstream ends gives one per end, which share `line`,
+ * `settings` and `span` (§27.2, v0.7.2).
+ */
 export interface LineageDependency {
   upstream: RefEndpoint;
   downstream: RefEndpoint;
   /** Settings of this dependency alone: the brackets after it in a block (§27.2). */
   settings: Setting[];
+  /**
+   * The kind of transformation (§27.10.1), lowercased, as written in any
+   * casing: in the brackets after the dependency, or, in the short form,
+   * after the one dependency. Undefined when none is written, when the
+   * value is no kind, or in a document without a version declaration,
+   * where `transformation` is a custom property (§27.3).
+   */
+  transformation?: Transformation;
+  /** The line of a `Dep` that states this dependency; undefined for an inline `dep`. */
+  line?: DepDependency;
   span: Span;
+}
+
+/** The kinds of transformation, in the order of §27.10.1 (v0.7.2). */
+export const TRANSFORMATIONS = [
+  'identity',
+  'derivation',
+  'aggregation',
+  'join',
+  'lookup',
+  'filter',
+  'group_by',
+  'conditional',
+] as const;
+
+export type Transformation = typeof TRANSFORMATIONS[number];
+
+/** The kinds that give the value of a field, and `conditional`, which tests it: a field is downstream (§27.10.1). */
+const FIELD_KINDS: ReadonlySet<string> = new Set(['identity', 'derivation', 'aggregation', 'conditional']);
+/** The kinds that steer the rows or a branch without giving the value (§27.10.1). */
+const INDIRECT_KINDS: ReadonlySet<string> = new Set(['join', 'lookup', 'filter', 'group_by', 'conditional']);
+
+/** A word a setting holds, bare or quoted, lowercased. */
+function settingWord (v: SettingValue | null | undefined): string | undefined {
+  return v && (v.kind === 'StringValue' || v.kind === 'IdentifierValue') ? v.value.toLowerCase() : undefined;
+}
+
+/** The `transformation` setting of one line: its own brackets, or, in the short form, the Dep's (§27.3). */
+function transformationSetting (line: DepDependency, decl: DepDeclaration, merged: ReadonlyArray<Setting>): Setting | undefined {
+  return line.settings.find((s) => s.name === 'transformation')
+    ?? (decl.form === 'short' ? merged.find((s) => s.name === 'transformation') : undefined);
+}
+
+function transformationOf (setting: Setting | undefined): Transformation | undefined {
+  const word = settingWord(setting?.value);
+  return word && (TRANSFORMATIONS as readonly string[]).includes(word) ? word as Transformation : undefined;
+}
+
+/** The first `source_query` of a block's body, and the Dep's `source_database` (§27.3). */
+function statementOf (decl: DepDeclaration, merged: ReadonlyArray<Setting>): { sourceQuery?: string; sourceDatabase?: string } {
+  const q = decl.form === 'block' ? (decl.bodySettings ?? []).find((s) => s.name === 'source_query') : undefined;
+  const sourceQuery = q?.value?.kind === 'StringValue' ? q.value.value : undefined;
+  const sourceDatabase = settingWord(merged.find((s) => s.name === 'source_database')?.value);
+  return {
+    ...(sourceQuery !== undefined ? { sourceQuery } : {}),
+    ...(sourceDatabase !== undefined ? { sourceDatabase } : {}),
+  };
+}
+
+/**
+ * The `grain` of an entity or a View: what one row represents, as written
+ * (§7.5, v0.7.2). Undefined when it has none.
+ */
+export function grainOf (decl: { settings: ReadonlyArray<Setting> }): string | undefined {
+  const v = decl.settings.find((s) => s.name === 'grain')?.value;
+  return v && (v.kind === 'StringValue' || v.kind === 'IdentifierValue') ? v.value : undefined;
 }
 
 /**
@@ -72,20 +163,28 @@ export interface LineageDependency {
  * bring.
  */
 export function collectLineage (doc: XDbmlDocument): Lineage[] {
+  const versioned = !!doc.version;
   const out: Lineage[] = [];
   for (const stmt of doc.statements) {
     if (stmt.kind !== 'DepDeclaration') continue;
+    const settings = depSettings(stmt);
     out.push({
       id: `dep:${out.length}`,
       ...(stmt.name !== undefined ? { name: stmt.name } : {}),
-      settings: depSettings(stmt),
-      dependencies: stmt.dependencies.map((d) => ({
-        upstream: d.upstream,
-        downstream: d.downstream,
-        settings: d.settings,
-        span: d.span,
-      })),
+      settings,
+      dependencies: stmt.dependencies.flatMap((line) => {
+        const transformation = versioned ? transformationOf(transformationSetting(line, stmt, settings)) : undefined;
+        return (line.upstreams ?? [line.upstream]).map((upstream) => ({
+          upstream,
+          downstream: line.downstream,
+          settings: line.settings,
+          ...(transformation ? { transformation } : {}),
+          line,
+          span: line.span,
+        }));
+      }),
       decl: stmt,
+      ...(versioned ? statementOf(stmt, settings) : {}),
       span: stmt.span,
     });
   }
@@ -254,6 +353,7 @@ export type DepEndResolver = (endpoint: RefEndpoint, diagnostics: Diagnostic[]) 
  */
 export function checkLineage (doc: XDbmlDocument, resolve: DepEndResolver): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
+  const versioned = !!doc.version;
   const lineage = collectLineage(doc);
   const seen = new Map<string, Span>();
   const key = (up: DepEnd, down: DepEnd): string =>
@@ -271,6 +371,11 @@ export function checkLineage (doc: XDbmlDocument, resolve: DepEndResolver): Diag
 
     if (l.inline) checkInlineKind(l, ends[0], diagnostics);
 
+    if (l.decl && versioned) {
+      checkTransformations(l, ends, diagnostics);
+      checkStatementPlace(l, diagnostics);
+    }
+
     if (l.decl?.form === 'block') {
       if (l.dependencies.length === 0) {
         diagnostics.push({
@@ -280,7 +385,7 @@ export function checkLineage (doc: XDbmlDocument, resolve: DepEndResolver): Diag
           span: l.span,
         });
       }
-      checkBlock(l, ends, diagnostics);
+      checkBlock(l, ends, versioned, diagnostics);
     }
 
     for (const e of ends) {
@@ -370,10 +475,15 @@ function checkInlineKind (
   });
 }
 
-/** One downstream element, and one level, for every dependency of a block (§27.2). */
+/**
+ * One downstream element for every dependency of a block, and, in a
+ * document without a version declaration, one level, as DBML requires
+ * (§27.2). From v0.7.2 a document that declares a version may mix levels.
+ */
 function checkBlock (
   l: Lineage,
   ends: ReadonlyArray<{ up: DepEnd; down: DepEnd; span: Span } | undefined>,
+  versioned: boolean,
   diagnostics: Diagnostic[],
 ): void {
   const resolved = ends.filter((e): e is { up: DepEnd; down: DepEnd; span: Span } => !!e);
@@ -391,15 +501,131 @@ function checkBlock (
     });
   }
   const fieldLevel = (e: { up: DepEnd; down: DepEnd }): boolean => e.up.field !== undefined || e.down.field !== undefined;
-  const mixed = resolved.find((e) => fieldLevel(e) !== fieldLevel(first));
+  const mixed = versioned ? undefined : resolved.find((e) => fieldLevel(e) !== fieldLevel(first));
   if (mixed) {
     diagnostics.push({
       severity: 'error',
       code: 'dep-mixed-level',
-      message: `${label} mixes a dependency between entities with a dependency naming a field: the dependencies of ` +
-        'a block are all between entities or Views, or all name a field at one end at least. Write a block for each ' +
-        '(spec §27.2).',
+      message: `${label} mixes a dependency between entities with a dependency naming a field. Without a version ` +
+        'declaration, as in DBML, the dependencies of a block are all between entities or Views, or all name a field. ' +
+        'Write a block for each, or declare a version, such as xdbml: 0.7 (spec §27.2).',
       span: mixed.span,
+    });
+  }
+}
+
+/** What an end names, for a message: `an entity` or `a View`. */
+function elementNoun (end: DepEnd): string {
+  return end.elementKind === 'view' ? 'a View' : 'an entity';
+}
+
+/**
+ * The checks of §27.10.5 on the `transformation` of each line of a Dep, in
+ * a document that declares a version. A line is checked once, whatever the
+ * number of its upstream ends.
+ */
+function checkTransformations (
+  l: Lineage,
+  ends: ReadonlyArray<{ up: DepEnd; down: DepEnd; span: Span } | undefined>,
+  diagnostics: Diagnostic[],
+): void {
+  const decl = l.decl;
+  if (!decl) return;
+  const byLine = new Map<DepDependency, Array<{ up: DepEnd; down: DepEnd; span: Span }>>();
+  l.dependencies.forEach((d, i) => {
+    if (!d.line) return;
+    const list = byLine.get(d.line) ?? [];
+    const e = ends[i];
+    if (e) list.push(e);
+    byLine.set(d.line, list);
+  });
+  for (const line of decl.dependencies) {
+    const setting = transformationSetting(line, decl, l.settings);
+    if (!setting) continue;
+    const word = settingWord(setting.value);
+    if (!word || !(TRANSFORMATIONS as readonly string[]).includes(word)) {
+      const written = setting.value?.kind === 'StringValue' || setting.value?.kind === 'IdentifierValue'
+        ? `'${setting.value.value}' is not a kind of transformation`
+        : 'A transformation takes one of eight words';
+      diagnostics.push({
+        severity: 'error',
+        code: 'unknown-transformation',
+        message: `${written}. Write identity, derivation, aggregation, join, lookup, filter, group_by or ` +
+          'conditional (spec §27.10.1).',
+        span: setting.span,
+      });
+      continue;
+    }
+    const resolved = byLine.get(line) ?? [];
+    if (resolved.length === 0) continue;
+    const between = resolved.find((e) => e.up.field === undefined && e.down.field === undefined);
+    if (between) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'transformation-between-entities',
+        message: `The dependency ${describe(between.up)} -> ${describe(between.down)} names no field, so it takes no ` +
+          'transformation: a transformation applies to fields. Name the field that takes part, or remove the ' +
+          'transformation (spec §27.10.1).',
+        span: setting.span,
+      });
+      continue;
+    }
+    const down = resolved[0].down;
+    if (FIELD_KINDS.has(word) && down.field === undefined) {
+      diagnostics.push({
+        severity: 'error',
+        code: 'transformation-target-mismatch',
+        message: `'${word}' concerns the value of one field, and this dependency ends at ${down.element}, ` +
+          `${elementNoun(down)}. End it at the field, ${down.element}.<field> (spec §27.10.1).`,
+        span: setting.span,
+      });
+      continue;
+    }
+    const upstreams = (line.upstreams ?? [line.upstream]).length;
+    if (word === 'identity' && upstreams > 1) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'transformation-mismatch',
+        message: `'identity' copies one field, and this dependency names ${upstreams} upstream ends. ` +
+          "Write 'derivation' instead (spec §27.10.5).",
+        span: setting.span,
+      });
+    }
+    const fromElement = resolved.find((e) => e.up.field === undefined);
+    if (INDIRECT_KINDS.has(word) && fromElement) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'indirect-from-entity',
+        message: `'${word}' starts from ${fromElement.up.element}, ${elementNoun(fromElement.up)} as a whole, so it ` +
+          `does not say which field takes part. Name the field, ${fromElement.up.element}.<field> (spec §27.10.5).`,
+        span: setting.span,
+      });
+    }
+  }
+}
+
+/**
+ * `source_query` in the brackets of a Dep or of one of its dependencies,
+ * in a document that declares a version: it is not the Dep's statement,
+ * which a block writes in its body (§27.3, v0.7.2).
+ */
+function checkStatementPlace (l: Lineage, diagnostics: Diagnostic[]): void {
+  const decl = l.decl;
+  if (!decl) return;
+  const brackets = [
+    ...decl.settings,
+    ...(decl.headerSettings ?? []),
+    ...decl.dependencies.flatMap((d) => d.settings),
+  ];
+  for (const s of brackets) {
+    if (s.name !== 'source_query') continue;
+    diagnostics.push({
+      severity: 'warning',
+      code: 'source-query-in-settings',
+      message: `${l.name !== undefined ? `Dep '${l.name}'` : 'This Dep'} writes source_query in brackets, where it is ` +
+        "not the Dep's statement. Write it in the body of a block: Dep name { a -> b  source_query: '...' } " +
+        '(spec §27.3).',
+      span: s.span,
     });
   }
 }

@@ -22,6 +22,8 @@ A point release of the v0.7 draft on data lineage: a `Dep` may specify how a tar
 #### Tooling
 
 - **`@xdbml/parse`** accepts documents declaring `xdbml: 0.7.2`.
+- **`@xdbml/parse`, source-to-target mapping (§27.2, §27.3, §27.10)**: in a document that declares a version, a dependency line may name several upstream ends (`DepDependency.upstreams`), and `collectLineage()` gives one pair per upstream end, the pairs of one line sharing its `line` and settings. A block may mix the two levels. Each pair carries its `transformation`, read in any casing, and each `Lineage` its `sourceQuery` and `sourceDatabase`; `dialect` reads as `source_database`, on a View too. New diagnostics: `unknown-transformation`, `transformation-between-entities` and `transformation-target-mismatch` (errors), `transformation-mismatch` and `indirect-from-entity` (warnings), and `source-query-in-settings` for a `Dep`; `grain` in a Metadata block draws `metadata-custom-property`. New exports: `TRANSFORMATIONS`, `targetCoverage()` and `grainOf()`. Without a version declaration nothing changes: several upstream ends and mixed levels stay errors, and the new settings stay custom properties, as in DBML.
+- **Grammar**: `depSpec` takes a `depEndList` on each side of the arrow. `grammar/test-cases.md` gains a v0.7.2 section of 17 cases, each checked against the parser.
 
 ---
 

@@ -58,7 +58,7 @@ import type {
   XDbmlDocument,
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
-import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment } from './names.ts';
+import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment, splitName } from './names.ts';
 import { flatten } from './module-resolver.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkOptionalMarks } from './cardinality.ts';
@@ -220,7 +220,13 @@ export type DiagnosticCode =
   | 'dep-wrong-kind'
   | 'dep-in-partial'
   | 'misplaced-dep'
-  | 'invalid-dep-value';
+  | 'invalid-dep-value'
+  // Source-to-target mapping (spec §27.10, §27.12, v0.7.2)
+  | 'unknown-transformation'
+  | 'transformation-between-entities'
+  | 'transformation-target-mismatch'
+  | 'transformation-mismatch'
+  | 'indirect-from-entity';
 
 /**
  * A single resolution diagnostic. Severity is currently always `error`,
@@ -537,6 +543,33 @@ export function resolveLineage (doc: XDbmlDocument): Map<string, ResolvedDepende
     }));
   }
   return out;
+}
+
+/**
+ * The fields of an entity or a View that a dependency of the document
+ * feeds, and those none feeds, by name, in the order declared (spec
+ * §27.10.4, v0.7.2). A field counts as fed when it, or a field nested in
+ * it, is the downstream end of a dependency; injected fields count. An
+ * inspector shows the second list for the target of a Dep with
+ * transformations. Undefined when `element`, a qualified name as `DepEnd`
+ * gives it, declares no entity or View.
+ */
+export function targetCoverage (doc: XDbmlDocument, element: string): { fed: string[]; unfed: string[] } | undefined {
+  const flat = flatten(doc);
+  const entries: SymbolEntry[] = [];
+  collectDeclarations(flat, entries, []);
+  const symbols = new SymbolTable(entries);
+  const decl = symbols.lookup(element)?.declaration;
+  if (!decl || (decl.kind !== 'EntityDeclaration' && decl.kind !== 'ViewDeclaration')) return undefined;
+  const fed = new Set<string>();
+  for (const l of collectLineage(flat)) {
+    for (const d of l.dependencies) {
+      const down = resolveDepEnd(d.downstream, symbols, []);
+      if (down?.element === element && down.field !== undefined) fed.add(splitName(down.field)[0]);
+    }
+  }
+  const names = effectiveFieldList(decl.body, partialLookup(symbols)).map((f) => f.field.name);
+  return { fed: names.filter((n) => fed.has(n)), unfed: names.filter((n) => !fed.has(n)) };
 }
 
 /* -------------------------------------------------------------------------
