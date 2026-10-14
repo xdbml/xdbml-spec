@@ -3676,7 +3676,7 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
 Entity A { }`,
       assert: (doc) => {
         if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
-        for (const v of ['0.8', '0.7.2', '1.0', '0.10']) {
+        for (const v of ['0.8', '0.7.3', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -4333,8 +4333,14 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.7.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.7.1 §4: xdbml: 0.7.2 is newer than this parser supports',
+      name: 'v0.7.2 §4: xdbml: 0.7.2 parses and keeps its patch number',
       source: `xdbml: 0.7.2
+Entity e { id int [pk] }`,
+      assert: (doc) => (doc.version?.version === '0.7.2' ? null : `version: ${doc.version?.version}`),
+    },
+    {
+      name: 'v0.7.2 §4: xdbml: 0.7.3 is newer than this parser supports',
+      source: `xdbml: 0.7.3
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',

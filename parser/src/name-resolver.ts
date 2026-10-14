@@ -207,7 +207,7 @@ export type DiagnosticCode =
   | 'duplicate-definition'
   | 'definitions-unsupported-target'
   | 'definition-shadows-type'
-  // Data lineage (spec §27.10, v0.7)
+  // Data lineage (spec §27.12, v0.7)
   | 'unresolved-dep-endpoint'
   | 'invalid-dep-endpoint'
   | 'ambiguous-dep-endpoint'
@@ -476,7 +476,7 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
   // Pass 7: diagram views (spec §18.6).
   diagnostics.push(...checkDiagramViews(flat));
 
-  // Pass 7b: data lineage (spec §27.10), on the flattened document, where
+  // Pass 7b: data lineage (spec §27.12), on the flattened document, where
   // the endpoints of an imported Dep and of an imported inline dep resolve.
   diagnostics.push(...checkLineage(flat, (endpoint, out) => resolveDepEnd(endpoint, symbols, out)));
 

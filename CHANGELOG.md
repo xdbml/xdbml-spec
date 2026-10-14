@@ -4,9 +4,30 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.7.1 -- 2026
+## v0.7.2 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A point release of the v0.7 draft on data lineage: a `Dep` may specify how a target is loaded from its sources, and so serve as a source-to-target mapping, and a metric is a field of a View that is not materialized, whose lineage a `Dep` may state. Documents keep declaring `xdbml: 0.7`.
+
+### Changed
+
+#### Spec
+
+- **Validation summary of chapter 27** moves from §27.10 to §27.12, the end of the chapter, after the two new sections.
+- **Rules of a `Dep` (§27.4)**: the spec states why cycles and two Deps with the same name are accepted, both as in DBML 10.3.1: a cycle may span several systems, as with reverse ETL, and a job that loads two targets takes one `Dep` per target, each with the job's name.
+- **Source query (§14.3)**: the spec states that neither the reference parser nor the playground parses a source query, of a View or of a `Dep`. A syntax error in the query, or a difference between the query and the fields or the Deps, draws no message; the playground's inspector highlights the query as SQL without checking it.
+
+#### Tooling
+
+- **`@xdbml/parse`** accepts documents declaring `xdbml: 0.7.2`.
+
+---
+
+## v0.7.1 -- 2026
+
+**Status**: Draft -- superseded by v0.7.2
 **Released**: 2026-10-14
 
 A point release of the v0.7 draft on names and settings. Chapter 17 takes the keywords `EntityPartial` and `EntityGroup`, after the entity they work on, as `Entity` names what DBML calls a `Table`; `TablePartial` and `TableGroup`, the DBML keywords, stay as aliases, and a diagram view lists `Entities` and `EntityGroups` beside `Tables` and `TableGroups`. `color` sets the header color of an entity, a View and an EntityPartial in a document that declares a version, as it sets the color of every other element drawn as a shape, with `headercolor` as an alias. A quoted setting key with the `x-` prefix, `"x-hackolade-id"`, marks a custom property as an `x_` key does, and a diagram view takes custom properties of any name, as every other element does: before, `"x-hackolade-id"` passed on an EntityGroup and failed on a diagram view. Every document that parsed before still parses, with one exception listed below. Documents keep declaring `xdbml: 0.7`.
@@ -81,7 +102,7 @@ Moves the DBML baseline from 3.13.6 to 10.3.1: a parser reads every construct DB
 - **Rules (§27.4)**: a `Dep` stands at the top level; a field does not depend on itself, while an entity may; a dependency is stated once in the document, inline included; cycles are accepted; names are optional and may repeat.
 - **Relationship, foreign master, Dep or View (§27.5)**, and **lineage and the query of a View (§27.6)**: the Deps into a View and its `source_query` state its lineage separately, and neither overrides the other; a tool that reads the query's dialect may report a difference as a warning.
 - **Drawing (§27.7)**: a dependency draws as a curve with an arrowhead at its downstream end, attached at the side of a field's row or of a box; the dependencies of one Dep that share a downstream end meet at a junction, which carries the Dep's name when the names of relationships are shown; a renderer offers a toggle that hides dependencies, and an automatic arrangement places each element to the right of the elements it is computed from.
-- **Modules and Metadata blocks (§27.8)**, **DBML compatibility (§27.9)** and **validation summary (§27.10)** for data lineage. xDBML differs from DBML 10.3.1 on three points: a block with no dependency draws a warning, a setting value of any form is a custom property, and brackets after a dependency in a block concern that dependency alone, where DBML applies them to the whole Dep.
+- **Modules and Metadata blocks (§27.8)**, **DBML compatibility (§27.9)** and **validation summary (§27.10, §27.12 from v0.7.2)** for data lineage. xDBML differs from DBML 10.3.1 on three points: a block with no dependency draws a warning, a setting value of any form is a custom property, and brackets after a dependency in a block concern that dependency alone, where DBML applies them to the whole Dep.
 - **Module specifiers (§28.13)**: a specifier other than an `https://` URL resolves as in DBML 10.3.1, in every document. The host application may map it to a file first, as DBML's `resolveFileSpecifier` does; otherwise it is read relative to the importing file, with or without `./`, so `auth`, `sub/auth` and `@shared-users` are valid, and an absolute path is an error unless the host resolves it. Without an extension, `<path>.xdbml` is read, or `<path>.dbml` when there is no such file.
 
 ### Changed

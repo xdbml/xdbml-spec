@@ -8,7 +8,7 @@
  * the playground and any generator agree on what `dep:<n>` names.
  *
  * `checkLineage()` holds the rules of §27.4 and the validation summary of
- * §27.10 that the grammar cannot express. It takes the endpoint resolver as
+ * §27.12 that the grammar cannot express. It takes the endpoint resolver as
  * an argument: name resolution owns the symbol table and the walk into
  * nested types, and calls this module from `resolveNames()`.
  */
@@ -248,7 +248,7 @@ export interface DepEnd {
 export type DepEndResolver = (endpoint: RefEndpoint, diagnostics: Diagnostic[]) => DepEnd | undefined;
 
 /**
- * The rules of §27 that the grammar does not express (§27.10). A `Dep`
+ * The rules of §27 that the grammar does not express (§27.12). A `Dep`
  * outside the top level, an operator other than an arrow, and a dependency
  * with more than two ends are parse errors.
  */

@@ -801,7 +801,7 @@ metadataSetting
 // concern that dependency alone. A Dep stands at the top level only (§27.4).
 // What each endpoint names, the rules of a block (one downstream element,
 // one level), the kind an inline `dep` names, and the value of `color` are
-// checked after parsing (§27.10).
+// checked after parsing (§27.12).
 
 depDefinition
     : DEP nameSegment? settingsBlock? COLON depSpec settingsBlock?     // short form
