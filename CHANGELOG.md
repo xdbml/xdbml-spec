@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.7.1 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-10-14
 
 A point release of the v0.7 draft on names and settings. Chapter 17 takes the keywords `EntityPartial` and `EntityGroup`, after the entity they work on, as `Entity` names what DBML calls a `Table`; `TablePartial` and `TableGroup`, the DBML keywords, stay as aliases, and a diagram view lists `Entities` and `EntityGroups` beside `Tables` and `TableGroups`. `color` sets the header color of an entity, a View and an EntityPartial in a document that declares a version, as it sets the color of every other element drawn as a shape, with `headercolor` as an alias. A quoted setting key with the `x-` prefix, `"x-hackolade-id"`, marks a custom property as an `x_` key does, and a diagram view takes custom properties of any name, as every other element does: before, `"x-hackolade-id"` passed on an EntityGroup and failed on a diagram view. Every document that parsed before still parses, with one exception listed below. Documents keep declaring `xdbml: 0.7`.
 
