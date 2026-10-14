@@ -454,7 +454,7 @@ function checkDepSettings (doc: XDbmlDocument, lineage: ReadonlyArray<Lineage>):
       diagnostics.push({
         severity: 'error',
         code: 'dep-in-partial',
-        message: `TablePartial '${stmt.name}' carries a dep: a TablePartial carries no dependency (spec §27.2). ` +
+        message: `${stmt.keyword} '${stmt.name}' carries a dep: a partial carries no dependency (spec §27.2). ` +
           'Write it on the entity that injects the partial, or as a Dep.',
         span: s.span,
       });

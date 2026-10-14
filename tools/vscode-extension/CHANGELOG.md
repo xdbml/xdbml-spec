@@ -4,6 +4,20 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1]
+
+Follows xDBML 0.7.1.
+
+### Added
+- **`EntityPartial` and `EntityGroup`**: colored as declaration keywords, as
+  their DBML aliases `TablePartial` and `TableGroup` are.
+- **Diagram view categories**: `Entities` and `EntityGroups` are colored as
+  declaration keywords before `{`, as `Tables` and `TableGroups` are.
+- **`Metadata EntityGroup`**: the kind is colored with `Metadata`.
+- **`x-` custom properties**: a quoted setting key with the `x-` prefix,
+  `"x-hackolade-id": '...'`, takes the color of an `x_` custom property in
+  the settings brackets.
+
 ## [0.7.0]
 
 Follows xDBML 0.7, whose DBML baseline moves from 3.13.6 to 10.3.1. The

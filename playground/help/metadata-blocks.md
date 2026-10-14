@@ -28,12 +28,12 @@ A block declares nothing. It adds no field, key, type or relationship; it annota
 
 ## What a block can target
 
-The kinds of DBML work in every document: `Table`, `Column` (a field), `TableGroup` and `Note` (a sticky note). A document declaring `xdbml: 0.7` may also use `Entity`, `Collection`, `Record`, `Field`, `Container` and its synonyms such as `Schema`, `View` and `DiagramView`. A block stands at the top level, never inside a Container, and names a field by its path, `orders.shipping.country`, and an element in a Container with its Container, `sales.orders`.
+The kinds of DBML work in every document: `Table`, `Column` (a field), `TableGroup` and `Note` (a sticky note). A document declaring `xdbml: 0.7` may also use `Entity`, `Collection`, `Record`, `Field`, `EntityGroup`, `Container` and its synonyms such as `Schema`, `View` and `DiagramView`. A block stands at the top level, never inside a Container, and names a field by its path, `orders.shipping.country`, and an element in a Container with its Container, `sales.orders`.
 
 ## What a block can set
 
 - `note`, rendered as Markdown in the inspector.
-- The color of an element drawn as a shape: `headercolor` on a Table or a View, `color` on a TableGroup, a sticky note or a Container.
+- The color of an element drawn as a shape: `color` on an entity, a View, an EntityGroup, a sticky note or a Container. On an entity or a View, `headercolor`, the DBML name, works too, and in a document without a version declaration it is the only one: there, `color` on a Table is a custom property, as in DBML.
 - Custom properties, such as `owner` or `x_steward`.
 
 A setting xDBML defines elsewhere, such as `synonyms`, `tags` or `pk`, stays in the element's own brackets. In a Metadata block it reads as a custom property, with a warning.

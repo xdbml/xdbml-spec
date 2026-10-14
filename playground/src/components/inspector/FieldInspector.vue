@@ -13,8 +13,9 @@
         <dt v-if="container" class="font-medium text-gray-500 dark:text-slate-400">Container</dt>
         <dd v-if="container" class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ container.name }}</dd>
         <!-- Spec §17.1: a field the entity receives through a ~name line is
-             declared in the TablePartial, which is where Edit in source goes. -->
-        <dt v-if="partial" class="font-medium text-gray-500 dark:text-slate-400">TablePartial</dt>
+             declared in the EntityPartial, which is where Edit in source goes.
+             The label is the keyword the partial is declared with (v0.7.1). -->
+        <dt v-if="partial" class="font-medium text-gray-500 dark:text-slate-400">{{ partial.keyword }}</dt>
         <dd v-if="partial" class="text-gray-900 dark:text-slate-100 font-mono break-all">{{ partial.name }}</dd>
       </dl>
     </InspectorSection>
@@ -53,7 +54,7 @@
       <SettingsTable :settings="standardSettings" :from-metadata="mergedSettings.fromMetadata" />
     </InspectorSection>
 
-    <InspectorSection v-if="customSettings.length > 0" title="Custom properties (x_*)">
+    <InspectorSection v-if="customSettings.length > 0" title="Custom properties (x_*, x-*)">
       <SettingsTable :settings="customSettings" :from-metadata="mergedSettings.fromMetadata" />
     </InspectorSection>
 
@@ -69,7 +70,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { joinName, metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
+import { isCustomPropertyName, joinName, metadataIndex, metadataNote, withMetadata } from '@xdbml/parse';
 import type { AppliedSetting } from '@xdbml/parse';
 import { useParserStore } from '@/stores/parserStore';
 import type {
@@ -172,16 +173,18 @@ const mergedSettings = computed(() =>
 
 // A flag shows as a badge above. A custom property that a Metadata block
 // sets under a flag's name, `pk: 'true'`, carries a value and shows here.
+// A key with the `x_` prefix, or `x-` in quotes (spec §24.5, v0.7.1), shows
+// under Custom properties.
 const standardSettings = computed(() =>
   mergedSettings.value.settings.filter(
     (s) => s.name !== 'note'
       && !(FLAG_SETTING_NAMES.has(s.name) && s.value === null)
-      && !s.name.startsWith('x_'),
+      && !isCustomPropertyName(s.name),
   ),
 );
 
 const customSettings = computed(() =>
-  mergedSettings.value.settings.filter((s) => s.name.startsWith('x_')),
+  mergedSettings.value.settings.filter((s) => isCustomPropertyName(s.name)),
 );
 
 // Field-level note can be a Note: '...' setting OR a separate NoteBlock

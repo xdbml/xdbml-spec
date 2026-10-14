@@ -111,10 +111,10 @@ reuse { type CurrencyCode }
 
 
 // -----------------------------------------------------------------------------
-//  TableGroup: visualization
+//  EntityGroup: visualization
 // -----------------------------------------------------------------------------
 
-TableGroup sales_remote [
+EntityGroup sales_remote [
   color: '#1976d2',
   note: 'Local fact plus the date dimension imported from the published library.'
 ] {

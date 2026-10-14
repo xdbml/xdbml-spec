@@ -451,11 +451,11 @@ function extractImports (
  *       EdgeDeclaration with matching name; supports dotted path.
  *   - 'view' / 'diagramview':
  *       ViewDeclaration with matching name; supports dotted path.
- *   - 'tablegroup':
+ *   - 'entitygroup' / 'tablegroup':
  *       TableGroupDeclaration with matching name (top-level only).
  *   - 'supertypegroup':
  *       SupertypeGroupDeclaration with matching name (top-level only, v0.5).
- *   - 'tablepartial':
+ *   - 'entitypartial' / 'tablepartial':
  *       TablePartialDeclaration with matching name (top-level only).
  *   - 'note':
  *       Sticky note with matching name; supports the dotted path
@@ -534,13 +534,13 @@ function findImportTarget (
     return undefined;
   }
 
-  // Type, TableGroup, TablePartial, Note: top-level only, bare name.
+  // Type, EntityGroup, EntityPartial, Note: top-level only, bare name.
   if (item.elementType === 'type') {
     return doc.statements.find(
       (s) => s.kind === 'TypeDeclaration' && s.name === path,
     );
   }
-  if (item.elementType === 'tablegroup') {
+  if (item.elementType === 'entitygroup' || item.elementType === 'tablegroup') {
     return doc.statements.find(
       (s) => s.kind === 'TableGroupDeclaration' && s.name === path,
     );
@@ -553,7 +553,7 @@ function findImportTarget (
       (s) => s.kind === 'SupertypeGroupDeclaration' && s.name === path,
     );
   }
-  if (item.elementType === 'tablepartial') {
+  if (item.elementType === 'entitypartial' || item.elementType === 'tablepartial') {
     return doc.statements.find(
       (s) => s.kind === 'TablePartialDeclaration' && s.name === path,
     );

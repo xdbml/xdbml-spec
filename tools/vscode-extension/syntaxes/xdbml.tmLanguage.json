@@ -110,7 +110,7 @@
     },
     "metadata-declaration": {
       "comment": "A Metadata block (spec 24.7, v0.7): the keyword, the kind of element, and the target. Matched only as a whole, so an entity or a field may still be named metadata.",
-      "match": "\\b((?i:metadata))\\s+((?i:diagramview|tablegroup|collection|container|namespace|database|keyspace|dataset|column|entity|record|schema|bucket|table|field|note|view))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_.]*)|(?:\"[^\"]*\")))?",
+      "match": "\\b((?i:metadata))\\s+((?i:entitygroup|diagramview|tablegroup|collection|container|namespace|database|keyspace|dataset|column|entity|record|schema|bucket|table|field|note|view))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_.]*)|(?:\"[^\"]*\")))?",
       "captures": {
         "1": {
           "name": "keyword.declaration.xdbml"
@@ -141,7 +141,7 @@
       "comment": "All declaration keywords. The keyword is followed by an identifier (the declared name). `Note` is skipped where it names a field (spec 3.10): it counts as a keyword only before ':' or '{', or before the name of a sticky note, qualified or not, its settings brackets, and '{' or ':' on the same line (spec 19.2).",
       "patterns": [
         {
-          "match": "\\b(?!(?i:note)\\b(?!\\s*[:{])(?!\\s+(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\"))*\\s*(?:\\[[^\\]]*\\]\\s*)?[{:]))((?i:supertypegroup|tablepartial|diagramview|collection|tablegroup|container|namespace|database|keyspace|project|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
+          "match": "\\b(?!(?i:note)\\b(?!\\s*[:{])(?!\\s+(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\")(?:\\.(?:[A-Za-z_][A-Za-z0-9_]*|\"[^\"]*\"))*\\s*(?:\\[[^\\]]*\\]\\s*)?[{:]))((?i:supertypegroup|entitypartial|tablepartial|entitygroup|diagramview|collection|tablegroup|container|namespace|database|keyspace|project|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref))\\b(?:\\s+((?:[A-Za-z_][A-Za-z0-9_]*)|(?:\"[^\"]*\")|(?:`[^`]*`)))?",
           "captures": {
             "1": {
               "name": "keyword.declaration.xdbml"
@@ -180,9 +180,9 @@
       "match": "\\b((?i:constraints|definitions|indexes|records|checks))\\b(?=\\s*\\{)|\\b((?i:records))\\b(?=\\s*[(\\[])"
     },
     "diagram-view-categories": {
-      "comment": "The categories of a DiagramView body (Tables, Views, Containers or Schemas, TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",
+      "comment": "The categories of a DiagramView body (Entities or Tables, Views, Containers or Schemas, EntityGroups or TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",
       "name": "keyword.declaration.category.xdbml",
-      "match": "\\b((?i:supertypegroups|tablegroups|containers|schemas|tables|views|notes))\\b(?=\\s*\\{)"
+      "match": "\\b((?i:supertypegroups|entitygroups|tablegroups|containers|entities|schemas|tables|views|notes))\\b(?=\\s*\\{)"
     },
     "native-types": {
       "comment": "Target-native type names (Oracle number, PostgreSQL serial, ...), colored like scalar types. Highlighting only: any identifier is a valid type name.",
@@ -193,6 +193,11 @@
       "comment": "Custom AI-readiness properties prefixed with `x_` or `x-`. Highlighted as extension points.",
       "name": "support.other.x-property.xdbml",
       "match": "\\b(x[_-][A-Za-z_][A-Za-z0-9_]*)\\b"
+    },
+    "x-quoted-properties": {
+      "comment": "A quoted setting key with the `x-` prefix, \"x-hackolade-id\", is a custom property as an `x_` key is (spec 24.5, v0.7.1). Matched only before ':', ahead of the strings, which would read it as a quoted identifier.",
+      "name": "support.other.x-property.xdbml",
+      "match": "\"x-[^\"\\\\]*\"(?=\\s*:)"
     },
     "settings-block": {
       "comment": "Square-bracket settings block. Inside, we recognize flag settings, keyed settings, ordinary string/number values, and cardinality operators (>, <, -) for Ref-style settings.",
@@ -214,6 +219,9 @@
         },
         {
           "include": "#cardinality-strings"
+        },
+        {
+          "include": "#x-quoted-properties"
         },
         {
           "include": "#strings"

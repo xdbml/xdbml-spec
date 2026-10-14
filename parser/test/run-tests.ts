@@ -45,7 +45,7 @@ import { effectiveFields, effectiveHeaderColor, effectiveIndexes, effectiveNote,
 import { keyPathString } from '../src/constraints.ts';
 import type { PathSegment } from '../src/index.ts';
 import { xdbmlMonarchTokensProvider } from '../src/monarch.ts';
-import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment, splitName } from '../src/names.ts';
+import { isCustomPropertyName, isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment, splitName } from '../src/names.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // The repository's own examples, the same files the site publishes and the
@@ -3537,7 +3537,7 @@ SupertypeGroup legal_nature [supertype: Party] {
       assert: (doc) => {
         const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'supertype-attribute-redeclared');
         if (hits.length !== 2) return `expected 2, got ${hits.length}: ${hits.map((d) => d.message).join(' | ')}`;
-        return hits.some((d) => /through TablePartial 'named'/.test(d.message)) ? null : 'partial not named in message';
+        return hits.some((d) => /through the partial 'named'/.test(d.message)) ? null : 'partial not named in message';
       },
     },
     {
@@ -3676,7 +3676,7 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
 Entity A { }`,
       assert: (doc) => {
         if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
-        for (const v of ['0.8', '0.7.1', '1.0', '0.10']) {
+        for (const v of ['0.8', '0.7.2', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -4327,8 +4327,14 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.6.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.7 §4: xdbml: 0.7.1 is newer than this parser supports',
+      name: 'v0.7.1 §4: xdbml: 0.7.1 parses and keeps its patch number',
       source: `xdbml: 0.7.1
+Entity e { id int [pk] }`,
+      assert: (doc) => (doc.version?.version === '0.7.1' ? null : `version: ${doc.version?.version}`),
+    },
+    {
+      name: 'v0.7.1 §4: xdbml: 0.7.2 is newer than this parser supports',
+      source: `xdbml: 0.7.2
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -4779,7 +4785,7 @@ Note states { 'An order moves from placed to shipped.' }
   });
   check('v0.6.3 §18.1: Edges, an unknown category, a DiagramView in a Container and * beside a body-level * fail the parse', () => {
     const edges = parseError('xdbml: 0.6\nTable a { id int [pk] }\nDiagramView v { Edges { * } }');
-    const unknown = parseError('xdbml: 0.6\nDiagramView v { Entities { a } }');
+    const unknown = parseError('xdbml: 0.6\nDiagramView v { Things { a } }');
     const inContainer = parseError('xdbml: 0.6\nSchema s { Table a { id int [pk] }\n DiagramView v { Tables { a } } }');
     const star = parseError('xdbml: 0.6\nDiagramView v { * Tables { a } }');
     const problems: string[] = [];
@@ -4938,11 +4944,11 @@ DiagramView reports { Tables { orders } }`,
   });
   check('v0.6.3: Monarch colors a category keyword before { only', () => {
     const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
-      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('(?:tables'));
+      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('(?:entities'));
     if (!rule) return 'rule missing';
     const re = new RegExp(`^(?:${rule[0].source})`, 'i');
-    const yes = ['Tables {', 'schemas{', 'SupertypeGroups  {', 'Notes { *'];
-    const no = ['tables varchar', 'notes int', 'Tablesx {', 'views object'];
+    const yes = ['Tables {', 'schemas{', 'SupertypeGroups  {', 'Notes { *', 'Entities {', 'EntityGroups{'];
+    const no = ['tables varchar', 'notes int', 'Tablesx {', 'views object', 'entities int', 'entitygroups varchar'];
     const bad = [...yes.filter((t) => !re.test(t)), ...no.filter((t) => re.test(t))];
     return bad.length ? bad.join('; ') : undefined;
   });
@@ -4965,9 +4971,9 @@ DiagramView b5 { Tables { a } }`);
     const found = resolveNames(doc).diagnostics.map((d) => d.code);
     return found.length ? found.join(', ') : undefined;
   });
-  check('v0.6.3 §18.6: a setting other than note or x_ is an error; a note or settings need a version declaration', () => {
-    const bad = codes('xdbml: 0.6\nTable a { id int [pk] }\nDiagramView v [color: \'#fff\'] { Tables { a } }');
-    if (bad.join() !== 'error:unknown-diagram-view-setting') return `bad: ${bad}`;
+  check('v0.6.3 §18.6: a note or settings need a version declaration (any key is a custom property from v0.7.1)', () => {
+    const any = codes('xdbml: 0.6\nTable a { id int [pk] }\nDiagramView v [color: \'#fff\'] { Tables { a } }');
+    if (any.length) return `custom property: ${any}`;
     const dbmlNote = codes("Table a { id int [pk] }\nDiagramView v {\n Note: 'x'\n Tables { a }\n}");
     const dbmlSetting = codes("Table a { id int [pk] }\nDiagramView v [note: 'x'] { Tables { a } }");
     if (dbmlNote.join() !== 'error:construct-requires-version') return `dbml note: ${dbmlNote}`;
@@ -6424,8 +6430,8 @@ function runV07MetadataTests (): TestResult[] {
     const merged = withMetadata(id.settings, metadataIndex(doc).field('users', undefined, 'id'));
     return same(merged.settings.map((x) => `${x.name}=${settingValueText(x.value)}`), ['pk=(flag)', 'pk=true']);
   });
-  check('§24.7.3: a diagram view takes note and x_ properties only', () =>
-    expectCodes("xdbml: 0.7\nTable t {\n  id int\n}\nDiagramView dv {\n  Tables {\n    t\n  }\n}\nMetadata DiagramView dv {\n  owner: 'x'\n}", 'error:unknown-diagram-view-setting'));
+  check('§24.7.3: a diagram view takes note and custom properties of any name (v0.7.1)', () =>
+    expectCodes("xdbml: 0.7\nTable t {\n  id int\n}\nDiagramView dv {\n  Tables {\n    t\n  }\n}\nMetadata DiagramView dv {\n  owner: 'x'\n}", ''));
   check('§24.7.3 DBML: settings in brackets after the target apply nothing, with a warning', () => {
     const src = `${T}Metadata Table users [team: 'y'] {\n  x_a: 'b'\n}`;
     return expectCodes(src, 'warning:metadata-brackets-ignored') ?? same(shown(index(src).entity('users')), ['x_a=b']);
@@ -7066,6 +7072,269 @@ function runV07ModuleSpecifierTests (): TestResult[] {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7.1: x- custom properties (§24.5, §18.1), color as the header color
+ * of an entity (§7.5), EntityPartial and EntityGroup (§17), the diagram
+ * view categories Entities and EntityGroups (§18.1)
+ * ----------------------------------------------------------------------- */
+
+function runV071Tests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const diags = (src: string) => resolveNames(parse(src)).diagnostics;
+  const codes = (src: string): string => diags(src).map((d) => `${d.severity}:${d.code}`).join(',');
+  const failure = (src: string): string => {
+    try { parse(src); return ''; } catch (e) { return e instanceof Error ? e.message : String(e); }
+  };
+  const entity = (doc: XDbmlDocument, name: string): EntityDeclaration =>
+    doc.statements.find((s) => s.kind === 'EntityDeclaration' && s.name === name) as EntityDeclaration;
+
+  /* ---- §24.5, §18.1: x- custom properties ---- */
+
+  check('§24.5: isCustomPropertyName reads x_ and x-, and nothing else', () => {
+    const yes = ['x_owner', 'x-hackolade-id', 'x-a'];
+    const no = ['owner', 'xowner', 'x', 'hackolade-id', 'note'];
+    const bad = [...yes.filter((n) => !isCustomPropertyName(n)), ...no.filter((n) => isCustomPropertyName(n))];
+    return bad.length ? bad.join('; ') : undefined;
+  });
+  check('§18.1: a diagram view takes a quoted x- custom property, as it takes x_', () => {
+    const got = codes(`xdbml: 0.7
+Table a { id int [pk] }
+DiagramView "Customers and Vehicles" ["x-hackolade-id": 'Customers and Vehicles-1', x_owner: 'ops'] { Tables { a } }`);
+    return got === '' ? undefined : got;
+  });
+  check('§18.1: a diagram view takes an unprefixed key, quoted or not, as a TableGroup does', () => {
+    const got = codes(`xdbml: 0.7
+Table a { id int [pk] }
+TableGroup g [owner: 'ops', "hackolade-id": 'x'] { a }
+DiagramView v1 [owner: 'ops'] { Tables { a } }
+DiagramView v2 ["hackolade-id": 'x', color: '#fff'] { Tables { a } }`);
+    return got === '' ? undefined : got;
+  });
+  check('§24.7.3: a Metadata DiagramView block applies x-, x_ and unprefixed custom properties', () => {
+    const src = `xdbml: 0.7
+Table a { id int [pk] }
+DiagramView v { Tables { a } }
+Metadata DiagramView v {
+  "x-hackolade-id": 'v-1'
+  x_team: 'core'
+  owner: 'ops'
+}`;
+    const got = codes(src);
+    if (got !== '') return got;
+    const applied = metadataIndex(flatten(parse(src))).diagramView('v').map((a) => a.setting.name).join(',');
+    return applied === 'x-hackolade-id,x_team,owner' ? undefined : `applied: ${applied}`;
+  });
+  check('§24.7.3: a color in a Metadata DiagramView block reads as a custom property, with a warning, as on a Column', () => {
+    const got = codes(`xdbml: 0.7
+Table a { id int [pk] }
+DiagramView v { Tables { a } }
+Metadata DiagramView v { color: '#fff' }`);
+    return got === 'warning:metadata-custom-property' ? undefined : got;
+  });
+  check('Monarch colors a quoted x- key as a custom property, and only before a colon', () => {
+    const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .find((r) => Array.isArray(r) && r[0] instanceof RegExp && r[0].source.startsWith('"x-'));
+    if (!rule) return 'rule missing';
+    const re = new RegExp(`^(?:${rule[0].source})`);
+    const yes = ['"x-hackolade-id": \'a\'', '"x-a" :'];
+    const no = ['"x-a" int', '"y-a": 1'];
+    const bad = [...yes.filter((t) => !re.test(t)), ...no.filter((t) => re.test(t))];
+    return bad.length ? bad.join('; ') : undefined;
+  });
+
+  /* ---- §7.5: color, the header color of an entity ---- */
+
+  check('§7.5: in a document that declares a version, color on an entity reads as headercolor', () => {
+    const doc = parse(`xdbml: 0.7
+Entity a [color: #3498DB] { id int [pk] }`);
+    const s = entity(doc, 'a').settings[0];
+    return s.name === 'headercolor' && s.nameSource === 'color' ? undefined : `${s.name}/${s.nameSource}`;
+  });
+  check('§7.5: without a version declaration, color on a Table stays a custom property, as in DBML 10.3.1', () => {
+    const doc = parse('Table a [color: #3498DB] { id int [pk] }');
+    const s = entity(doc, 'a').settings[0];
+    if (s.name !== 'color') return s.name;
+    return effectiveHeaderColor(entity(doc, 'a'), tablePartials(doc)) ? 'a header color applied' : undefined;
+  });
+  check('§7.5: headercolor reads the same in every document', () => {
+    for (const head of ['', 'xdbml: 0.6\n', 'xdbml: 0.7.1\n']) {
+      const s = entity(parse(`${head}Table a [headercolor: #111] { id int }`), 'a').settings[0];
+      if (s.name !== 'headercolor') return `${JSON.stringify(head)}: ${s.name}`;
+    }
+    return undefined;
+  });
+  check('§7.5: color on a View and on an EntityPartial is the header color; on a TableGroup it stays color', () => {
+    const doc = parse(`xdbml: 0.7
+Table t { id int [pk] }
+View v [color: #111] { id int }
+EntityPartial p [color: #222] { x int }
+Entity e { ~p
+  id int [pk] }
+TableGroup g [color: #333] { t }`);
+    const view = doc.statements.find((s) => s.kind === 'ViewDeclaration')!.settings[0].name;
+    const carried = effectiveHeaderColor(entity(doc, 'e'), tablePartials(doc));
+    const group = doc.statements.find((s) => s.kind === 'TableGroupDeclaration')!.settings[0].name;
+    const got = `${view},${carried ? settingValueText(carried.value) : '-'},${group}`;
+    return got === 'headercolor,#222,color' ? undefined : got;
+  });
+  check('§7.5, §24.5: color and headercolor in one list draw duplicate-setting; the first applies', () => {
+    const src = 'xdbml: 0.7\nEntity a [color: #111, headercolor: #222] { id int }';
+    const d = diags(src).filter((x) => x.code === 'duplicate-setting');
+    if (d.length !== 1 || !/header color/.test(d[0].message)) return d.map((x) => x.message).join(' | ') || 'none';
+    const doc = parse(src);
+    const c = effectiveHeaderColor(entity(doc, 'a'), tablePartials(doc));
+    return c && settingValueText(c.value) === '#111' ? undefined : 'second applied';
+  });
+  check('§7.5: without a version, color and headercolor on a Table are two settings', () => {
+    const got = codes('Table a [color: #111, headercolor: #222] { id int }');
+    return got === '' ? undefined : got;
+  });
+  check('§24.7.3: color in a Metadata Table block of a versioned document sets the header color', () => {
+    const src = `xdbml: 0.7
+Table a [headercolor: #111] { id int [pk] }
+Metadata Entity a { color: #222 }`;
+    const got = codes(src);
+    if (got !== 'warning:metadata-override') return got;
+    const applied = metadataIndex(flatten(parse(src))).entity('a').map((a) => `${a.setting.name}=${settingValueText(a.setting.value)}`).join(',');
+    return applied === 'headercolor=#222' ? undefined : applied;
+  });
+  check('§24.7.3: color and headercolor in one Metadata block are one setting written twice', () => {
+    const d = diags(`xdbml: 0.7
+Table a { id int [pk] }
+Metadata Table a {
+  color: #111
+  headercolor: #222
+}`).filter((x) => x.code === 'duplicate-metadata-setting');
+    return d.length === 1 && /header color/.test(d[0].message) ? undefined : d.map((x) => x.message).join(' | ') || 'none';
+  });
+  check('§24.7.3: without a version, color in a Metadata Table block is a custom property, with a warning naming both words', () => {
+    const d = diags(`Table a { id int [pk] }
+Metadata Table a { color: #111 }`).filter((x) => x.code === 'metadata-custom-property');
+    return d.length === 1 && /'headercolor', or as 'color'/.test(d[0].message) ? undefined : d.map((x) => x.message).join(' | ') || 'none';
+  });
+  check('§7.5: an imported file keeps its own reading of color', () => {
+    const files: Record<string, string> = {
+      '/p/dbml.dbml': 'Table d [color: #111] { id int }',
+      '/p/x.xdbml': 'xdbml: 0.7\nTable x [color: #222] { id int }',
+    };
+    const doc = flatten(parse("xdbml: 0.7\nuse * from './dbml'\nuse * from './x'", {
+      filePath: '/p/main.xdbml',
+      readFile: (k: string) => { if (k in files) return files[k]; throw new Error(`not found: ${k}`); },
+    }));
+    const got = ['d', 'x'].map((n) => entity(doc, n).settings[0].name).join(',');
+    return got === 'color,headercolor' ? undefined : got;
+  });
+
+  /* ---- §17: EntityPartial and EntityGroup ---- */
+
+  check('§17.1: EntityPartial injects its fields, its header color and its note, as TablePartial does', () => {
+    const doc = parse(`xdbml: 0.7
+EntityPartial audit [color: #F1C40F, note: 'Audited'] {
+  created_at timestamp
+}
+Entity orders {
+  id int [pk]
+  ~audit
+}`);
+    const e = entity(doc, 'orders');
+    const fields = effectiveFields(e, tablePartials(doc)).map((f) => f.field.name).join(',');
+    const color = effectiveHeaderColor(e, tablePartials(doc));
+    const note = effectiveNote(e, tablePartials(doc))?.body;
+    const kw = (doc.statements.find((s) => s.kind === 'TablePartialDeclaration') as { keyword: string }).keyword;
+    const got = `${kw}|${fields}|${color ? settingValueText(color.value) : '-'}|${note}`;
+    return got === 'EntityPartial|id,created_at|#F1C40F|Audited' && codes(`xdbml: 0.7\nEntityPartial p { x int }\nEntity e { ~p }`) === ''
+      ? undefined : got;
+  });
+  check('§17.2: EntityGroup groups entities, with its keyword kept; TableGroup keeps its own', () => {
+    const doc = parse(`xdbml: 0.7
+Entity a { id int [pk] }
+Entity b { id int [pk] }
+EntityGroup g1 [color: '#3498DB'] { a }
+tablegroup g2 { b }`);
+    const groups = doc.statements.filter((s) => s.kind === 'TableGroupDeclaration').map((s) => `${(s as { keyword: string }).keyword}:${(s as { members: string[] }).members.join('+')}`).join(',');
+    return groups === 'EntityGroup:a,TableGroup:b' && resolveNames(doc).diagnostics.length === 0 ? undefined : groups;
+  });
+  check('§17: EntityPartial and EntityGroup parse without a version declaration, as Entity does', () => {
+    const got = codes('EntityPartial p { x int }\nEntity e { id int [pk]\n ~p }\nEntityGroup g { e }');
+    return got === '' ? undefined : got;
+  });
+  check('§17: diagnostics name the keyword as written', () => {
+    const group = diags('xdbml: 0.7\nEntityGroup g { missing }').find((d) => d.code === 'unresolved-tablegroup-member')?.message ?? '';
+    const tgroup = diags('TableGroup g { missing }').find((d) => d.code === 'unresolved-tablegroup-member')?.message ?? '';
+    const inj = diags('xdbml: 0.7\nEntityPartial a { ~b\n x int }\nEntityPartial b { y int }').find((d) => d.code === 'partial-injection-in-partial')?.message ?? '';
+    const ok1 = group.startsWith("EntityGroup member 'missing'") && tgroup.startsWith("TableGroup member 'missing'") && inj.startsWith("EntityPartial 'a'");
+    return ok1 ? undefined : [group, tgroup, inj].join(' | ');
+  });
+  check('§15.5: an EntityPartial shares the namespace of entities, named as an EntityPartial', () => {
+    const d = diags('xdbml: 0.7\nEntityPartial a { x int }\nEntity a { id int }').find((x) => x.code === 'name-collision');
+    return d && /an EntityPartial/.test(d.message) ? undefined : d?.message ?? 'no diagnostic';
+  });
+  check('§28.3: entitypartial and entitygroup import as tablepartial and tablegroup do', () => {
+    const files: Record<string, string> = {
+      '/p/lib.xdbml': 'xdbml: 0.7\nEntityPartial audit { created_at timestamp }\nEntity a { id int [pk] }\nEntityGroup g { a }',
+    };
+    const doc = flatten(parse("xdbml: 0.7\nuse { entitypartial audit\n entitygroup g\n entity a } from './lib'\nEntity e { id int [pk]\n ~audit }", {
+      filePath: '/p/main.xdbml',
+      readFile: (k: string) => { if (k in files) return files[k]; throw new Error(`not found: ${k}`); },
+    }));
+    const kinds = doc.statements.map((s) => s.kind).filter((k) => k === 'TablePartialDeclaration' || k === 'TableGroupDeclaration').sort().join(',');
+    const fields = effectiveFields(entity(doc, 'e'), tablePartials(doc)).map((f) => f.field.name).join(',');
+    return kinds === 'TableGroupDeclaration,TablePartialDeclaration' && fields === 'id,created_at' ? undefined : `${kinds} / ${fields}`;
+  });
+  check('§24.7.1: Metadata EntityGroup targets a group in a document declaring 0.7, and needs that version', () => {
+    const ok7 = codes("xdbml: 0.7\nTable a { id int }\nEntityGroup g { a }\nMetadata EntityGroup g { note: 'x' }");
+    const dbml = codes("Table a { id int }\nTableGroup g { a }\nMetadata EntityGroup g { note: 'x' }");
+    return ok7 === '' && dbml === 'error:construct-requires-version' ? undefined : `${ok7} / ${dbml}`;
+  });
+
+  /* ---- §18.1: Entities and EntityGroups ---- */
+
+  check('§18.1: Entities and EntityGroups list what Tables and TableGroups list', () => {
+    const src = `xdbml: 0.7
+Entity a { id int [pk] }
+Entity b { id int [pk] }
+Entity c { id int [pk] }
+EntityGroup g { b }
+DiagramView v {
+  Entities { a }
+  EntityGroups { g }
+}`;
+    const doc = parse(src);
+    const m = diagramViewMembers(doc, 'v');
+    const got = m ? [...m.entities].sort().join(',') : 'none';
+    const cats = (doc.statements.find((s) => s.kind === 'DiagramViewDeclaration') as { categories: { category: string; keyword: string }[] })
+      .categories.map((c) => `${c.keyword}>${c.category}`).join(',');
+    return got === 'a,b' && cats === 'Entities>Tables,EntityGroups>TableGroups' && codes(src) === '' ? undefined : `${got} / ${cats} / ${codes(src)}`;
+  });
+  check('§18.1: Entities and Tables in one diagram view are one category written twice', () => {
+    const d = diags('xdbml: 0.7\nTable a { id int }\nDiagramView v {\n Entities { a }\n Tables { a }\n}').filter((x) => x.code === 'duplicate-diagram-view-category');
+    return d.length === 1 && /Tables is the DBML name of Entities/.test(d[0].message) ? undefined : d.map((x) => x.message).join(' | ') || 'none';
+  });
+  check('§18.5: Entities and EntityGroups need a version declaration; Tables and TableGroups do not', () => {
+    const xd = codes('Table a { id int }\nTableGroup g { a }\nDiagramView v {\n Entities { a }\n EntityGroups { g }\n}');
+    const dbml = codes('Table a { id int }\nTableGroup g { a }\nDiagramView v {\n Tables { a }\n TableGroups { g }\n}');
+    return xd === 'error:construct-requires-version,error:construct-requires-version' && dbml === '' ? undefined : `${xd} / ${dbml}`;
+  });
+  check('§18.3: a wrong category points to the xDBML name in a versioned document', () => {
+    const d = diags('xdbml: 0.7\nTable a { id int }\nEntityGroup g { a }\nDiagramView v { Entities { g } }').find((x) => x.code === 'diagram-view-wrong-category');
+    return d && /an EntityGroup: list it under EntityGroups/.test(d.message) ? undefined : d?.message ?? 'none';
+  });
+  check('§17, §18.1: the parse error for an unknown category lists the new names', () => {
+    const m = failure('xdbml: 0.7\nDiagramView v { Things { a } }');
+    return /Entities \(or Tables\)/.test(m) && /EntityGroups \(or TableGroups\)/.test(m) ? undefined : m;
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -7083,6 +7352,7 @@ function main (): void {
   const noteTests = runV07StickyNoteTests();
   const lineageTests = runV07LineageTests();
   const specifierTests = runV07ModuleSpecifierTests();
+  const v071Tests = runV071Tests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -7098,9 +7368,10 @@ function main (): void {
   const nr = report('v0.7 sticky notes and the note of the project (spec §19)', noteTests);
   const lr = report('v0.7 data lineage (spec §27)', lineageTests);
   const sr = report('v0.7 module specifiers (spec §28.13)', specifierTests);
+  const v71 = report('v0.7.1 x- custom properties, color, EntityPartial and EntityGroup (spec §24.5, §7.5, §17)', v071Tests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + v71.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + v71.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

@@ -591,11 +591,21 @@ export interface KeyConstraintEntry {
 }
 
 /* -------------------------------------------------------------------------
- * Table Partial / Table Group
+ * EntityPartial / EntityGroup (spec §17)
+ *
+ * `EntityPartial` and `EntityGroup` are the xDBML keywords (v0.7.1);
+ * `TablePartial` and `TableGroup`, the DBML keywords, are their aliases.
+ * The node kinds keep the DBML names, and `keyword` records the word as
+ * written, in its canonical casing.
  * ----------------------------------------------------------------------- */
+
+export type PartialKeyword = 'EntityPartial' | 'TablePartial';
+export type GroupKeyword = 'EntityGroup' | 'TableGroup';
 
 export interface TablePartialDeclaration {
   kind: 'TablePartialDeclaration';
+  /** The keyword as written: `EntityPartial`, or its DBML alias `TablePartial`. */
+  keyword: PartialKeyword;
   name: string;
   settings: Setting[];
   body: EntityBodyItem[];
@@ -604,6 +614,8 @@ export interface TablePartialDeclaration {
 
 export interface TableGroupDeclaration {
   kind: 'TableGroupDeclaration';
+  /** The keyword as written: `EntityGroup`, or its DBML alias `TableGroup`. */
+  keyword: GroupKeyword;
   name: string;
   settings: Setting[];
   members: string[];
@@ -649,9 +661,12 @@ export interface SupertypeGroupMember {
  *   }
  *
  * `{ * }` as the whole body lists every element of every category. The AST
- * keeps the category keyword as written (`Schemas`, `tables`) next to its
- * canonical name (`Containers`, `Tables`); names stay unresolved strings,
- * and `diagramViewMembers()` resolves them (spec §18.2, §18.3, §29.8).
+ * keeps the category keyword as written (`Schemas`, `tables`, `Entities`)
+ * next to the name of its category (`Containers`, `Tables`); names stay
+ * unresolved strings, and `diagramViewMembers()` resolves them (spec
+ * §18.2, §18.3, §29.8). The category names `Tables` and `TableGroups`
+ * stand for `Entities` and `EntityGroups` as well (v0.7.1), as the node
+ * kinds of §17 keep their DBML names.
  * ----------------------------------------------------------------------- */
 
 export type DiagramViewCategoryName =
@@ -665,7 +680,7 @@ export type DiagramViewCategoryName =
 export interface DiagramViewDeclaration {
   kind: 'DiagramViewDeclaration';
   name: string;
-  /** Bracket settings: `note` and custom `x_` properties (spec §18.1). */
+  /** Bracket settings: `note`, and custom properties of any name (spec §18.1, §24.5). */
   settings: Setting[];
   /** `Note:` / `Note { }` elements of the body. `diagramViewNote()` gives the note. */
   notes: NoteBlock[];
@@ -677,7 +692,10 @@ export interface DiagramViewDeclaration {
 
 export interface DiagramViewCategory {
   kind: 'DiagramViewCategory';
-  /** Canonical category: `Schemas` reads as `Containers`. */
+  /**
+   * The category: `Schemas` reads as `Containers`; `Entities` and
+   * `EntityGroups` read as `Tables` and `TableGroups`.
+   */
   category: DiagramViewCategoryName;
   /** The keyword as written, for round trips and the DBML-form check of §18.5. */
   keyword: string;
@@ -1070,7 +1088,14 @@ export interface CloneBlock {
 
 export interface Setting {
   kind: 'Setting';
-  /** Setting name, lowercased for canonical comparison. Source casing is preserved in `nameSource`. */
+  /**
+   * Setting name, lowercased for canonical comparison. Source casing is
+   * preserved in `nameSource`. Two words read as one name: `required` is
+   * `not null` (spec §8), and in a document that declares a version,
+   * `color` on an entity, a View or an EntityPartial, and in a
+   * `Metadata Table` or `Metadata View` block, is `headercolor`, the
+   * header color (spec §7.5, v0.7.1).
+   */
   name: string;
   nameSource: string;
   /** Value, if any. A pure flag like `pk` has `value: null`. */

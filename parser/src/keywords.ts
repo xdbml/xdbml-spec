@@ -57,8 +57,9 @@ export const ENTITY_KEYWORDS = [
 /**
  * The words that name the kind of element a `Metadata` block targets
  * (spec §24.7, v0.7). DBML defines `table`, `column`, `tablegroup` and
- * `note`; xDBML adds the entity synonyms, `field`, `view`, `diagramview`,
- * and `container` with its synonyms, in documents that declare a version.
+ * `note`; xDBML adds the entity synonyms, `field`, `entitygroup` (v0.7.1),
+ * `view`, `diagramview`, and `container` with its synonyms, in documents
+ * that declare a version.
  */
 export const METADATA_TARGET_KINDS = [
   'table',
@@ -69,6 +70,7 @@ export const METADATA_TARGET_KINDS = [
   'collection',
   'record',
   'field',
+  'entitygroup',
   'view',
   'diagramview',
   ...CONTAINER_KEYWORDS,
@@ -88,7 +90,9 @@ export const DECLARATION_KEYWORDS = [
   'enum',
   'ref',
   'note',
+  'entitypartial',     // v0.7.1 §17: the xDBML keyword; `tablepartial` is the DBML alias
   'tablepartial',
+  'entitygroup',       // v0.7.1 §17: the xDBML keyword; `tablegroup` is the DBML alias
   'tablegroup',
   'supertypegroup',
   'diagramview',
@@ -210,15 +214,18 @@ export const BLOCK_KEYWORDS = ['indexes', 'checks', 'constraints', 'records', 'd
  * DiagramView categories (spec §18.1, v0.6.3)
  *
  * The words that open a category inside a DiagramView body. `schemas` is
- * the DBML name of `containers`. Both highlighters color them only when `{`
- * follows, since an entity or a field may carry one of these names.
+ * the DBML name of `containers`, and `tables` and `tablegroups` those of
+ * `entities` and `entitygroups` (v0.7.1). Both highlighters color them only
+ * when `{` follows, since an entity or a field may carry one of these names.
  * ----------------------------------------------------------------------- */
 
 export const DIAGRAM_VIEW_CATEGORIES = [
+  'entities',
   'tables',
   'views',
   'containers',
   'schemas',
+  'entitygroups',
   'tablegroups',
   'supertypegroups',
   'notes',

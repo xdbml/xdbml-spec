@@ -137,7 +137,7 @@
     },
 
     "diagram-view-categories": {
-      "comment": "The categories of a DiagramView body (Tables, Views, Containers or Schemas, TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",
+      "comment": "The categories of a DiagramView body (Entities or Tables, Views, Containers or Schemas, EntityGroups or TableGroups, SupertypeGroups, Notes; spec 18.1). Matched only before '{', so an entity or a field may still carry one of these names.",
       "name": "keyword.declaration.category.xdbml",
       "match": "\\b((?i:__DIAGRAM_VIEW_CATEGORIES__))\\b(?=\\s*\\{)"
     },
@@ -154,6 +154,12 @@
       "match": "\\b(x[_-][A-Za-z_][A-Za-z0-9_]*)\\b"
     },
 
+    "x-quoted-properties": {
+      "comment": "A quoted setting key with the `x-` prefix, \"x-hackolade-id\", is a custom property as an `x_` key is (spec 24.5, v0.7.1). Matched only before ':', ahead of the strings, which would read it as a quoted identifier.",
+      "name": "support.other.x-property.xdbml",
+      "match": "\"x-[^\"\\\\]*\"(?=\\s*:)"
+    },
+
     "settings-block": {
       "comment": "Square-bracket settings block. Inside, we recognize flag settings, keyed settings, ordinary string/number values, and cardinality operators (>, <, -) for Ref-style settings.",
       "begin": "\\[",
@@ -167,6 +173,7 @@
       "patterns": [
         { "include": "#comments" },
         { "include": "#cardinality-strings" },
+        { "include": "#x-quoted-properties" },
         { "include": "#strings" },
         { "include": "#numbers" },
         { "include": "#constants" },

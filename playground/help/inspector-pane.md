@@ -60,7 +60,7 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - Type: short label plus an expandable structural breakdown for compound types (objects, arrays, oneOf, etc.)
 - Flags: badges for PRIMARY KEY, UNIQUE, REQUIRED, and AUTO-INCREMENT when present
 - Settings: regular settings (default values, regex patterns, length constraints, etc.)
-- Custom properties: anything starting with `x_` shown in a separate section, since these are the AI-readiness extension point
+- Custom properties: anything starting with `x_`, or with `x-` in a quoted key such as `"x-hackolade-id"`, shown in a separate section, since these are the AI-readiness extension point
 - Note: the field's `Note: '...'` body if present
 
 **Relationship inspector** shows:

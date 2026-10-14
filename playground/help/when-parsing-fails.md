@@ -77,9 +77,9 @@ A few patterns to recognize quickly:
 
 **Commas between items**: a comma or a semicolon between fields, enum values and the other items of a body is accepted and ignored, as is a trailing comma in a settings list such as `[pk, not null,]`. The exception is `indexes`: write one index per line, and a composite index in parentheses, as in `(email, name)`.
 
-**A setting in a body**: `materialized: true` inside a View body, or `headercolor: '#3498DB'` inside a Table body. Settings go in the brackets after the name, as in `View monthly_revenue [materialized: true] { ... }`; the error message names the declaration and shows where the setting goes.
+**A setting in a body**: `materialized: true` inside a View body, or `color: '#3498DB'` inside an Entity body. Settings go in the brackets after the name, as in `View monthly_revenue [materialized: true] { ... }`; the error message names the declaration and shows where the setting goes.
 
-**A diagram view category the parser does not know**: a `DiagramView` lists `Tables`, `Views`, `Containers` (or `Schemas`), `TableGroups`, `SupertypeGroups` and `Notes`. `Edges` is not one: an Edge, like a relationship, appears in a diagram view when both of its ends do. A `DiagramView` also stays at the top level of the document, never inside a Container. See [**Diagram views**](./diagram-views).
+**A diagram view category the parser does not know**: a `DiagramView` lists `Entities` (or `Tables`), `Views`, `Containers` (or `Schemas`), `EntityGroups` (or `TableGroups`), `SupertypeGroups` and `Notes`. `Edges` is not one: an Edge, like a relationship, appears in a diagram view when both of its ends do. A `DiagramView` also stays at the top level of the document, never inside a Container. See [**Diagram views**](./diagram-views).
 
 **Mixed quote types**: xDBML accepts single quotes (`'foo'`) and backticks (`` `bar` ``) for strings; double quotes are not a primary string delimiter. Switch to single quotes if double quotes don't parse.
 

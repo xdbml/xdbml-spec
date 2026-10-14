@@ -227,6 +227,10 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
       // Triple-quoted multi-line strings -- must precede single-quoted
       [/'''/, { token: 'string.multiline', next: '@multilineString' }],
 
+      // Spec §24.5 (v0.7.1): a quoted setting key with the `x-` prefix is a
+      // custom property, as `x_` is: `"x-hackolade-id": '...'`.
+      [/"x-[^"\\]*"(?=\s*:)/, 'identifier.custom-property'],
+
       // Quoted identifiers (double-quote)
       [/"/, { token: 'string.quoted-ident', next: '@quotedIdent' }],
 

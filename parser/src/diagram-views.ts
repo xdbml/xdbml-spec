@@ -231,6 +231,25 @@ const KIND_LABEL: Record<ElementKind, string> = {
   edge: 'an Edge',
 };
 
+/** The label of a kind in a message: an EntityGroup in a document that declares a version (§17.2, v0.7.1). */
+function kindLabel (kind: ElementKind, declared: boolean): string {
+  return kind === 'tablegroup' && declared ? 'an EntityGroup' : KIND_LABEL[kind];
+}
+
+/** The DBML name of a category, when it has another name in xDBML. */
+const DBML_CATEGORY_WORD: Partial<Record<DiagramViewCategoryName, string>> = {
+  Tables: 'Tables',
+  TableGroups: 'TableGroups',
+  Containers: 'Schemas',
+};
+
+/** The xDBML name of a category (§18.1): Entities and EntityGroups for Tables and TableGroups. */
+function xdbmlCategoryWord (category: DiagramViewCategoryName): string {
+  if (category === 'Tables') return 'Entities';
+  if (category === 'TableGroups') return 'EntityGroups';
+  return category;
+}
+
 type Resolution =
   | { ok: true; id: string }
   | { ok: false; reason: 'unresolved' }
@@ -396,24 +415,16 @@ export function checkDiagramViews (doc: XDbmlDocument): Diagnostic[] {
     }
     seen.add(view.name);
 
-    // §18.1: the brackets take `note` and custom properties only.
-    for (const setting of view.settings) {
-      if (setting.name === 'note' || setting.name.startsWith('x_')) continue;
-      diagnostics.push({
-        severity: 'error',
-        code: 'unknown-diagram-view-setting',
-        message: `Diagram view '${view.name}' writes the setting '${setting.nameSource}'. A diagram view takes ` +
-          'a note and custom x_ properties in its brackets, and no other setting (spec §18.1).',
-        span: setting.span,
-      });
-    }
+    // §18.1 (v0.7.1): the brackets take `note`, and every other key is a
+    // custom property, as on every other element (§24.5). Before v0.7.1 a
+    // key without the `x_` prefix drew unknown-diagram-view-setting.
     // §18.5: a note and the brackets are xDBML extensions.
     if (!declared && (view.settings.length > 0 || view.notes.length > 0)) {
       diagnostics.push({
         severity: 'error',
         code: 'construct-requires-version',
         message: `Diagram view '${view.name}' carries a note or settings, an xDBML extension that needs a ` +
-          'version declaration such as xdbml: 0.6 at the top of the document (spec §18.5).',
+          'version declaration such as xdbml: 0.7 at the top of the document (spec §18.5).',
         span: (view.settings[0] ?? view.notes[0]).span,
       });
     }
@@ -429,22 +440,25 @@ export function checkDiagramViews (doc: XDbmlDocument): Diagnostic[] {
           message: same
             ? `Diagram view '${view.name}' writes ${c.keyword} twice. Write each category once (spec §18.1).`
             : `Diagram view '${view.name}' writes both ${first.keyword} and ${c.keyword}, which are one ` +
-              'category: Schemas is the DBML name of Containers (spec §18.1).',
+              `category: ${DBML_CATEGORY_WORD[c.category]} is the DBML name of ${xdbmlCategoryWord(c.category)} (spec §18.1).`,
           span: c.span,
         });
       } else {
         written.set(c.category, c);
       }
 
-      // §18.5: Containers, Views and SupertypeGroups are xDBML extensions.
-      if (!declared && c.keyword.toLowerCase() !== 'schemas'
-        && (c.category === 'Containers' || c.category === 'Views' || c.category === 'SupertypeGroups')) {
+      // §18.5: Containers, Views and SupertypeGroups are xDBML extensions,
+      // and so are the names Entities and EntityGroups (v0.7.1).
+      const word = c.keyword.toLowerCase();
+      if (!declared && (word === 'containers' || word === 'views' || word === 'supertypegroups'
+        || word === 'entities' || word === 'entitygroups')) {
+        const dbml = DBML_CATEGORY_WORD[c.category];
         diagnostics.push({
           severity: 'error',
           code: 'construct-requires-version',
           message: `The ${c.keyword} category of a diagram view is an xDBML extension and needs a version ` +
-            'declaration such as xdbml: 0.6 at the top of the document' +
-            (c.category === 'Containers' ? ', or the DBML name Schemas' : '') + ' (spec §18.5).',
+            'declaration such as xdbml: 0.7 at the top of the document' +
+            (dbml ? `, or the DBML name ${dbml}` : '') + ' (spec §18.5).',
           span: c.span,
         });
       }
@@ -466,9 +480,9 @@ export function checkDiagramViews (doc: XDbmlDocument): Diagnostic[] {
           diagnostics.push({
             severity: 'error',
             code: 'diagram-view-wrong-category',
-            message: `'${item.name}' under ${c.keyword} is ${KIND_LABEL[r.kind]}` +
+            message: `'${item.name}' under ${c.keyword} is ${kindLabel(r.kind, declared)}` +
               (right
-                ? `: list it under ${right} (spec §18.3).`
+                ? `: list it under ${declared ? xdbmlCategoryWord(right) : right} (spec §18.3).`
                 : ', which appears in a diagram view when both of its ends do and is never listed (spec §18.1, §18.4).'),
             span: item.span,
           });
@@ -476,7 +490,7 @@ export function checkDiagramViews (doc: XDbmlDocument): Diagnostic[] {
           diagnostics.push({
             severity: 'error',
             code: 'unresolved-diagram-view-name',
-            message: `'${item.name}' under ${c.keyword} matches no ${KIND_LABEL[CATEGORY_KIND[c.category]].replace(/^an? /, '')} ` +
+            message: `'${item.name}' under ${c.keyword} matches no ${kindLabel(CATEGORY_KIND[c.category], declared).replace(/^an? /, '')} ` +
               'in the project (spec §18.3).',
             span: item.span,
           });

@@ -5,7 +5,7 @@ description: How to show a diagram view, what it draws, and what it keeps of its
 
 # Diagram views
 
-A large model is easier to read one subject at a time. A diagram view is a named subset of the model's diagram, known in other data modeling tools as a subject area or a sub-model. It lists the entities to show, directly or through the Containers, TableGroups and supertype groups that hold them, and the playground draws them on a canvas of their own. Diagram views arrived with xDBML v0.6.3; the language side is in [spec §18](/spec/v0.6#_18-diagram-view-subject-areas-and-sub-models), and [example 16](/examples/16-diagram-views) has three of them.
+A large model is easier to read one subject at a time. A diagram view is a named subset of the model's diagram, known in other data modeling tools as a subject area or a sub-model. It lists the entities to show, directly or through the Containers, EntityGroups and supertype groups that hold them, and the playground draws them on a canvas of their own. Diagram views arrived with xDBML v0.6.3; the language side is in [spec §18](/spec/v0.6#_18-diagram-view-subject-areas-and-sub-models), and [example 16](/examples/16-diagram-views) has three of them.
 
 ::: screenshot
 **[Screenshot needed]**
@@ -30,11 +30,11 @@ A diagram view draws its members, as [spec §18.2](/spec/v0.6#_18-2-members) def
 
 An entity looks the same in every diagram view and in Main ERD, since a diagram view holds no copy of it. Its attributes, its badges and its `fk` or `dk` markers stay as they are, even when the entity at the other end of a relationship is not in the diagram view. Edit an entity in the editor and the change shows wherever the entity appears.
 
-Sticky notes and TableGroup frames are not drawn in the playground yet, in any diagram. A `Notes { ... }` list in a diagram view is checked, and has no visible effect for now.
+Sticky notes and EntityGroup frames are not drawn in the playground yet, in any diagram. A `Notes { ... }` list in a diagram view is checked, and has no visible effect for now.
 
 ## Inspecting a diagram view
 
-Click an empty area of the canvas while a diagram view is on display: the inspector shows its members, the Containers framed around them, its categories as written, its custom properties and its note. A diagram view takes a note in its brackets or in its body, as a TableGroup does:
+Click an empty area of the canvas while a diagram view is on display: the inspector shows its members, the Containers framed around them, its categories as written, its custom properties and its note. A diagram view takes a note in its brackets or in its body, as an EntityGroup does, and custom properties of any name in its brackets:
 
 ```xdbml
 DiagramView order_to_cash [note: 'From the order to its invoice and payment'] {

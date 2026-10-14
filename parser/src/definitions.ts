@@ -86,7 +86,7 @@ export function checkDefinitions (
     if (blocks.length === 0) return;
 
     if (decl.kind !== 'EntityDeclaration') {
-      const what = decl.kind === 'EdgeDeclaration' ? 'Edge' : 'TablePartial';
+      const what = decl.kind === 'EdgeDeclaration' ? 'Edge' : decl.keyword;
       for (const block of blocks) {
         diagnostics.push({
           severity: 'error',

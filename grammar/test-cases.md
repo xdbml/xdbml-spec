@@ -1,6 +1,6 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.7. Every case runs in the reference parser's test suite.
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.7.1. Every case runs in the reference parser's test suite.
 ---
 
 
@@ -3180,14 +3180,14 @@ DiagramView ordering_too {
 }
 ```
 
-### INVALID -- a setting other than note or a custom property (unknown-diagram-view-setting, §18.1)
+### VALID -- any key other than note is a custom property, prefixed or not, as on a TableGroup (§18.1, v0.7.1)
 
 ```
 xdbml: 0.6
 
 Table orders { id int [pk] }
 
-DiagramView ordering [color: '#3498DB'] {
+DiagramView ordering [owner: 'sales-ops', "x-hackolade-id": 'ordering-4'] {
   Tables { orders }
 }
 ```
@@ -3416,6 +3416,136 @@ Entity trees {
   id   string [not null]
   root root
 }
+```
+
+## v0.7.1 -- EntityPartial and EntityGroup, color, x- custom properties
+
+### VALID -- EntityPartial and EntityGroup, with TablePartial and TableGroup as aliases (§17)
+
+```
+xdbml: 0.7.1
+
+EntityPartial audit [color: '#F1C40F'] {
+  created_at timestamp
+}
+
+TablePartial versioned {
+  version int
+}
+
+Entity orders {
+  id int [pk]
+  ~audit
+  ~versioned
+}
+
+Entity customers {
+  id int [pk]
+}
+
+EntityGroup commerce [color: '#3498DB'] {
+  orders
+}
+
+TableGroup crm {
+  customers
+}
+```
+
+### VALID -- Entities and EntityGroups in a diagram view (§18.1)
+
+```
+xdbml: 0.7.1
+
+Entity orders { id int [pk] }
+Entity customers { id int [pk] }
+
+EntityGroup crm { customers }
+
+DiagramView ordering {
+  Entities { orders }
+  EntityGroups { crm }
+}
+```
+
+### INVALID -- Entities and Tables in one diagram view (duplicate-diagram-view-category, §18.1)
+
+```
+xdbml: 0.7.1
+
+Entity orders { id int [pk] }
+
+DiagramView ordering {
+  Entities { orders }
+  Tables { orders }
+}
+```
+
+### INVALID -- Entities without a version declaration (construct-requires-version, §18.5)
+
+```
+Table orders { id int [pk] }
+
+DiagramView ordering {
+  Entities { orders }
+}
+```
+
+### VALID -- a quoted x- custom property on a diagram view, a TableGroup and an entity (§24.5, §18.1)
+
+```
+xdbml: 0.7.1
+
+Table orders ["x-hackolade-id": 'orders-1'] { id int [pk] }
+
+TableGroup billing [color: '#E74C3C', "x-hackolade-id": 'billing-2'] {
+  orders
+}
+
+DiagramView "Customers and Vehicles" ["x-hackolade-id": 'view-3', x_owner: 'ops'] {
+  Tables { orders }
+}
+```
+
+### VALID -- color sets the header color of an entity, a View and an EntityPartial (§7.5)
+
+```
+xdbml: 0.7.1
+
+Entity orders [color: '#3498DB'] { id int [pk] }
+
+View open_orders [color: '#2ECC71'] { id int }
+
+Metadata Entity orders {
+  note: 'Orders of the web shop'
+}
+```
+
+### VALID with a warning -- color and headercolor in one settings list (duplicate-setting, §7.5, §24.5)
+
+```
+xdbml: 0.7.1
+
+Entity orders [color: '#3498DB', headercolor: '#E74C3C'] { id int [pk] }
+```
+
+### INVALID -- color and headercolor in one Metadata block (duplicate-metadata-setting, §24.7.3)
+
+```
+xdbml: 0.7.1
+
+Entity orders { id int [pk] }
+
+Metadata Entity orders {
+  color: '#3498DB'
+  headercolor: '#E74C3C'
+}
+```
+
+### VALID -- color on a Table without a version declaration is a custom property, as in DBML (§7.5)
+
+```
+Table orders [color: #3498DB, headercolor: #E74C3C] { id int [pk] }
 ```
 
 ---

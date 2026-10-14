@@ -47,7 +47,7 @@ The consumer half of a multi-file example pair. A sales data mart that imports c
 //    - Container-scoped imports (§28.5): directives inside Container body
 //    - Scalar Named Types (§15.7): imported via `reuse { type Email, ... }`
 //    - Entity-level checks block (§10): `checks { `expr` [name: ...] }`
-//    - `color:` settings on TableGroups (§17.2)
+//    - `color:` settings on EntityGroups (§17.2)
 //
 //  NOTE: until the reference parser implements the above v0.2 features,
 //  this file will not parse cleanly in the playground. The test runner
@@ -337,7 +337,7 @@ reuse { type Address }
 //  Visualization
 // -----------------------------------------------------------------------------
 
-TableGroup sales_facts [
+EntityGroup sales_facts [
   color: '#1976d2',
   note: 'Local fact tables for the sales data product.'
 ] {
@@ -345,7 +345,7 @@ TableGroup sales_facts [
   fact_returns
 }
 
-TableGroup imported_dimensions [
+EntityGroup imported_dimensions [
   color: '#0a7d3f',
   note: 'Cloned from the conformed-dimensions library. Refreshed quarterly.'
 ] {

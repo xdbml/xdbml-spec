@@ -4,9 +4,49 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.7 -- 2026
+## v0.7.1 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A point release of the v0.7 draft on names and settings. Chapter 17 takes the keywords `EntityPartial` and `EntityGroup`, after the entity they work on, as `Entity` names what DBML calls a `Table`; `TablePartial` and `TableGroup`, the DBML keywords, stay as aliases, and a diagram view lists `Entities` and `EntityGroups` beside `Tables` and `TableGroups`. `color` sets the header color of an entity, a View and an EntityPartial in a document that declares a version, as it sets the color of every other element drawn as a shape, with `headercolor` as an alias. A quoted setting key with the `x-` prefix, `"x-hackolade-id"`, marks a custom property as an `x_` key does, and a diagram view takes custom properties of any name, as every other element does: before, `"x-hackolade-id"` passed on an EntityGroup and failed on a diagram view. Every document that parsed before still parses, with one exception listed below. Documents keep declaring `xdbml: 0.7`.
+
+### Changed
+
+#### Spec
+
+- **EntityPartial and EntityGroup (§17)**: chapter 17 becomes "EntityPartial and EntityGroup". `EntityPartial` and `EntityGroup` are the keywords; `TablePartial` and `TableGroup`, the DBML keywords, are aliases that declare the same element, read in every document. DBML 10.3.1 rejects both new words, so no DBML document reads differently. Tools that write xDBML write the new keywords in a document that declares a version (§17.3, which until now kept the DBML names without synonyms). The rest of the specification names the constructs by their new keywords.
+- **Diagram view categories (§18.1)**: `Entities` and `EntityGroups` list what `Tables` and `TableGroups` list; the DBML names are aliases, and an alias written beside the name it stands for is one category written twice. The new names are xDBML extensions, so a document without a version declaration writes the DBML names (§18.5, §18.6). The examples of chapter 18 use `Entities`.
+- **Custom properties on a diagram view (§18.1)**: the brackets take `note`, and every other key is a custom property, prefixed or not, as on an EntityGroup, an entity and a field; a `Metadata DiagramView` block does the same (§24.7.3). Until now a diagram view took the `x_` prefix only, and `unknown-diagram-view-setting` reported any other key. The rows of that condition leave the validation summaries of §18.6 and §24.7.6.
+- **Metadata kinds (§24.7.1)**: `EntityGroup` targets an EntityGroup, as `TableGroup` does, in a document declaring `xdbml: 0.7` or later.
+- **Module system (§28.3)**: the element types `entitypartial` and `entitygroup` import an EntityPartial and an EntityGroup, as `tablepartial` and `tablegroup` do.
+- **Header color (§7.5, §14.5, §17.1)**: `color` sets the header color of an entity, a View and an EntityPartial in a document that declares a version, with `headercolor`, the DBML name, as an alias. The two in one settings list are one setting written twice: a warning, and the first one applies (§24.5). In a `Metadata Table` or `Metadata View` block, `color` sets the header color too, and a block that writes both sets it twice, an error (§24.7.3). Without a version declaration, `color` on a `Table` stays a custom property, as DBML 10.3.1 reads it, and only `headercolor` sets the header color (Appendix D, item 13). §7.5 gains an example.
+- **Custom-property prefixes (§24.5)**: a quoted key with the `x-` prefix, `"x-hackolade-id"`, the form of the specification extensions of OpenAPI and AsyncAPI, marks a deliberate custom property as `x_` does. DBML rejects a quoted key, so the form belongs to xDBML.
+- **Reserved keywords (Appendix A)**, **AST representation (§29)** and **DBML compatibility (Appendix D, items 13 and 15)** list the new keywords, categories, kind and prefix.
+- **Grammar (`grammar/xDBML.g4`)**: `tablePartialDefinition` and `tableGroupDefinition` take `EntityPartial` and `EntityGroup`, `diagramViewCategoryKeyword` takes `Entities` and `EntityGroups`, and `metadataKind` takes `EntityGroup`; the comments state the `x-` prefix and the reading of `color`.
+
+#### Tooling
+
+- **`@xdbml/parse`**: reads `EntityPartial` and `EntityGroup` as `TablePartialDeclaration` and `TableGroupDeclaration` nodes, which gain a `keyword` field holding the word as written; reads `Entities` and `EntityGroups` as the categories `Tables` and `TableGroups`, with the keyword as written in `keyword`, as for `Schemas`; reads the Metadata kind `EntityGroup`, and the import element types `entitypartial` and `entitygroup`. In a document that declares a version, a `color` setting on an entity, a View or an EntityPartial, or in a `Metadata Table` or `Metadata View` block, gets the `name` `headercolor` and keeps `color` in `nameSource`, as `required` reads as `not null`, so every consumer, the renderer among them, reads one key. A diagram view and a `Metadata DiagramView` block take any custom property; the diagnostic code `unknown-diagram-view-setting` is no longer reported and stays in the `DiagnosticCode` type. Diagnostics name the keyword as written (`EntityGroup member 'x' does not resolve`), the duplicate-setting messages name both words when `color` and `headercolor` meet, and the messages of diagram views point to `Entities` and `EntityGroups` in a document that declares a version. New export: `isCustomPropertyName()`, true for an `x_` or an `x-` key. `@xdbml/parse` accepts documents declaring `xdbml: 0.7.1`.
+- **Playground**: the field inspector lists `x-` keys under Custom properties with `x_` keys, and labels a field received from a partial with the partial's keyword. The help pages on diagram views, Metadata blocks, the module system, the diagnostics panel, entity cards, the inspector and parse failures use the new keywords, categories and `color`.
+- **Highlighting**: Monarch and the TextMate grammar color `EntityPartial`, `EntityGroup`, the categories `Entities` and `EntityGroups`, `Metadata EntityGroup`, and a quoted `"x-..."` key before `:` as a custom property.
+- **VS Code extension 0.7.1**: the highlighting above.
+- **`llms.txt` and the MCP server**: write `EntityPartial`, `EntityGroup`, `Entities`, `EntityGroups` and `color` on an entity; custom properties may start with `x_`, or with `x-` in double quotes.
+- **Examples**: 09, 10 and 11 declare their groups with `EntityGroup`, and 16 lists its entities under `Entities`.
+- **Grammar corpus**: a v0.7.1 section on the new keywords, the categories, `color` and `headercolor`, and `x-` keys; the diagram view case with an unprefixed key moves from INVALID to VALID.
+
+### Not changed (compatibility)
+
+- Every document that parsed before parses, except the case below, and the DBML keywords keep working everywhere. The AST node kinds and the category names `Tables` and `TableGroups` stay as they were.
+- One reading changes: in a document that declares a version, `color` on an entity, a View or an EntityPartial was a custom property and is now the header color. A document without a version declaration reads it as before, as DBML 10.3.1 does.
+- One condition follows from it: a `Metadata Table` or `Metadata View` block of a document that declares a version and writes both `color` and `headercolor` sets the header color twice, an error, where `color` was a custom property with a warning.
+- A diagram view with a custom property other than an `x_` one, an error before, is now valid.
+
+---
+
+## v0.7 -- 2026
+
+**Status**: Draft -- superseded by v0.7.1
 **Released**: 2026-10-12
 
 Moves the DBML baseline from 3.13.6 to 10.3.1: a parser reads every construct DBML added in between, in every document, including one without a version declaration. Records: a column list on records inside a table, an `example` flag and empty fields; an entity holds one records block, as in DBML. Relationships: the `?` marks DBML added to its operators make an end optional, and the default inference of §11.8 now makes the parent end optional for a nullable foreign key, where its table had put the zero at the child end. Custom properties and `Metadata` blocks: xDBML reads DBML's custom properties in every document, and a `Metadata` block sets a note, a color and custom properties on an element declared elsewhere, in the same file or an imported one. Sticky notes: a named top-level `Note` is an annotation drawn on the diagram, its text rendered as Markdown, with DBML's `color` and custom properties; it may sit in a Container, which carries it on the canvas, and a top-level `Note` without a name is the note of the project. Data lineage: DBML's `Dep` records which entity, View or field is computed from which, in a short form, a block and an inline `dep` setting; xDBML reads it in every document, lets its ends name Views and nested fields, and gives it a chapter of its own, chapter 27. Module specifiers: as in DBML 10.3.1, `auth` reads as `./auth`, the host application may map a specifier such as `@shared/users` to a file, and an import without an extension falls back to a `.dbml` file. Every v0.6 document remains valid: in a document declaring v0.6 or an earlier version, a second records block draws a warning rather than an error, and a `dep` setting without an arrow stays a custom property, with a warning. Documents using the new rule declare `xdbml: 0.7`.

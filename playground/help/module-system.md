@@ -38,13 +38,13 @@ The three `dim_*` entities are declared once in `conformed-dimensions.xdbml` and
 
 Note that the source declares the dimensions inside its own `core` Container, but the importer pulls them into its `sales` Container. **Imported entities become members of whichever Container holds the directive**; the original Container wrapper does not carry over. The qualified path (`core.dim_customer`) in the directive identifies the source location; the entity itself becomes `sales.dim_customer` in the importer.
 
-### Parts of entities, via TablePartial
+### Parts of entities, via EntityPartial
 
-A **TablePartial** is xDBML's mixin construct: a named cluster of fields that any entity can splice into its body with `~PartialName`. Combined with the module system, partials let you share **parts** of entities across files -- a canonical audit-fields cluster, a soft-delete pattern, a multi-tenancy stamp.
+An **EntityPartial** (`TablePartial` in DBML) is xDBML's mixin construct: a named cluster of fields that any entity can splice into its body with `~PartialName`. Combined with the module system, partials let you share **parts** of entities across files -- a canonical audit-fields cluster, a soft-delete pattern, a multi-tenancy stamp.
 
 ```xdbml
 // In shared/audit.xdbml
-TablePartial audit_fields {
+EntityPartial audit_fields {
   created_at  timestamp [default: `now()`, not null]
   created_by  varchar
   updated_at  timestamp
@@ -54,7 +54,7 @@ TablePartial audit_fields {
 
 ```xdbml
 // In any consumer
-reuse { tablepartial audit_fields } from './shared/audit' { ... }
+reuse { entitypartial audit_fields } from './shared/audit' { ... }
 
 Entity orders {
   id           bigint [pk]
@@ -70,7 +70,7 @@ Entity products {
 }
 ```
 
-This is genuine sharing of common field clusters: if `audit_fields` gains a `tenant_id` later, every entity that splices it in gets the new field automatically. The TablePartial is the single source of truth for what an "audited entity" looks like across the organization.
+This is genuine sharing of common field clusters: if `audit_fields` gains a `tenant_id` later, every entity that splices it in gets the new field automatically. The EntityPartial is the single source of truth for what an "audited entity" looks like across the organization.
 
 ### Individual fields, via field-level imports
 
@@ -136,7 +136,7 @@ Entity employees {
 
 The canonical declaration ensures "email" means the same thing -- same pattern, same classification tag -- across every file that uses it.
 
-Beyond Types, you can also reuse Enums, Containers (with their entities), Edges, Views, TableGroups, and notes via the same directive. The full element-type vocabulary lives in [spec §26](/spec/v0.2#_26-module-system).
+Beyond Types, you can also reuse Enums, Containers (with their entities), Edges, Views, EntityGroups, and notes via the same directive. The full element-type vocabulary lives in [spec §26](/spec/v0.2#_26-module-system).
 
 ## The two directive forms
 
@@ -212,7 +212,7 @@ Now load `10-modules-consumer.xdbml`. The file declares a `sales` Container, the
 - **File-scope Type import**: `reuse { type Email, type CountryCode, type CurrencyCode, type PhoneE164 } from './09-modules-conformed-dimensions' { ... }` brings the canonical scalar types into the importer's namespace.
 - **File-scope field import**: `reuse { field core.dim_customer.engagement_score } from './09-modules-conformed-dimensions' { ... }` brings the engagement-score field's complete validation surface in as a usable type at file scope. The fact-sales entity then declares `engagement_at_sale engagement_score` to record the customer's score AT THE TIME of each sale -- the same shape, the same bounds, no re-declaration.
 
-The diagram shows the `sales` Container holding five entities: two locally-declared fact tables (`fact_sales`, `fact_returns`) plus the three cloned dimensions. The dimensions get a green TableGroup color from `imported_dimensions`; the fact tables get a blue color from `sales_facts`. Click any cloned entity in the diagram: the inspector shows its fields, settings, and notes -- exactly as if the entity had been declared in the consumer file directly.
+The diagram shows the `sales` Container holding five entities: two locally-declared fact tables (`fact_sales`, `fact_returns`) plus the three cloned dimensions. The dimensions get a green group color from `imported_dimensions`; the fact tables get a blue color from `sales_facts`. Click any cloned entity in the diagram: the inspector shows its fields, settings, and notes -- exactly as if the entity had been declared in the consumer file directly.
 
 The fact tables reference the cloned dimensions via foreign keys (`customer_id > dim_customer.id`), and those references resolve cleanly. The cloned entities and the field-derived `engagement_score` type are first-class citizens in the importing file's namespace.
 
@@ -249,7 +249,7 @@ Project declarations are excluded because two `Project` declarations in the same
 
 **use versus reuse.** The two keywords are semantically equivalent at the parser level. The intent the spec captures: `use` suggests "I depend on this but I'm not republishing it"; `reuse` suggests "I'm pulling this into my namespace and treating it as mine." Pick whichever reads more naturally; tooling treats them identically.
 
-**Where directives may live.** File-scope directives appear at the top level. Entity imports may also appear inside a Container body, where the imported entity becomes a member of that Container. Imports of top-level declarations (Type, Enum, TableGroup, TablePartial, View, Edge, Note) and of individual fields (§28.8) must appear at file scope. Directives MAY NOT appear inside Entity, Edge, View, or Type bodies.
+**Where directives may live.** File-scope directives appear at the top level. Entity imports may also appear inside a Container body, where the imported entity becomes a member of that Container. Imports of top-level declarations (Type, Enum, EntityGroup, EntityPartial, View, Edge, Note) and of individual fields (§28.8) must appear at file scope. Directives MAY NOT appear inside Entity, Edge, View, or Type bodies.
 
 **Cycles are allowed.** If A imports from B and B imports from A, the parser breaks the cycle by leaving the back-edge directive's clone block undefined. Spec §28.15 makes this explicit: cycles compile, but the back-edge produces nothing.
 

@@ -48,7 +48,7 @@ try {
 
 The package also exports `tokenize`, `LexError`, `Parser`, `SymbolTable`, and the AST types.
 
-For diagram views (spec §18), `diagramViews(doc)` lists the `DiagramView` declarations, and `diagramViewMembers(doc, name)` returns the entities, database views and sticky notes a diagram view contains, with the Containers, TableGroups and supertype groups a renderer frames or draws around them.
+For diagram views (spec §18), `diagramViews(doc)` lists the `DiagramView` declarations, and `diagramViewMembers(doc, name)` returns the entities, database views and sticky notes a diagram view contains, with the Containers, EntityGroups (TableGroups) and supertype groups a renderer frames or draws around them.
 
 ```ts
 import { parse, diagramViewMembers } from '@xdbml/parse';

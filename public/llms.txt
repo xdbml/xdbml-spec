@@ -10,9 +10,10 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 - Comments are `//` to the end of the line, or `/* ... */`. `#` and `--` are errors.
 - Keywords match any casing, and names are case-sensitive. Write construct keywords capitalized (`Entity`, `Table`, `View`, `Ref`), settings and type keywords in lowercase.
 - A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks, and so do `records (` and `records [`.
-- Entities, Views, Edges, Types, Enums and TablePartials share one namespace: two of them never have the same name.
+- Entities, Views, Edges, Types, Enums and EntityPartials share one namespace: two of them never have the same name.
 - Declare every entity, Enum and Type that the document names.
 - Use `Entity` for a generic entity. Target-native synonyms also work and carry intent: `Table` (relational), `Collection` (document/MongoDB), `Record` (Avro). Namespacing uses `Container`, `Schema`, `Database`, `Keyspace`, `Namespace`, `Dataset` or `Bucket`.
+- Write `EntityPartial` and `EntityGroup`. `TablePartial` and `TableGroup`, the DBML keywords, are aliases and parse the same.
 - Prefer xDBML extensions over flat DBML where they fit: nested objects and arrays, polymorphism (`oneOf` / `union`), reusable `Type`s, precise min/max cardinality, `Edge`s, `View`s, supertype groups for generalization, and AI-readiness metadata (`synonyms`, `business_term`, `tags`, `granularity`).
 
 ## Quoting
@@ -28,7 +29,7 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 - Double quotes never delimit a string: `Note: "text"` is an error.
 - A type written in several words is one double-quoted name: `"double precision"`, `"timestamp with time zone"`, `"int unsigned"`. A one-word synonym works as well: `timestamptz`, `float8`.
 - In a qualified name or a path, quote each name on its own: `"sales"."Work Order"."Work Order ID"`, `("Work Order ID", "Part ID") [pk]`. A dot inside quotes is part of the name: `"sales.Work Order"` is one entity named `sales.Work Order`, not an entity of `sales`.
-- Colors are strings: `headercolor: '#3498DB'`, `color: '#999999'`.
+- Colors are strings: `color: '#3498DB'`.
 
 ## Separators
 
@@ -66,16 +67,16 @@ A construct takes its settings in brackets after its name, before its body: `mat
 |---|---|---|---|
 | `Project` | none | `targets:`, `Note:` | top level, at most once |
 | `Container`, `Schema`, `Database`, ... | `type`, `target`, `color`, `note`, custom | entities, Views, Edges, Enums, `Note:`, sticky notes (`xdbml: 0.7`) | top level |
-| `Entity`, `Table`, `Collection`, `Record` | `note`, `headercolor`, `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }`, `definitions { }` | top level or in a Container |
-| `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
+| `Entity`, `Table`, `Collection`, `Record` | `note`, `color` (the header color), `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }`, `definitions { }` | top level or in a Container |
+| `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `color`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
 | `Edge` | `source`, `target` (entities), `source_cardinality`, `target_cardinality`, `undirected`, roles and verbs, `note` | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }` | top level or in a Container |
 | `Enum` | none | values, each with an optional `[note: '...']` | top level or in a Container |
 | `Type` | `note`, `tags`, `synonyms`, `business_term` | fields, `~partial` | top level |
-| `TablePartial` | `note`, `headercolor` | fields, `Note:`, `constraints { }`, `indexes { }` | top level |
+| `EntityPartial` | `note`, `color` | fields, `Note:`, `constraints { }`, `indexes { }` | top level |
 | `Ref` | relationship settings | -- | top level, never in a Container |
 | `SupertypeGroup` | `supertype` (required), `completeness`, `exclusivity`, `strategy`, `merge`, `discriminator`, `note` | subtype names, each with an optional `[strategy: ...]` | top level |
-| `TableGroup` | `color`, `note` | entity names | top level |
-| `DiagramView` | `note`, custom | `Note:`, and categories: `Tables`, `Views`, `Containers`, `TableGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
+| `EntityGroup` | `color`, `note` | entity names | top level |
+| `DiagramView` | `note`, custom | `Note:`, and categories: `Entities`, `Views`, `Containers`, `EntityGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
 | `Note name` (a sticky note) | `color` (`#rgb`, `#rrggbb` or `none`), custom | one string, Markdown | top level, or in a Container with `xdbml: 0.7` |
 | `Dep` (data lineage) | `note`, `color` (`#rgb` or `#rrggbb`), custom | dependencies `a -> b`, one per line, each with optional brackets; `key: value` lines; `Note:` | top level, never in a Container |
 
@@ -106,7 +107,7 @@ Settings. These are all the field settings:
 - validation: `pattern`, `format`, `minLength`, `maxLength`, `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`, `minItems`, `maxItems`, `uniqueItems`, `minProperties`, `maxProperties`
 - AI-readiness: `tags`, `synonyms`, `business_term`, `granularity`
 - beside an inline `ref:` only: `foreign_master`
-- custom properties: any name that starts with `x_`
+- custom properties: any name that starts with `x_`, or a double-quoted name that starts with `x-`: `"x-hackolade-id": 'orders-12'`
 
 A word from another language is not a setting. A parser keeps it as an unknown property and nothing reads it. Write `increment`, not `auto_increment`, `autoincrement` or `identity`; `note`, not `comment` or `description`; `pk`, not `primary_key`. Leave out `nullable`: a field accepts null unless it is marked `not null`. An index is an entry in `indexes { }`, not an `[index]` flag, and a relationship is a `ref:` or a `Ref`, never `fk` or `references`.
 
@@ -137,7 +138,7 @@ Table pitstops {
 }
 ```
 
-A `constraints` block appears at most once, in the body of an Entity, a TablePartial or an Edge. A View has none. A key names fields declared in the same body. A key may name a nested field (`profile.email`) but never cross an array. In a document store, keys follow the same syntax.
+A `constraints` block appears at most once, in the body of an Entity, an EntityPartial or an Edge. A View has none. A key names fields declared in the same body. A key may name a nested field (`profile.email`) but never cross an array. In a document store, keys follow the same syntax.
 
 `indexes { }` lists physical access paths, one entry per line: a field, a composite `(a, b)`, or an expression `` (`lower(email)`) ``, each with optional settings `name`, `type` (`btree`, `hash`, ...), `unique` and `note`. A key belongs in `constraints`, not in `indexes`.
 
@@ -315,7 +316,7 @@ SupertypeGroup legal_nature [supertype: Party, completeness: total, exclusivity:
 
 ## Diagram views
 
-A diagram view is a named subset of the model's diagram, a subject area: it lists what to show, and declares nothing. Each category lists names, one per line, or `*` for every element of its kind: `Tables` (entities, whatever keyword declares them), `Views` (database views), `Containers`, `TableGroups`, `SupertypeGroups` and `Notes` (sticky notes). Write a name in a Container with its Container, as in `sales.orders`. Relationships and Edges are never listed: one appears in a diagram view when both of its ends are there.
+A diagram view is a named subset of the model's diagram, a subject area: it lists what to show, and declares nothing. Each category lists names, one per line, or `*` for every element of its kind: `Entities` (entities, whatever keyword declares them), `Views` (database views), `Containers`, `EntityGroups`, `SupertypeGroups` and `Notes` (sticky notes). `Tables` and `TableGroups`, the DBML names, are aliases of `Entities` and `EntityGroups`; write one name per category. Write a name in a Container with its Container, as in `sales.orders`. Relationships and Edges are never listed: one appears in a diagram view when both of its ends are there.
 
 ```xdbml
 Schema sales {
@@ -339,7 +340,7 @@ DiagramView order_flow {
     sales
     billing
   }
-  Tables {
+  Entities {
     sales.orders
     sales.order_lines
     crm.customers
@@ -347,7 +348,7 @@ DiagramView order_flow {
 }
 ```
 
-A listed Container brings all of its entities, unless `Tables` names some of them: then it brings only those. Here `sales` brings `orders` and `order_lines` and leaves `returns` out, `billing` brings every entity, and `crm`, not listed, contributes `customers` alone. `Views` narrows the database views of a listed Container the same way, separately, and `Notes` its sticky notes. A listed TableGroup or supertype group brings all of its members, whichever Container holds them. Each category appears once, and a diagram view has a unique name.
+A listed Container brings all of its entities, unless `Entities` names some of them: then it brings only those. Here `sales` brings `orders` and `order_lines` and leaves `returns` out, `billing` brings every entity, and `crm`, not listed, contributes `customers` alone. `Views` narrows the database views of a listed Container the same way, separately, and `Notes` its sticky notes. A listed EntityGroup or supertype group brings all of its members, whichever Container holds them. Each category appears once, and a diagram view has a unique name.
 
 ## Sticky notes
 
@@ -379,7 +380,7 @@ Note release_plan [color: none, author: 'data-team'] {
 }
 
 DiagramView ordering {
-  Tables {
+  Entities {
     sales.orders
   }
   Notes {
@@ -491,10 +492,10 @@ An internal definition is visible only inside its entity, so two entities may ea
 
 ## Partials
 
-A `TablePartial` declares a set of fields once, for several bodies. A `~name` line places them where it is written, in the order the TablePartial declares them: in an Entity or an Edge, among the fields of an `object { }` or a `json { }`, or in the body of a `Type`. A field the body declares itself overrides an injected field of the same name; among partials, the last one injected applies. At the top level of an Entity or an Edge, a partial also brings the keys and checks of its `constraints { }`, the entries of its `indexes { }`, and its `headercolor` and its note where the entity declares none. In a nested body it brings its fields only. The body of a TablePartial holds no `~name` line, at any depth. `~` never names a `Type`: a Type is the type of a field (`billing Address`), and the field holds its shape as a nested value.
+An `EntityPartial` declares a set of fields once, for several bodies. A `~name` line places them where it is written, in the order the EntityPartial declares them: in an Entity or an Edge, among the fields of an `object { }` or a `json { }`, or in the body of a `Type`. A field the body declares itself overrides an injected field of the same name; among partials, the last one injected applies. At the top level of an Entity or an Edge, a partial also brings the keys and checks of its `constraints { }`, the entries of its `indexes { }`, and its `color` and its note where the entity declares none. In a nested body it brings its fields only. The body of an EntityPartial holds no `~name` line, at any depth. `~` never names a `Type`: a Type is the type of a field (`billing Address`), and the field holds its shape as a nested value.
 
 ```xdbml
-TablePartial audit {
+EntityPartial audit {
   created_at timestamp [not null]
   created_by varchar
 }
@@ -574,7 +575,7 @@ Metadata Column customers.email {
 }
 ```
 
-The kinds are `Table`, `Column`, `TableGroup` and `Note`, and with `xdbml: 0.7` also `Container`, `View` and `DiagramView`. A block takes `note`, the element's color (`headercolor` on a Table or a View, `color` on a TableGroup, a sticky note or a Container), and custom properties. It does not take `synonyms`, `business_term`, `tags`, `granularity`, or a field setting such as `pk`: those read as custom properties there, with a warning.
+The kinds are `Table`, `Column`, `TableGroup` and `Note`, and with `xdbml: 0.7` also `Entity`, `Field`, `EntityGroup`, `Container`, `View` and `DiagramView`. A block takes `note`, the element's `color` (on an entity, a View, a group, a sticky note or a Container), and custom properties. It does not take `synonyms`, `business_term`, `tags`, `granularity`, or a field setting such as `pk`: those read as custom properties there, with a warning.
 
 ## Common mistakes
 
@@ -1005,7 +1006,7 @@ Entity orders {
 
 // Wrong (parse-error): Edges is not a DiagramView category
 DiagramView ordering {
-  Tables {
+  Entities {
     customers
     orders
   }
@@ -1016,7 +1017,7 @@ DiagramView ordering {
 
 // Right
 DiagramView ordering {
-  Tables {
+  Entities {
     customers
     orders
   }
@@ -1111,11 +1112,11 @@ Entity suppliers {
 3. No comma or semicolon follows an item in `{ }`.
 4. In every relationship between attributes, the referenced side -- the right side of `>`, the left side of `<` -- names all the fields of the parent's primary key or of one of its unique keys, and no other field.
 5. Relationship settings sit in a `Ref`, not beside an inline `ref:`. Cardinalities are quoted `'min..max'` strings: `source` for the left end, `target` for the right end.
-6. `Ref`, `Dep`, `Metadata`, `Type`, `SupertypeGroup`, `TableGroup`, `TablePartial` and `DiagramView` declarations sit at the top level.
+6. `Ref`, `Dep`, `Metadata`, `Type`, `SupertypeGroup`, `EntityGroup`, `EntityPartial` and `DiagramView` declarations sit at the top level.
 7. A View body holds `source_query:`, fields and `Note:`, and nothing else.
 8. A key sits inline only on one unnamed field, and otherwise in `constraints`; each key is declared once, and primary key fields carry `not null`.
 9. Strings use single quotes, with each `'` inside escaped or the string in `'''...'''`; database expressions use backticks; multi-word types use double quotes.
-10. Every setting comes from this reference, or starts with `x_`. `tags` and `synonyms` are lists.
+10. Every setting comes from this reference, or starts with `x_` (or `x-` in double quotes). `tags` and `synonyms` are lists.
 11. Edge cardinality uses `source_cardinality` and `target_cardinality`.
 12. Every entity, field, Enum and Type the document names is declared, qualified with its Container where it sits in one.
 13. Internal definitions sit in one `definitions { }` block of the entity that uses them, never for a relational, Cassandra, ScyllaDB or graph target; a shape used by several entities is a top-level `Type`.

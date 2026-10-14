@@ -108,7 +108,7 @@ Note order_states {
   'An order moves from placed to shipped to delivered. A return points at one order line.'
 }
 
-// Order to cash. Tables names two entities of sales, so sales contributes
+// Order to cash. Entities names two entities of sales, so sales contributes
 // those two and leaves returns out; Views names none of its database views,
 // so monthly_revenue comes along. billing is listed with no entity named, so
 // it contributes all of its entities. crm is not listed: customers appears
@@ -119,7 +119,7 @@ DiagramView order_to_cash {
     sales
     billing
   }
-  Tables {
+  Entities {
     sales.orders
     sales.order_lines
     crm.customers
@@ -133,7 +133,7 @@ DiagramView order_to_cash {
 // the line from customers to party appears since both ends are members.
 DiagramView parties {
   Note: 'Customers and the legal nature of the party behind each one'
-  Tables {
+  Entities {
     crm.customers
   }
   SupertypeGroups {
@@ -145,7 +145,7 @@ DiagramView parties {
 // entities. Its line to products appears; its line to orders does not.
 DiagramView catalog_usage {
   Note: 'Where products are ordered'
-  Tables {
+  Entities {
     catalog.products
     catalog.categories
     sales.order_lines

@@ -1,146 +1,67 @@
-xDBML 0.7.0 -- merge dev/0.7 into main, release, publish the extension
-Base: origin/dev/0.7 9c5deaf ("Topic 6 -- Import specifiers and Topic 7 --
-Closing"). Built 2026-10-12.
+xDBML 0.7.1 -- commit on main, release, publish the VS Code extension
+Base: main at 01c16c2 ("release 0.7.0"). Built 2026-10-14.
 
-UPDATE, AFTER THE MERGE (main at 4552029, "Dev/0.7 (#3)")
----------------------------------------------------------
-The preflight failed in npm test: 212 cases of the grammar corpus found
-"no code block under the heading". The cause is line endings. Git for
-Windows, with core.autocrlf=true, checked out every file that changed
-between 0.6.7 and 0.7 with CRLF when main moved to the merge. The corpus
-runner looks for a line "```" followed by LF, so a CRLF file has no code
-block for it; other checks read files byte for byte too. Until now the
-deliveries were written straight into the working tree with LF, and no
-checkout had rewritten them.
+WHAT THIS DELIVERY CHANGES
+--------------------------
+1. EntityPartial and EntityGroup (spec §17). They are the keywords of
+   chapter 17; TablePartial and TableGroup, the DBML keywords, are aliases
+   read in every document. A diagram view lists Entities and EntityGroups,
+   with Tables and TableGroups as aliases (§18.1); a Metadata block targets
+   an EntityGroup (§24.7.1); an import names an entitypartial or an
+   entitygroup (§28.3). The AST keeps its node kinds and category names,
+   and gains a `keyword` field on partials and groups.
 
-The fix, in this update:
-  .gitattributes   "* text=auto eol=lf": text files are checked out with
-                   LF on every platform, whatever core.autocrlf says;
-                   *.cmd and *.bat keep CRLF. The index changes for no
-                   file: every text file in it is LF already.
-  apply.cmd        "apply.cmd release" finds the pull request with
-                   gh pr list, which works once GitHub has deleted the
-                   branch, no longer requires the commits of dev/0.7 in
-                   main (a squash merge has none), and checks the text
-                   files out again with LF when it finds CRLF, on a clean
-                   tree only. It no longer deletes PR-0.7.md, which the
-                   squash merge put in main.
-  APPLY.txt        this section.
+2. color, the header color of an entity (spec §7.5). In a document that
+   declares a version, `color` on an entity, a View or an EntityPartial
+   sets the header color, as `headercolor` does; written together, they
+   are one setting written twice (a warning, the first one applies).
+   Without a version declaration, `color` on a Table stays a custom
+   property, as DBML 10.3.1 reads it (checked with @dbml/core 10.3.1).
 
-To finish the release, from cmd.exe at the repo root, on main:
+3. Custom properties (spec §24.5, §18.1). A quoted key with the x- prefix,
+   "x-hackolade-id", marks a custom property as x_ does. A diagram view
+   takes custom properties of any name, as every other element does, in
+   its brackets and in Metadata DiagramView blocks: the error
+   unknown-diagram-view-setting is gone. The five errors of Studio's
+   export, "x-hackolade-id" on diagram views, disappear.
 
-    git add .gitattributes apply.cmd APPLY.txt
-    git commit -m "Check out text files with LF; apply.cmd release after a squash merge"
-    git push
-    apply.cmd release
+Documents keep declaring `xdbml: 0.7`; the parser also accepts 0.7.1.
 
-apply.cmd release sees the merged pull request, checks the files out again
-with LF (git rm -r --cached . and git reset --hard, which rewrites line
-endings only), then runs the preflight, dates the CHANGELOG and runs
-tools\release.cmd 0.7.0, as step 2 below describes. Then apply.cmd vscode.
-
-This delivery writes five files into the clone, on dev/0.7:
-  PR-0.7.md            the description of the pull request
-  apply.cmd            the three steps below
-  APPLY.txt            this file
-  tools\release.cmd    tags a minor release vX.Y, see below
-  tools\RELEASE.md     one paragraph on that rule
+The files are in the working tree of your clone, uncommitted, on main.
+Look at them with git status and git diff before step 1 if you want.
 
 THE WHOLE DEPLOYMENT, IN THREE COMMANDS
 ---------------------------------------
-From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on dev/0.7:
+From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on main:
 
-  apply.cmd            gate, commit this delivery, open the pull request
-  apply.cmd release    merge the pull request, release 0.7.0, tag v0.7
-  apply.cmd vscode     publish the VS Code extension 0.7.0
+  apply.cmd            gate, commit this delivery, push main
+  apply.cmd release    release 0.7.1, tag v0.7.1
+  apply.cmd vscode     publish the VS Code extension 0.7.1
 
 Each step stops at the first failure, says what failed, and can be rerun
 once the cause is fixed. Nothing is published before step 2.
 
-Needed once, if not set up yet:
-  GitHub CLI   winget install GitHub.cli   then   gh auth login
-  npm          npm login, with publish rights on @xdbml
-  wrangler     cd mcp, then npx wrangler login
-  vsce         npx @vscode/vsce login xdbml, with a Personal Access Token
-               of the xdbml publisher; or upload the .vsix by hand
+Step 1 runs npm run check and the type-check of the MCP server, then
+commits every change in the tree as "0.7.1: EntityPartial and EntityGroup,
+color as the header color, x- custom properties" and pushes main. It
+checks only that the clone is on main and that origin/main has nothing
+your main lacks; it does not compare the tree against a list of files.
 
-STEP 1 -- apply.cmd
--------------------
-  1. Checks that the GitHub CLI is logged in, that the clone is on dev/0.7
-     and in step with origin/dev/0.7, that main has no commit dev/0.7
-     lacks, and that nothing outside this delivery is uncommitted.
-  2. Runs the gate: npm run check, then the MCP type-check. Most of the
-     step's time goes here.
-  3. Commits apply.cmd, APPLY.txt, tools\release.cmd and tools\RELEASE.md
-     as "0.7.0: deployment script; release.cmd tags a minor release vX.Y",
-     and pushes dev/0.7.
-  4. Opens the pull request dev/0.7 into main, titled "xDBML 0.7: DBML
-     10.3.1 baseline", with PR-0.7.md as its description, then deletes
-     PR-0.7.md: from then on the text lives in the pull request, and the
-     release commits with git add -A. To change the text before it goes
-     up, edit PR-0.7.md before running apply.cmd; afterwards, edit it on
-     GitHub. If the pull request exists already, the step prints its URL.
+Step 2 checks that main matches origin/main, runs
+tools\release-preflight.cmd 0.7.1, dates the CHANGELOG, and runs
+tools\release.cmd 0.7.1: @xdbml/parse and @xdbml/render 0.7.1 on npm, the
+MCP server and the rendering API deployed, "release 0.7.1" committed and
+pushed, the tag v0.7.1 and its GitHub release from the "## v0.7.1" section
+of the CHANGELOG. A point release keeps all three numbers in its tag.
 
-  Then read the pull request on GitHub. CI runs on it, on Node 22 and 24.
-  You may also merge it on GitHub yourself: step 2 sees that it is merged
-  and goes on from there.
+Step 3 publishes tools\vscode-extension\xdbml-0.7.1.vsix, built from the
+extension sources of this delivery (vsce package; dist\extension.js is
+byte for byte the committed one).
 
-STEP 2 -- apply.cmd release
----------------------------
-  1. Waits for the checks of the pull request (gh pr checks --watch) and
-     stops if one fails.
-  2. Merges the pull request with a merge commit, which keeps the topic
-     commits in the history of main.
-  3. Checks out main and pulls it, then checks the text files out again
-     with LF if git wrote them with CRLF.
-  4. tools\release-preflight.cmd 0.7.0: npm login, 0.7.0 free on npm,
-     wrangler, MCP reference in sync with llms.txt, every test suite.
-  5. Sets "**Released**: unreleased" in the v0.7 section of CHANGELOG.md
-     to today's date.
-  6. tools\release.cmd 0.7.0: publishes @xdbml/parse and @xdbml/render
-     0.7.0, deploys the MCP server and the rendering API, commits the
-     version bumps and the date as "release 0.7.0", pushes main, then tags
-     v0.7 and publishes the GitHub release from "## v0.7" in CHANGELOG.md.
-
-  The merge pushes main, so deploy.yml publishes xdbml.org with the v0.7
-  specification a few minutes later. Until release.cmd finishes, the site
-  and llms.txt describe 0.7 while npm and the MCP server still serve
-  0.6.7.
-
-  If release.cmd stops: fix the cause it names, then rerun
-      tools\release.cmd 0.7.0
-  directly, not apply.cmd release. release.cmd skips a package it has
-  already published, while the preflight refuses a version on npm.
-
-STEP 3 -- apply.cmd vscode
---------------------------
-  Publishes tools\vscode-extension\xdbml-0.7.0.vsix, committed with
-  Topic 7, with vsce. Without a vsce login, the step prints how to log in,
-  and where to upload the file by hand:
-      https://marketplace.visualstudio.com/manage/publishers/xdbml
-
-WHAT CHANGED IN THIS DELIVERY
------------------------------
-tools\release.cmd
-  A minor release is tagged with its minor version, as its CHANGELOG
-  section is named: release.cmd 0.7.0 runs github-release.cmd 0.7, which
-  tags v0.7 from "## v0.7", like v0.4, v0.5 and v0.6. A patch release
-  keeps three numbers: 0.6.7 is tagged v0.6.7. Before this change,
-  release.cmd 0.7.0 would have published and pushed, then stopped at its
-  last step, looking for a "## v0.7.0" section.
-tools\RELEASE.md
-  One paragraph on the same rule.
-PR-0.7.md
-  The pull request description: the topics and their commits, the
-  language changes, compatibility (the readings that change in every
-  document, the API unions that gain members), tooling, verification, and
-  what follows the merge.
-apply.cmd, APPLY.txt
-  This deployment.
-
-AFTERWARDS, IF YOU WANT
------------------------
-  Delete the branch:   git push origin --delete dev/0.7
-                       git branch -d dev/0.7
-  Outside this repo: the Hackolade DBML import plugin, to move from
-  @dbml/parse 8.2.5 to 10.3.1.
+VERIFIED BEFORE DELIVERY
+------------------------
+On a copy of the tree with its own npm ci, on Linux, Node 22:
+  parser 809 (28 new for 0.7.1, 9 new corpus cases), renderer 358,
+  viewport 14, interactive 58, MCP 94, from-mongodb 24, playground 65,
+  spec links 234, TextMate grammar test, playground type-check (vue-tsc),
+  MCP type-check, MCP reference in sync with llms.txt, docs build OK.

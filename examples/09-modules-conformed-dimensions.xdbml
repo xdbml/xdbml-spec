@@ -11,7 +11,7 @@
 //  v0.2 features exercised:
 //    - Scalar Named Types (spec §15.7): `Type Email varchar [...]`
 //    - Entity-level checks block (§10): `checks { `expr` [name: ...] }`
-//    - `color:` setting on TableGroup (§17.2)
+//    - `color:` setting on EntityGroup (§17.2)
 //    - Quoted hex color strings (`'#0a7d3f'`)
 //
 //  NOTE: until the reference parser implements the above v0.2 features,
@@ -147,10 +147,10 @@ Container core [type: schema, note: 'Conformed dimensions. Stable, governed.'] {
 
 
 // -----------------------------------------------------------------------------
-//  TableGroup: visualization
+//  EntityGroup: visualization
 // -----------------------------------------------------------------------------
 
-TableGroup conformed_core [
+EntityGroup conformed_core [
   color: '#0a7d3f',
   note: 'The conformed dimensions. Stable interface; all consumer data products depend on these.'
 ] {

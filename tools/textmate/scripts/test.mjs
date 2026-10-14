@@ -275,6 +275,7 @@ async function main () {
   for (const [line, word, expected] of [
     ['  Tables {', 'Tables', true], ['  Schemas { core }', 'Schemas', true], ['  SupertypeGroups {', 'SupertypeGroups', true],
     ['  Notes { * }', 'Notes', true], ['  tables varchar', 'tables', false], ['  notes int', 'notes', false],
+    ['  Entities {', 'Entities', true], ['  EntityGroups { g }', 'EntityGroups', true], ['  entities int', 'entities', false],
   ]) {
     const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
     const at = line.indexOf(word);
@@ -284,6 +285,24 @@ async function main () {
       console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${expected ? 'is' : 'is not'} a category keyword`);
     } else {
       console.log(`  ${RED}✗${RESET} '${line.trim()}': expected ${expected ? '' : 'no '}keyword.declaration.category.xdbml`);
+      totalFailed++;
+    }
+  }
+  // v0.7.1: EntityPartial and EntityGroup are declaration keywords, and a
+  // quoted `x-` key in the brackets is a custom property (spec 17.3, 24.5).
+  console.log(`\n${CYAN}v0.7.1 keywords and x- keys${RESET}`);
+  for (const [line, word, scope] of [
+    ['EntityPartial audit {', 'EntityPartial', 'keyword.declaration.xdbml'],
+    ['EntityGroup billing [color: \'#E74C3C\'] {', 'EntityGroup', 'keyword.declaration.xdbml'],
+    ['DiagramView v ["x-hackolade-id": \'v-1\'] {', '"x-hackolade-id"', 'support.other.x-property.xdbml'],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    if ((tok?.scopes ?? []).includes(scope)) {
+      console.log(`  ${GREEN}✓${RESET} ${word} is ${scope}`);
+    } else {
+      console.log(`  ${RED}✗${RESET} ${word}: expected ${scope}, got ${(tok?.scopes ?? []).join(' ')}`);
       totalFailed++;
     }
   }

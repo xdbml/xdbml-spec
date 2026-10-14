@@ -51,7 +51,11 @@ const DBML_KIND_WORDS = new Set(['table', 'column', 'tablegroup', 'note']);
  * The settings a Metadata block sets on each kind of element, beside
  * custom properties: a note, and a color on an element drawn as a shape.
  * DBML defines the first four rows; `note` on a sticky note is a custom
- * property, as in DBML, since the note's text is its body.
+ * property, as in DBML, since the note's text is its body. The header
+ * color of a Table or a View is `headercolor` here, whichever word the
+ * block writes: the parser reads `color` in a `Metadata Table` or
+ * `Metadata View` block of a document that declares a version as
+ * `headercolor` (§7.5, v0.7.1).
  */
 export const METADATA_SETTINGS: Readonly<Record<MetadataTargetKind, ReadonlyArray<string>>> = {
   Table: ['note', 'headercolor'],
@@ -280,10 +284,9 @@ function kindAllowed (doc: XDbmlDocument, block: MetadataDeclaration): boolean {
   return DBML_KIND_WORDS.has(block.targetKindSource.toLowerCase()) || versionAtLeast(doc, '0.7');
 }
 
-/** Whether a block applies this setting: a built-in with a valid value, or a custom property (§18.1 for a DiagramView). */
+/** Whether a block applies this setting: a built-in with a valid value, or a custom property. */
 function applies (kind: MetadataTargetKind, s: Setting): boolean {
   if (METADATA_SETTINGS[kind].includes(s.name)) return validBuiltinValue(kind, s.name, s.value);
-  if (kind === 'DiagramView') return s.name.startsWith('x_');
   return true;
 }
 
@@ -382,7 +385,7 @@ export function metadataColor (applied: ReadonlyArray<AppliedSetting>, name: 'co
  * ----------------------------------------------------------------------- */
 
 const KIND_LIST_DBML = 'Table, Column, TableGroup or Note';
-const KIND_LIST = 'Table (or Entity, Collection, Record), Column (or Field), TableGroup, Note, ' +
+const KIND_LIST = 'Entity (or Table, Collection, Record), Field (or Column), EntityGroup (or TableGroup), Note, ' +
   'Container (or one of its synonyms), View or DiagramView';
 
 /** Where a block came from, for messages: its line, and its file when an import brought it. */
@@ -446,7 +449,7 @@ function describeTarget (r: ResolvedMetadataTarget): string {
     case 'Column': return `field '${r.fieldPath}' of '${(r.decl as EntityDeclaration).name}'`;
     case 'Table': return `entity '${(r.decl as EntityDeclaration).name}'`;
     case 'View': return `View '${(r.decl as ViewDeclaration).name}'`;
-    case 'TableGroup': return `TableGroup '${(r.decl as TableGroupDeclaration).name}'`;
+    case 'TableGroup': return `${(r.decl as TableGroupDeclaration).keyword} '${(r.decl as TableGroupDeclaration).name}'`;
     case 'Note': return `sticky note '${r.key.slice('Note:'.length)}'`;
     case 'Container': return `Container '${(r.decl as ContainerDeclaration).name}'`;
     case 'DiagramView': return `diagram view '${(r.decl as DiagramViewDeclaration).name}'`;
@@ -474,6 +477,11 @@ function notSetReason (kind: MetadataTargetKind, name: string): string | undefin
   }
   if (COLOR_SETTINGS.has(name)) {
     const takes = METADATA_SETTINGS[kind].find((n) => COLOR_SETTINGS.has(n));
+    if (takes === 'headercolor') {
+      // Reached by `color` in a document without a version declaration,
+      // where it is a custom property, as in DBML 10.3.1 (§7.5).
+      return `a ${kind} takes its color as 'headercolor', or as 'color' in a document that declares a version`;
+    }
     return takes
       ? `a ${kind} takes its color as '${takes}'`
       : `a ${kind} is not drawn as a shape and takes no color`;
@@ -541,7 +549,7 @@ export function checkMetadata (doc: XDbmlDocument): Diagnostic[] {
       continue;
     }
 
-    const seen = new Set<string>();
+    const seen = new Map<string, Setting>();
     let state = current.get(r.key);
     if (!state) {
       // The element's own settings come first (§24.7.4).
@@ -551,16 +559,20 @@ export function checkMetadata (doc: XDbmlDocument): Diagnostic[] {
     }
 
     for (const setting of block.settings) {
-      if (seen.has(setting.name)) {
+      const first = seen.get(setting.name);
+      if (first) {
         report({
           severity: 'error',
           code: 'duplicate-metadata-setting',
-          message: `The Metadata block sets '${setting.nameSource}' twice. A block sets each setting once, as in DBML (spec §24.7.3).`,
+          message: sameWord(first, setting)
+            ? `The Metadata block sets '${setting.nameSource}' twice. A block sets each setting once, as in DBML (spec §24.7.3).`
+            : `The Metadata block sets ${settingLabel(setting)} twice, as '${first.nameSource}' and as '${setting.nameSource}', ` +
+              'two names of one setting. A block sets each setting once (spec §24.7.3).',
           span: setting.span,
         });
         continue;
       }
-      seen.add(setting.name);
+      seen.set(setting.name, setting);
       if (METADATA_SETTINGS[kind].includes(setting.name)) {
         if (!validBuiltinValue(kind, setting.name, setting.value)) {
           report({
@@ -573,15 +585,6 @@ export function checkMetadata (doc: XDbmlDocument): Diagnostic[] {
           });
           continue;
         }
-      } else if (kind === 'DiagramView' && !setting.name.startsWith('x_')) {
-        report({
-          severity: 'error',
-          code: 'unknown-diagram-view-setting',
-          message: `A Metadata block for a diagram view sets '${setting.nameSource}'. A diagram view takes a note and ` +
-            'custom x_ properties, and no other setting (spec §18.1, §24.7.3).',
-          span: setting.span,
-        });
-        continue;
       } else {
         const reason = notSetReason(kind, setting.name);
         if (reason) {
@@ -625,6 +628,19 @@ export function checkMetadata (doc: XDbmlDocument): Diagnostic[] {
 const REPEATABLE = new Set(['check', 'ref']);
 
 /**
+ * Whether two settings of one name are written with the same word: not so
+ * for `color` and `headercolor` (§7.5), or `required` and `not null` (§8).
+ */
+function sameWord (a: Setting, b: Setting): boolean {
+  return a.nameSource.toLowerCase() === b.nameSource.toLowerCase();
+}
+
+/** A setting named in a message about its two names. */
+function settingLabel (s: Setting): string {
+  return s.name === 'headercolor' ? 'the header color (spec §7.5)' : `'${s.name}'`;
+}
+
+/**
  * Spec §24.5 (v0.7): a setting written twice in one settings list draws a
  * warning; DBML rejects it. `check` and `ref` repeat by design.
  */
@@ -641,18 +657,23 @@ function checkDuplicateSettings (doc: XDbmlDocument): Diagnostic[] {
       if (key === 'span') continue;
       if ((key === 'settings' || key === 'bracketSettings') && Array.isArray(value)
         && rec.kind !== 'MetadataDeclaration' && value.every((v) => (v as { kind?: string })?.kind === 'Setting')) {
-        const seen = new Set<string>();
+        const seen = new Map<string, Setting>();
         for (const s of value as Setting[]) {
           if (s.implied || REPEATABLE.has(s.name)) continue;
-          if (seen.has(s.name)) {
+          const first = seen.get(s.name);
+          if (first) {
             diagnostics.push({
               severity: 'warning',
               code: 'duplicate-setting',
-              message: `'${s.nameSource}' is written twice in one settings list; the first one applies. DBML rejects it (spec §24.5).`,
+              message: sameWord(first, s)
+                ? `'${s.nameSource}' is written twice in one settings list; the first one applies. DBML rejects it (spec §24.5).`
+                : `'${first.nameSource}' and '${s.nameSource}' both set ${settingLabel(s)} in one settings list; ` +
+                  `the first one, '${first.nameSource}', applies (spec §24.5).`,
               span: s.span,
             });
+          } else {
+            seen.set(s.name, s);
           }
-          seen.add(s.name);
         }
       } else if (value && typeof value === 'object') {
         visit(value);

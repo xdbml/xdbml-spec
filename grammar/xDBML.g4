@@ -67,6 +67,24 @@
  *     dependency inline, in the brackets of an entity, a View or a field.
  *     The arrows `->` and `<-` are lexed as one token each.
  *
+ * v0.7.1 changes (spec §17, §18.1, §7.5, §24.5):
+ *   - tablePartialDefinition and tableGroupDefinition take the xDBML
+ *     keywords EntityPartial and EntityGroup, with TablePartial and
+ *     TableGroup, the DBML keywords, as aliases. The rule names keep the
+ *     DBML names, as the AST node kinds do.
+ *   - diagramViewCategoryKeyword takes Entities and EntityGroups, with
+ *     Tables and TableGroups as their DBML names; a document without a
+ *     version declaration uses the DBML names (checked after parsing).
+ *   - metadataKind takes EntityGroup, and elementType entitypartial and
+ *     entitygroup.
+ *   - customProperty: a quoted key with the `x-` prefix, such as
+ *     "x-hackolade-id", marks a custom property as an `x_` key does. A
+ *     diagram view takes custom properties of any name, as every other
+ *     element does (spec §18.1).
+ *   - `color` on an entity, a View or an EntityPartial is the header color,
+ *     as `headercolor` is, in a document that declares a version. Both
+ *     parse as a generalSetting; the reading is applied after parsing.
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -333,8 +351,8 @@ topLevelStatement
     | viewDefinition               //§14
     | enumDefinition               // upstream DBML
     | refDefinition                // upstream DBML, extended for cardinality (§17.10)
-    | tablePartialDefinition       // upstream DBML
-    | tableGroupDefinition         // upstream DBML
+    | tablePartialDefinition       // upstream DBML; EntityPartial (v0.7.1, §17.1)
+    | tableGroupDefinition         // upstream DBML; EntityGroup (v0.7.1, §17.2)
     | supertypeGroupDefinition     // spec §12 (new in v0.5)
     | diagramViewDefinition        // spec §18 (defined in v0.6.3)
     | metadataDefinition           // spec §24.7 (defined in v0.7)
@@ -372,11 +390,12 @@ tableDefinition
       RBRACE
     ;
 
-// §17.1: a TablePartial does not inject another TablePartial. This rule reads
-// a `~name` line in its body, and inside its fields, as in every other body,
-// and an implementation reports it after parsing (partial-injection-in-partial).
+// §17.1: a partial does not inject another partial. This rule reads a `~name`
+// line in its body, and inside its fields, as in every other body, and an
+// implementation reports it after parsing (partial-injection-in-partial).
+// EntityPartial is the xDBML keyword, TablePartial its DBML alias (v0.7.1).
 tablePartialDefinition
-    : 'TablePartial' nameSegment settingsBlock? LBRACE
+    : ('EntityPartial' | 'TablePartial') nameSegment settingsBlock? LBRACE
         (entityBodyItem | listSeparator)*
       RBRACE
     ;
@@ -403,8 +422,9 @@ enumValue
     : (fieldName | QUOTED_STRING | STRING_LITERAL) settingsBlock?
     ;
 
+// EntityGroup is the xDBML keyword, TableGroup its DBML alias (v0.7.1, §17.2).
 tableGroupDefinition
-    : 'TableGroup' nameSegment settingsBlock? LBRACE
+    : ('EntityGroup' | 'TableGroup') nameSegment settingsBlock? LBRACE
         (entityReference | listSeparator)*
       RBRACE
     ;
@@ -509,8 +529,9 @@ importItem
 
 elementType
     // Contextual keyword: validated post-parse against the recognized set
-    // (table, entity, collection, record, enum, tablepartial, note, schema,
-    // container, tablegroup, type, edge, view, diagramview, field).
+    // (table, entity, collection, record, enum, entitypartial, tablepartial,
+    // note, schema, container, entitygroup, tablegroup, type, edge, view,
+    // diagramview, field, supertypegroup).
     : IDENTIFIER
     ;
 
@@ -676,10 +697,11 @@ subtypeSetting
 // An unknown category, Edges included, matches no alternative and fails the
 // parse. The other conditions of §18.6 are checked after parsing: a name
 // that resolves to nothing, to several elements, or to an element of another
-// kind; a category written twice; two diagram views with one name; a
-// setting other than note or an x_ property; and Containers, Views or
+// kind; a category written twice, under one name or two; two diagram views
+// with one name; and Entities, EntityGroups, Containers, Views or
 // SupertypeGroups, a note, or settings, in a document without a version
-// declaration (§18.5).
+// declaration (§18.5). From v0.7.1, every key other than `note` in the
+// brackets is a custom property, as on every other element (§18.1).
 
 diagramViewDefinition
     : DIAGRAM_VIEW nameSegment settingsBlock? LBRACE
@@ -689,7 +711,7 @@ diagramViewDefinition
 
 // A '*' body item lists every element of every category and stands with no
 // category beside it; notes may sit beside it. The settings brackets take
-// `note` and x_ custom properties only (§18.1), checked after parsing.
+// `note` and custom properties of any name (§18.1, v0.7.1).
 diagramViewBodyItem
     : diagramViewCategory
     | noteDefinition               // §18.1 (v0.6.3)
@@ -701,11 +723,13 @@ diagramViewCategory
     ;
 
 diagramViewCategoryKeyword
-    : 'Tables'
+    : 'Entities'             // v0.7.1
+    | 'Tables'               // DBML name of Entities
     | 'Views'
     | 'Containers'
     | 'Schemas'              // DBML name of Containers
-    | 'TableGroups'
+    | 'EntityGroups'         // v0.7.1
+    | 'TableGroups'          // DBML name of EntityGroups
     | 'SupertypeGroups'
     | 'Notes'
     ;
@@ -755,7 +779,7 @@ metadataDefinition
 metadataKind
     : TABLE | ENTITY | COLLECTION | RECORD
     | 'Column' | 'Field'
-    | 'TableGroup'
+    | 'TableGroup' | 'EntityGroup'
     | NOTE
     | containerKeyword
     | VIEW
@@ -1208,9 +1232,12 @@ granularityValue
     | 'millisecond' | 'microsecond' | 'nanosecond'
     ;
 
-// ---- §17.9.5 Custom properties (x_ prefix convention) ---------------------
+// ---- §24.5 Custom properties (x_ and x- prefix convention) -----------------
 // Custom properties are accepted as generic settings; the x_ prefix is a
 // recommendation enforced (warned about) at lint time, not at parse time.
+// A quoted key with the x- prefix, "x-hackolade-id", the form of OpenAPI
+// extensions, marks a custom property as well (v0.7.1); it parses as a
+// generalSetting with a quoted key.
 
 customProperty
     : XPREFIXED_IDENTIFIER COLON settingValue
@@ -1421,9 +1448,10 @@ quotedIdentifier options { caseInsensitive=false; }
 //      - circular type references must form valid cycles (§13)
 //      - module system (§25, new in v0.2):
 //          * elementType slot values must be one of the recognized values
-//            (table, entity, collection, record, enum, tablepartial, note,
-//            schema, container, tablegroup, type, edge, view, diagramview,
-//            field). Other values produce a clear error.
+//            (table, entity, collection, record, enum, entitypartial,
+//            tablepartial, note, schema, container, entitygroup, tablegroup,
+//            type, edge, view, diagramview, field, supertypegroup). Other
+//            values produce a clear error.
 //          * field-element-type imports may only appear at file scope
 //            (the containerBody alternative for useDirective is rejected
 //            when the import items include `field`).

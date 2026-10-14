@@ -63,6 +63,8 @@ import type {
   ObjectType,
   OneOfType,
   PartialInjection,
+  PartialKeyword,
+  GroupKeyword,
   ParseOptions,
   PathSegment,
   PolymorphicAlternative,
@@ -127,7 +129,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.7';
+export const SUPPORTED_XDBML_VERSION = '0.7.1';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -168,21 +170,25 @@ const ENTITY_KEYWORDS = new Set(['table', 'entity', 'collection', 'record']);
  */
 const IMPORT_ELEMENT_TYPES = new Set([
   'table', 'entity', 'collection', 'record',
-  'enum', 'tablepartial', 'note',
-  'schema', 'container', 'tablegroup',
+  'enum', 'entitypartial', 'tablepartial', 'note',
+  'schema', 'container', 'entitygroup', 'tablegroup',
   'type', 'edge', 'view', 'diagramview',
   'field', 'supertypegroup',
 ]);
 
 /**
  * DiagramView categories (spec §18.1), by lowercased keyword. `Schemas`, the
- * DBML name, reads as `Containers`, after the `Schema` keyword (§6.2).
+ * DBML name, reads as `Containers`, after the `Schema` keyword (§6.2), and
+ * `Entities` and `EntityGroups` (v0.7.1) read as their DBML names `Tables`
+ * and `TableGroups`.
  */
 const DIAGRAM_VIEW_CATEGORIES: Readonly<Record<string, DiagramViewCategoryName>> = {
+  entities: 'Tables',
   tables: 'Tables',
   views: 'Views',
   containers: 'Containers',
   schemas: 'Containers',
+  entitygroups: 'TableGroups',
   tablegroups: 'TableGroups',
   supertypegroups: 'SupertypeGroups',
   notes: 'Notes',
@@ -210,7 +216,7 @@ function metadataKind (word: string): MetadataTargetKind | undefined {
   const w = word.toLowerCase();
   if (w === 'table' || ENTITY_KEYWORDS.has(w)) return 'Table';
   if (w === 'column' || w === 'field') return 'Column';
-  if (w === 'tablegroup') return 'TableGroup';
+  if (w === 'tablegroup' || w === 'entitygroup') return 'TableGroup';
   if (w === 'note') return 'Note';
   if (w === 'view') return 'View';
   if (w === 'diagramview') return 'DiagramView';
@@ -240,6 +246,15 @@ function canonContainerKw (raw: string): ContainerKeyword {
     case 'bucket': return 'Bucket';
     default: throw new Error(`Not a container keyword: ${raw}`);
   }
+}
+
+/** Canonical capitalization for the keywords of §17 (v0.7.1: `EntityPartial`, `EntityGroup`). */
+function canonPartialKw (raw: string): PartialKeyword {
+  return raw.toLowerCase() === 'entitypartial' ? 'EntityPartial' : 'TablePartial';
+}
+
+function canonGroupKw (raw: string): GroupKeyword {
+  return raw.toLowerCase() === 'entitygroup' ? 'EntityGroup' : 'TableGroup';
 }
 
 function canonEntityKw (raw: string): EntityKeyword {
@@ -528,8 +543,8 @@ export class Parser {
     if (k === 'view') return this.parseView();
     if (k === 'enum') return this.parseEnum();
     if (k === 'ref') return this.parseRef();
-    if (k === 'tablepartial') return this.parseTablePartial();
-    if (k === 'tablegroup') return this.parseTableGroup();
+    if (k === 'entitypartial' || k === 'tablepartial') return this.parseTablePartial();
+    if (k === 'entitygroup' || k === 'tablegroup') return this.parseTableGroup();
     if (k === 'supertypegroup') return this.parseSupertypeGroup();
     if (k === 'diagramview') return this.parseDiagramView();
     if (k === 'note') return this.parseNoteDeclaration();
@@ -759,7 +774,7 @@ export class Parser {
       this.advance();
       alias = this.parseDeclaredName('alias');
     }
-    const settings = this.maybeSettingsBlock();
+    const settings = this.headerColorAlias(this.maybeSettingsBlock());
     this.expect(TokenKind.LBrace, "Expected '{' after entity name");
     const body = this.parseEntityBody(canonEntityKw(kwTok.text), name);
     this.expect(TokenKind.RBrace, "Expected '}' closing entity");
@@ -1001,8 +1016,8 @@ export class Parser {
     const kindTok = this.peek();
     if (kindTok.kind !== TokenKind.Identifier) {
       throw new ParseError(
-        'Expected the kind of element after Metadata: Table, Column, TableGroup or Note, ' +
-        'and in a document that declares a version Container, View or DiagramView (spec §24.7).',
+        'Expected the kind of element after Metadata: Table, Column, TableGroup or Note, and in a ' +
+        'document that declares a version Entity, Field, EntityGroup, Container, View or DiagramView (spec §24.7).',
         kindTok.start,
       );
     }
@@ -1035,6 +1050,7 @@ export class Parser {
     };
     const canonical = metadataKind(kindTok.text);
     if (canonical) decl.targetKind = canonical;
+    if (canonical === 'Table' || canonical === 'View') this.headerColorAlias(settings);
     if (this.options.filePath) decl.file = toForwardSlashes(this.options.filePath);
     return decl;
   }
@@ -1055,9 +1071,10 @@ export class Parser {
    *     importSpec ::= '*'  |  '{' importItem (',' importItem)* '}'
    *     importItem ::= elementType path ('as' Identifier)?
    *     elementType ::= 'table' | 'entity' | 'collection' | 'record' |
-   *                     'enum' | 'tablepartial' | 'note' | 'schema' |
-   *                     'container' | 'tablegroup' | 'type' | 'edge' |
-   *                     'view' | 'diagramview' | 'field'
+   *                     'enum' | 'entitypartial' | 'tablepartial' | 'note' |
+   *                     'schema' | 'container' | 'entitygroup' |
+   *                     'tablegroup' | 'type' | 'edge' | 'view' |
+   *                     'diagramview' | 'field'
    *     metadataSettings ::= '[' setting (',' setting)* ']'
    *     cloneBlock ::= '{' topLevelStatement* '}'
    */
@@ -1363,8 +1380,8 @@ export class Parser {
     if (k === 'view') return true;
     if (k === 'enum') return true;
     if (k === 'ref') return true;
-    if (k === 'tablepartial') return true;
-    if (k === 'tablegroup') return true;
+    if (k === 'entitypartial' || k === 'tablepartial') return true;
+    if (k === 'entitygroup' || k === 'tablegroup') return true;
     if (k === 'note') return true;
     if (k === 'records') return true;
     if (k === 'metadata') return true;
@@ -1964,7 +1981,7 @@ export class Parser {
     const start = this.peek().start;
     this.advance(); // View
     const name = this.parseDeclaredName('view name');
-    const settings = this.maybeSettingsBlock();
+    const settings = this.headerColorAlias(this.maybeSettingsBlock());
     this.expect(TokenKind.LBrace, "Expected '{' after View name");
     const body: ViewBodyItem[] = [];
     for (;;) {
@@ -2492,18 +2509,33 @@ export class Parser {
     }
   }
 
-  /* ----- TablePartial / TableGroup ----- */
+  /* ----- EntityPartial / EntityGroup (TablePartial / TableGroup) ----- */
+
+  /**
+   * Spec §7.5 (v0.7.1): in a document that declares a version, `color`
+   * sets the header color of an entity, a View or an EntityPartial, as
+   * `headercolor` does. Its `name` becomes `headercolor`, as `required`
+   * becomes `not null`, so every consumer reads one key, and `nameSource`
+   * keeps the word as written. Without a version declaration, `color` on a
+   * Table stays a custom property, as DBML 10.3.1 reads it.
+   */
+  private headerColorAlias (settings: Setting[]): Setting[] {
+    if (!this.declaredVersion) return settings;
+    for (const s of settings) if (s.name === 'color') s.name = 'headercolor';
+    return settings;
+  }
 
   private parseTablePartial (): TablePartialDeclaration {
     const start = this.peek().start;
-    this.advance(); // TablePartial
-    const name = this.parseDeclaredName('TablePartial name');
-    const settings = this.maybeSettingsBlock();
-    this.expect(TokenKind.LBrace, "Expected '{' after TablePartial name");
-    const body = this.parseEntityBody('TablePartial', name);
-    this.expect(TokenKind.RBrace, "Expected '}' closing TablePartial");
+    const keyword = canonPartialKw(this.advance().text);
+    const name = this.parseDeclaredName(`${keyword} name`);
+    const settings = this.headerColorAlias(this.maybeSettingsBlock());
+    this.expect(TokenKind.LBrace, `Expected '{' after ${keyword} name`);
+    const body = this.parseEntityBody(keyword, name);
+    this.expect(TokenKind.RBrace, `Expected '}' closing ${keyword}`);
     return {
       kind: 'TablePartialDeclaration',
+      keyword,
       name,
       settings,
       body,
@@ -2513,27 +2545,28 @@ export class Parser {
 
   private parseTableGroup (): TableGroupDeclaration {
     const start = this.peek().start;
-    this.advance(); // TableGroup
-    const name = this.parseDeclaredName('TableGroup name');
+    const keyword = canonGroupKw(this.advance().text);
+    const name = this.parseDeclaredName(`${keyword} name`);
     const settings = this.maybeSettingsBlock();
-    this.expect(TokenKind.LBrace, "Expected '{' after TableGroup name");
+    this.expect(TokenKind.LBrace, `Expected '{' after ${keyword} name`);
     const members: string[] = [];
     while (!this.check(TokenKind.RBrace) && !this.check(TokenKind.EOF)) {
       const t = this.peek();
-      if (this.atDepDeclaration()) this.rejectDepInBody(`TableGroup '${name}'`);
+      if (this.atDepDeclaration()) this.rejectDepInBody(`${keyword} '${name}'`);
       if (t.kind === TokenKind.Identifier || t.kind === TokenKind.QuotedIdentifier) {
-        members.push(this.parseQualifiedName('TableGroup member'));
+        members.push(this.parseQualifiedName(`${keyword} member`));
         // optional trailing semicolons in some sources
         this.match(TokenKind.Semicolon);
       } else if (t.kind === TokenKind.Semicolon || t.kind === TokenKind.Comma) {
         this.advance();
       } else {
-        throw new ParseError(`Unexpected token in TableGroup: ${t.kind}`, t.start);
+        throw new ParseError(`Unexpected token in ${keyword}: ${t.kind}`, t.start);
       }
     }
-    this.expect(TokenKind.RBrace, "Expected '}' closing TableGroup");
+    this.expect(TokenKind.RBrace, `Expected '}' closing ${keyword}`);
     return {
       kind: 'TableGroupDeclaration',
+      keyword,
       name,
       settings,
       members,
@@ -2658,8 +2691,9 @@ export class Parser {
           );
         }
         throw new ParseError(
-          `Unknown DiagramView category ${JSON.stringify(t.text)}. Expected Tables, Views, Containers ` +
-          '(or Schemas), TableGroups, SupertypeGroups or Notes, each followed by { names }, or a Note (spec §18.1)',
+          `Unknown DiagramView category ${JSON.stringify(t.text)}. Expected Entities (or Tables), Views, ` +
+          'Containers (or Schemas), EntityGroups (or TableGroups), SupertypeGroups or Notes, each followed by ' +
+          '{ names }, or a Note (spec §18.1)',
           t.start,
         );
       }

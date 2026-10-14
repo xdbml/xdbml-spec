@@ -577,7 +577,7 @@ export function checkSupertypeGroups (doc: XDbmlDocument): Diagnostic[] {
     for (const a of declaredAttributes(entity, index)) {
       const owner = inherited.get(a.name);
       if (owner === undefined) continue;
-      const via = a.viaPartial ? ` (through TablePartial '${a.viaPartial}')` : '';
+      const via = a.viaPartial ? ` (through the partial '${a.viaPartial}')` : '';
       diagnostics.push({
         severity: 'error',
         code: 'supertype-attribute-redeclared',

@@ -41,7 +41,7 @@ Resolution reports two severities. An **error** marks something the schema canno
 - **`source-query-in-settings`**: a View writes `source_query` in the brackets after its name. The source query belongs in the body, as `source_query: '...'`; in the brackets it stays an ordinary setting, so the inspector does not show it as the view's query.
 - **`duplicate-source-query`**: a View declares a second `source_query:` in its body. The first one is the view's source query.
 - **`duplicate-unique-key`**: an entity declares the same unique key twice, for example `[unique]` on a field and the same field as a `unique` line in `constraints`. Declare it in one place: inline for a single field without a name, in `constraints` otherwise.
-- **`name-collision`**: two declarations share one qualified name, such as a Type and an Entity named `customers`. Entities, Views, Edges, Types, Enums and TablePartials share one namespace (spec §15.5): rename one of them. An error from v0.6, a warning in a document declaring an earlier version or none.
+- **`name-collision`**: two declarations share one qualified name, such as a Type and an Entity named `customers`. Entities, Views, Edges, Types, Enums and EntityPartials share one namespace (spec §15.5): rename one of them. An error from v0.6, a warning in a document declaring an earlier version or none.
 - **`container-target-missing`**: the Project declares several targets and a Container declares none. Write it after the Container's name, as in `Schema core [target: PostgreSQL] { ... }` (spec §5.2).
 - **`container-target-not-in-project`**: a Container's target is not among the Project's targets. Add it to the Project's `targets:`, or change the Container's target (spec §5.2).
 
@@ -61,19 +61,19 @@ Diagram views (spec §18) add five errors of their own, whatever version the doc
 
 - **`unresolved-diagram-view-name`**: a name in a diagram view matches nothing of its category's kind.
 - **`ambiguous-diagram-view-name`**: an unqualified name, such as `orders`, matches entities in several Containers and none outside a Container. Write the qualified name, `sales.orders`.
-- **`diagram-view-wrong-category`**: a name lists an element under the wrong category, such as a database view under `Tables`. The message names the right category. An Edge is never listed: it appears when both of its ends do.
+- **`diagram-view-wrong-category`**: a name lists an element under the wrong category, such as a database view under `Entities`. The message names the right category. An Edge is never listed: it appears when both of its ends do.
 - **`duplicate-diagram-view`**: two diagram views share one name.
-- **`unknown-diagram-view-setting`**: the brackets of a diagram view hold a setting other than `note` or a custom `x_` property.
+
 
 The `Containers`, `Views` and `SupertypeGroups` categories, and a diagram view's note and settings, are xDBML extensions: in a document without a version declaration they raise `construct-requires-version`. DBML's own name for Containers, `Schemas`, needs no declaration. See [**Diagram views**](./diagram-views).
 
-TablePartials (spec §17.1) add one condition, with the same severity whatever version the document declares:
+EntityPartials (spec §17.1), written `TablePartial` in DBML, add one condition, with the same severity whatever version the document declares:
 
-- **`partial-injection-in-partial`** (error): the body of a TablePartial, or one of its fields, holds a `~name` line. A TablePartial does not inject another one; write both `~name` lines in the body that needs the fields of both.
+- **`partial-injection-in-partial`** (error): the body of an EntityPartial, or one of its fields, holds a `~name` line. A partial does not inject another one; write both `~name` lines in the body that needs the fields of both.
 
 Internal definitions (spec §15.8) add five conditions of their own, with the same severity whatever version the document declares, since no parser read a `definitions` block before 0.6.5:
 
-- **`definitions-outside-entity`** (error): a TablePartial or an Edge holds a `definitions` block. Internal definitions belong to an entity; declare a shape reused elsewhere as a `Type`. In a View, the block stops the parse with a message citing §15.8.1.
+- **`definitions-outside-entity`** (error): an EntityPartial or an Edge holds a `definitions` block. Internal definitions belong to an entity; declare a shape reused elsewhere as a `Type`. In a View, the block stops the parse with a message citing §15.8.1.
 - **`duplicate-definitions-block`** (error): an entity declares a second `definitions` block. Put every entry in one.
 - **`duplicate-definition`** (error): two entries of one block share a name.
 - **`definitions-unsupported-target`** (error): the entity's target takes no internal definitions: a relational target, Cassandra, ScyllaDB, Neo4j, Memgraph, Neptune or JanusGraph. Declare the shape as a `Type` at the top of the document (spec §15.8.4).
@@ -113,7 +113,7 @@ Data lineage (spec §27):
 - **`dep-self-loop`** (error): a field depends on itself. An entity may: its rows can come from its own earlier rows.
 - **`duplicate-dep`** (error): one dependency stated twice, inline and in a `Dep`, say.
 - **`invalid-dep-color`** (error): a `color` other than `#rgb` or `#rrggbb`.
-- **`misplaced-dep`** and **`dep-in-partial`** (errors): a `dep` where no dependency can stand, such as on an Edge, a Type or a TablePartial.
+- **`misplaced-dep`** and **`dep-in-partial`** (errors): a `dep` where no dependency can stand, such as on an Edge, a Type or an EntityPartial.
 - **`invalid-dep-value`**: a `dep` whose value is no arrow. An error; in a document declaring v0.6 or an earlier version, a warning, and the value stays a custom property, as it was.
 - **`empty-dep`** (warning): a block with no dependency. DBML drops it silently.
 - **`ambiguous-dep-endpoint`** (warning): an end reads both as an entity and as a field of another one. The field reading is used, as for a relationship. See [**Data lineage**](./data-lineage).

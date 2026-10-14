@@ -192,6 +192,11 @@ export type DiagnosticCode =
   | 'unresolved-diagram-view-name'
   | 'ambiguous-diagram-view-name'
   | 'diagram-view-wrong-category'
+  /**
+   * Not reported from v0.7.1: a diagram view takes any custom property, as
+   * every other element does (spec §18.1). Kept so that code naming it
+   * still compiles.
+   */
   | 'unknown-diagram-view-setting'
   // Rules checked from v0.6.4 (spec §8.6, §15.2); warnings before v0.6
   | 'invalid-tuple-positions'
@@ -649,7 +654,11 @@ const KIND_NAMES: Partial<Record<SymbolKind, string>> = {
   entity: 'an Entity', view: 'a View', edge: 'an Edge', type: 'a Type', enum: 'an Enum', tablepartial: 'a TablePartial',
 };
 
-function article (kind: SymbolKind): string {
+/** The kind of a declaration in a message; a partial by the keyword it is declared with (§17, v0.7.1). */
+function article (kind: SymbolKind, declaration?: SymbolEntry['declaration']): string {
+  if (kind === 'tablepartial' && (declaration as TablePartialDeclaration | undefined)?.keyword === 'EntityPartial') {
+    return 'an EntityPartial';
+  }
   return KIND_NAMES[kind] ?? kind;
 }
 
@@ -673,8 +682,8 @@ function addEntry (
       diagnostics.push({
         severity: 'error',
         code: 'name-collision',
-        message: `'${qualifiedName}' names both ${article(other.kind)} and ${article(kind)}. ` +
-          `Entities, Views, Edges, Types, Enums and TablePartials share one namespace (spec §15.5): rename one of them.`,
+        message: `'${qualifiedName}' names both ${article(other.kind, other.declaration)} and ${article(kind, declaration)}. ` +
+          `Entities, Views, Edges, Types, Enums and EntityPartials share one namespace (spec §15.5): rename one of them.`,
         span,
       });
     }
@@ -748,7 +757,7 @@ function resolveTopLevel (
           severity: 'error',
           code: 'partial-injection-in-partial',
           message:
-            `TablePartial '${stmt.name}' injects '~${item.partialName}'. A TablePartial does not inject another one: ` +
+            `${stmt.keyword} '${stmt.name}' injects '~${item.partialName}'. A partial does not inject another one: ` +
             `write '~${item.partialName}' where '~${stmt.name}' is injected, next to it (spec §17.1).`,
           span: item.span,
         });
@@ -765,7 +774,7 @@ function resolveTopLevel (
       return;
     case 'TableGroupDeclaration':
       for (const member of stmt.members) {
-        resolveTableGroupMember(member, stmt.span, symbols, diagnostics);
+        resolveTableGroupMember(member, stmt.keyword, stmt.span, symbols, diagnostics);
       }
       return;
     case 'TopLevelRecordsDeclaration': {
@@ -838,7 +847,7 @@ function resolveEntityBody (
           diagnostics.push({
             severity: 'error',
             code: 'unresolved-partial',
-            message: `Partial injection '~${item.partialName}' does not resolve to a TablePartial declaration.`,
+            message: `Partial injection '~${item.partialName}' does not resolve to an EntityPartial or TablePartial declaration.`,
             span: item.span,
           });
         }
@@ -948,7 +957,7 @@ function resolveTypeExpression (
             diagnostics.push({
               severity: 'error',
               code: 'unresolved-partial',
-              message: `Partial injection '~${field.partialName}' does not resolve to a TablePartial declaration.`,
+              message: `Partial injection '~${field.partialName}' does not resolve to an EntityPartial or TablePartial declaration.`,
               span: field.span,
             });
           }
@@ -1377,7 +1386,7 @@ function reportUnresolvedPartial (item: PartialInjection, symbols: SymbolTable, 
   diagnostics.push({
     severity: 'error',
     code: 'unresolved-partial',
-    message: `Partial injection '~${item.partialName}' does not resolve to a TablePartial declaration.`,
+    message: `Partial injection '~${item.partialName}' does not resolve to an EntityPartial or TablePartial declaration.`,
     span: item.span,
   });
 }
@@ -1719,6 +1728,7 @@ function extractFieldNamesFromType (
 
 function resolveTableGroupMember (
   member: string,
+  keyword: string,
   span: Span,
   symbols: SymbolTable,
   diagnostics: Diagnostic[],
@@ -1728,7 +1738,7 @@ function resolveTableGroupMember (
     diagnostics.push({
       severity: 'error',
       code: 'unresolved-tablegroup-member',
-      message: `TableGroup member '${member}' does not resolve to an entity.`,
+      message: `${keyword} member '${member}' does not resolve to an entity.`,
       span,
     });
   }

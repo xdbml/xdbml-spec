@@ -25,6 +25,18 @@
  * such as the dotted fields of a key, use this form.
  */
 
+/**
+ * Whether a setting name carries the prefix of a deliberate custom
+ * property (spec §24.5): `x_`, or `x-` in a quoted key such as
+ * `"x-hackolade-id"` (v0.7.1), as the extensions of OpenAPI and AsyncAPI
+ * write it. Takes the lowercased `name` of a Setting. Every element takes
+ * unprefixed custom properties as well; the prefix tells a deliberate
+ * custom property from a misspelled setting, for linters and tools.
+ */
+export function isCustomPropertyName (name: string): boolean {
+  return name.startsWith('x_') || name.startsWith('x-');
+}
+
 /** True when a segment needs quotes to stay one segment. */
 function needsQuotes (segment: string): boolean {
   return segment.includes('.') || segment.includes('"');

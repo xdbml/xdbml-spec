@@ -501,6 +501,27 @@ TableGroup g [color: '#999999'] {
   check('partial: the header color of a partial applies over the color of a TableGroup',
     colorOf('grouped') === '#ff0000' && colorOf('plain') === '#999999', `${colorOf('grouped')} ${colorOf('plain')}`);
 
+  // v0.7.1 §7.5: `color` is the header color of an entity, a View and an
+  // EntityPartial in a document that declares a version; without one it
+  // stays a custom property, as in DBML 10.3.1.
+  const colorWord = build(`xdbml: 0.7.1
+EntityPartial p [color: '#ff0000'] { x int }
+Entity own [color: '#0000ff'] { id int [pk] }
+Entity carried { id int [pk]
+ ~p }
+Entity both [color: '#111111', headercolor: '#222222'] { id int [pk] }
+View v [color: '#00ff00'] { id int }
+EntityGroup g [color: '#999999'] { carried }`);
+  const colorWordOf = (id: string): string => colorWord.entities.find((x) => x.id === id)?.headerColor ?? '-';
+  check('v0.7.1: color sets the header color of an entity, a View and an EntityPartial; the first of color and headercolor applies',
+    colorWordOf('own') === '#0000ff' && colorWordOf('carried') === '#ff0000' && colorWordOf('both') === '#111111'
+      && colorWord.entities.some((x) => x.headerColor === '#00ff00'),
+    colorWord.entities.map((x) => `${x.id}=${x.headerColor ?? '-'}`).join(' '));
+  const dbmlColor = build("Table t [color: '#0000ff'] { id int [pk] }");
+  check('v0.7.1: without a version declaration, color on a Table draws no header color',
+    dbmlColor.entities.find((x) => x.id === 't')?.headerColor === undefined,
+    String(dbmlColor.entities.find((x) => x.id === 't')?.headerColor));
+
   // ~name in an object, a json body and a Type (spec §17.1).
   const nested = build(`xdbml: 0.6
 Entity users { id int [pk] }
