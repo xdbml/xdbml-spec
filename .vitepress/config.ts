@@ -131,6 +131,19 @@ export default defineConfig({
   // Use git timestamps for "last updated" display
   lastUpdated: true,
 
+  // Each specification version is a single page, so its compiled chunk
+  // holds the whole document (about 880 kB for v0.7), and the local search
+  // index is a single chunk as well. Both are content, not application
+  // code, so Vite's default 500 kB limit would warn on every build with
+  // nothing to fix. The 1500 kB limit leaves room for the next spec
+  // version and still catches a real bundling mistake, such as Monaco
+  // pulled into the site theme.
+  vite: {
+    build: {
+      chunkSizeWarningLimit: 1500,
+    },
+  },
+
   // Theme configuration
   // https://vitepress.dev/reference/default-theme-config
   themeConfig: {
@@ -364,6 +377,19 @@ export default defineConfig({
       provider: 'local',
       options: {
         detailedView: true,
+        // Local search indexes every page except superseded specification
+        // versions and /spec/current. Superseded versions would list each
+        // section once per version in the results, and /spec/current
+        // repeats the newest version, whose canonical URL is /spec/vN.M.
+        // Excluded pages are still built and listed in the sidebar.
+        // supersededSpecs is computed at the top of this file, so a new
+        // version drops its predecessor from the index with no change here.
+        _render(src, env, md) {
+          const p = env.relativePath
+          if (p === 'spec/current.md') return ''
+          if (supersededSpecs.some((v) => p === `spec/${v}.md`)) return ''
+          return md.render(src, env)
+        },
         miniSearch: {
           searchOptions: {
             fuzzy: 0.2,
