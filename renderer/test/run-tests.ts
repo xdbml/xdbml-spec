@@ -907,6 +907,67 @@ DiagramView legend_only { Notes { legend } }`;
     (wp.get('d')?.x ?? 0) < (wp.get('a')?.x ?? 0), JSON.stringify([...wp]));
 }
 
+/* ---- Source-to-target mapping (spec §27.10.6, v0.7.2) -------------- */
+
+{
+  const src = [
+    'xdbml: 0.7',
+    'Table src {\n  id int\n  first varchar\n  last varchar\n  code char(2)\n  status char(1)\n}',
+    'Table ref {\n  code char(2)\n  name varchar\n}',
+    'Table tgt {\n  id int\n  full_name varchar\n  country varchar\n}',
+    'Table copy {\n  id int\n}',
+    'Dep load {',
+    '  src.id -> tgt.id [transformation: identity]',
+    '  src.first, src.last -> tgt.full_name [transformation: derivation]',
+    '  ref.name -> tgt.country',
+    '  src.code, ref.code -> tgt [transformation: lookup]',
+    '  src.status -> tgt [transformation: filter]',
+    '}',
+    'Dep replicate: src -> copy [transformation: identity]',
+  ].join('\n');
+  const m = applyUserPositions(buildDiagram(flatten(parse(src))), autoArrange(buildDiagram(flatten(parse(src))), 'relational'));
+  const load = m.deps[0];
+  check('mapping: a dependency carries its kind and its line',
+    JSON.stringify(load.dependencies.map((d) => [d.transformation ?? null, d.line ?? null]))
+      === JSON.stringify([['identity', 0], ['derivation', 1], ['derivation', 1], [null, 2], ['lookup', 3], ['lookup', 3], ['filter', 4]]),
+    JSON.stringify(load.dependencies.map((d) => [d.transformation, d.line])));
+  const [g, copy] = layoutDeps(m.deps, m.entities);
+  const dashed = g.curves.filter((c) => c.dashed).map((c) => c.index);
+  check('mapping: the indirect kinds draw dashed, the direct ones solid', JSON.stringify(dashed) === JSON.stringify([4, 5, 6]), JSON.stringify(dashed));
+  check('mapping: a pill names derivation, lookup and filter, and none for identity or a line without a kind',
+    JSON.stringify(g.pills.map((p) => p.text).sort()) === JSON.stringify(['derivation', 'filter', 'lookup']),
+    JSON.stringify(g.pills.map((p) => p.text)));
+  const lookupJ = g.junctions.find((j) => g.pills.some((p) => p.text === 'lookup' && p.x === j.x && p.y === j.y));
+  check('mapping: the two ends of a lookup meet at a junction that carries its pill', !!lookupJ);
+  check('mapping: a dashed group draws a dashed trunk', g.trunkDashed.filter(Boolean).length === 1 && g.trunkDashed.length === 2);
+  const headerTips = g.arrows.map((a) => a.split(' ')[0]).filter((t) => {
+    const tgt = m.entities.find((e) => e.id === 'tgt')!;
+    const y = Number(t.split(',')[1]);
+    return y < tgt.bounds.y + 32;
+  });
+  check('mapping: two groups that end at one header spread their arrowheads', new Set(headerTips).size === 2, JSON.stringify(headerTips));
+  check('mapping: a copy between two entities shows identity', JSON.stringify(copy.pills.map((p) => p.text)) === JSON.stringify(['identity']));
+  const svg = serializeDiagram(m);
+  check('mapping: the SVG draws dashes and pills', svg.includes('stroke-dasharray="5 3"') && svg.includes('>lookup</text>') && svg.includes('>derivation</text>'));
+  check('mapping: group_by reads group by', layoutDeps(buildDiagram(flatten(parse('xdbml: 0.7\nTable a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a.x -> b [transformation: group_by]'))).deps,
+    buildDiagram(flatten(parse('xdbml: 0.7\nTable a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a.x -> b [transformation: group_by]'))).entities)[0]?.pills[0]?.text === 'group by');
+  const plain = buildDiagram(flatten(parse('Table a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a.x -> b.x')));
+  check('mapping: without kinds, no pill and no dash', !serializeDiagram(plain).includes('stroke-dasharray="5 3"') && layoutDeps(plain.deps, plain.entities)[0].pills.length === 0);
+  check('mapping: the overlay selects a Dep from its pills', buildOverlay(m, null, defaultTheme).includes('data-dep="dep:0"'));
+  check('mapping: a junction that carries a pill draws no dot', (() => {
+    const svgDots = (serializeDiagram(m).match(/<circle [^>]*r="3\.5"/g) ?? []).length;
+    return svgDots === g.junctions.filter((j) => !g.pills.some((p) => p.x === j.x && p.y === j.y)).length;
+  })());
+  const sel = buildOverlay(m, { kind: 'dep', id: 'dep:0' }, defaultTheme);
+  const blue = defaultTheme.row.selectStrip;
+  check('mapping: a selected Dep keeps its dashes in the selection color',
+    new RegExp(`stroke="${blue}" stroke-width="2\\.5" stroke-dasharray="5 3"`).test(sel));
+  check('mapping: a selected Dep draws its pills above the lines, in the selection color',
+    sel.lastIndexOf('>lookup</text>') > sel.lastIndexOf('stroke-dasharray="5 3"') && new RegExp(`fill="${blue}"[^>]*>lookup</text>`).test(sel));
+  check('mapping: a selected Dep draws no dot at a junction that carries a pill',
+    (sel.match(/<circle [^>]*r="4"/g) ?? []).length === g.junctions.filter((j) => !g.pills.some((p) => p.x === j.x && p.y === j.y)).length);
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

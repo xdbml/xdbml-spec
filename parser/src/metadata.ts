@@ -469,6 +469,9 @@ export function isMetadataCustomProperty (kind: MetadataTargetKind, name: string
 
 /** The warning for a setting a block does not set, which reads as a custom property; undefined for an ordinary custom property. */
 function notSetReason (kind: MetadataTargetKind, name: string): string | undefined {
+  if (name === 'grain') {
+    return "'grain' is a setting of the entity or the View itself (spec §7.5), written in its brackets";
+  }
   if (MEANING_SETTINGS.has(name)) {
     return `'${name}' is a setting of the element itself (spec §24.1 to §24.4), written in its brackets`;
   }
@@ -637,7 +640,9 @@ function sameWord (a: Setting, b: Setting): boolean {
 
 /** A setting named in a message about its two names. */
 function settingLabel (s: Setting): string {
-  return s.name === 'headercolor' ? 'the header color (spec §7.5)' : `'${s.name}'`;
+  if (s.name === 'headercolor') return 'the header color (spec §7.5)';
+  if (s.name === 'source_database') return 'the language of the query (spec §14.5, §27.3)';
+  return `'${s.name}'`;
 }
 
 /**

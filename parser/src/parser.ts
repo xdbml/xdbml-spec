@@ -129,7 +129,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.7.1';
+export const SUPPORTED_XDBML_VERSION = '0.7.2';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -1981,7 +1981,7 @@ export class Parser {
     const start = this.peek().start;
     this.advance(); // View
     const name = this.parseDeclaredName('view name');
-    const settings = this.headerColorAlias(this.maybeSettingsBlock());
+    const settings = this.sourceDatabaseAlias(this.headerColorAlias(this.maybeSettingsBlock()));
     this.expect(TokenKind.LBrace, "Expected '{' after View name");
     const body: ViewBodyItem[] = [];
     for (;;) {
@@ -2391,10 +2391,10 @@ export class Parser {
     } else if (t.kind === TokenKind.Star) {
       throw new ParseError("'*' is no name for a Dep: the name is an identifier, bare or quoted (spec §27.4).", t.start);
     }
-    const brackets = this.maybeSettingsBlock();
+    const brackets = this.sourceDatabaseAlias(this.maybeSettingsBlock());
     if (this.match(TokenKind.Colon)) {
       const dependency = this.parseDepDependency();
-      const settings = this.maybeSettingsBlock();
+      const settings = this.sourceDatabaseAlias(this.maybeSettingsBlock());
       this.rejectChainedDependency();
       return {
         kind: 'DepDeclaration',
@@ -2417,7 +2417,7 @@ export class Parser {
           (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier))
           && this.peek(1).kind === TokenKind.Colon
         ) {
-          bodySettings.push(this.parseLineSetting());
+          bodySettings.push(...this.sourceDatabaseAlias([this.parseLineSetting()]));
         } else {
           const dependency = this.parseDepDependency();
           dependency.settings = this.maybeSettingsBlock();
@@ -2445,21 +2445,47 @@ export class Parser {
     );
   }
 
-  /** One dependency: two endpoints joined by `->` or `<-` (spec §27.1). */
+  /**
+   * One dependency line: endpoints joined by `->` or `<-` (spec §27.1,
+   * §27.2). In a document that declares a version, the upstream side may
+   * list several endpoints, separated by commas (v0.7.2): `a.x, a.y -> b.z`
+   * or `b.z <- a.x, a.y`. The downstream end stays single.
+   */
   private parseDepDependency (): DepDependency {
     const start = this.peek().start;
-    const first = this.parseRefEndpoint();
+    const left = this.parseDepEndList();
     const arrow = this.parseDepArrow();
-    const second = this.parseRefEndpoint();
-    const [upstream, downstream] = arrow === '->' ? [first, second] : [second, first];
+    const right = this.parseDepEndList();
+    const [upstreams, downstreams] = arrow === '->' ? [left, right] : [right, left];
+    if (downstreams.length > 1) {
+      throw new ParseError(
+        'A dependency has one downstream end: write a dependency for each downstream element (spec §27.2).',
+        downstreams[1].span.start,
+      );
+    }
+    if (upstreams.length > 1 && !this.declaredVersion) {
+      throw new ParseError(
+        'Several upstream ends in one dependency need a version declaration, such as xdbml: 0.7. Without one, as in ' +
+        'DBML, write one dependency for each upstream element, gathered in a block if need be (spec §27.2).',
+        upstreams[1].span.start,
+      );
+    }
     return {
       kind: 'DepDependency',
-      upstream,
-      downstream,
+      upstream: upstreams[0],
+      upstreams,
+      downstream: downstreams[0],
       arrow,
       settings: [],
       span: this.spanFrom(start),
     };
+  }
+
+  /** One endpoint, or several separated by commas (spec §27.2, v0.7.2). */
+  private parseDepEndList (): RefEndpoint[] {
+    const ends = [this.parseRefEndpoint()];
+    while (this.match(TokenKind.Comma)) ends.push(this.parseRefEndpoint());
+    return ends;
   }
 
   /** `->` or `<-` at the current token, written without a space inside. */
@@ -2498,15 +2524,28 @@ export class Parser {
     );
   }
 
-  /** `a -> b -> c` and `a -> b, c`: a dependency has two ends (spec §27.2). */
+  /** `a -> b -> c`: a dependency has one arrow (spec §27.2). */
   private rejectChainedDependency (): void {
     const t = this.peek();
     if (this.atDepArrow() || t.kind === TokenKind.Comma) {
       throw new ParseError(
-        'A dependency has two ends: write a -> b and b -> c as two dependencies (spec §27.2).',
+        'A dependency has one arrow and one downstream end: write a -> b and b -> c as two dependencies (spec §27.2).',
         t.start,
       );
     }
+  }
+
+  /**
+   * Spec §14.5, §27.3 (v0.7.2): in a document that declares a version,
+   * `dialect` is an alias of `source_database` on a View and on a Dep. Its
+   * `name` becomes `source_database`, as `color` becomes `headercolor`
+   * (§7.5), and `nameSource` keeps the word as written. Without a version
+   * declaration, `dialect` stays a custom property.
+   */
+  private sourceDatabaseAlias (settings: Setting[]): Setting[] {
+    if (!this.declaredVersion) return settings;
+    for (const s of settings) if (s.name === 'dialect') s.name = 'source_database';
+    return settings;
   }
 
   /* ----- EntityPartial / EntityGroup (TablePartial / TableGroup) ----- */

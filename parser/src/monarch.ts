@@ -31,6 +31,7 @@ import {
   SETTING_FLAGS,
   SETTING_KEYS,
   GRANULARITY_VALUES,
+  TRANSFORMATION_VALUES,
   DIAGRAM_VIEW_CATEGORIES,
   METADATA_TARGET_KINDS,
 } from './keywords.ts';
@@ -66,6 +67,7 @@ export interface XDbmlMonarchLanguage {
   settingFlags: string[];
   settingKeys: string[];
   granularityValues: string[];
+  transformationValues: string[];
   ignoreCase: boolean;
   unicode: boolean;
   tokenizer: Record<string, unknown[]>;
@@ -186,6 +188,10 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
 
   granularityValues: [...GRANULARITY_VALUES],
 
+  // The kinds of transformation (v0.7.2, spec §27.10.1), colored as values
+  // the way the granularity values are.
+  transformationValues: [...TRANSFORMATION_VALUES],
+
   ignoreCase: true,
   unicode: true,
 
@@ -290,6 +296,7 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
           '@settingFlags': 'keyword.setting',
           '@settingKeys': 'keyword.setting',
           '@granularityValues': 'keyword.value',
+          '@transformationValues': 'keyword.value',
           'true': 'keyword.literal',
           'false': 'keyword.literal',
           'null': 'keyword.literal',

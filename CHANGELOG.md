@@ -4,9 +4,55 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.7.1 -- 2026
+## v0.7.2 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A point release of the v0.7 draft on data lineage. A `Dep` may now say how a target is loaded, and so serve as a source-to-target mapping: each dependency may carry a `transformation`, from a list of eight kinds that follows OpenLineage's column lineage facet, a line may name several source fields, and a `Dep` may carry the statement that loads the target in `source_query`, in the language its `source_database` names. A metric is a field of a View that is not materialized, whose lineage a `Dep` may state with `transformation: aggregation`. An entity or a View states its `grain`. Every document that parsed before still parses. Documents keep declaring `xdbml: 0.7`.
+
+### Added
+
+#### Spec
+
+- **Source-to-target mapping (§27.10)**: the kinds `identity`, `derivation`, `aggregation`, `join`, `lookup`, `filter`, `group_by` and `conditional` (§27.10.1), with a table of where each appears in a SQL statement. A line without `transformation` carries no kind. `identity` between two entities states a copy of every row and every field, such as a replica; the other kinds name a field. A type conversion the database makes on write keeps `identity`, and a `CAST` written in the statement makes a `derivation`. §27.10.2 covers the statement and its language, §27.10.3 the grain of the target, §27.10.4 the target fields no source supplies, with a Data Vault record source, §27.10.5 the checks, §27.10.6 the drawing, and §27.10.7 the correspondence with OpenLineage.
+- **Metrics (§27.11)**: a metric is a field of a View that is not materialized; the View's `source_query` holds the SQL, and a `Dep` with `transformation: aggregation` states which fields each metric aggregates. A table gives the correspondence with Apache Ossie.
+- **Settings of a `Dep` (§27.3)**: `source_query`, written in the body of a block as a View writes its own; `source_database`, with `dialect` as an alias, on a `Dep` and on a View (§14.5); `transformation` on a dependency. Values are read in any casing and written in lowercase. Without a version declaration they stay custom properties, as DBML 10.3.1 reads them.
+- **Several upstream ends (§27.2)**: in a document that declares a version, `a.x, a.y -> b.z` or `b.z <- a.x, a.y` states one dependency per source field, with settings written once for all of them. The downstream end stays single.
+- **`grain` (§7.5, §14.5)**: what one row of an entity or a View represents, in Kimball's sense. In a Metadata block it reads as a custom property, with a warning (§24.7.3).
+- **Examples of §27.10 and §27.11** open in the playground from a "View in playground" button.
+
+#### Tooling
+
+- **`@xdbml/parse`**: reads several upstream ends (`DepDependency.upstreams`), and `collectLineage()` gives one pair per upstream end, the pairs of one line sharing its `line` and settings. Each pair carries its `transformation`, and each `Lineage` its `sourceQuery` and `sourceDatabase`; `dialect` reads as `source_database`, on a View too. New diagnostics: `unknown-transformation`, `transformation-between-entities` and `transformation-target-mismatch` (errors), `transformation-mismatch` and `indirect-from-entity` (warnings), and `source-query-in-settings` for a `Dep`. New exports: `TRANSFORMATIONS`, `targetCoverage()` and `grainOf()`. Accepts documents declaring `xdbml: 0.7.2`.
+- **`@xdbml/render`**: a dependency with an indirect kind (join, lookup, filter, group by, conditional) draws dashed, and the ends of one such line meet at a junction of their own. A pill names the kind at the junction, which then draws no dot, or on the curve; a dashed border marks an indirect kind; `identity` shows none, except on a copy between two entities. Groups that end at one row or one header spread their arrowheads. Columns stand further apart when a dependency carries a kind. A selected Dep keeps its dashes and draws its pills above its lines, in the selection color. `RelationshipVisibility.indirectLineage` hides the indirect dependencies alone. A document without kinds draws as before.
+- **Playground**: a Dep with kinds reads in the inspector as a mapping table, one row per target field with its sources and kind, then the lines that steer the rows, then its statement highlighted as SQL. The inspector of a target lists the Deps that load it and the fields no dependency feeds, and, for a View that is not materialized, its metrics. Display > Lineage gains "Indirect dependencies". The help pages on data lineage, the diagnostics panel, the inspector, the diagram and visual cues cover the mapping.
+- **Highlighting**: Monarch and the TextMate grammar color `transformation`, `dialect` and `grain` as setting keys, and Monarch colors the eight kinds as values.
+- **VS Code extension 0.7.2**: the highlighting above.
+- **`llms.txt` and the MCP server**: a "Source-to-target mapping" section and a "Metrics" section, rows for the new settings in "What goes where", four common mistakes (a query in a note or a setting of another name, a `Mapping` block, several downstream ends, a kind between two entities), and a checklist item.
+- **Grammar**: `depSpec` takes a `depEndList` on each side of the arrow. `grammar/test-cases.md` gains a v0.7.2 section of 21 cases, each checked against the parser.
+- **Example 19, source-to-target mapping**: a legacy system and a CRM loading a warehouse, with every kind of transformation, a statement on each `Dep`, metrics in a View, replicas and a Data Vault hub, and three diagram views.
+- **Example 18**: the query of `stg_customers` moves from its note into `source_query`.
+
+### Changed
+
+#### Spec
+
+- **Rules of a `Dep` (§27.4)**: in a document that declares a version, the same pair may be stated once for each kind of transformation, since one field may play several roles in a load. The spec also states why cycles and two Deps with the same name are accepted, both as in DBML 10.3.1: a cycle may span several systems, as with reverse ETL, and a job that loads two targets takes one `Dep` per target, each with the job's name.
+- **Levels in a block (§27.2)**: in a document that declares a version, a block may mix dependencies between entities with dependencies naming fields. Without a version declaration, DBML's rule of one level still holds.
+- **Source query (§14.3)**: the spec states that neither the reference parser nor the playground parses a source query, of a View or of a `Dep`. A syntax error in the query, or a difference between the query and the fields or the Deps, draws no message; the playground's inspector highlights the query as SQL without checking it.
+- **Validation summary of chapter 27** moves from §27.10 to §27.12, after the two new sections.
+
+### Not changed (compatibility)
+
+- Every document that parsed before parses, and reads the same. Without a version declaration, several upstream ends and mixed levels stay errors, as in DBML, and the new settings stay custom properties.
+- In a document that declares a version, a block mixing levels, an error before, is now valid, and so is the same pair stated twice with two kinds.
+
+---
+
+## v0.7.1 -- 2026
+
+**Status**: Draft -- superseded by v0.7.2
 **Released**: 2026-10-14
 
 A point release of the v0.7 draft on names and settings. Chapter 17 takes the keywords `EntityPartial` and `EntityGroup`, after the entity they work on, as `Entity` names what DBML calls a `Table`; `TablePartial` and `TableGroup`, the DBML keywords, stay as aliases, and a diagram view lists `Entities` and `EntityGroups` beside `Tables` and `TableGroups`. `color` sets the header color of an entity, a View and an EntityPartial in a document that declares a version, as it sets the color of every other element drawn as a shape, with `headercolor` as an alias. A quoted setting key with the `x-` prefix, `"x-hackolade-id"`, marks a custom property as an `x_` key does, and a diagram view takes custom properties of any name, as every other element does: before, `"x-hackolade-id"` passed on an EntityGroup and failed on a diagram view. Every document that parsed before still parses, with one exception listed below. Documents keep declaring `xdbml: 0.7`.
@@ -81,7 +127,7 @@ Moves the DBML baseline from 3.13.6 to 10.3.1: a parser reads every construct DB
 - **Rules (§27.4)**: a `Dep` stands at the top level; a field does not depend on itself, while an entity may; a dependency is stated once in the document, inline included; cycles are accepted; names are optional and may repeat.
 - **Relationship, foreign master, Dep or View (§27.5)**, and **lineage and the query of a View (§27.6)**: the Deps into a View and its `source_query` state its lineage separately, and neither overrides the other; a tool that reads the query's dialect may report a difference as a warning.
 - **Drawing (§27.7)**: a dependency draws as a curve with an arrowhead at its downstream end, attached at the side of a field's row or of a box; the dependencies of one Dep that share a downstream end meet at a junction, which carries the Dep's name when the names of relationships are shown; a renderer offers a toggle that hides dependencies, and an automatic arrangement places each element to the right of the elements it is computed from.
-- **Modules and Metadata blocks (§27.8)**, **DBML compatibility (§27.9)** and **validation summary (§27.10)** for data lineage. xDBML differs from DBML 10.3.1 on three points: a block with no dependency draws a warning, a setting value of any form is a custom property, and brackets after a dependency in a block concern that dependency alone, where DBML applies them to the whole Dep.
+- **Modules and Metadata blocks (§27.8)**, **DBML compatibility (§27.9)** and **validation summary (§27.10, §27.12 from v0.7.2)** for data lineage. xDBML differs from DBML 10.3.1 on three points: a block with no dependency draws a warning, a setting value of any form is a custom property, and brackets after a dependency in a block concern that dependency alone, where DBML applies them to the whole Dep.
 - **Module specifiers (§28.13)**: a specifier other than an `https://` URL resolves as in DBML 10.3.1, in every document. The host application may map it to a file first, as DBML's `resolveFileSpecifier` does; otherwise it is read relative to the importing file, with or without `./`, so `auth`, `sub/auth` and `@shared-users` are valid, and an absolute path is an error unless the host resolves it. Without an extension, `<path>.xdbml` is read, or `<path>.dbml` when there is no such file.
 
 ### Changed

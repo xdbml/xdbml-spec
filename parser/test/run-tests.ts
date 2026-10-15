@@ -27,6 +27,7 @@ import {
   metadataIndex, settingValueText, withMetadata,
   projectNote, resolveStickyNote, stickyNotes,
   collectLineage, depColor, depSettings, resolveLineage,
+  grainOf, targetCoverage, TRANSFORMATIONS,
   classifyModuleSource, moduleCandidates, ParseError,
 } from '../src/index.ts';
 import type { AppliedSetting, DepDeclaration, EndCardinality, EntityDeclaration, FieldDeclaration, ParseOptions, RecordRow, RecordsBlock, RefDeclaration, RefValue, TopLevelRecordsDeclaration, XDbmlDocument } from '../src/index.ts';
@@ -3676,7 +3677,7 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
 Entity A { }`,
       assert: (doc) => {
         if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
-        for (const v of ['0.8', '0.7.2', '1.0', '0.10']) {
+        for (const v of ['0.8', '0.7.3', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -4333,8 +4334,14 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.7.1' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.7.1 §4: xdbml: 0.7.2 is newer than this parser supports',
+      name: 'v0.7.2 §4: xdbml: 0.7.2 parses and keeps its patch number',
       source: `xdbml: 0.7.2
+Entity e { id int [pk] }`,
+      assert: (doc) => (doc.version?.version === '0.7.2' ? null : `version: ${doc.version?.version}`),
+    },
+    {
+      name: 'v0.7.2 §4: xdbml: 0.7.3 is newer than this parser supports',
+      source: `xdbml: 0.7.3
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -7335,6 +7342,227 @@ DiagramView v {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7.2: source-to-target mapping in a Dep (spec §27.2, §27.3, §27.10,
+ * §27.12), metrics (§27.11) and grain (§7.5)
+ *
+ * In a document that declares a version, a dependency line may name
+ * several upstream ends, a block may mix the two levels, and a Dep carries
+ * `source_query`, `source_database` (alias `dialect`) and, on each
+ * dependency, a `transformation`. Without a version declaration these stay
+ * DBML: one upstream end, one level per block, custom properties.
+ * ----------------------------------------------------------------------- */
+
+function runV072Tests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string, options?: ParseOptions): string =>
+    resolveNames(parse(src, options)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const expectCodes = (src: string, want: string, options?: ParseOptions): string | undefined => {
+    const got = codes(src, options);
+    return got === want ? undefined : `diagnostics: '${got}', want '${want}'`;
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const failure = (src: string): string => {
+    try {
+      parse(src);
+      return 'no parse error';
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const dep = (src: string, k = 0): DepDeclaration =>
+    parse(src).statements.filter((x): x is DepDeclaration => x.kind === 'DepDeclaration')[k];
+  const pairs = (src: string, options?: ParseOptions): string[] => collectLineage(flatten(parse(src, options))).flatMap((l) =>
+    l.dependencies.map((d) => `${pathToString(d.upstream.path)}->${pathToString(d.downstream.path)}${d.transformation ? `:${d.transformation}` : ''}`));
+  const T = 'Table a {\n  x int\n  y int\n}\nTable b {\n  x int\n  y int\n}\nTable c {\n  x int\n}\n';
+  const V = 'xdbml: 0.7\n';
+
+  /* ---- §27.2 several upstream ends ---- */
+
+  check('§27.2: a line with several upstream ends keeps them in order, the first as upstream', () => {
+    const d = dep(`${V}${T}Dep: a.x, a.y -> b.x`).dependencies[0];
+    return same([pathToString(d.upstream.path), d.upstreams.map((u) => pathToString(u.path)), pathToString(d.downstream.path)],
+      ['a.x', ['a.x', 'a.y'], 'b.x']);
+  });
+  check('§27.2: `b.x <- a.x, a.y` states the same dependencies as `a.x, a.y -> b.x`', () =>
+    same(pairs(`${V}${T}Dep: b.x <- a.x, a.y`), pairs(`${V}${T}Dep: a.x, a.y -> b.x`)));
+  check('§27.2: collectLineage gives one pair per upstream end, sharing the line and its settings', () => {
+    const l = collectLineage(parse(`${V}${T}Dep n {\n  a.x, a.y -> b.x [note: 'full name']\n  a.x -> b.y\n}`))[0];
+    const [p, q, r] = l.dependencies;
+    return same([l.dependencies.length, p.line === q.line, p.settings === q.settings, q.line === r.line, settingValueText(p.settings[0].value)],
+      [3, true, true, false, 'full name']);
+  });
+  check('§27.2: every line has its upstreams, one end included', () =>
+    same(dep(`${T}Dep: a -> b`).dependencies[0].upstreams.map((u) => pathToString(u.path)), ['a']));
+  check('§27.2: several upstream ends without a version declaration are a parse error, as in DBML', () => {
+    const m = failure(`${T}Dep: a.x, a.y -> b.x`);
+    return /need a version declaration/.test(m) ? undefined : m;
+  });
+  check('§27.2: the downstream end stays single, with either arrow', () => {
+    const m = [failure(`${V}${T}Dep: a.x -> b.x, b.y`), failure(`${V}${T}Dep: b.x, b.y <- a.x`)];
+    return m.every((x) => /one downstream end/.test(x)) ? undefined : m.join(' / ');
+  });
+  check('§27.2: a chained dependency is still a parse error', () => {
+    const m = failure(`${V}${T}Dep: a -> b -> c`);
+    return /one arrow/.test(m) ? undefined : m;
+  });
+  check('§27.4: an upstream end listed twice on one line states a dependency twice', () =>
+    expectCodes(`${V}${T}Dep: a.x, a.x -> b.x`, 'error:duplicate-dep'));
+  check('§27.4: a pair of a multi-end line stated again on its own line', () =>
+    expectCodes(`${V}${T}Dep n {\n  a.x, a.y -> b.x\n  a.y -> b.x\n}`, 'error:duplicate-dep'));
+
+  /* ---- §27.2 levels ---- */
+
+  check('§27.2: a block may mix the entity level and the field level in a document that declares a version', () =>
+    expectCodes(`${V}${T}Dep n {\n  a -> b\n  a.x -> b.x\n}`, ''));
+  check('§27.2: without a version declaration, mixing levels stays an error, as in DBML', () => {
+    const d = resolveNames(parse(`${T}Dep n {\n  a -> b\n  a.x -> b.x\n}`)).diagnostics;
+    return same(d.map((x) => x.code), ['dep-mixed-level']) ?? (/declare a version/.test(d[0].message) ? undefined : d[0].message);
+  });
+
+  /* ---- §27.3 source_query and source_database ---- */
+
+  check('§27.3: a block body holds the statement and its language; dialect reads as source_database, lowercased', () => {
+    const l = collectLineage(parse(`${V}${T}Dep n [dialect: Snowflake] {\n  a.x -> b.x\n  source_query: 'SELECT x FROM a'\n}`))[0];
+    return same([l.sourceQuery, l.sourceDatabase, l.settings.map((s) => `${s.name}/${s.nameSource}`)],
+      ['SELECT x FROM a', 'snowflake', ['source_database/dialect', 'source_query/source_query']]);
+  });
+  check('§27.3: source_database in the body, quoted, in any casing', () =>
+    same(collectLineage(parse(`${V}${T}Dep n {\n  a.x -> b.x\n  source_database: 'ANSI_SQL'\n}`))[0].sourceDatabase, 'ansi_sql'));
+  check('§27.3: a multi-line source_query in the body', () => {
+    const q = collectLineage(parse(`${V}${T}Dep n {\n  a.x -> b.x\n  source_query: '''\n    SELECT x\n    FROM a\n  '''\n}`))[0].sourceQuery ?? '';
+    return /SELECT x/.test(q) && /FROM a/.test(q) ? undefined : JSON.stringify(q);
+  });
+  check('§27.3: source_query in brackets draws a warning and is not the statement', () => {
+    const src = `${V}${T}Dep n [source_query: 'q1'] {\n  a.x -> b.x [source_query: 'q2']\n}\nDep m [source_query: 'q3']: a -> b`;
+    return expectCodes(src, 'warning:source-query-in-settings warning:source-query-in-settings warning:source-query-in-settings')
+      ?? same(collectLineage(parse(src)).map((l) => l.sourceQuery ?? null), [null, null]);
+  });
+  check('§27.3: without a version declaration, the settings stay custom properties', () => {
+    const src = `${T}Dep n [dialect: snowflake, source_query: 'q'] {\n  a.x -> b.x [transformation: copy]\n  source_query: 'q2'\n}`;
+    const l = collectLineage(parse(src))[0];
+    return expectCodes(src, '') ?? same([l.sourceQuery ?? null, l.sourceDatabase ?? null, l.dependencies[0].transformation ?? null, l.settings[0].name],
+      [null, null, null, 'dialect']);
+  });
+  check('§14.5: dialect on a View reads as source_database in a document that declares a version', () => {
+    const view = (src: string) => parse(src).statements.find((s) => s.kind === 'ViewDeclaration') as { settings: Array<{ name: string; nameSource: string }> };
+    const a = view(`${V}View v [dialect: oracle] {\n  x int\n}`).settings[0];
+    const b = view('View v [dialect: oracle] {\n  x int\n}').settings[0];
+    return same([a.name, a.nameSource, b.name], ['source_database', 'dialect', 'dialect']);
+  });
+  check('§24.5: dialect and source_database in one settings list draw duplicate-setting', () => {
+    const d = resolveNames(parse(`${V}View v [dialect: snowflake, source_database: oracle] {\n  x int\n}`)).diagnostics;
+    return same(d.map((x) => x.code), ['duplicate-setting']) ?? (/the language of the query/.test(d[0].message) ? undefined : d[0].message);
+  });
+
+  /* ---- §27.10.1 transformations ---- */
+
+  check('§27.10.1: the eight kinds, bare or quoted, in any casing', () => {
+    const lines = TRANSFORMATIONS.map((k, i) => {
+      const written = i % 2 ? `'${k.toUpperCase()}'` : k[0].toUpperCase() + k.slice(1);
+      return ['identity', 'derivation', 'aggregation', 'conditional'].includes(k)
+        ? `  a.x -> b.x [transformation: ${written}]` : `  a.y -> b [transformation: ${written}]`;
+    });
+    const got = TRANSFORMATIONS.map((k, i) => pairs(`${V}${T}Dep n {\n${lines[i]}\n}`)[0].split(':')[1]);
+    return same(got, [...TRANSFORMATIONS]);
+  });
+  check('§27.10.1: a line without transformation carries no kind', () =>
+    same(pairs(`${V}${T}Dep: a.x -> b.x\nDep: a -> b`), ['a.x->b.x', 'a->b']));
+  check('§27.3: in the short form, the brackets after the dependency hold its transformation', () =>
+    same(pairs(`${V}${T}Dep n [note: 'n']: a.x -> b.x [transformation: derivation]`), ['a.x->b.x:derivation']));
+  check('§27.3: a transformation in the brackets of a block is no setting of its lines', () =>
+    same(pairs(`${V}${T}Dep n [transformation: derivation] {\n  a.x -> b.x\n}`), ['a.x->b.x']));
+  check('§27.10.1: the indirect kinds may end at the entity, from fields', () =>
+    expectCodes(`${V}${T}Dep n {\n  a.x, b.y -> c [transformation: join]\n  a.y -> c [transformation: lookup]\n  b.x -> c [transformation: filter]\n}\nDep m {\n  a.x -> b [transformation: group_by]\n}`, ''));
+  check('§27.10.1: a CASE: derivation of the value, conditional of the field it tests', () =>
+    expectCodes(`${V}${T}Dep n [source_database: ansi_sql] {\n  a.x -> c.x [transformation: derivation]\n  a.y -> c.x [transformation: conditional]\n  source_query: '''\n    SELECT CASE WHEN y = 1 THEN x END AS x FROM a\n  '''\n}`, ''));
+
+  /* ---- §27.10.5 checks ---- */
+
+  check('§27.10.5: an unknown value of transformation is an error, a word or any other value', () =>
+    expectCodes(`${V}${T}Dep n {\n  a.x -> b.x [transformation: copy]\n  a.y -> b.y [transformation: 3]\n}`, 'error:unknown-transformation error:unknown-transformation'));
+  check('§27.10.5: a transformation between two entities is an error', () =>
+    expectCodes(`${V}${T}Dep: a -> b [transformation: filter]`, 'error:transformation-between-entities'));
+  check('§27.10.5: a transformation on a line where one pair is between entities is an error', () =>
+    expectCodes(`${V}${T}Dep: a, b.x -> c [transformation: join]`, 'error:transformation-between-entities'));
+  check('§27.10.5: identity, derivation, aggregation and conditional ending at an entity are errors', () =>
+    expectCodes(`${V}${T}Dep n {\n  a.x -> c [transformation: identity]\n  a.y -> c [transformation: derivation]\n  b.x -> c [transformation: aggregation]\n  b.y -> c [transformation: conditional]\n}`,
+      'error:transformation-target-mismatch error:transformation-target-mismatch error:transformation-target-mismatch error:transformation-target-mismatch'));
+  check('§27.10.1: identity between two entities states a copy', () =>
+    expectCodes(`${V}${T}Dep: a -> b [transformation: identity]`, '') ?? same(pairs(`${V}${T}Dep: a -> b [transformation: identity]`), ['a->b:identity']));
+  check('§27.10.5: identity from a field to an entity is still an error', () =>
+    expectCodes(`${V}${T}Dep: a.x -> b [transformation: identity]`, 'error:transformation-target-mismatch'));
+  check('§27.10.5: a copy from two entities draws the identity warning', () =>
+    expectCodes(`${V}${T}Dep: a, b -> c [transformation: identity]`, 'warning:transformation-mismatch'));
+  check('§27.4: one field may play several roles: the same pair once for each kind', () =>
+    expectCodes(`${V}${T}Dep n {\n  a.x -> c [transformation: join]\n  a.x -> c [transformation: group_by]\n  a.x -> c [transformation: filter]\n}`, ''));
+  check('§27.4: the same pair with the same kind twice is stated twice', () => {
+    const d = resolveNames(parse(`${V}${T}Dep n {\n  a.x -> c [transformation: join]\n  a.x -> c [transformation: join]\n}`)).diagnostics;
+    return same(d.map((x) => x.code), ['duplicate-dep']) ?? (/both times as 'join'/.test(d[0].message) ? undefined : d[0].message);
+  });
+  check('§27.4: without a version declaration, the same pair twice is stated twice, whatever its custom properties', () =>
+    expectCodes(`${T}Dep n {\n  a.x -> c [transformation: join]\n  a.x -> c [transformation: group_by]\n}`, 'error:duplicate-dep'));
+  check('§27.10.5: identity with several upstream ends draws a warning', () =>
+    expectCodes(`${V}${T}Dep: a.x, a.y -> b.x [transformation: identity]`, 'warning:transformation-mismatch'));
+  check('§27.10.5: an indirect kind from a whole entity draws a warning, once per line', () =>
+    expectCodes(`${V}${T}Dep n {\n  a, b -> c.x [transformation: filter]\n}\nDep m {\n  a -> b.x [transformation: lookup]\n}`, 'warning:indirect-from-entity warning:indirect-from-entity'));
+  check('§27.10.5: a transformation on a dependency to a View field is read as for an entity', () =>
+    expectCodes(`${V}${T}View v {\n  total int\n}\nDep: a.x -> v.total [transformation: aggregation]`, ''));
+
+  /* ---- §27.10.4 target coverage, §7.5 grain ---- */
+
+  check('§27.10.4: targetCoverage lists the fields a dependency feeds and those none does, nested and injected included', () => {
+    const doc = parse(`${V}${T}TablePartial audited {\n  loaded_at timestamp\n}\nTable d {\n  id int\n  name varchar\n  meta object {\n    k int\n  }\n  ~audited\n}\nDep: a.x -> d.id\nDep: a.y -> d.meta.k\nDep: a -> d`);
+    return same([targetCoverage(doc, 'd'), targetCoverage(doc, 'zz')], [{ fed: ['id', 'meta'], unfed: ['name', 'loaded_at'] }, undefined]);
+  });
+  check('§27.10.4: a Data Vault record source fed from an entity counts as fed', () => {
+    const doc = parse(`${V}${T}Table hub {\n  id int\n  REC_SRC varchar\n}\nDep n {\n  a.x -> hub.id\n  a -> hub.REC_SRC\n  source_query: 'SELECT x AS id, \\'A\\' AS REC_SRC FROM a'\n}`);
+    return same(targetCoverage(doc, 'hub'), { fed: ['id', 'REC_SRC'], unfed: [] }) ?? expectCodes(`${V}${T}Table hub {\n  id int\n  REC_SRC varchar\n}\nDep n {\n  a.x -> hub.id\n  a -> hub.REC_SRC\n}`, '');
+  });
+  check('§7.5: grainOf reads the grain of an entity and of a View', () => {
+    const doc = parse(`${V}Table f [grain: 'One row per order'] {\n  id int\n}\nView m [grain: 'One row per month'] {\n  n int\n}\nTable g {\n  id int\n}`);
+    return same(doc.statements.map((s) => grainOf(s as unknown as { settings: [] })), ['One row per order', 'One row per month', undefined]);
+  });
+  check('§24.7.3: grain in a Metadata block reads as a custom property, with a warning', () =>
+    expectCodes(`${V}Table f {\n  id int\n}\nMetadata Table f {\n  grain: 'One row per order'\n}`, 'warning:metadata-custom-property'));
+
+  /* ---- §27.8 modules ---- */
+
+  const files: Record<string, string> = {
+    '/l/lib.xdbml': `${V}${T}Dep load [dialect: snowflake] {\n  a.x, a.y -> b.x [transformation: derivation]\n  source_query: 'SELECT x || y AS x FROM a'\n}\n`,
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  check('editors: Monarch colors transformation, dialect and grain as setting keys, and the kinds as values', () => {
+    const lang = xdbmlMonarchTokensProvider as unknown as { settingKeys: string[]; transformationValues: string[] };
+    const keys = ['transformation', 'dialect', 'grain'].filter((k) => !lang.settingKeys.includes(k));
+    return keys.length ? `missing keys: ${keys.join(', ')}` : same(lang.transformationValues, [...TRANSFORMATIONS]);
+  });
+  check('§27.8: importing everything brings a Dep with its upstream ends, transformation and statement', () => {
+    const src = `${V}use * from './lib'\n`;
+    const l = collectLineage(flatten(parse(src, opts('/l/main.xdbml'))))[0];
+    return same([pairs(src, opts('/l/main.xdbml')), l.sourceQuery, l.sourceDatabase], [['a.x->b.x:derivation', 'a.y->b.x:derivation'], 'SELECT x || y AS x FROM a', 'snowflake'])
+      ?? expectCodes(src, '', opts('/l/main.xdbml'));
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -7353,6 +7581,7 @@ function main (): void {
   const lineageTests = runV07LineageTests();
   const specifierTests = runV07ModuleSpecifierTests();
   const v071Tests = runV071Tests();
+  const v072Tests = runV072Tests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -7369,9 +7598,10 @@ function main (): void {
   const lr = report('v0.7 data lineage (spec §27)', lineageTests);
   const sr = report('v0.7 module specifiers (spec §28.13)', specifierTests);
   const v71 = report('v0.7.1 x- custom properties, color, EntityPartial and EntityGroup (spec §24.5, §7.5, §17)', v071Tests);
+  const v72 = report('v0.7.2 source-to-target mapping, metrics and grain (spec §27.2, §27.3, §27.10, §27.11, §7.5)', v072Tests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + v71.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + v71.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + v71.passed + v72.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + v71.failed + v72.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

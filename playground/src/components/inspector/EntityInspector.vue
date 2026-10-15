@@ -82,6 +82,41 @@
       <NoteDisplay :body="noteBody" />
     </InspectorSection>
 
+    <!-- Source-to-target mapping (spec §27.10.4, §27.11, v0.7.2): the Deps
+         with transformations that load this entity or View, the fields none
+         of the document's Deps feeds, and the metrics of a View that is not
+         materialized. -->
+    <InspectorSection v-if="mappings.deps.length > 0" title="Loaded by">
+      <div class="text-xs mb-1.5">
+        <template v-for="(d, i) in mappings.deps" :key="d.id">
+          <span v-if="i > 0" class="text-gray-400 dark:text-slate-500">, </span>
+          <button type="button" class="font-mono text-blue-700 dark:text-blue-300 hover:underline" @click="selectDep(d.id)">{{ d.name ?? d.id }}</button>
+        </template>
+      </div>
+      <p v-if="mappings.unfed.length > 0" class="text-xs text-gray-700 dark:text-slate-300 leading-relaxed">
+        <span class="text-gray-500 dark:text-slate-400">No dependency feeds </span>
+        <template v-for="(f, i) in mappings.unfed" :key="f">
+          <span v-if="i > 0" class="text-gray-500 dark:text-slate-400">, </span>
+          <code class="font-mono text-[0.92em] px-1 rounded bg-black/5 dark:bg-white/10 text-gray-900 dark:text-slate-100">{{ f }}</code>
+        </template>
+        <span class="text-gray-500 dark:text-slate-400">.</span>
+      </p>
+      <p v-else class="text-xs text-gray-500 dark:text-slate-400">Every field is fed by a dependency.</p>
+    </InspectorSection>
+
+    <InspectorSection v-if="mappings.metrics.length > 0" title="Metrics">
+      <ul class="space-y-1 text-xs">
+        <li v-for="m in mappings.metrics" :key="m.field" class="leading-relaxed">
+          <code class="font-mono text-[0.92em] px-1 rounded bg-black/5 dark:bg-white/10 text-gray-900 dark:text-slate-100">{{ m.field }}</code>
+          <span class="text-gray-500 dark:text-slate-400"> aggregates </span>
+          <template v-for="(src, i) in m.sources" :key="src">
+            <span v-if="i > 0" class="text-gray-500 dark:text-slate-400">, </span>
+            <code class="font-mono text-[0.92em] px-1 rounded bg-black/5 dark:bg-white/10 text-gray-900 dark:text-slate-100">{{ src }}</code>
+          </template>
+        </li>
+      </ul>
+    </InspectorSection>
+
     <!-- Views surface their source_query so users can see the SQL that
          defines the view without leaving the inspector. Tables don't
          have this section. The block is rendered through Prism for
@@ -116,6 +151,7 @@ import NoteDisplay        from './NoteDisplay.vue';
 import EditInSourceButton from './EditInSourceButton.vue';
 import { highlightSql }   from './sqlHighlight';
 import { supertypeGroupsOf } from './ast-lookup';
+import { mappingsInto } from './dep-mapping';
 import type { Selection } from './selection';
 import { useParserStore } from '@/stores/parserStore';
 import { effectiveFieldList, effectiveFields, effectiveHeaderColor, effectiveNote, entityConstraints, entityDefinitions, metadataIndex, metadataNote, tablePartials, viewSourceQuery, withMetadata } from '@xdbml/parse';
@@ -181,6 +217,24 @@ function selectEntity (id: string): void {
 function selectGroup (groupName: string): void {
   emit('select', { kind: 'supertypeGroup', groupName });
 }
+
+function selectDep (depId: string): void {
+  emit('select', { kind: 'dep', depId });
+}
+
+/**
+ * The Deps with transformations that load this entity or View, the fields
+ * none feeds, and, for a View that is not materialized, its metrics
+ * (spec §27.10.4, §27.11).
+ */
+const mappings = computed(() => {
+  const doc = parser.flatAst;
+  if (!doc || props.entity.kind === 'EdgeDeclaration') return { deps: [], unfed: [], metrics: [] };
+  const materialized = props.entity.settings.find((s) => s.name === 'materialized')?.value;
+  const notMaterializedView = props.entity.kind === 'ViewDeclaration'
+    && !(materialized?.kind === 'BooleanValue' ? materialized.value : materialized?.kind === 'IdentifierValue' && materialized.value === 'true');
+  return mappingsInto(doc, entityId.value, notMaterializedView);
+});
 
 /**
  * Views and Edges don't have a `keyword` field in the AST (their kind

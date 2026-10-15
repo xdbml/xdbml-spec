@@ -189,7 +189,7 @@ check('visibility: inactive flag is carried',
 
 check('visibility: defaults to all types shown',
   JSON.stringify(visHandle.getRelationshipVisibility())
-    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true }));
+    === JSON.stringify({ referential: true, foreignMaster: true, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true, indirectLineage: true }));
 
 const beforeHide = visHost.innerHTML;
 visHandle.setRelationshipVisibility({ foreignMaster: false });
@@ -198,7 +198,7 @@ check('visibility: getter reflects the change',
   visHandle.getRelationshipVisibility().foreignMaster === false);
 check('visibility: change callback fires',
   JSON.stringify(lastVisibility)
-    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true }));
+    === JSON.stringify({ referential: true, foreignMaster: false, inactive: true, conceptual: true, supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true, indirectLineage: true }));
 check('visibility: the model keeps every relationship',
   visHandle.getModel().refs.length === 3);
 
@@ -209,6 +209,32 @@ check('visibility: showing them again restores the drawing',
 visHandle.setRelationshipVisibility({ referential: false, foreignMaster: false, inactive: false, conceptual: false });
 check('visibility: hiding every type still renders the entities',
   !!visHost.querySelector('svg'));
+
+// ---- indirect dependencies (spec §27.10.6, v0.7.2) ----
+//
+// The indirect kinds of a source-to-target mapping draw dashed and answer
+// to a toggle of their own; the direct ones stay.
+const mapHost = window.document.createElement('div');
+window.document.body.appendChild(mapHost);
+const mapHandle = mount(mapHost, `xdbml: 0.7
+Table s {
+  id int
+  status char(1)
+}
+Table t {
+  id int
+}
+Dep load {
+  s.id -> t.id [transformation: derivation]
+  s.status -> t [transformation: filter]
+}`);
+const dashCount = (): number => (mapHost.innerHTML.match(/stroke-dasharray="5 3"/g) ?? []).length;
+const pillText = (t: string): boolean => mapHost.innerHTML.includes(`>${t}</text>`);
+check('indirect: a filter draws dashed with its pill', dashCount() === 1 && pillText('filter') && pillText('derivation'));
+mapHandle.setRelationshipVisibility({ indirectLineage: false });
+check('indirect: hiding indirect dependencies keeps the direct ones', dashCount() === 0 && !pillText('filter') && pillText('derivation'));
+mapHandle.setRelationshipVisibility({ indirectLineage: true, lineage: false });
+check('indirect: hiding dependencies hides both', dashCount() === 0 && !pillText('filter') && !pillText('derivation'));
 // ---- selection highlight follows the line style (spec 11.13) ----
 //
 // A selected relationship is re-stroked in the selection colour over its own

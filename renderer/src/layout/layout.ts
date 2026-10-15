@@ -72,6 +72,7 @@ import type {
   TypeExpression,
   ViewDeclaration,
   XDbmlDocument,
+  Transformation,
 } from '@xdbml/parse';
 import { layoutNoteText, type NoteText } from './note-text.ts';
 import { depExtent, layoutDeps } from '../geometry/dep-path.ts';
@@ -166,6 +167,24 @@ export interface DepLineLayout {
   downstream?: FieldLocator;
   /** The `color` in the brackets after the dependency in a block (§27.3). */
   color?: string;
+  /**
+   * The kind of transformation (§27.10.1, v0.7.2), as `collectLineage()`
+   * reads it; undefined when the dependency carries none.
+   */
+  transformation?: Transformation;
+  /**
+   * The line of the Dep that states the dependency, counted from 0: the
+   * dependencies of a line with several upstream ends share it (§27.2).
+   */
+  line?: number;
+}
+
+/** The indirect kinds (§27.10.1): they steer the rows or a branch, and draw dashed (§27.10.6). */
+export const INDIRECT_TRANSFORMATIONS: ReadonlySet<string> = new Set(['join', 'lookup', 'filter', 'group_by', 'conditional']);
+
+/** Whether a dependency is indirect: its kind steers the rows without giving a value (§27.10.6). */
+export function isIndirectDependency (d: DepLineLayout): boolean {
+  return d.transformation !== undefined && INDIRECT_TRANSFORMATIONS.has(d.transformation);
 }
 
 export interface ContainerLayout {
@@ -786,16 +805,21 @@ export function buildDiagram (
   // Data lineage (spec §27), in the order and under the ids of
   // collectLineage(). An endpoint resolves as a relationship endpoint does
   // (§11.16.3), against the entities and the Views on the canvas.
-  const depLayouts: DepLayout[] = collectLineage(doc).map((l) => ({
-    id: l.id,
-    ...(l.name !== undefined ? { name: l.name } : {}),
-    ...(depColor(l.settings) ? { color: depColor(l.settings) } : {}),
-    dependencies: l.dependencies.map((d) => ({
-      upstream: locateRefEndpoint(d.upstream, entityByName),
-      downstream: locateRefEndpoint(d.downstream, entityByName),
-      ...(depColor(d.settings) ? { color: depColor(d.settings) } : {}),
-    })),
-  }));
+  const depLayouts: DepLayout[] = collectLineage(doc).map((l) => {
+    const lineIndex = new Map(l.decl?.dependencies.map((line, i) => [line, i]) ?? []);
+    return {
+      id: l.id,
+      ...(l.name !== undefined ? { name: l.name } : {}),
+      ...(depColor(l.settings) ? { color: depColor(l.settings) } : {}),
+      dependencies: l.dependencies.map((d) => ({
+        upstream: locateRefEndpoint(d.upstream, entityByName),
+        downstream: locateRefEndpoint(d.downstream, entityByName),
+        ...(depColor(d.settings) ? { color: depColor(d.settings) } : {}),
+        ...(d.transformation ? { transformation: d.transformation } : {}),
+        ...(d.line && lineIndex.has(d.line) ? { line: lineIndex.get(d.line)! } : {}),
+      })),
+    };
+  });
 
 
   // Mark the four relationship role markers of spec 11.12 on the fields

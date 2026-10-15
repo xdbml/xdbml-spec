@@ -85,6 +85,18 @@
  *     as `headercolor` is, in a document that declares a version. Both
  *     parse as a generalSetting; the reading is applied after parsing.
  *
+ * v0.7.2 changes (spec §27.2, §27.3, §27.10, §14.5, §7.5):
+ *   - depSpec takes a list of endpoints on each side of the arrow,
+ *     depEndList. The upstream side may name several, separated by commas,
+ *     in a document that declares a version; the downstream side names
+ *     one. A parser rejects a second downstream end, and a second upstream
+ *     end without a version declaration, as DBML does.
+ *   - The settings of a Dep, `source_query` (in the body of a block),
+ *     `source_database` with its alias `dialect`, and `transformation` (in
+ *     the brackets after a dependency) parse as general settings. `dialect`
+ *     on a View parses the same way, and so does `grain` on an entity or a
+ *     View. Their reading and their checks apply after parsing (§27.12).
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -801,7 +813,15 @@ metadataSetting
 // concern that dependency alone. A Dep stands at the top level only (§27.4).
 // What each endpoint names, the rules of a block (one downstream element,
 // one level), the kind an inline `dep` names, and the value of `color` are
-// checked after parsing (§27.10).
+// checked after parsing (§27.12).
+//
+// From v0.7.2, in a document that declares a version: a dependency may name
+// several upstream ends (depEndList); a block may mix the two levels; the body
+// of a block may hold `source_query`, the statement that loads the target, and
+// `source_database` or its alias `dialect`, its language; and the brackets
+// after a dependency may hold `transformation`, one of identity, derivation,
+// aggregation, join, lookup, filter, group_by, conditional (§27.3, §27.10).
+// Without a version declaration they are custom properties, as in DBML.
 
 depDefinition
     : DEP nameSegment? settingsBlock? COLON depSpec settingsBlock?     // short form
@@ -809,7 +829,14 @@ depDefinition
     ;
 
 depSpec
-    : refEndpoint depArrow refEndpoint
+    : depEndList depArrow depEndList    // one endpoint on the downstream side
+    ;
+
+// One endpoint, or several separated by commas on the upstream side, in a
+// document that declares a version (§27.2, v0.7.2): `a.x, a.y -> b.z` or
+// `b.z <- a.x, a.y`.
+depEndList
+    : refEndpoint (COMMA refEndpoint)*
     ;
 
 depArrow
@@ -1513,8 +1540,16 @@ quotedIdentifier options { caseInsensitive=false; }
 //            that names an entity or a View holds the field (§11.16.3). An
 //            Edge, its fields, and a composite endpoint are errors.
 //          * the dependencies of a block have one downstream entity or
-//            View, and are all between entities or all name a field at one
-//            end at least. A block with no dependency draws a warning.
+//            View. Without a version declaration, they are also all between
+//            entities or all name a field at one end at least (v0.7.2). A
+//            block with no dependency draws a warning.
+//          * in a document that declares a version (v0.7.2): the value of
+//            `transformation` is one of the eight kinds; a dependency
+//            between two entities takes none; identity, derivation,
+//            aggregation and conditional end at a field; identity with
+//            several upstream ends, and an indirect kind from a whole
+//            entity, draw a warning; `source_query` in brackets draws a
+//            warning (§27.10.5, §27.12).
 //          * an inline `dep` on an entity or a View names one, and on a
 //            field names a field. A TablePartial carries no `dep`.
 //          * `color` is #rgb or #rrggbb; a field does not depend on itself;

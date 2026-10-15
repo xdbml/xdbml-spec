@@ -54,6 +54,7 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - Settings: any settings on the entity declaration
 - Note: the entity's `Note: '...'` body if present
 - Source query, for a View: the first `source_query:` of its body, highlighted as SQL
+- Loaded by, for the target of a source-to-target mapping: the Deps that load it, and the fields no dependency feeds; for a View that is not materialized, Metrics: each metric with the fields it aggregates
 
 **Field inspector** shows:
 - Identification: name, dotted path within the entity, parent entity, parent container
@@ -76,9 +77,11 @@ The header always shows a colored badge with the kind (`SCHEMA`, `TABLE`, `FIELD
 - See [**Sticky notes**](./sticky-notes)
 
 **Dep inspector** shows:
-- Identification: the Dep's name when it has one, its form (short, block, or inline on an entity, a View or a field), and its color
+- Identification: the Dep's name when it has one, its form (short, block, or inline on an entity, a View or a field), its color, and the language of its statement when it names one
 - Dependencies: each read back as a sentence that names the elements, such as "`fct_orders.revenue` is computed from `stg_orders.amount`", with the note and settings of a dependency that carries its own
-- Transformation: the note of the Dep, rendered as Markdown, so a query in a code block keeps its layout
+- Source-to-target mapping, instead of the sentences, when the dependencies carry kinds of transformation: one row per target field with its sources and its kind, then the lines that steer the rows, such as a lookup or a filter
+- Transformation: the note of the Dep, rendered as Markdown
+- Source query: the statement of the Dep, highlighted as SQL, when it has one
 - Custom properties, when the Dep has any
 - See [**Data lineage**](./data-lineage)
 

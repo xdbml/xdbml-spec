@@ -1,67 +1,52 @@
-xDBML 0.7.1 -- commit on main, release, publish the VS Code extension
-Base: main at 01c16c2 ("release 0.7.0"). Built 2026-10-14.
+xDBML 0.7.2 -- pull request, release, VS Code extension
+Base: dev/0.7.2 at 6581050. Built 2026-10-15.
 
-WHAT THIS DELIVERY CHANGES
---------------------------
-1. EntityPartial and EntityGroup (spec §17). They are the keywords of
-   chapter 17; TablePartial and TableGroup, the DBML keywords, are aliases
-   read in every document. A diagram view lists Entities and EntityGroups,
-   with Tables and TableGroups as aliases (§18.1); a Metadata block targets
-   an EntityGroup (§24.7.1); an import names an entitypartial or an
-   entitygroup (§28.3). The AST keeps its node kinds and category names,
-   and gains a `keyword` field on partials and groups.
+WHAT THIS DELIVERY ADDS
+-----------------------
+Three files, in the working tree of your clone, on dev/0.7.2:
 
-2. color, the header color of an entity (spec §7.5). In a document that
-   declares a version, `color` on an entity, a View or an EntityPartial
-   sets the header color, as `headercolor` does; written together, they
-   are one setting written twice (a warning, the first one applies).
-   Without a version declaration, `color` on a Table stays a custom
-   property, as DBML 10.3.1 reads it (checked with @dbml/core 10.3.1).
+  apply.cmd      the three steps below
+  APPLY.txt      this file
+  PR-0.7.2.md    the description of the pull request; step 1 puts it in
+                 the pull request and deletes it, so it is never committed
 
-3. Custom properties (spec §24.5, §18.1). A quoted key with the x- prefix,
-   "x-hackolade-id", marks a custom property as x_ does. A diagram view
-   takes custom properties of any name, as every other element does, in
-   its brackets and in Metadata DiagramView blocks: the error
-   unknown-diagram-view-setting is gone. The five errors of Studio's
-   export, "x-hackolade-id" on diagram views, disappear.
-
-Documents keep declaring `xdbml: 0.7`; the parser also accepts 0.7.1.
-
-The files are in the working tree of your clone, uncommitted, on main.
-Look at them with git status and git diff before step 1 if you want.
+Everything else of 0.7.2 is on the branch already, in your four commits.
 
 THE WHOLE DEPLOYMENT, IN THREE COMMANDS
 ---------------------------------------
-From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on main:
+From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on
+dev/0.7.2:
 
-  apply.cmd            gate, commit this delivery, push main
-  apply.cmd release    release 0.7.1, tag v0.7.1
-  apply.cmd vscode     publish the VS Code extension 0.7.1
+  apply.cmd            gate, commit this delivery, open the pull request
+  apply.cmd release    merge the pull request, release 0.7.2, tag v0.7.2
+  apply.cmd vscode     publish the VS Code extension 0.7.2
 
 Each step stops at the first failure, says what failed, and can be rerun
 once the cause is fixed. Nothing is published before step 2.
 
-Step 1 runs npm run check and the type-check of the MCP server, then
-commits every change in the tree as "0.7.1: EntityPartial and EntityGroup,
-color as the header color, x- custom properties" and pushes main. It
-checks only that the clone is on main and that origin/main has nothing
-your main lacks; it does not compare the tree against a list of files.
+Step 1 checks that the GitHub CLI is logged in, that the clone is on
+dev/0.7.2, level with origin/dev/0.7.2, and that main has nothing the
+branch lacks. It runs npm run check and the type-check of the MCP server,
+commits every change in the tree except PR-0.7.2.md as "0.7.2: deployment
+script", pushes the branch, and opens the pull request into main with
+PR-0.7.2.md as its description. It does not compare the tree against a
+list of files.
 
-Step 2 checks that main matches origin/main, runs
-tools\release-preflight.cmd 0.7.1, dates the CHANGELOG, and runs
-tools\release.cmd 0.7.1: @xdbml/parse and @xdbml/render 0.7.1 on npm, the
-MCP server and the rendering API deployed, "release 0.7.1" committed and
-pushed, the tag v0.7.1 and its GitHub release from the "## v0.7.1" section
-of the CHANGELOG. A point release keeps all three numbers in its tag.
+Step 2 waits for the checks of the pull request, merges it, switches to
+main and pulls, runs tools\release-preflight.cmd 0.7.2, dates the
+CHANGELOG, and runs tools\release.cmd 0.7.2: @xdbml/parse and
+@xdbml/render 0.7.2 on npm, the MCP server and the rendering API deployed,
+"release 0.7.2" committed and pushed, the tag v0.7.2 and its GitHub
+release from the "## v0.7.2" section of the CHANGELOG. xdbml.org deploys
+from main.
 
-Step 3 publishes tools\vscode-extension\xdbml-0.7.1.vsix, built from the
-extension sources of this delivery (vsce package; dist\extension.js is
-byte for byte the committed one).
+Step 3 publishes tools\vscode-extension\xdbml-0.7.2.vsix, which was built
+on your machine from the extension sources of the branch.
 
 VERIFIED BEFORE DELIVERY
 ------------------------
-On a copy of the tree with its own npm ci, on Linux, Node 22:
-  parser 809 (28 new for 0.7.1, 9 new corpus cases), renderer 358,
-  viewport 14, interactive 58, MCP 94, from-mongodb 24, playground 65,
-  spec links 234, TextMate grammar test, playground type-check (vue-tsc),
-  MCP type-check, MCP reference in sync with llms.txt, docs build OK.
+On a Linux clone of dev/0.7.2 with its own npm ci, Node 22, with this
+delivery applied: parser 875, renderer 384, viewport 14, interactive 61,
+MCP 104, from-mongodb 24, playground 67, VS Code extension package in
+sync, spec links 236, TextMate grammar test, playground and MCP
+type-checks, MCP reference in sync with llms.txt, docs build OK.

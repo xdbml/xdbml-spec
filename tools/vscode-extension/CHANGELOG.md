@@ -4,6 +4,15 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.2]
+
+Follows xDBML 0.7.2.
+
+### Added
+- **Source-to-target mapping**: `transformation`, `dialect` and `grain` are
+  colored as setting keys, as `source_database` and `source_query` already
+  are.
+
 ## [0.7.1]
 
 Follows xDBML 0.7.1.

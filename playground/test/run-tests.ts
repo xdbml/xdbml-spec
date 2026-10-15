@@ -46,6 +46,7 @@ import {
 import type { LayoutSnapshot } from '../src/components/diagram/layout-history.ts';
 import { applyTextEdits, planStickyNote } from '../src/components/diagram/add-note.ts';
 import { depNarrative } from '../src/components/inspector/dep-narrative.ts';
+import { depMapping, isMapping, mappingsInto } from '../src/components/inspector/dep-mapping.ts';
 import { collectLineage, resolveLineage } from '../../parser/src/index.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -204,6 +205,74 @@ Dep: stg -> stg
       const names = collectLineage(ast)[1];
       const withNote = depNarrative(names, resolved.get(names.id) ?? [])[0].withSettings;
       assertEq(JSON.stringify(withNote.map((w) => w.upstream)), JSON.stringify(['raw.last']), 'the settings of one dependency of a group');
+    },
+  },
+
+  {
+    name: 'the inspector reads a Dep with transformations as a source-to-target mapping (spec §27.10, v0.7.2)',
+    source: `xdbml: 0.7
+Container src {
+  Table m {
+    id     int [pk]
+    first  varchar
+    last   varchar
+    code   char(2)
+    status char(1)
+  }
+  Table c {
+    code char(2) [pk]
+    name varchar
+  }
+}
+Container dw {
+  Table d {
+    id       int
+    full     varchar
+    country  varchar
+    email    varchar
+  }
+  Table f {
+    total decimal
+  }
+  View kpis {
+    revenue decimal
+  }
+}
+Dep load {
+  src.m.id -> dw.d.id [transformation: identity]
+  src.m.first, src.m.last -> dw.d.full [transformation: derivation, note: 'Trimmed']
+  src.c.name -> dw.d.country
+  src.m.code, src.c.code -> dw.d [transformation: lookup]
+  src.m.status -> dw.d [transformation: filter]
+  source_query: 'SELECT 1'
+}
+Dep plain {
+  src.m.id -> dw.f.total
+}
+Dep metrics {
+  dw.f.total -> dw.kpis.revenue [transformation: aggregation]
+}
+`,
+    check: ({ ast }) => {
+      const resolved = resolveLineage(ast);
+      const [load, plain, metrics] = collectLineage(ast);
+      assertTrue(isMapping(load) && !isMapping(plain) && isMapping(metrics), 'a Dep with a kind reads as a mapping');
+      const m = depMapping(load, resolved.get(load.id) ?? []);
+      assertEq(m.element, 'dw.d', 'the target element');
+      assertEq(JSON.stringify(m.fields.map((r) => [r.target, r.sources, r.kind ?? null, r.note ?? null])), JSON.stringify([
+        ['id', ['src.m.id'], 'identity', null],
+        ['full', ['src.m.first', 'src.m.last'], 'derivation', 'Trimmed'],
+        ['country', ['src.c.name'], null, null],
+      ]), 'one row per line into a field, with its sources, kind and note');
+      assertEq(JSON.stringify(m.rows.map((r) => [r.kind, r.sources])), JSON.stringify([
+        ['lookup', ['src.m.code', 'src.c.code']],
+        ['filter', ['src.m.status']],
+      ]), 'the lines into the target as a whole');
+      const into = mappingsInto(ast, 'dw.d');
+      assertEq(JSON.stringify([into.deps.map((d) => d.name), into.unfed]), JSON.stringify([['load'], ['email']]), 'the Deps that load a target, and the fields none feeds');
+      assertEq(mappingsInto(ast, 'dw.f').deps.length, 0, 'a target only plain lineage loads shows no mapping');
+      assertEq(JSON.stringify(mappingsInto(ast, 'dw.kpis', true).metrics), JSON.stringify([{ field: 'revenue', sources: ['dw.f.total'] }]), 'the metrics of a View that is not materialized');
+      assertEq(mappingsInto(ast, 'dw.kpis', false).metrics.length, 0, 'no metrics for a materialized View');
     },
   },
 

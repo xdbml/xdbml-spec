@@ -1,6 +1,6 @@
 ---
 title: Grammar test cases
-description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.7.1. Every case runs in the reference parser's test suite.
+description: Reference test corpus for xDBML grammar validation. VALID and INVALID examples organized by specification section. Every conforming parser must accept the VALID and reject the INVALID cases. Includes v0.1 baseline cases, v0.2 additions (module system, scalar Named Types) and cases for later versions up to v0.7.2. Every case runs in the reference parser's test suite.
 ---
 
 
@@ -2184,7 +2184,7 @@ Table c {
 Dep: a -> b -> c
 ```
 
-### INVALID -- two upstream elements in one dependency (§27.2)
+### INVALID -- two upstream elements in one dependency, without a version declaration (§27.2)
 
 ```
 Table a {
@@ -2223,7 +2223,7 @@ Dep load {
 }
 ```
 
-### INVALID -- a block mixing a dependency between entities with one naming a field (dep-mixed-level, §27.2)
+### INVALID -- a block mixing a dependency between entities with one naming a field, without a version declaration (dep-mixed-level, §27.2)
 
 ```
 Table a {
@@ -3546,6 +3546,478 @@ Metadata Entity orders {
 
 ```
 Table orders [color: #3498DB, headercolor: #E74C3C] { id int [pk] }
+```
+
+---
+
+## v0.7.2 -- Source-to-target mapping, metrics and grain
+
+### VALID -- a source-to-target mapping with its statement (§27.10)
+
+```
+xdbml: 0.7
+
+Container legacy [type: database, target: Oracle] {
+  Table MBR {
+    MBR_ID   number [pk]
+    FIRST_NM varchar2(50)
+    LAST_NM  varchar2(50)
+    STATUS   char(1)
+    CNTRY_CD char(2)
+  }
+  Table COUNTRY {
+    CODE char(2) [pk]
+    NAME varchar2(80)
+  }
+}
+
+Container dw [type: schema, target: Snowflake] {
+  Table dim_member [grain: 'One row per member'] {
+    member_key   int       [pk, increment]
+    member_id    int       [unique]
+    full_name    varchar
+    country_name varchar
+    email        varchar   [note: 'Not available in the source system.']
+    loaded_at    timestamp [default: `CURRENT_TIMESTAMP`]
+  }
+}
+
+Dep load_dim_member [source_database: snowflake] {
+  legacy.MBR.MBR_ID   -> dw.dim_member.member_id    [transformation: identity]
+  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: derivation]
+  legacy.COUNTRY.NAME -> dw.dim_member.country_name [transformation: identity]
+
+  legacy.MBR.CNTRY_CD, legacy.COUNTRY.CODE -> dw.dim_member [transformation: lookup]
+  legacy.MBR.STATUS -> dw.dim_member [transformation: filter]
+
+  source_query: '''
+    SELECT m.MBR_ID AS member_id,
+           TRIM(m.FIRST_NM) || ' ' || TRIM(m.LAST_NM) AS full_name,
+           c.NAME AS country_name
+    FROM legacy.MBR m
+    LEFT JOIN legacy.COUNTRY c ON c.CODE = m.CNTRY_CD
+    WHERE m.STATUS <> 'X'
+  '''
+  Note: 'Initial load, then a daily delta of the members of the legacy system.'
+}
+```
+
+### VALID -- a CASE: derivation of the value, conditional of the field it tests (§27.10.1)
+
+```
+xdbml: 0.7
+
+Container src {
+  Table payment {
+    id     int [pk]
+    amount decimal(12, 2)
+    state  char(1)
+  }
+}
+
+Container dw {
+  Table fct_payment {
+    id             int [pk]
+    settled_amount decimal(12, 2)
+  }
+}
+
+Dep load_fct_payment [source_database: ansi_sql] {
+  src.payment.amount -> dw.fct_payment.settled_amount [transformation: derivation]
+  src.payment.state  -> dw.fct_payment.settled_amount [transformation: conditional]
+  source_query: '''
+    SELECT CASE WHEN state = 'S' THEN amount END AS settled_amount
+    FROM src.payment
+  '''
+}
+```
+
+### VALID -- a Data Vault record source, from the source entity to the field (§27.10.4)
+
+```
+xdbml: 0.7
+
+Container legacy {
+  Table MBR {
+    MBR_ID number [pk]
+  }
+}
+
+Container crm {
+  Table contacts {
+    member_number int [pk]
+  }
+}
+
+Container dv {
+  Table hub_member {
+    member_id int [pk]
+    REC_SRC   varchar
+  }
+}
+
+Dep load_hub_member_legacy {
+  legacy.MBR.MBR_ID -> dv.hub_member.member_id
+  legacy.MBR        -> dv.hub_member.REC_SRC
+  source_query: '''
+    SELECT MBR_ID AS member_id, 'LEGACY' AS REC_SRC FROM legacy.MBR
+  '''
+}
+
+Dep load_hub_member_crm {
+  crm.contacts.member_number -> dv.hub_member.member_id
+  crm.contacts               -> dv.hub_member.REC_SRC
+  source_query: '''
+    SELECT member_number AS member_id, 'CRM' AS REC_SRC FROM crm.contacts
+  '''
+}
+```
+
+### VALID -- metrics: fields of a View that is not materialized (§27.11)
+
+```
+xdbml: 0.7
+
+Table fct_orders [grain: 'One row per order'] {
+  order_id    int [pk]
+  customer_id int
+  revenue     decimal(12, 2)
+  ordered_at  date
+}
+
+View sales_metrics [source_database: ansi_sql, note: 'Measures of the order process, computed at query time.'] {
+  source_query: '''
+    SELECT SUM(revenue) AS total_revenue,
+           SUM(revenue) / COUNT(DISTINCT order_id) AS average_order_value
+    FROM fct_orders
+  '''
+  total_revenue       decimal(18, 2) [synonyms: ['revenue', 'total sales'], note: 'Revenue of the orders, net of refunds.']
+  average_order_value decimal(12, 2)
+}
+
+Dep sales_metrics_lineage {
+  fct_orders.revenue -> sales_metrics.total_revenue [transformation: aggregation]
+  fct_orders.revenue, fct_orders.order_id -> sales_metrics.average_order_value [transformation: aggregation]
+}
+```
+
+### VALID -- several upstream ends, with either arrow (§27.2)
+
+```
+xdbml: 0.7
+
+Table stg_customers {
+  first_name varchar
+  last_name  varchar
+  nick_name  varchar
+}
+
+Table dim_customer {
+  full_name    varchar
+  display_name varchar
+}
+
+Dep: stg_customers.first_name, stg_customers.last_name -> dim_customer.full_name
+Dep: dim_customer.display_name <- stg_customers.nick_name, stg_customers.first_name
+```
+
+### VALID -- a block mixing the entity level and the field level (§27.2)
+
+```
+xdbml: 0.7
+
+Table raw_orders {
+  amount_usd decimal(12, 2)
+}
+
+Table stg_orders {
+  revenue decimal(12, 2)
+}
+
+Dep stg_orders {
+  raw_orders -> stg_orders
+  raw_orders.amount_usd -> stg_orders.revenue
+}
+```
+
+### VALID -- values in any casing, and dialect as an alias of source_database (§27.3)
+
+```
+xdbml: 0.7
+
+Table customers {
+  id         int [pk]
+  country_id int
+}
+
+Table countries {
+  id   int [pk]
+  name varchar
+}
+
+Table dim_customer {
+  id      int [pk]
+  country varchar
+}
+
+Dep load_dim_customer [Dialect: ANSI_SQL] {
+  customers.id -> dim_customer.id [transformation: Identity]
+  countries.name -> dim_customer.country [transformation: 'IDENTITY']
+  customers.country_id, countries.id -> dim_customer [transformation: Lookup]
+}
+```
+
+### VALID -- without a version declaration, transformation is a custom property, as in DBML (§27.3)
+
+```
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep: a -> b [transformation: copy, source_query: 'SELECT id FROM a']
+```
+
+### VALID -- a copy between two entities (identity, §27.10.1)
+
+```
+xdbml: 0.7
+
+Container crm {
+  Table contacts {
+    member_number int [pk]
+    email         varchar
+  }
+}
+
+Container stage {
+  Table contacts {
+    member_number int [pk]
+    email         varchar
+  }
+}
+
+Dep replicate_contacts: crm.contacts -> stage.contacts [transformation: identity]
+```
+
+### VALID -- a role-playing date dimension: one field feeds three fields of a fact (§27.4)
+
+```
+xdbml: 0.7
+
+Table dim_date {
+  date_key int [pk]
+}
+
+Table fct_orders {
+  order_date_key    int
+  ship_date_key     int
+  delivery_date_key int
+}
+
+Dep load_fct_orders {
+  dim_date.date_key -> fct_orders.order_date_key [transformation: lookup]
+  dim_date.date_key -> fct_orders.ship_date_key [transformation: lookup]
+  dim_date.date_key -> fct_orders.delivery_date_key [transformation: lookup]
+}
+```
+
+### VALID -- one field in several roles of one load: the same pair once for each kind (§27.4)
+
+```
+xdbml: 0.7
+
+Table orders {
+  member_id int
+  order_dt  date
+  amount    decimal(12, 2)
+}
+
+Table members {
+  member_id int [pk]
+}
+
+Table fct_daily_sales {
+  member_id int
+  sale_date date
+  total     decimal(14, 2)
+}
+
+Dep load_fct_daily_sales {
+  orders.member_id -> fct_daily_sales.member_id [transformation: identity]
+  orders.order_dt  -> fct_daily_sales.sale_date [transformation: identity]
+  orders.amount    -> fct_daily_sales.total [transformation: aggregation]
+  orders.member_id, members.member_id -> fct_daily_sales [transformation: join]
+  orders.member_id, orders.order_dt -> fct_daily_sales [transformation: group_by]
+}
+```
+
+### INVALID -- the same pair with the same kind twice (duplicate-dep, §27.4)
+
+```
+xdbml: 0.7
+
+Table a {
+  x int
+}
+
+Table b {
+  x int
+}
+
+Dep load {
+  a.x -> b [transformation: filter]
+  a.x -> b [transformation: filter]
+}
+```
+
+### INVALID -- two downstream ends in one dependency (§27.2)
+
+```
+xdbml: 0.7
+
+Table a {
+  x int
+}
+
+Table b {
+  x int
+  y int
+}
+
+Dep: a.x -> b.x, b.y
+```
+
+### INVALID -- an unknown value of transformation (unknown-transformation, §27.10.1)
+
+```
+xdbml: 0.7
+
+Table a {
+  x int
+}
+
+Table b {
+  x int
+}
+
+Dep: a.x -> b.x [transformation: copy]
+```
+
+### INVALID -- a transformation between two entities (transformation-between-entities, §27.10.1)
+
+```
+xdbml: 0.7
+
+Table raw_orders {
+  id int
+}
+
+Table stg_orders {
+  id int
+}
+
+Dep: raw_orders -> stg_orders [transformation: filter]
+```
+
+### INVALID -- a kind that gives the value of a field, ending at an entity (transformation-target-mismatch, §27.10.1)
+
+```
+xdbml: 0.7
+
+Table a {
+  first_name varchar
+}
+
+Table b {
+  full_name varchar
+}
+
+Dep: a.first_name -> b [transformation: derivation]
+```
+
+### VALID with a warning -- identity with several upstream ends (transformation-mismatch, §27.10.5)
+
+```
+xdbml: 0.7
+
+Table a {
+  first_name varchar
+  last_name  varchar
+}
+
+Table b {
+  full_name varchar
+}
+
+Dep: a.first_name, a.last_name -> b.full_name [transformation: identity]
+```
+
+### VALID with a warning -- an indirect kind from a whole entity (indirect-from-entity, §27.10.5)
+
+```
+xdbml: 0.7
+
+Table members {
+  id     int
+  status char(1)
+}
+
+Table dim_member {
+  id int
+}
+
+Dep: members -> dim_member.id [transformation: filter]
+```
+
+### VALID with a warning -- source_query in the brackets of a Dep (source-query-in-settings, §27.3)
+
+```
+xdbml: 0.7
+
+Table a {
+  id int
+}
+
+Table b {
+  id int
+}
+
+Dep load [source_query: 'SELECT id FROM a'] {
+  a.id -> b.id
+}
+```
+
+### VALID with a warning -- dialect and source_database in one settings list (duplicate-setting, §24.5)
+
+```
+xdbml: 0.7
+
+Table a {
+  id int
+}
+
+View v [dialect: snowflake, source_database: oracle] {
+  source_query: 'SELECT id FROM a'
+  id int
+}
+```
+
+### VALID with a warning -- grain in a Metadata block (metadata-custom-property, §24.7.3)
+
+```
+xdbml: 0.7
+
+Table fct_orders {
+  order_id int [pk]
+}
+
+Metadata Table fct_orders {
+  grain: 'One row per order'
+}
 ```
 
 ---

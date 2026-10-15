@@ -6,13 +6,13 @@ xdbml: 0.7
 // The analytics warehouse of an online shop. Raw data lands from the shop's
 // database and from the Stripe API; dbt models clean it in a staging layer
 // and join it into marts. Each Dep records which element feeds which, from
-// upstream to downstream. The transformations themselves stay in the notes,
-// as text.
+// upstream to downstream. The query of a dbt model goes in `source_query`,
+// and the notes stay prose. Example 19 adds the kind of each transformation.
 //
 //   - `Dep: a -> b` states one dependency, between entities, Views or
 //     fields, or from an entity to a field and the reverse.
 //   - A block gathers the dependencies into one downstream element, such as
-//     the columns one dbt model fills. Its note holds the query.
+//     the columns one dbt model fills. `source_query` holds the model's query.
 //   - `[dep: <- source]` states a dependency in the brackets of the element
 //     it concerns.
 //   - In the diagram, a dependency draws as an amber curve with an arrowhead,
@@ -118,19 +118,18 @@ Dep stg_order_lines {
 }
 
 // Two fields combined into one meet at a junction.
-Dep stg_customers [owner: 'analytics'] {
+Dep stg_customers [owner: 'analytics', source_database: snowflake] {
   raw.customers.id         -> staging.stg_customers.customer_id
   raw.customers.first_name -> staging.stg_customers.full_name
   raw.customers.last_name  -> staging.stg_customers.full_name
   raw.customers.email      -> staging.stg_customers.email [note: 'Lowercased']
-  Note: '''
-    ~~~sql
+  source_query: '''
     SELECT id AS customer_id,
            first_name || ' ' || last_name AS full_name,
            LOWER(email) AS email
     FROM raw.customers
-    ~~~
   '''
+  Note: 'One row per customer, with a full name and a lowercased email.'
 }
 
 Dep stg_payments [color: #7c3aed] {

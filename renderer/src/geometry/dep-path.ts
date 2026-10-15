@@ -12,11 +12,20 @@
  * to the arrowhead, so several fields combined into one read as one
  * derivation.
  *
+ * From v0.7.2 a dependency may carry a kind of transformation (§27.10.6).
+ * The direct kinds keep the solid curve and the junction; the indirect
+ * kinds (join, lookup, filter, group by, conditional) draw dashed, the
+ * ends of one line meeting at a junction of their own. A pill names the
+ * kind at the junction, or at the middle of the curve when there is none;
+ * `identity` shows none, except between two entities, where it marks a
+ * copy. Several groups that end at one row or one header spread their
+ * arrowheads a little, so each stays visible.
+ *
  * Pure: computed from the boxes' current bounds, at draw time, by the
  * serializer and by the interaction overlay alike.
  */
 import type { DepLayout, EntityLayout, FieldLayout, FieldLocator } from '../layout/layout.ts';
-import { ENTITY_HEADER_HEIGHT, ROW_HEIGHT } from '../layout/layout.ts';
+import { ENTITY_HEADER_HEIGHT, ROW_HEIGHT, isIndirectDependency } from '../layout/layout.ts';
 import { isQualifiedName, joinName, splitName } from '@xdbml/parse';
 import { findFieldRow } from './ref-path.ts';
 
@@ -43,6 +52,24 @@ const LOOP_REACH = 44;
 const SELF_SPREAD = 7;
 /** A loop on the left stays this far inside the canvas, whose left edge is at 0. */
 const LEFT_LIMIT = 4;
+/** Vertical step between the arrowheads of groups that end at one row or one header. */
+const TIP_SPREAD = 6;
+
+/** The text of a pill for a kind of transformation: `group_by` reads `group by`. */
+export function transformationLabel (kind: string): string {
+  return kind.replace(/_/g, ' ');
+}
+
+/** Width of a pill for its text: about 5.4 px a character in 9 px type, plus padding. */
+export function pillWidth (text: string): number {
+  return Math.round(text.length * 5.4 + 10);
+}
+export const PILL_HEIGHT = 13;
+
+/** Whether a pill stands at a junction: the pill then marks it, and no dot is drawn. */
+export function pillAt (g: DepGeometry, j: Point): boolean {
+  return g.pills.some((p) => p.x === j.x && p.y === j.y);
+}
 
 export interface DepCurve {
   /** Index of the dependency in `DepLayout.dependencies`. */
@@ -50,6 +77,17 @@ export interface DepCurve {
   d: string;
   /** The dependency's own color, or undefined for the Dep's. */
   color?: string;
+  /** An indirect kind of transformation: drawn dashed (§27.10.6). */
+  dashed?: boolean;
+}
+
+/** A pill that names a kind of transformation (§27.10.6). */
+export interface DepPill extends Point {
+  text: string;
+  /** The color of the curves it names, or undefined for the Dep's. */
+  color?: string;
+  /** It names an indirect kind: its border is dashed, as its curves are. */
+  dashed?: boolean;
 }
 
 export interface DepGeometry {
@@ -58,7 +96,11 @@ export interface DepGeometry {
   curves: DepCurve[];
   /** The straight trunk from each junction to its arrowhead. */
   trunks: string[];
+  /** For each trunk, whether its group is indirect, so that it draws dashed. */
+  trunkDashed: boolean[];
   junctions: Point[];
+  /** The kinds of transformation, at a junction or at the middle of a curve (v0.7.2). */
+  pills: DepPill[];
   /** Arrowheads, as polygon points, one per downstream end. */
   arrows: string[];
   /** Where the Dep's name goes: above its first junction, or at the middle of its first curve. */
@@ -71,49 +113,117 @@ export function layoutDeps (deps: ReadonlyArray<DepLayout>, entities: ReadonlyAr
   return deps.map((d) => layoutDep(d, byId)).filter((g) => g.curves.length > 0);
 }
 
-export function layoutDep (dep: DepLayout, boxes: ReadonlyMap<string, EntityLayout>): DepGeometry {
-  const out: DepGeometry = { dep, curves: [], trunks: [], junctions: [], arrows: [] };
+type Member = { index: number; up: EntityLayout; upField?: string; color?: string };
 
-  // Group the dependencies by their downstream end.
-  const groups = new Map<string, Array<{ index: number; up: EntityLayout; upField?: string; color?: string }>>();
-  const downOf = new Map<string, { box: EntityLayout; field?: string }>();
+interface Group {
+  members: Member[];
+  box: EntityLayout;
+  field?: string;
+  /** The indirect line it draws, or undefined for the direct group of its end. */
+  indirect: boolean;
+  /** The kind the group's pill names, if any. */
+  kind?: string;
+  side: HSide;
+}
+
+export function layoutDep (dep: DepLayout, boxes: ReadonlyMap<string, EntityLayout>): DepGeometry {
+  const out: DepGeometry = { dep, curves: [], trunks: [], trunkDashed: [], junctions: [], pills: [], arrows: [] };
+
+  // Group the dependencies by their downstream end: the direct ones of an
+  // end together, and the indirect ones by the line that states them.
+  const groups = new Map<string, Group>();
+  const kinds = new Map<string, Set<string | undefined>>();
+  const onCurve: Array<{ d: string; text: string; color?: string; dashed?: boolean }> = [];
   dep.dependencies.forEach((d, index) => {
     const up = box(d.upstream, boxes);
     const down = box(d.downstream, boxes);
     if (!up || !down) return;
-    const key = `${down.id}\u0000${d.downstream!.fieldName ?? ''}`;
+    const indirect = isIndirectDependency(d);
+    const key = `${down.id}\u0000${d.downstream!.fieldName ?? ''}\u0000${indirect ? `i${d.line ?? index}` : 'd'}`;
     if (!groups.has(key)) {
-      groups.set(key, []);
-      downOf.set(key, { box: down, field: d.downstream!.fieldName });
+      groups.set(key, { members: [], box: down, field: d.downstream!.fieldName, indirect, side: 'right' });
+      kinds.set(key, new Set());
     }
-    groups.get(key)!.push({ index, up, upField: d.upstream!.fieldName, ...(d.color ? { color: d.color } : {}) });
+    groups.get(key)!.members.push({ index, up, upField: d.upstream!.fieldName, ...(d.color ? { color: d.color } : {}) });
+    kinds.get(key)!.add(d.transformation);
   });
 
-  for (const [key, members] of groups) {
-    const down = downOf.get(key)!;
-    const B = down.box;
+  for (const [key, g] of groups) {
     // The downstream side faces the upstream boxes that stand apart from it;
     // when every upstream box shares its column, the curves loop on the right.
-    const apart = members.filter((m) => !sameColumn(m.up, B));
-    const side: HSide = apart.length > 0 && mean(apart.map((m) => centerX(m.up))) < centerX(B) ? 'left' : 'right';
+    const apart = g.members.filter((m) => !sameColumn(m.up, g.box));
+    g.side = apart.length > 0 && mean(apart.map((m) => centerX(m.up))) < centerX(g.box) ? 'left' : 'right';
+    // A pill names the kind its members share; mixed kinds name none.
+    const ks = [...kinds.get(key)!];
+    const kind = ks.length === 1 ? ks[0] : undefined;
+    const copy = !g.field && g.members.every((m) => !m.upField);
+    if (kind && (kind !== 'identity' || copy)) g.kind = kind;
+  }
+
+  // Groups that end at one row or one header, on one side, spread their
+  // arrowheads, in the order of their upstream ends, top to bottom.
+  const atTip = new Map<string, Group[]>();
+  for (const g of groups.values()) {
+    const k = `${g.box.id}\u0000${g.field ?? ''}\u0000${g.side}`;
+    if (!atTip.has(k)) atTip.set(k, []);
+    atTip.get(k)!.push(g);
+  }
+  const shiftOf = new Map<Group, number>();
+  for (const list of atTip.values()) {
+    if (list.length < 2) continue;
+    const upY = (g: Group) => mean(g.members.map((m) => anchor(m.up, 'left', m.upField).y));
+    list.sort((a, b) => upY(a) - upY(b));
+    const room = (list[0].field ? ROW_HEIGHT : ENTITY_HEADER_HEIGHT) / 2 - 3;
+    // Pills at junctions stand one above the other: they need a pill's height.
+    const pills = list.some((g) => g.kind && g.members.length >= 2);
+    const step = Math.min(pills ? PILL_HEIGHT + 2 : TIP_SPREAD, (2 * room) / (list.length - 1));
+    list.forEach((g, i) => shiftOf.set(g, (i - (list.length - 1) / 2) * step));
+  }
+
+  for (const g of groups.values()) {
+    const { members, side } = g;
+    const B = g.box;
     const out1 = side === 'left' ? -1 : 1;
-    const self = members.length === 1 && members[0].up.id === B.id && !members[0].upField && !down.field;
-    const tip = anchor(B, side, down.field, self ? SELF_SPREAD : 0);
+    const self = members.length === 1 && members[0].up.id === B.id && !members[0].upField && !g.field;
+    const tip = anchor(B, side, g.field, (self ? SELF_SPREAD : 0) + (shiftOf.get(g) ?? 0));
     const base: Point = { x: tip.x + out1 * ARROW_LENGTH, y: tip.y };
     out.arrows.push(arrowPoints(tip, side));
+    const pillColor = members.length > 0 && members.every((m) => m.color && m.color === members[0].color) ? members[0].color : undefined;
 
     if (members.length >= 2) {
       const reach = Math.min(...members.map((m) => {
         const a = anchor(m.up, sameColumn(m.up, B) ? side : (centerX(m.up) < tip.x ? 'right' : 'left'), m.upField);
         return out1 * (a.x - tip.x) > 0 ? out1 * (a.x - tip.x) : Infinity;
       }));
-      const gap = Math.max(JUNCTION_MIN_GAP, Math.min(JUNCTION_GAP, reach / 3));
+      // A pill at the junction needs room beside the arrowhead.
+      const wanted = g.kind ? Math.max(JUNCTION_GAP, pillWidth(transformationLabel(g.kind)) / 2 + ARROW_LENGTH + 6) : JUNCTION_GAP;
+      const gap = Math.max(JUNCTION_MIN_GAP, Math.min(wanted, reach / (g.kind ? 2 : 3)));
       const j: Point = { x: tip.x + out1 * gap, y: tip.y };
       out.junctions.push(j);
       out.trunks.push(`M ${r(j.x)} ${r(j.y)} L ${r(base.x)} ${r(base.y)}`);
-      for (const m of members) out.curves.push(curveTo(m, j, side, B, false));
+      out.trunkDashed.push(g.indirect);
+      for (const m of members) out.curves.push({ ...curveTo(m, j, side, B, false), ...(g.indirect ? { dashed: true } : {}) });
+      if (g.kind) out.pills.push({ x: j.x, y: j.y, text: transformationLabel(g.kind), ...(pillColor ? { color: pillColor } : {}), ...(g.indirect ? { dashed: true } : {}) });
     } else {
-      out.curves.push(curveTo(members[0], base, side, B, self));
+      const c = { ...curveTo(members[0], base, side, B, self), ...(g.indirect ? { dashed: true } : {}) };
+      out.curves.push(c);
+      if (g.kind) onCurve.push({ d: c.d, text: transformationLabel(g.kind), ...(pillColor ? { color: pillColor } : {}), ...(g.indirect ? { dashed: true } : {}) });
+    }
+  }
+
+  // A pill on a curve goes at its middle, or, when another pill of the Dep
+  // stands there, a little toward one end.
+  for (const p of onCurve) {
+    const w = pillWidth(p.text);
+    for (const t of [0.5, 0.36, 0.64, 0.25, 0.75]) {
+      const at = curvePoint(p.d, t);
+      if (!at) break;
+      const free = out.pills.every((q) =>
+        Math.abs(q.x - at.x) * 2 >= w + pillWidth(q.text) + 4 || Math.abs(q.y - at.y) >= PILL_HEIGHT + 2);
+      if (free || t === 0.75) {
+        out.pills.push({ x: r(at.x), y: r(at.y), text: p.text, ...(p.color ? { color: p.color } : {}), ...(p.dashed ? { dashed: true } : {}) });
+        break;
+      }
     }
   }
 
@@ -121,8 +231,10 @@ export function layoutDep (dep: DepLayout, boxes: ReadonlyMap<string, EntityLayo
   const name = dep.name;
   if (name !== undefined) {
     const j = out.junctions[0];
+    // A pill where the name goes pushes the name above it.
+    const lift = (p: Point): number => (out.pills.some((x) => Math.abs(x.x - p.x) < 1 && Math.abs(x.y - p.y) < 1) ? PILL_HEIGHT / 2 + 2 : 0);
     if (j) {
-      out.label = { x: j.x, y: j.y - 7, anchor: 'middle' };
+      out.label = { x: j.x, y: j.y - 7 - lift(j), anchor: 'middle' };
     } else if (out.curves[0]) {
       const mid = curveMidpoint(out.curves[0].d);
       // A loop bows out to one side: its name goes beside it, not on it.
@@ -132,7 +244,7 @@ export function layoutDep (dep: DepLayout, boxes: ReadonlyMap<string, EntityLayo
           ? { x: mid.x + 5, y: mid.y + 3, anchor: 'start' }
           : { x: mid.x - 5, y: mid.y + 3, anchor: 'end' };
       } else if (mid) {
-        out.label = { x: mid.x, y: mid.y - 5, anchor: 'middle' };
+        out.label = { x: mid.x, y: mid.y - 5 - lift({ x: r(mid.x), y: r(mid.y) }), anchor: 'middle' };
       }
     }
   }
@@ -291,6 +403,18 @@ export function curveMidpoint (d: string): Point | undefined {
   if (!n || n.length < 8) return undefined;
   const [x0, y0, x1, y1, x2, y2, x3, y3] = n;
   return { x: (x0 + 3 * x1 + 3 * x2 + x3) / 8, y: (y0 + 3 * y1 + 3 * y2 + y3) / 8 };
+}
+
+/** The point at `t` of a path `M x y C x1 y1 x2 y2 x y`. */
+function curvePoint (d: string, t: number): Point | undefined {
+  const n = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number);
+  if (!n || n.length < 8) return undefined;
+  const [x0, y0, x1, y1, x2, y2, x3, y3] = n;
+  const u = 1 - t;
+  return {
+    x: u * u * u * x0 + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x3,
+    y: u * u * u * y0 + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y3,
+  };
 }
 
 function r (n: number): number {

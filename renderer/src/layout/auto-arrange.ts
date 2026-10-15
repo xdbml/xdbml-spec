@@ -39,6 +39,9 @@ export type ArrangeStrategy = 'relational' | 'star';
 
 const GRID = 20;        // canvas grid pitch (CSS background-size: 20px 20px)
 const GUTTER_X = 64;    // horizontal gap between entity columns
+// The gap between entity columns when a dependency carries a kind of
+// transformation, whose pill needs room between the boxes (spec §27.10.6).
+const GUTTER_X_PILLS = 120;
 const GUTTER_Y = 56;    // vertical gap between entity rows
 const BLOCK_GAP = 96;   // gap between packed container / component blocks
 const SWEEPS = 3;        // barycentre refinement passes (relational)
@@ -82,7 +85,7 @@ export function autoArrange (
     laneW = Math.max(laneW, e.bounds.width);
     laneH = Math.max(laneH, e.bounds.height);
   }
-  laneW += GUTTER_X;
+  laneW += (diagram.deps ?? []).some((d) => d.dependencies.some((x) => x.transformation)) ? GUTTER_X_PILLS : GUTTER_X;
   laneH += GUTTER_Y;
   for (const n of notes) sizeOf.set(n.id, { w: n.bounds.width, h: n.bounds.height });
 

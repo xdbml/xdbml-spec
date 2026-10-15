@@ -334,7 +334,11 @@ export const SETTING_KEYS = [
   'refresh_schedule',
   'refresh_on',
   'source_database',
+  'dialect',          // v0.7.2 §14.5, §27.3: alias of source_database
   'storage_options',
+  // v0.7.2 source-to-target mapping (spec §27.10) and grain (§7.5)
+  'transformation',
+  'grain',
   // Validation
   'pattern',
   'format',
@@ -382,6 +386,12 @@ export const GRANULARITY_VALUES = [
   'year', 'quarter', 'month', 'week', 'day',
   'hour', 'minute', 'second',
   'millisecond', 'microsecond', 'nanosecond',
+] as const;
+
+/** The kinds of transformation of a dependency (v0.7.2, spec §27.10.1). */
+export const TRANSFORMATION_VALUES = [
+  'identity', 'derivation', 'aggregation',
+  'join', 'lookup', 'filter', 'group_by', 'conditional',
 ] as const;
 
 /* -------------------------------------------------------------------------
