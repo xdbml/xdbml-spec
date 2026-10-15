@@ -61,14 +61,14 @@ Other lists keep their own rules. In `indexes { }` a comma between two entries i
 
 ## What goes where
 
-A construct takes its settings in brackets after its name, before its body: `materialized: true` inside a View body is a syntax error. A field with a body -- `object { }`, `oneOf { }`, `json { }` -- takes its settings after the closing brace. In a body, the `name: value` form is only for `Note:`, for `targets:` in a Project, and for `source_query:` in a View.
+A construct takes its settings in brackets after its name, before its body: `materialized: true` inside a View body is a syntax error. A field with a body -- `object { }`, `oneOf { }`, `json { }` -- takes its settings after the closing brace. In a body, the `name: value` form is only for `Note:`, for `targets:` in a Project, for `source_query:` in a View, and for the settings of a `Dep` block.
 
 | Construct | Brackets after the name | Body holds | Declared |
 |---|---|---|---|
 | `Project` | none | `targets:`, `Note:` | top level, at most once |
 | `Container`, `Schema`, `Database`, ... | `type`, `target`, `color`, `note`, custom | entities, Views, Edges, Enums, `Note:`, sticky notes (`xdbml: 0.7`) | top level |
-| `Entity`, `Table`, `Collection`, `Record` | `note`, `color` (the header color), `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }`, `definitions { }` | top level or in a Container |
-| `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `color`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
+| `Entity`, `Table`, `Collection`, `Record` | `note`, `color` (the header color), `grain`, `tags`, `synonyms`, `business_term`, custom | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }`, `records { }`, `definitions { }` | top level or in a Container |
+| `View` | `materialized`, `refresh_schedule`, `refresh_on`, `source_database`, `storage_options`, `note`, `color`, `grain`, `synonyms`, `business_term` | `source_query:` once, fields, `Note:`, and nothing else | top level or in a Container |
 | `Edge` | `source`, `target` (entities), `source_cardinality`, `target_cardinality`, `undirected`, roles and verbs, `note` | fields, `~partial`, `Note:`, `constraints { }`, `indexes { }` | top level or in a Container |
 | `Enum` | none | values, each with an optional `[note: '...']` | top level or in a Container |
 | `Type` | `note`, `tags`, `synonyms`, `business_term` | fields, `~partial` | top level |
@@ -78,7 +78,7 @@ A construct takes its settings in brackets after its name, before its body: `mat
 | `EntityGroup` | `color`, `note` | entity names | top level |
 | `DiagramView` | `note`, custom | `Note:`, and categories: `Entities`, `Views`, `Containers`, `EntityGroups`, `SupertypeGroups`, `Notes`, each with names or `*` | top level, never in a Container |
 | `Note name` (a sticky note) | `color` (`#rgb`, `#rrggbb` or `none`), custom | one string, Markdown | top level, or in a Container with `xdbml: 0.7` |
-| `Dep` (data lineage) | `note`, `color` (`#rgb` or `#rrggbb`), custom | dependencies `a -> b`, one per line, each with optional brackets; `key: value` lines; `Note:` | top level, never in a Container |
+| `Dep` (data lineage) | `note`, `color` (`#rgb` or `#rrggbb`), `source_database`, custom | dependencies `a -> b`, one per line, each with optional brackets holding `transformation`, `note`, `color`; `source_query:` once; other `key: value` lines; `Note:` | top level, never in a Container |
 
 A note goes either in the brackets as `note: '...'` or in the body as `Note: '...'`.
 
@@ -416,17 +416,96 @@ Table daily_signups {
 Dep: raw_customers -> daily_signups.customers [note: 'COUNT(*) per day']
 
 Dep build_full_name [owner: 'analytics'] {
-  raw_customers.first_name -> stg_customers.full_name
-  raw_customers.last_name  -> stg_customers.full_name
-  Note: '''
-    ~~~sql
-    SELECT first_name || ' ' || last_name AS full_name FROM raw_customers
-    ~~~
+  raw_customers.first_name, raw_customers.last_name -> stg_customers.full_name
+  Note: 'Joins the first and the last name.'
+}
+```
+
+The short form, `Dep name: a -> b [settings]`, states one dependency; its name is optional. A line may name several upstream ends, separated by commas, and one downstream end: `a.x, a.y -> b.z`. A block gathers dependencies into one downstream entity or View, the entity itself or its fields; a `key: value` line or a `Note:` in its body is a setting of the Dep, and brackets after a dependency hold settings of that dependency alone. Inline, `dep: <- source` or `dep: -> target` on an entity or a View names an entity or a View, and on a field names a field, qualified with its entity. A field never depends on itself, and a dependency is stated once in the document, once for each kind of transformation when it has one. A `Dep` stands at the top level; `use *` brings the Deps of a file, and a selective import brings none. The note is prose: the statement that computes the data goes in `source_query`, and the kind of each dependency in `transformation` (next section).
+
+## Source-to-target mapping
+
+A `Dep` specifies how a target is loaded when its dependencies carry a `transformation`. Write one line per target field, with every source field that feeds it, then one line for each field that joins, looks up, filters or groups the rows, ending at the target entity itself. Put the statement that loads the target in `source_query:`, in the body of the block, in triple quotes, and its language in `source_database` (or `dialect`), in lowercase: `snowflake`, `oracle`, `ansi_sql`. No parser reads the statement: write it as the pipeline runs it.
+
+| `transformation` | The source fields | Ends at |
+|---|---|---|
+| `identity` | are copied unchanged | a field; between two entities, a copy of every row and field |
+| `derivation` | compute the value within the row | a field |
+| `aggregation` | compute the value over several rows | a field |
+| `join` | sit in a join condition | the entity, or a field |
+| `lookup` | sit in a join that finds at most one row | the entity, or a field |
+| `filter` | sit in a condition the rows meet | the entity, or a field |
+| `group_by` | group the rows | the entity, or a field |
+| `conditional` | are tested in a `CASE WHEN` of the value | a field |
+
+A line without `transformation` states lineage and no kind. A `CAST` written in the statement makes a `derivation`. One field may play several roles: state the same pair once for each kind. Give the target its `grain`, what one row represents.
+
+```xdbml
+Container legacy [type: database, target: Oracle] {
+  Table MBR {
+    MBR_ID   number [pk]
+    FIRST_NM varchar2(50)
+    LAST_NM  varchar2(50)
+    STATUS   char(1)
+    CNTRY_CD char(2)
+  }
+  Table COUNTRY {
+    CODE char(2) [pk]
+    NAME varchar2(80)
+  }
+}
+
+Container dw [type: schema, target: Snowflake] {
+  Table dim_member [grain: 'One row per member'] {
+    member_key   int     [pk, increment]
+    member_id    int     [unique]
+    full_name    varchar
+    country_name varchar
+  }
+}
+
+Dep load_dim_member [source_database: snowflake] {
+  legacy.MBR.MBR_ID -> dw.dim_member.member_id [transformation: identity]
+  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: derivation]
+  legacy.COUNTRY.NAME -> dw.dim_member.country_name [transformation: identity]
+  legacy.MBR.CNTRY_CD, legacy.COUNTRY.CODE -> dw.dim_member [transformation: lookup]
+  legacy.MBR.STATUS -> dw.dim_member [transformation: filter]
+  source_query: '''
+    SELECT m.MBR_ID AS member_id,
+           TRIM(m.FIRST_NM) || ' ' || TRIM(m.LAST_NM) AS full_name,
+           c.NAME AS country_name
+    FROM legacy.MBR m
+    LEFT JOIN legacy.COUNTRY c ON c.CODE = m.CNTRY_CD
+    WHERE m.STATUS <> 'X'
   '''
 }
 ```
 
-The short form, `Dep name: a -> b [settings]`, states one dependency; its name is optional. A block gathers dependencies into one downstream entity or View, all between entities or all naming a field at one end at least; a `key: value` line or a `Note:` in its body is a setting of the Dep, and brackets after a dependency hold settings of that dependency alone. Inline, `dep: <- source` or `dep: -> target` on an entity or a View names an entity or a View, and on a field names a field, qualified with its entity. A field never depends on itself, and a dependency is stated once in the document. A `Dep` stands at the top level; `use *` brings the Deps of a file, and a selective import brings none. Write the transformation in the note: xDBML 0.7 records which element feeds which, not the expression that computes it.
+## Metrics
+
+A metric, such as total revenue, is a field of a View that is not materialized: a semantic layer computes it at query time. The View's `source_query` holds the SQL, and a `Dep` with `transformation: aggregation` states which fields each metric aggregates.
+
+```xdbml
+Table fct_orders [grain: 'One row per order'] {
+  order_id int [pk]
+  revenue  decimal(12, 2)
+}
+
+View sales_metrics [source_database: ansi_sql] {
+  source_query: '''
+    SELECT SUM(revenue) AS total_revenue,
+           SUM(revenue) / COUNT(DISTINCT order_id) AS average_order_value
+    FROM fct_orders
+  '''
+  total_revenue       decimal(18, 2) [synonyms: ['revenue', 'total sales']]
+  average_order_value decimal(12, 2)
+}
+
+Dep sales_metrics_lineage {
+  fct_orders.revenue -> sales_metrics.total_revenue [transformation: aggregation]
+  fct_orders.revenue, fct_orders.order_id -> sales_metrics.average_order_value [transformation: aggregation]
+}
+```
 
 ## Nesting and polymorphism
 
@@ -638,6 +717,98 @@ Table stg_orders {
 Table stg_orders [dep: <- raw_orders] {
   order_id int [pk, dep: <- raw_orders.id]
 }
+```
+
+A query or a formula in a note, or in a setting of another name. A note is prose that no tool reads as code, and `rule:`, `expression:` or `type:` on a dependency is a custom property that no tool reads either. The kind goes in `transformation`, and the statement in `source_query:`, in the body of the block.
+
+```xdbml
+Table raw_customers {
+  id         int [pk]
+  first_name varchar
+  last_name  varchar
+}
+
+Table stg_customers {
+  id        int [pk]
+  full_name varchar
+}
+
+// Wrong (accepted silently): the note and the rule are not read as code
+Dep load_stg_customers {
+  raw_customers.first_name, raw_customers.last_name -> stg_customers.full_name [rule: 'first_name || last_name']
+  Note: 'SELECT id, first_name || last_name AS full_name FROM raw_customers'
+}
+
+// Right
+Dep load_stg_customers [source_database: ansi_sql] {
+  raw_customers.first_name, raw_customers.last_name -> stg_customers.full_name [transformation: derivation]
+  source_query: '''SELECT id, first_name || ' ' || last_name AS full_name FROM raw_customers'''
+}
+```
+
+A `Mapping` block, or a `Metric` declaration. Neither exists: a `Dep` is the mapping, and a metric is a field of a View.
+
+```xdbml
+Table orders {
+  id     int [pk]
+  amount decimal(12, 2)
+}
+
+View sales_metrics {
+  source_query: 'SELECT SUM(amount) AS revenue FROM orders'
+  revenue decimal(18, 2)
+}
+
+// Wrong (parse-error): there is no Mapping block
+Mapping load_sales {
+  orders.amount -> sales_metrics.revenue
+}
+
+// Right
+Dep load_sales {
+  orders.amount -> sales_metrics.revenue [transformation: aggregation]
+}
+```
+
+Several downstream ends on one line, or a line with no source. A line names its upstream ends, one or several, and one downstream end.
+
+```xdbml
+Table a {
+  x int
+}
+
+Table b {
+  x int
+  y int
+}
+
+// Wrong (parse-error): one downstream end per line
+Dep: a.x -> b.x, b.y
+
+// Right
+Dep load {
+  a.x -> b.x
+  a.x -> b.y
+}
+```
+
+A kind of transformation between two entities. Only `identity`, a copy of every row, applies there; the other kinds name the field that takes part.
+
+```xdbml
+Table raw_orders {
+  id     int [pk]
+  status varchar
+}
+
+Table stg_orders {
+  id int [pk]
+}
+
+// Wrong (transformation-between-entities): which field filters is not named
+Dep: raw_orders -> stg_orders [transformation: filter]
+
+// Right
+Dep: raw_orders.status -> stg_orders [transformation: filter]
 ```
 
 A sticky note without a name. A top-level `Note` without a name is the note of the project, and takes no settings.
@@ -1120,6 +1291,7 @@ Entity suppliers {
 11. Edge cardinality uses `source_cardinality` and `target_cardinality`.
 12. Every entity, field, Enum and Type the document names is declared, qualified with its Container where it sits in one.
 13. Internal definitions sit in one `definitions { }` block of the entity that uses them, never for a relational, Cassandra, ScyllaDB or graph target; a shape used by several entities is a top-level `Type`.
+14. In a source-to-target mapping, each line names its source fields and one target; its kind is in `transformation`, the statement in `source_query:` in the body of the `Dep`, and its language in `source_database`.
 
 To check a schema, run it through an xDBML validator when one is available, or paste it into the playground at https://xdbml.org/playground/: its diagnostics panel lists each error and warning with its line.
 

@@ -7548,6 +7548,11 @@ function runV072Tests (): TestResult[] {
       return text;
     },
   });
+  check('editors: Monarch colors transformation, dialect and grain as setting keys, and the kinds as values', () => {
+    const lang = xdbmlMonarchTokensProvider as unknown as { settingKeys: string[]; transformationValues: string[] };
+    const keys = ['transformation', 'dialect', 'grain'].filter((k) => !lang.settingKeys.includes(k));
+    return keys.length ? `missing keys: ${keys.join(', ')}` : same(lang.transformationValues, [...TRANSFORMATIONS]);
+  });
   check('§27.8: importing everything brings a Dep with its upstream ends, transformation and statement', () => {
     const src = `${V}use * from './lib'\n`;
     const l = collectLineage(flatten(parse(src, opts('/l/main.xdbml'))))[0];

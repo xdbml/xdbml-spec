@@ -306,6 +306,23 @@ async function main () {
       totalFailed++;
     }
   }
+  // v0.7.2: the settings of a source-to-target mapping are setting keys.
+  console.log(`\n${CYAN}v0.7.2 setting keys${RESET}`);
+  for (const [line, word] of [
+    ['  a.x -> b.y [transformation: lookup]', 'transformation'],
+    ['Dep load [dialect: snowflake] {', 'dialect'],
+    ['Table f [grain: \'One row per order\'] {', 'grain'],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    if ((tok?.scopes ?? []).includes('variable.parameter.setting.xdbml')) {
+      console.log(`  ${GREEN}✓${RESET} ${word} is variable.parameter.setting.xdbml`);
+    } else {
+      console.log(`  ${RED}✗${RESET} ${word}: expected variable.parameter.setting.xdbml, got ${(tok?.scopes ?? []).join(' ')}`);
+      totalFailed++;
+    }
+  }
   // Target-native type names are colored like scalar types, and a
   // generic word left out of TARGET_NATIVE_TYPES is not.
   console.log(`\n${CYAN}Target-native type names${RESET}`);

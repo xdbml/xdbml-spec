@@ -109,14 +109,24 @@ Data lineage (spec §27):
 
 - **`unresolved-dep-endpoint`** and **`invalid-dep-endpoint`** (errors): an end of a dependency names nothing, or names an Edge, or several fields at once.
 - **`dep-wrong-kind`** (error): an inline `dep` on a field names an entity, or one on an entity names a field.
-- **`dep-mixed-downstream`** and **`dep-mixed-level`** (errors): the dependencies of one block go to different elements, or mix dependencies between entities with dependencies naming fields.
+- **`dep-mixed-downstream`** (error): the dependencies of one block go to different elements.
+- **`dep-mixed-level`** (error): in a document without a version declaration, a block mixes dependencies between entities with dependencies naming fields, which DBML rejects. A document that declares a version may mix them.
 - **`dep-self-loop`** (error): a field depends on itself. An entity may: its rows can come from its own earlier rows.
-- **`duplicate-dep`** (error): one dependency stated twice, inline and in a `Dep`, say.
+- **`duplicate-dep`** (error): one dependency stated twice, inline and in a `Dep`, say. In a document that declares a version, the same pair may be stated once for each kind of transformation.
 - **`invalid-dep-color`** (error): a `color` other than `#rgb` or `#rrggbb`.
 - **`misplaced-dep`** and **`dep-in-partial`** (errors): a `dep` where no dependency can stand, such as on an Edge, a Type or an EntityPartial.
 - **`invalid-dep-value`**: a `dep` whose value is no arrow. An error; in a document declaring v0.6 or an earlier version, a warning, and the value stays a custom property, as it was.
 - **`empty-dep`** (warning): a block with no dependency. DBML drops it silently.
 - **`ambiguous-dep-endpoint`** (warning): an end reads both as an entity and as a field of another one. The field reading is used, as for a relationship. See [**Data lineage**](./data-lineage).
+
+Source-to-target mapping (spec §27.10, v0.7.2):
+
+- **`unknown-transformation`** (error): `transformation` takes one of identity, derivation, aggregation, join, lookup, filter, group_by and conditional.
+- **`transformation-between-entities`** (error): a kind other than `identity` on a dependency between two entities; name the field that takes part.
+- **`transformation-target-mismatch`** (error): `identity`, `derivation`, `aggregation` or `conditional` from a field to an entity; these kinds give the value of one field.
+- **`transformation-mismatch`** (warning): `identity` with several sources; a copy has one.
+- **`indirect-from-entity`** (warning): a join, a lookup, a filter, a grouping or a condition starting from a whole entity, which does not say which field takes part.
+- **`source-query-in-settings`** (warning): `source_query` in the brackets of a `Dep`, where it is not the statement; write it in the body of a block, as for a View.
 
 ## Rows in the body
 

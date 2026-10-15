@@ -121,6 +121,8 @@ A curve with an arrowhead is a `Dep`: the element at the arrowhead is computed f
 | Curve ending at a card's header | The dependency names the entity or the View |
 | Several curves meeting at a dot before one arrowhead | Fields of one Dep combined into one, such as a first and a last name into a full name |
 | A curve in another color | The `color` of the Dep, or of that one dependency |
+| Dashed curve | An indirect kind of transformation: a join, a lookup, a filter, a grouping or a condition |
+| A pill on a curve | The kind of transformation; a dashed border for an indirect kind |
 
 With **Display > Relationship names** on, a named Dep shows its name at its junction, or along its curve. Clicking a curve selects the Dep: its curves and arrowheads turn blue, the rows of the fields at its ends take the selection tint, and an entity or a View it names with no field is outlined. The inspector reads its dependencies back as sentences that name the elements, such as "`fct_orders.revenue` is computed from `stg_orders.revenue`", and shows its note and its settings.
 
