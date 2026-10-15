@@ -18,6 +18,7 @@ import type { XDbmlDocument } from '@xdbml/parse';
 import {
   applyUserPositions,
   buildDiagram,
+  isIndirectDependency,
   makeCollapsedKey,
   type DiagramModel,
   type EdgeOffsets,
@@ -75,6 +76,12 @@ export interface RelationshipVisibility {
    * written before v0.7; dependencies are drawn unless it is false.
    */
   lineage?: boolean;
+  /**
+   * The indirect dependencies of data lineage: join, lookup, filter, group
+   * by and conditional, which draw dashed (spec §27.10.6, v0.7.2). Drawn
+   * unless it is false, or unless `lineage` is false.
+   */
+  indirectLineage?: boolean;
 }
 
 export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
@@ -86,6 +93,7 @@ export const ALL_RELATIONSHIPS_VISIBLE: RelationshipVisibility = {
   relationshipNames: false,
   stickyNotes: true,
   lineage: true,
+  indirectLineage: true,
 };
 
 export interface LayoutState {
@@ -226,13 +234,22 @@ export function mount (target: HTMLElement, input: MountInput, options: MountOpt
     const groupsHidden = !refVisibility.supertypeGroups && model.supertypeGroups.length > 0;
     const notesHidden = refVisibility.stickyNotes === false && (model.notes ?? []).length > 0;
     const depsHidden = refVisibility.lineage === false && (model.deps ?? []).length > 0;
-    if (refs.length === model.refs.length && !groupsHidden && !notesHidden && !depsHidden) return model;
+    const indirectHidden = !depsHidden && refVisibility.indirectLineage === false
+      && (model.deps ?? []).some((d) => d.dependencies.some(isIndirectDependency));
+    if (refs.length === model.refs.length && !groupsHidden && !notesHidden && !depsHidden && !indirectHidden) return model;
+    const deps = depsHidden
+      ? []
+      : indirectHidden
+        ? (model.deps ?? [])
+          .map((d) => ({ ...d, dependencies: d.dependencies.filter((x) => !isIndirectDependency(x)) }))
+          .filter((d) => d.dependencies.length > 0)
+        : (model.deps ?? []);
     return {
       ...model,
       refs,
       supertypeGroups: groupsHidden ? [] : model.supertypeGroups,
       notes: notesHidden ? [] : model.notes,
-      deps: depsHidden ? [] : (model.deps ?? []),
+      deps,
     };
   }
 

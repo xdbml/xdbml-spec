@@ -33,7 +33,7 @@ import { edgeConnectors, edgeLabelX, edgeLabelY } from '../geometry/edge-path.ts
 import { escapeXml } from './util.ts';
 import { ENTITY_NAME_FONT_SIZE, FIELD_FONT_SIZE, measureText } from './metrics.ts';
 import { layoutSupertypeGroups, longestSegmentMidpoint, type SupertypeGroupGeometry } from '../geometry/supertype-symbol.ts';
-import { layoutDeps, type DepGeometry } from '../geometry/dep-path.ts';
+import { layoutDeps, pillAt, pillWidth, PILL_HEIGHT, type DepGeometry } from '../geometry/dep-path.ts';
 
 const HEADER_HEIGHT = 32;
 const INDENT_PX = 14;
@@ -469,20 +469,39 @@ function refLine (ref: RefLayout, model: DiagramModel, theme: Theme, showNames =
  * with its marks, and the branches to the subtypes. Drawn above
  * relationship lines and below entity cards.
  */
+/** The dash of an indirect dependency (spec §27.10.6). */
+const DEP_DASH = ' stroke-dasharray="5 3"';
+
 /**
  * A Dep (spec §27.7): a curve for each dependency, the trunk from each
  * junction, the junctions and the arrowheads, in the Dep's color or the
  * theme's lineage color. A dependency's own color applies to its curve.
+ * From v0.7.2, the indirect kinds of transformation draw dashed, and a
+ * pill names the kind at a junction or on a curve (§27.10.6).
  */
 function depShape (g: DepGeometry, theme: Theme, showNames: boolean): string {
   const color = g.dep.color ?? theme.lineage.line;
   const parts: string[] = ['<g>'];
   for (const c of g.curves) {
-    parts.push(`<path d="${c.d}" fill="none" stroke="${c.color ?? color}" stroke-width="1.5"/>`);
+    parts.push(`<path d="${c.d}" fill="none" stroke="${c.color ?? color}" stroke-width="1.5"${c.dashed ? DEP_DASH : ''}/>`);
   }
-  for (const t of g.trunks) parts.push(`<path d="${t}" fill="none" stroke="${color}" stroke-width="1.5"/>`);
-  for (const j of g.junctions) parts.push(`<circle cx="${j.x}" cy="${j.y}" r="3.5" fill="${color}"/>`);
+  g.trunks.forEach((t, i) => {
+    parts.push(`<path d="${t}" fill="none" stroke="${color}" stroke-width="1.5"${g.trunkDashed[i] ? DEP_DASH : ''}/>`);
+  });
+  // A junction that carries a pill draws no dot: the pill marks it.
+  for (const j of g.junctions) {
+    if (!pillAt(g, j)) parts.push(`<circle cx="${j.x}" cy="${j.y}" r="3.5" fill="${color}"/>`);
+  }
   for (const a of g.arrows) parts.push(`<polygon points="${a}" fill="${color}"/>`);
+  for (const p of g.pills) {
+    const w = pillWidth(p.text);
+    const stroke = p.color ?? color;
+    parts.push(
+      `<rect x="${p.x - w / 2}" y="${p.y - PILL_HEIGHT / 2}" width="${w}" height="${PILL_HEIGHT}" rx="${PILL_HEIGHT / 2}" ` +
+      `fill="${theme.canvas.background}" stroke="${stroke}" stroke-width="1"${p.dashed ? ' stroke-dasharray="3 2"' : ''}/>`,
+      text({ x: p.x, y: p.y + 3, fill: p.color ?? g.dep.color ?? theme.lineage.label, size: 9, weight: 500, anchor: 'middle', content: escapeXml(p.text) }),
+    );
+  }
   if (showNames && g.label && g.dep.name !== undefined) {
     parts.push(
       text({

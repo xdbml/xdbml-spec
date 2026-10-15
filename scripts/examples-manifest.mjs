@@ -217,4 +217,13 @@ export const examples = [
     description: 'Declared data lineage with Dep (spec \u00a727). Raw data lands in Snowflake from the shop\u2019s database and from the Stripe API, which a Container declares so that dependencies can start from it; dbt models clean it in a `staging` layer and join it into `marts`. The example uses the three forms: the short form for an array unnested into a table (field to entity), blocks gathering the columns one model fills, with the query in the note, and inline `dep` settings on the columns of `stg_orders`. In the diagram, each dependency draws as an amber curve with an arrowhead at its downstream end, the first and last names of a customer meet at a junction before `full_name`, the `stg_payments` Dep draws in its own color, and the Refs between staging tables keep their crow\u2019s feet. A Dep from an entity to a field records a count (`daily_revenue.orders`) and an existence flag (`fct_orders.paid`).',
     generators:  [],
   },
+  {
+    file:        '19-source-to-target.xdbml',
+    slug:        '19-source-to-target',
+    title:       'Source-to-target mapping (v0.7.2)',
+    domain:      'Data warehouse',
+    paradigm:    'Oracle + PostgreSQL to Snowflake',
+    description: 'A source-to-target mapping with Dep (spec \u00a727.10) and metrics (\u00a727.11). A legacy Oracle system and a CRM load a Snowflake warehouse. Each dependency names its kind of transformation: `identity` for a copied column, `derivation` for a full name built from two columns, `aggregation` for counts and sums, and, drawn dashed, `lookup`, `join`, `filter`, `group_by` and `conditional` for the columns that select or group the rows. Each `Dep` carries the statement that implements it in `source_query`. In the daily sales fact, `MBR_ID` plays two roles, join key and grouping key. A View that is not materialized holds two metrics. A staging area holds replicas of the sources, a copy between two tables, and feeds a Data Vault hub whose record source each load writes. Three diagram views show one load each.',
+    generators:  [],
+  },
 ];

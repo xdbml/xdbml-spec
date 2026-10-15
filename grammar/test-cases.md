@@ -3781,6 +3781,99 @@ Table b {
 Dep: a -> b [transformation: copy, source_query: 'SELECT id FROM a']
 ```
 
+### VALID -- a copy between two entities (identity, §27.10.1)
+
+```
+xdbml: 0.7
+
+Container crm {
+  Table contacts {
+    member_number int [pk]
+    email         varchar
+  }
+}
+
+Container stage {
+  Table contacts {
+    member_number int [pk]
+    email         varchar
+  }
+}
+
+Dep replicate_contacts: crm.contacts -> stage.contacts [transformation: identity]
+```
+
+### VALID -- a role-playing date dimension: one field feeds three fields of a fact (§27.4)
+
+```
+xdbml: 0.7
+
+Table dim_date {
+  date_key int [pk]
+}
+
+Table fct_orders {
+  order_date_key    int
+  ship_date_key     int
+  delivery_date_key int
+}
+
+Dep load_fct_orders {
+  dim_date.date_key -> fct_orders.order_date_key [transformation: lookup]
+  dim_date.date_key -> fct_orders.ship_date_key [transformation: lookup]
+  dim_date.date_key -> fct_orders.delivery_date_key [transformation: lookup]
+}
+```
+
+### VALID -- one field in several roles of one load: the same pair once for each kind (§27.4)
+
+```
+xdbml: 0.7
+
+Table orders {
+  member_id int
+  order_dt  date
+  amount    decimal(12, 2)
+}
+
+Table members {
+  member_id int [pk]
+}
+
+Table fct_daily_sales {
+  member_id int
+  sale_date date
+  total     decimal(14, 2)
+}
+
+Dep load_fct_daily_sales {
+  orders.member_id -> fct_daily_sales.member_id [transformation: identity]
+  orders.order_dt  -> fct_daily_sales.sale_date [transformation: identity]
+  orders.amount    -> fct_daily_sales.total [transformation: aggregation]
+  orders.member_id, members.member_id -> fct_daily_sales [transformation: join]
+  orders.member_id, orders.order_dt -> fct_daily_sales [transformation: group_by]
+}
+```
+
+### INVALID -- the same pair with the same kind twice (duplicate-dep, §27.4)
+
+```
+xdbml: 0.7
+
+Table a {
+  x int
+}
+
+Table b {
+  x int
+}
+
+Dep load {
+  a.x -> b [transformation: filter]
+  a.x -> b [transformation: filter]
+}
+```
+
 ### INVALID -- two downstream ends in one dependency (§27.2)
 
 ```

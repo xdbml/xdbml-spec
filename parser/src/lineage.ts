@@ -356,8 +356,11 @@ export function checkLineage (doc: XDbmlDocument, resolve: DepEndResolver): Diag
   const versioned = !!doc.version;
   const lineage = collectLineage(doc);
   const seen = new Map<string, Span>();
-  const key = (up: DepEnd, down: DepEnd): string =>
-    JSON.stringify([up.element, up.field ?? null, down.element, down.field ?? null]);
+  // From v0.7.2, in a document that declares a version, the same pair may
+  // be stated once for each kind of transformation: one field may join the
+  // rows of a target and also group them (§27.4).
+  const key = (up: DepEnd, down: DepEnd, kind: string | undefined): string =>
+    JSON.stringify([up.element, up.field ?? null, down.element, down.field ?? null, versioned ? kind ?? null : null]);
 
   for (const l of lineage) {
     const ends: Array<{ up: DepEnd; down: DepEnd; span: Span } | undefined> = [];
@@ -388,8 +391,9 @@ export function checkLineage (doc: XDbmlDocument, resolve: DepEndResolver): Diag
       checkBlock(l, ends, versioned, diagnostics);
     }
 
-    for (const e of ends) {
+    for (const [i, e] of ends.entries()) {
       if (!e) continue;
+      const kind = l.dependencies[i].transformation;
       if (e.up.field !== undefined && e.up.element === e.down.element && e.up.field === e.down.field) {
         diagnostics.push({
           severity: 'error',
@@ -400,13 +404,13 @@ export function checkLineage (doc: XDbmlDocument, resolve: DepEndResolver): Diag
         });
         continue;
       }
-      const k = key(e.up, e.down);
+      const k = key(e.up, e.down, kind);
       if (seen.has(k)) {
         diagnostics.push({
           severity: 'error',
           code: 'duplicate-dep',
-          message: `The dependency ${describe(e.up)} -> ${describe(e.down)} is stated twice: state each dependency once ` +
-            '(spec §27.4).',
+          message: `The dependency ${describe(e.up)} -> ${describe(e.down)} is stated twice` +
+            `${versioned && kind ? `, both times as '${kind}'` : ''}: state each dependency once (spec §27.4).`,
           span: e.span,
         });
       } else {
@@ -559,19 +563,20 @@ function checkTransformations (
     const resolved = byLine.get(line) ?? [];
     if (resolved.length === 0) continue;
     const between = resolved.find((e) => e.up.field === undefined && e.down.field === undefined);
-    if (between) {
+    if (between && word !== 'identity') {
       diagnostics.push({
         severity: 'error',
         code: 'transformation-between-entities',
-        message: `The dependency ${describe(between.up)} -> ${describe(between.down)} names no field, so it takes no ` +
-          'transformation: a transformation applies to fields. Name the field that takes part, or remove the ' +
-          'transformation (spec §27.10.1).',
+        message: `The dependency ${describe(between.up)} -> ${describe(between.down)} names no field. Between two ` +
+          `entities, only 'identity' applies, for a copy of every row; '${word}' applies to fields. Name the field ` +
+          'that takes part, or remove the transformation (spec §27.10.1).',
         span: setting.span,
       });
       continue;
     }
     const down = resolved[0].down;
-    if (FIELD_KINDS.has(word) && down.field === undefined) {
+    const fromField = resolved.some((e) => e.up.field !== undefined);
+    if (FIELD_KINDS.has(word) && down.field === undefined && fromField) {
       diagnostics.push({
         severity: 'error',
         code: 'transformation-target-mismatch',

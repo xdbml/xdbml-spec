@@ -40,6 +40,7 @@ These files serve three audiences:
 | Diagram views: subject areas (v0.6.3)              | Retail order to cash            | PostgreSQL relational                   | [View](./16-diagram-views) · <a href="/examples/16-diagram-views.xdbml" download="16-diagram-views.xdbml">Download</a>                                                    |
 | Internal definitions (v0.6.5)                      | Insurance claims intake         | JSON Schema + MongoDB + Oracle          | [View](./17-internal-definitions) · <a href="/examples/17-internal-definitions.xdbml" download="17-internal-definitions.xdbml">Download</a>                               |
 | Data lineage (v0.7)                                | Analytics warehouse             | Snowflake + Stripe API                  | [View](./18-data-lineage) · <a href="/examples/18-data-lineage.xdbml" download="18-data-lineage.xdbml">Download</a>                                                       |
+| Source-to-target mapping (v0.7.2)                  | Data warehouse                  | Oracle + PostgreSQL to Snowflake        | [View](./19-source-to-target) · <a href="/examples/19-source-to-target.xdbml" download="19-source-to-target.xdbml">Download</a>                                           |
 <!-- examples-table:end -->
 
 The **View** link opens the rendered example with syntax highlighting and the VitePress theme. The **Download** link serves the raw `.xdbml` file for use with parsers, generators, or your own tooling.

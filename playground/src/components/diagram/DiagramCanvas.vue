@@ -618,9 +618,12 @@ const annotationOptions = [
 
 // Data lineage (spec §27.7) under a heading of its own: a dependency is no
 // relationship between rows. Hiding it hides content, so it counts toward
-// the Display button's highlight.
+// the Display button's highlight. The indirect dependencies of a
+// source-to-target mapping (join, lookup, filter, group by, conditional)
+// draw dashed and have a toggle of their own (spec §27.10.6, v0.7.2).
 const lineageOptions = [
   { key: 'lineage' as const, label: 'Dependencies', hint: 'curves' },
+  { key: 'indirectLineage' as const, label: 'Indirect dependencies', hint: 'dashed' },
 ];
 
 // Label options sit under their own heading: turning names off hides no
@@ -637,6 +640,7 @@ function loadRelationshipVisibility (): RelationshipVisibility {
   const all: RelationshipVisibility = {
     referential: true, foreignMaster: true, inactive: true, conceptual: true,
     supertypeGroups: true, relationshipNames: false, stickyNotes: true, lineage: true,
+    indirectLineage: true,
   };
   try {
     const parsed = activeView.value
@@ -675,8 +679,8 @@ function persistRelationshipVisibility (): void {
 function toggleRelationship (key: keyof RelationshipVisibility): void {
   relationshipVisibility.value = {
     ...relationshipVisibility.value,
-    // stickyNotes and lineage are optional in the mount's type, and absent means shown.
-    [key]: key === 'stickyNotes' || key === 'lineage'
+    // stickyNotes, lineage and indirectLineage are optional in the mount's type, and absent means shown.
+    [key]: key === 'stickyNotes' || key === 'lineage' || key === 'indirectLineage'
       ? relationshipVisibility.value[key] === false
       : !relationshipVisibility.value[key],
   };

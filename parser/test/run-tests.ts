@@ -7497,6 +7497,20 @@ function runV072Tests (): TestResult[] {
   check('§27.10.5: identity, derivation, aggregation and conditional ending at an entity are errors', () =>
     expectCodes(`${V}${T}Dep n {\n  a.x -> c [transformation: identity]\n  a.y -> c [transformation: derivation]\n  b.x -> c [transformation: aggregation]\n  b.y -> c [transformation: conditional]\n}`,
       'error:transformation-target-mismatch error:transformation-target-mismatch error:transformation-target-mismatch error:transformation-target-mismatch'));
+  check('§27.10.1: identity between two entities states a copy', () =>
+    expectCodes(`${V}${T}Dep: a -> b [transformation: identity]`, '') ?? same(pairs(`${V}${T}Dep: a -> b [transformation: identity]`), ['a->b:identity']));
+  check('§27.10.5: identity from a field to an entity is still an error', () =>
+    expectCodes(`${V}${T}Dep: a.x -> b [transformation: identity]`, 'error:transformation-target-mismatch'));
+  check('§27.10.5: a copy from two entities draws the identity warning', () =>
+    expectCodes(`${V}${T}Dep: a, b -> c [transformation: identity]`, 'warning:transformation-mismatch'));
+  check('§27.4: one field may play several roles: the same pair once for each kind', () =>
+    expectCodes(`${V}${T}Dep n {\n  a.x -> c [transformation: join]\n  a.x -> c [transformation: group_by]\n  a.x -> c [transformation: filter]\n}`, ''));
+  check('§27.4: the same pair with the same kind twice is stated twice', () => {
+    const d = resolveNames(parse(`${V}${T}Dep n {\n  a.x -> c [transformation: join]\n  a.x -> c [transformation: join]\n}`)).diagnostics;
+    return same(d.map((x) => x.code), ['duplicate-dep']) ?? (/both times as 'join'/.test(d[0].message) ? undefined : d[0].message);
+  });
+  check('§27.4: without a version declaration, the same pair twice is stated twice, whatever its custom properties', () =>
+    expectCodes(`${T}Dep n {\n  a.x -> c [transformation: join]\n  a.x -> c [transformation: group_by]\n}`, 'error:duplicate-dep'));
   check('§27.10.5: identity with several upstream ends draws a warning', () =>
     expectCodes(`${V}${T}Dep: a.x, a.y -> b.x [transformation: identity]`, 'warning:transformation-mismatch'));
   check('§27.10.5: an indirect kind from a whole entity draws a warning, once per line', () =>

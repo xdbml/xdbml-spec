@@ -206,7 +206,7 @@ export type {
   EdgeOffsets,
 } from './layout/layout.ts';
 
-export { collectRefDeclarations } from './layout/layout.ts';
+export { collectRefDeclarations, INDIRECT_TRANSFORMATIONS, isIndirectDependency } from './layout/layout.ts';
 export {
   layoutSupertypeGroups,
   supertypeGroupAnchorX,
@@ -215,7 +215,7 @@ export {
   type SupertypeGroupGeometry,
 } from './geometry/supertype-symbol.ts';
 export { autoArrange, type ArrangeStrategy } from './layout/auto-arrange.ts';
-export { layoutDep, layoutDeps, curveMidpoint, JUNCTION_GAP, type DepCurve, type DepGeometry } from './geometry/dep-path.ts';
+export { layoutDep, layoutDeps, curveMidpoint, JUNCTION_GAP, PILL_HEIGHT, pillWidth, transformationLabel, type DepCurve, type DepGeometry, type DepPill } from './geometry/dep-path.ts';
 export { inlineText, isBreak, parseInline, parseMarkdown } from './layout/markdown.ts';
 export type { MdBlock, MdBreak, MdInline, MdRun } from './layout/markdown.ts';
 export { layoutNoteText } from './layout/note-text.ts';

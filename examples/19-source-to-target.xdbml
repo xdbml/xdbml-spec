@@ -1,0 +1,185 @@
+xdbml: 0.7
+
+// Source-to-target mapping (spec §27.10) and metrics (§27.11).
+// A legacy Oracle system and a CRM load a Snowflake warehouse: a member
+// dimension, a daily sales fact, a View of metrics computed at query time,
+// and a Data Vault hub fed by both systems through a staging area of
+// replicas. Three diagram views show one load each.
+
+Container legacy [type: database, target: Oracle] {
+  Table MBR {
+    MBR_ID   number [pk]
+    FIRST_NM varchar2(50)
+    LAST_NM  varchar2(50)
+    STATUS   char(1) [note: "'X' when the member left"]
+    CNTRY_CD char(2)
+  }
+  Table COUNTRY {
+    CODE char(2) [pk]
+    NAME varchar2(80)
+  }
+  Table ORD {
+    ORD_ID number [pk]
+    MBR_ID number
+    ORD_DT date
+    AMT    number(12, 2)
+    STATE  char(1) [note: "'S' when the payment is settled"]
+  }
+}
+
+Container crm [type: database, target: PostgreSQL] {
+  Table contacts {
+    member_number int [pk]
+    email         varchar
+  }
+}
+
+Container dw [type: schema, target: Snowflake] {
+  Table dim_member [grain: 'One row per member'] {
+    member_key   int       [pk, increment]
+    member_id    int       [unique]
+    full_name    varchar
+    country_name varchar
+    email        varchar   [note: 'Not available in the legacy system.']
+    loaded_at    timestamp [default: `CURRENT_TIMESTAMP`]
+  }
+  Table fct_daily_sales [grain: 'One row per member per day'] {
+    member_id      int
+    sale_date      date
+    order_count    int
+    settled_amount decimal(14, 2)
+  }
+  View sales_metrics [source_database: ansi_sql, note: 'Measures of the sales, computed at query time.'] {
+    source_query: '''
+      SELECT SUM(settled_amount) AS total_revenue,
+             SUM(settled_amount) / SUM(order_count) AS average_order_value
+      FROM dw.fct_daily_sales
+    '''
+    total_revenue       decimal(18, 2) [synonyms: ['revenue', 'total sales']]
+    average_order_value decimal(12, 2)
+  }
+}
+
+Container stage [type: schema, target: Snowflake, note: 'Replicas of the source tables, loaded as they are.'] {
+  Table MBR {
+    MBR_ID   number [pk]
+    FIRST_NM varchar(50)
+    LAST_NM  varchar(50)
+    STATUS   char(1)
+    CNTRY_CD char(2)
+  }
+  Table contacts {
+    member_number int [pk]
+    email         varchar
+  }
+}
+
+Container dv [type: schema, target: Snowflake] {
+  Table hub_member [note: 'Data Vault 2.0 hub, fed by both systems.'] {
+    member_id int [pk]
+    REC_SRC   varchar
+  }
+}
+
+// The member dimension: two copies, a derivation, a lookup and a filter.
+Dep load_dim_member [source_database: snowflake] {
+  legacy.MBR.MBR_ID   -> dw.dim_member.member_id    [transformation: identity]
+  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: derivation]
+  legacy.COUNTRY.NAME -> dw.dim_member.country_name [transformation: identity]
+
+  legacy.MBR.CNTRY_CD, legacy.COUNTRY.CODE -> dw.dim_member [transformation: lookup]
+  legacy.MBR.STATUS -> dw.dim_member [transformation: filter]
+
+  source_query: '''
+    SELECT m.MBR_ID AS member_id,
+           TRIM(m.FIRST_NM) || ' ' || TRIM(m.LAST_NM) AS full_name,
+           c.NAME AS country_name
+    FROM legacy.MBR m
+    LEFT JOIN legacy.COUNTRY c ON c.CODE = m.CNTRY_CD
+    WHERE m.STATUS <> 'X'
+  '''
+  Note: 'Initial load, then a daily delta of the members of the legacy system.'
+}
+
+// The daily sales fact: MBR_ID plays two roles, join key and grouping key.
+Dep load_fct_daily_sales [source_database: snowflake] {
+  legacy.ORD.MBR_ID -> dw.fct_daily_sales.member_id      [transformation: identity]
+  legacy.ORD.ORD_DT -> dw.fct_daily_sales.sale_date      [transformation: identity]
+  legacy.ORD.ORD_ID -> dw.fct_daily_sales.order_count    [transformation: aggregation]
+  legacy.ORD.AMT    -> dw.fct_daily_sales.settled_amount [transformation: aggregation]
+  legacy.ORD.STATE  -> dw.fct_daily_sales.settled_amount [transformation: conditional]
+
+  legacy.ORD.MBR_ID, legacy.MBR.MBR_ID -> dw.fct_daily_sales [transformation: join]
+  legacy.MBR.STATUS -> dw.fct_daily_sales [transformation: filter]
+  legacy.ORD.MBR_ID, legacy.ORD.ORD_DT -> dw.fct_daily_sales [transformation: group_by]
+
+  source_query: '''
+    SELECT o.MBR_ID AS member_id,
+           o.ORD_DT AS sale_date,
+           COUNT(o.ORD_ID) AS order_count,
+           SUM(CASE WHEN o.STATE = 'S' THEN o.AMT END) AS settled_amount
+    FROM legacy.ORD o
+    JOIN legacy.MBR m ON m.MBR_ID = o.MBR_ID
+    WHERE m.STATUS <> 'X'
+    GROUP BY o.MBR_ID, o.ORD_DT
+  '''
+}
+
+// Metrics: fields of a View that is not materialized (spec §27.11).
+Dep sales_metrics_lineage {
+  dw.fct_daily_sales.settled_amount -> dw.sales_metrics.total_revenue [transformation: aggregation]
+  dw.fct_daily_sales.settled_amount, dw.fct_daily_sales.order_count -> dw.sales_metrics.average_order_value [transformation: aggregation]
+}
+
+// Replicas: a copy of every row and every field.
+Dep replicate_mbr: legacy.MBR -> stage.MBR [transformation: identity]
+Dep replicate_contacts: crm.contacts -> stage.contacts [transformation: identity]
+
+// The hub: each load writes its own record source (spec §27.10.4).
+Dep load_hub_member_legacy {
+  stage.MBR.MBR_ID -> dv.hub_member.member_id
+  stage.MBR        -> dv.hub_member.REC_SRC
+  source_query: '''
+    SELECT MBR_ID AS member_id, 'LEGACY' AS REC_SRC FROM stage.MBR
+  '''
+}
+
+Dep load_hub_member_crm {
+  stage.contacts.member_number -> dv.hub_member.member_id
+  stage.contacts               -> dv.hub_member.REC_SRC
+  source_query: '''
+    SELECT member_number AS member_id, 'CRM' AS REC_SRC FROM stage.contacts
+  '''
+}
+
+DiagramView members {
+  Note: 'The member dimension, loaded from the legacy system'
+  Entities {
+    legacy.MBR
+    legacy.COUNTRY
+    dw.dim_member
+  }
+}
+
+DiagramView sales {
+  Note: 'The daily sales fact and the metrics computed from it'
+  Entities {
+    legacy.ORD
+    legacy.MBR
+    dw.fct_daily_sales
+  }
+  Views {
+    dw.sales_metrics
+  }
+}
+
+DiagramView data_vault {
+  Note: 'The member hub, fed by both systems through replicas'
+  Entities {
+    legacy.MBR
+    crm.contacts
+    stage.MBR
+    stage.contacts
+    dv.hub_member
+  }
+}

@@ -20,7 +20,8 @@ import { CONTAINER_HEADER_HEIGHT, ENTITY_HEADER_HEIGHT } from '../layout/layout.
 import type { Theme } from '../style/theme.ts';
 import { resolveRef } from '../geometry/ref-path.ts';
 import { layoutSupertypeGroups, type SupertypeGroupGeometry } from '../geometry/supertype-symbol.ts';
-import { depEnds, layoutDeps, type DepGeometry } from '../geometry/dep-path.ts';
+import { depEnds, layoutDeps, pillAt, pillWidth, PILL_HEIGHT, type DepGeometry } from '../geometry/dep-path.ts';
+import { escapeXml } from '../svg/util.ts';
 
 const INDENT_PX = 14;
 
@@ -247,14 +248,38 @@ function depOverlay (g: DepGeometry, sel: Selection, theme: Theme): string {
   const parts: string[] = [`<g data-xdbml="dep" data-id="${id}">`];
   if (sel && sel.kind === 'dep' && sel.id === g.dep.id) {
     const blue = theme.row.selectStrip;
-    for (const d of paths) {
-      parts.push(`<path d="${d}" fill="none" stroke="${blue}" stroke-width="2.5" pointer-events="none"/>`);
+    // The highlight keeps the dashes of the indirect kinds (spec §27.10.6).
+    const dash = ' stroke-dasharray="5 3"';
+    for (const c of g.curves) {
+      parts.push(`<path d="${c.d}" fill="none" stroke="${blue}" stroke-width="2.5"${c.dashed ? dash : ''} pointer-events="none"/>`);
     }
-    for (const j of g.junctions) parts.push(`<circle cx="${j.x}" cy="${j.y}" r="4" fill="${blue}" pointer-events="none"/>`);
+    g.trunks.forEach((t, i) => {
+      parts.push(`<path d="${t}" fill="none" stroke="${blue}" stroke-width="2.5"${g.trunkDashed[i] ? dash : ''} pointer-events="none"/>`);
+    });
+    for (const j of g.junctions) {
+      if (!pillAt(g, j)) parts.push(`<circle cx="${j.x}" cy="${j.y}" r="4" fill="${blue}" pointer-events="none"/>`);
+    }
     for (const a of g.arrows) parts.push(`<polygon points="${a}" fill="${blue}" stroke="${blue}" stroke-width="1" stroke-linejoin="round" pointer-events="none"/>`);
+    // The pills stay above the highlighted lines, in the selection color.
+    for (const p of g.pills) {
+      const w = pillWidth(p.text);
+      parts.push(
+        `<rect x="${p.x - w / 2}" y="${p.y - PILL_HEIGHT / 2}" width="${w}" height="${PILL_HEIGHT}" rx="${PILL_HEIGHT / 2}" ` +
+        `fill="${theme.canvas.background}" stroke="${blue}" stroke-width="1.5"${p.dashed ? ' stroke-dasharray="3 2"' : ''} pointer-events="none"/>`,
+        `<text x="${p.x}" y="${p.y + 3}" fill="${blue}" font-size="9" font-weight="600" text-anchor="middle" pointer-events="none">${escapeXml(p.text)}</text>`,
+      );
+    }
   }
   for (const d of paths) {
     parts.push(`<path d="${d}" fill="none" stroke="transparent" stroke-width="12" data-dep="${id}" style="cursor:pointer"/>`);
+  }
+  // A pill selects its Dep too (spec §27.10.6).
+  for (const p of g.pills) {
+    const w = pillWidth(p.text);
+    parts.push(
+      `<rect x="${p.x - w / 2}" y="${p.y - PILL_HEIGHT / 2}" width="${w}" height="${PILL_HEIGHT}" fill="transparent" ` +
+      `data-dep="${id}" style="cursor:pointer"/>`,
+    );
   }
   parts.push('</g>');
   return parts.join('');
