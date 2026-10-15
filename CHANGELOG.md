@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.7.2 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-10-15
 
 A point release of the v0.7 draft on data lineage. A `Dep` may now say how a target is loaded, and so serve as a source-to-target mapping: each dependency may carry a `transformation`, from a list of eight kinds that follows OpenLineage's column lineage facet, a line may name several source fields, and a `Dep` may carry the statement that loads the target in `source_query`, in the language its `source_database` names. A metric is a field of a View that is not materialized, whose lineage a `Dep` may state with `transformation: aggregation`. An entity or a View states its `grain`. Every document that parsed before still parses. Documents keep declaring `xdbml: 0.7`.
 
