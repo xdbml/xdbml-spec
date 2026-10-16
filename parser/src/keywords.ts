@@ -390,7 +390,7 @@ export const GRANULARITY_VALUES = [
 
 /** The kinds of transformation of a dependency (v0.7.2, spec §27.10.1). */
 export const TRANSFORMATION_VALUES = [
-  'identity', 'derivation', 'aggregation',
+  'identity', 'calculation', 'aggregation',
   'join', 'lookup', 'filter', 'group_by', 'conditional',
 ] as const;
 

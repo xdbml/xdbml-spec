@@ -240,7 +240,7 @@ Container dw {
 }
 Dep load {
   src.m.id -> dw.d.id [transformation: identity]
-  src.m.first, src.m.last -> dw.d.full [transformation: derivation, note: 'Trimmed']
+  src.m.first, src.m.last -> dw.d.full [transformation: calculation, note: 'Trimmed']
   src.c.name -> dw.d.country
   src.m.code, src.c.code -> dw.d [transformation: lookup]
   src.m.status -> dw.d [transformation: filter]
@@ -261,7 +261,7 @@ Dep metrics {
       assertEq(m.element, 'dw.d', 'the target element');
       assertEq(JSON.stringify(m.fields.map((r) => [r.target, r.sources, r.kind ?? null, r.note ?? null])), JSON.stringify([
         ['id', ['src.m.id'], 'identity', null],
-        ['full', ['src.m.first', 'src.m.last'], 'derivation', 'Trimmed'],
+        ['full', ['src.m.first', 'src.m.last'], 'calculation', 'Trimmed'],
         ['country', ['src.c.name'], null, null],
       ]), 'one row per line into a field, with its sources, kind and note');
       assertEq(JSON.stringify(m.rows.map((r) => [r.kind, r.sources])), JSON.stringify([

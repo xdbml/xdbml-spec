@@ -4,9 +4,36 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.7.2 -- 2026
+## v0.7.3 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A point release of the v0.7 draft that renames one kind of transformation. `derivation`, the kind for a value computed within the row, is now `calculation`. The word "derivation" already names the derivation of a physical model, in this specification (§12.7) and in Hackolade Studio. v0.7.2 had just been published, so the old word is not kept as an alias. Documents keep declaring `xdbml: 0.7`.
+
+### Changed
+
+#### Spec
+
+- **Transformations (§27.10.1)**: the kind `derivation` is renamed `calculation`, in the list of kinds, the examples, the checks (§27.10.5), the drawing (§27.10.6), the OpenLineage table, where it still maps to `DIRECT`/`TRANSFORMATION` (§27.10.7), the validation summary (§27.12) and Appendix A.
+- **Grammar (`grammar/xDBML.g4`)**: the comments name `calculation`, and state that a dependency between two entities takes `identity` only.
+
+#### Tooling
+
+- **`@xdbml/parse`**: reads `calculation` as a kind of transformation, and reports `derivation` with `unknown-transformation`. `@xdbml/parse` accepts documents declaring `xdbml: 0.7.3`.
+- **Renderer and playground**: the pill of the kind reads `calculation`. The help pages on data lineage and the diagnostics panel name it.
+- **`llms.txt` and the MCP server**: teach `calculation`.
+- **Example 19** and the **grammar corpus** use `calculation`; the corpus gains a v0.7.3 case where `derivation` is an error.
+
+### Not changed (compatibility)
+
+- A document of v0.7.2 that writes `transformation: derivation` gets an `unknown-transformation` error. Nothing else changes.
+
+---
+
+## v0.7.2 -- 2026
+
+**Status**: Draft -- superseded by v0.7.3
 **Released**: 2026-10-15
 
 A point release of the v0.7 draft on data lineage. A `Dep` may now say how a target is loaded, and so serve as a source-to-target mapping: each dependency may carry a `transformation`, from a list of eight kinds that follows OpenLineage's column lineage facet, a line may name several source fields, and a `Dep` may carry the statement that loads the target in `source_query`, in the language its `source_database` names. A metric is a field of a View that is not materialized, whose lineage a `Dep` may state with `transformation: aggregation`. An entity or a View states its `grain`. Every document that parsed before still parses. Documents keep declaring `xdbml: 0.7`.

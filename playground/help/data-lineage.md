@@ -46,7 +46,7 @@ From xDBML v0.7.2, a `Dep` can say how a target is loaded: each dependency may c
 ```xdbml
 Dep load_dim_member [source_database: snowflake] {
   legacy.MBR.MBR_ID -> dw.dim_member.member_id [transformation: identity]
-  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: derivation]
+  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: calculation]
   legacy.MBR.STATUS -> dw.dim_member [transformation: filter]
   source_query: '''
     SELECT MBR_ID AS member_id, TRIM(FIRST_NM) || ' ' || TRIM(LAST_NM) AS full_name
@@ -55,7 +55,7 @@ Dep load_dim_member [source_database: snowflake] {
 }
 ```
 
-The kinds `identity`, `derivation` and `aggregation` give the value of a field. The kinds `join`, `lookup`, `filter`, `group_by` and `conditional` decide which rows the target receives, or which branch of a `CASE` applies, without giving a value: they are the indirect kinds. A line without `transformation` records lineage only. The playground does not read the statement: it shows it highlighted as SQL, and reports neither a syntax error in it nor a difference with the lines.
+The kinds `identity`, `calculation` and `aggregation` give the value of a field. The kinds `join`, `lookup`, `filter`, `group_by` and `conditional` decide which rows the target receives, or which branch of a `CASE` applies, without giving a value: they are the indirect kinds. A line without `transformation` records lineage only. The playground does not read the statement: it shows it highlighted as SQL, and reports neither a syntax error in it nor a difference with the lines.
 
 ## How a dependency is drawn
 

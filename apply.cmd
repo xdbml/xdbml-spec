@@ -1,19 +1,17 @@
 @echo off
 setlocal
-REM xDBML 0.7.2: merge dev/0.7.2 into main, release, publish the VS Code
-REM extension. Three steps, each run from cmd.exe at the repo root:
+REM xDBML 0.7.3: the kind of transformation derivation becomes calculation.
+REM Two steps, each run from cmd.exe at the repo root:
 REM
-REM   apply.cmd            gate, commit this delivery, open the pull request
-REM   apply.cmd release    merge the pull request, release 0.7.2, tag v0.7.2
-REM   apply.cmd vscode     publish the VS Code extension 0.7.2
+REM   apply.cmd            branch, gate, commit this delivery, open the pull request
+REM   apply.cmd release    merge the pull request, release 0.7.3, tag v0.7.3
 REM
 REM Each step stops at the first failure and says what to do next. APPLY.txt
-REM describes the three steps.
-set "VER=0.7.2"
-set "BRANCH=dev/0.7.2"
-set "PRTITLE=xDBML 0.7.2: source-to-target mapping in Dep"
-set "PRBODY=PR-0.7.2.md"
-set "VSIX=xdbml-0.7.2.vsix"
+REM describes the two steps. The VS Code extension does not change in 0.7.3.
+set "VER=0.7.3"
+set "BRANCH=dev/0.7.3"
+set "PRTITLE=xDBML 0.7.3: the kind of transformation derivation becomes calculation"
+set "PRBODY=PR-0.7.3.md"
 set "ROOT=%~dp0"
 cd /d "%ROOT%" || exit /b 1
 if not exist "parser\src\parser.ts" (
@@ -21,41 +19,47 @@ if not exist "parser\src\parser.ts" (
   exit /b 1
 )
 if /i "%~1"=="release" goto :release
-if /i "%~1"=="vscode" goto :vscode
 if not "%~1"=="" (
-  echo ERROR: unknown step "%~1". The steps are: apply.cmd, apply.cmd release, apply.cmd vscode
+  echo ERROR: unknown step "%~1". The steps are: apply.cmd, apply.cmd release
   exit /b 1
 )
 
 REM ===========================================================================
-REM  Step 1: gate, commit this delivery, open the pull request
+REM  Step 1: branch, gate, commit this delivery, open the pull request
 REM ===========================================================================
 echo.
 echo ============================================================
-echo  Step 1 of 3: gate, commit, pull request %BRANCH% into main
+echo  Step 1 of 2: branch, gate, commit, pull request into main
 echo ============================================================
 echo.
-echo [1/5] Checks: GitHub CLI, branch, remote
+echo [1/5] Checks: GitHub CLI, branch
 call :needgh || exit /b 1
-for /f %%b in ('git rev-parse --abbrev-ref HEAD') do set "CUR=%%b"
-if not "%CUR%"=="%BRANCH%" (
-  echo ERROR: the clone is on branch %CUR%. Run: git checkout %BRANCH%
-  exit /b 1
-)
 call git fetch origin --quiet || goto :fail
-for /f %%h in ('git rev-parse HEAD') do set "LOCAL=%%h"
-for /f %%h in ('git rev-parse origin/%BRANCH%') do set "REMOTE=%%h"
-if not "%LOCAL%"=="%REMOTE%" (
-  echo ERROR: %BRANCH% differs from origin/%BRANCH%. Pull or push first.
+for /f %%b in ('git rev-parse --abbrev-ref HEAD') do set "CUR=%%b"
+if "%CUR%"=="%BRANCH%" goto :onbranch
+if not "%CUR%"=="main" (
+  echo ERROR: the clone is on branch %CUR%. The delivery goes on main:
+  echo        git checkout main   then rerun apply.cmd
   exit /b 1
 )
+for /f %%h in ('git rev-parse HEAD') do set "LOCAL=%%h"
+for /f %%h in ('git rev-parse origin/main') do set "REMOTE=%%h"
+if not "%LOCAL%"=="%REMOTE%" (
+  echo ERROR: main differs from origin/main. Run  git pull --ff-only  then
+  echo        rerun apply.cmd. The files of this delivery stay as they are.
+  exit /b 1
+)
+REM The branch starts from main and takes the changes of the working tree,
+REM which are this delivery.
+call git checkout -b %BRANCH% || goto :fail
+:onbranch
 call git merge-base --is-ancestor origin/main HEAD
 if errorlevel 1 (
   echo ERROR: main has commits that %BRANCH% lacks. Merge them first:
   echo        git merge origin/main
   exit /b 1
 )
-echo   ok
+echo   ok, on %BRANCH%
 
 echo.
 echo [2/5] Verification gate: npm run check, mcp type-check
@@ -72,11 +76,11 @@ REM the pull request is not committed: it goes into the pull request.
 call git add -A -- . ":(exclude)%PRBODY%" || goto :fail
 call git diff --cached --quiet
 if errorlevel 1 (
-  call git commit -m "0.7.2: deployment script" || goto :fail
+  call git commit -m "0.7.3: the kind of transformation derivation becomes calculation" || goto :fail
 ) else (
   echo   nothing to commit: the delivery is committed already.
 )
-call git push origin %BRANCH% || goto :fail
+call git push -u origin %BRANCH% || goto :fail
 
 echo.
 echo [4/5] Pull request %BRANCH% into main
@@ -109,12 +113,12 @@ echo ============================================================
 exit /b 0
 
 REM ===========================================================================
-REM  Step 2: merge the pull request, release 0.7.2, tag v0.7.2
+REM  Step 2: merge the pull request, release 0.7.3, tag v0.7.3
 REM ===========================================================================
 :release
 echo.
 echo ============================================================
-echo  Step 2 of 3: merge into main, release %VER%, tag v%VER%
+echo  Step 2 of 2: merge into main, release %VER%, tag v%VER%
 echo ============================================================
 echo.
 echo [1/6] Checks: GitHub CLI, pull request
@@ -135,7 +139,9 @@ echo   ok
 echo.
 echo [2/6] Wait for the checks of the pull request, then merge it
 call gh pr checks %BRANCH% --watch || goto :failchecks
-call gh pr merge %BRANCH% --merge || goto :fail
+REM --admin merges once the checks above pass: the rules of main ask for an
+REM approving review, and the author of a pull request cannot approve it.
+call gh pr merge %BRANCH% --merge --admin || goto :fail
 :merged
 
 echo.
@@ -186,32 +192,6 @@ echo  Done: %VER% is published and deployed, v%VER% is tagged and
 echo  released.
 echo    https://github.com/xdbml/xdbml-spec/releases/tag/v%VER%
 echo    https://xdbml.org/spec/v0.7
-echo.
-echo  Last step:  apply.cmd vscode
-echo ============================================================
-exit /b 0
-
-REM ===========================================================================
-REM  Step 3: publish the VS Code extension
-REM ===========================================================================
-:vscode
-echo.
-echo ============================================================
-echo  Step 3 of 3: publish the VS Code extension %VER%
-echo ============================================================
-cd /d "%ROOT%tools\vscode-extension" || goto :fail
-if not exist "%VSIX%" (
-  echo ERROR: tools\vscode-extension\%VSIX% is missing.
-  cd /d "%ROOT%"
-  exit /b 1
-)
-call npx --yes @vscode/vsce publish --packagePath %VSIX% || goto :failvsce
-cd /d "%ROOT%"
-echo.
-echo ============================================================
-echo  Done: the extension is on the Marketplace. It can take a
-echo  few minutes to show at
-echo    https://marketplace.visualstudio.com/items?itemName=xdbml.xdbml
 echo ============================================================
 exit /b 0
 
@@ -259,14 +239,4 @@ echo tools\release.cmd stopped. Fix the cause it names, then rerun
 echo   tools\release.cmd %VER%
 echo directly, not apply.cmd release: release.cmd skips what it already
 echo published, while the preflight refuses a version that is on npm.
-exit /b 1
-
-:failvsce
-cd /d "%ROOT%"
-echo.
-echo vsce could not publish. Either log in once, with a Personal Access
-echo Token of the xdbml publisher, then rerun apply.cmd vscode:
-echo   npx @vscode/vsce login xdbml
-echo or upload tools\vscode-extension\%VSIX% by hand at
-echo   https://marketplace.visualstudio.com/manage/publishers/xdbml
 exit /b 1

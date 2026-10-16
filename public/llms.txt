@@ -430,7 +430,7 @@ A `Dep` specifies how a target is loaded when its dependencies carry a `transfor
 | `transformation` | The source fields | Ends at |
 |---|---|---|
 | `identity` | are copied unchanged | a field; between two entities, a copy of every row and field |
-| `derivation` | compute the value within the row | a field |
+| `calculation` | compute the value within the row | a field |
 | `aggregation` | compute the value over several rows | a field |
 | `join` | sit in a join condition | the entity, or a field |
 | `lookup` | sit in a join that finds at most one row | the entity, or a field |
@@ -438,7 +438,7 @@ A `Dep` specifies how a target is loaded when its dependencies carry a `transfor
 | `group_by` | group the rows | the entity, or a field |
 | `conditional` | are tested in a `CASE WHEN` of the value | a field |
 
-A line without `transformation` states lineage and no kind. A `CAST` written in the statement makes a `derivation`. One field may play several roles: state the same pair once for each kind. Give the target its `grain`, what one row represents.
+A line without `transformation` states lineage and no kind. A `CAST` written in the statement makes a `calculation`. One field may play several roles: state the same pair once for each kind. Give the target its `grain`, what one row represents.
 
 ```xdbml
 Container legacy [type: database, target: Oracle] {
@@ -466,7 +466,7 @@ Container dw [type: schema, target: Snowflake] {
 
 Dep load_dim_member [source_database: snowflake] {
   legacy.MBR.MBR_ID -> dw.dim_member.member_id [transformation: identity]
-  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: derivation]
+  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: calculation]
   legacy.COUNTRY.NAME -> dw.dim_member.country_name [transformation: identity]
   legacy.MBR.CNTRY_CD, legacy.COUNTRY.CODE -> dw.dim_member [transformation: lookup]
   legacy.MBR.STATUS -> dw.dim_member [transformation: filter]
@@ -741,7 +741,7 @@ Dep load_stg_customers {
 
 // Right
 Dep load_stg_customers [source_database: ansi_sql] {
-  raw_customers.first_name, raw_customers.last_name -> stg_customers.full_name [transformation: derivation]
+  raw_customers.first_name, raw_customers.last_name -> stg_customers.full_name [transformation: calculation]
   source_query: '''SELECT id, first_name || ' ' || last_name AS full_name FROM raw_customers'''
 }
 ```

@@ -103,7 +103,7 @@ export interface LineageDependency {
 /** The kinds of transformation, in the order of §27.10.1 (v0.7.2). */
 export const TRANSFORMATIONS = [
   'identity',
-  'derivation',
+  'calculation',
   'aggregation',
   'join',
   'lookup',
@@ -115,7 +115,7 @@ export const TRANSFORMATIONS = [
 export type Transformation = typeof TRANSFORMATIONS[number];
 
 /** The kinds that give the value of a field, and `conditional`, which tests it: a field is downstream (§27.10.1). */
-const FIELD_KINDS: ReadonlySet<string> = new Set(['identity', 'derivation', 'aggregation', 'conditional']);
+const FIELD_KINDS: ReadonlySet<string> = new Set(['identity', 'calculation', 'aggregation', 'conditional']);
 /** The kinds that steer the rows or a branch without giving the value (§27.10.1). */
 const INDIRECT_KINDS: ReadonlySet<string> = new Set(['join', 'lookup', 'filter', 'group_by', 'conditional']);
 
@@ -554,7 +554,7 @@ function checkTransformations (
       diagnostics.push({
         severity: 'error',
         code: 'unknown-transformation',
-        message: `${written}. Write identity, derivation, aggregation, join, lookup, filter, group_by or ` +
+        message: `${written}. Write identity, calculation, aggregation, join, lookup, filter, group_by or ` +
           'conditional (spec §27.10.1).',
         span: setting.span,
       });
@@ -592,7 +592,7 @@ function checkTransformations (
         severity: 'warning',
         code: 'transformation-mismatch',
         message: `'identity' copies one field, and this dependency names ${upstreams} upstream ends. ` +
-          "Write 'derivation' instead (spec §27.10.5).",
+          "Write 'calculation' instead (spec §27.10.5).",
         span: setting.span,
       });
     }

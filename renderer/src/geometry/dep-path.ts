@@ -10,7 +10,7 @@
  * The dependencies of one Dep that share a downstream end meet at a
  * junction shortly before it, and one trunk continues from the junction
  * to the arrowhead, so several fields combined into one read as one
- * derivation.
+ * calculation.
  *
  * From v0.7.2 a dependency may carry a kind of transformation (§27.10.6).
  * The direct kinds keep the solid curve and the junction; the indirect

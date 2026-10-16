@@ -1,52 +1,51 @@
-xDBML 0.7.2 -- pull request, release, VS Code extension
-Base: dev/0.7.2 at 6581050. Built 2026-10-15.
+xDBML 0.7.3 -- the kind of transformation derivation becomes calculation
+Base: main at 99956b8 (release 0.7.2). Built 2026-10-15.
 
-WHAT THIS DELIVERY ADDS
------------------------
-Three files, in the working tree of your clone, on dev/0.7.2:
+WHAT THIS DELIVERY CHANGES
+--------------------------
+The files are in the working tree of your clone, on main, uncommitted:
+the spec (chapter 27, Appendix A, the version index), the parser and its
+tests, the grammar comments and corpus, the renderer tests and the golden
+of example 19, the playground tests and two help pages, llms.txt and the
+MCP reference, example 19 and its description, the CHANGELOG, and:
 
-  apply.cmd      the three steps below
+  apply.cmd      the two steps below
   APPLY.txt      this file
-  PR-0.7.2.md    the description of the pull request; step 1 puts it in
+  PR-0.7.3.md    the description of the pull request; step 1 puts it in
                  the pull request and deletes it, so it is never committed
 
-Everything else of 0.7.2 is on the branch already, in your four commits.
+The VS Code extension does not change, so there is no vscode step.
 
-THE WHOLE DEPLOYMENT, IN THREE COMMANDS
----------------------------------------
-From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on
-dev/0.7.2:
+THE WHOLE DEPLOYMENT, IN TWO COMMANDS
+-------------------------------------
+From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on main:
 
-  apply.cmd            gate, commit this delivery, open the pull request
-  apply.cmd release    merge the pull request, release 0.7.2, tag v0.7.2
-  apply.cmd vscode     publish the VS Code extension 0.7.2
+  apply.cmd            branch, gate, commit this delivery, open the pull request
+  apply.cmd release    merge the pull request, release 0.7.3, tag v0.7.3
 
 Each step stops at the first failure, says what failed, and can be rerun
 once the cause is fixed. Nothing is published before step 2.
 
-Step 1 checks that the GitHub CLI is logged in, that the clone is on
-dev/0.7.2, level with origin/dev/0.7.2, and that main has nothing the
-branch lacks. It runs npm run check and the type-check of the MCP server,
-commits every change in the tree except PR-0.7.2.md as "0.7.2: deployment
-script", pushes the branch, and opens the pull request into main with
-PR-0.7.2.md as its description. It does not compare the tree against a
-list of files.
+Step 1 checks that the GitHub CLI is logged in and that main is level with
+origin/main, then creates the branch dev/0.7.3, which takes the changes of
+the working tree. On a rerun it finds itself on dev/0.7.3 and goes on from
+there. It runs npm run check and the type-check of the MCP server, commits
+every change in the tree except PR-0.7.3.md, pushes the branch, and opens
+the pull request into main with PR-0.7.3.md as its description.
 
-Step 2 waits for the checks of the pull request, merges it, switches to
-main and pulls, runs tools\release-preflight.cmd 0.7.2, dates the
-CHANGELOG, and runs tools\release.cmd 0.7.2: @xdbml/parse and
-@xdbml/render 0.7.2 on npm, the MCP server and the rendering API deployed,
-"release 0.7.2" committed and pushed, the tag v0.7.2 and its GitHub
-release from the "## v0.7.2" section of the CHANGELOG. xdbml.org deploys
-from main.
-
-Step 3 publishes tools\vscode-extension\xdbml-0.7.2.vsix, which was built
-on your machine from the extension sources of the branch.
+Step 2 waits for the checks of the pull request and merges it with
+--admin, since the rules of main ask for a review that the author of the
+pull request cannot give. It then switches to main and pulls, runs
+tools\release-preflight.cmd 0.7.3, dates the CHANGELOG, and runs
+tools\release.cmd 0.7.3: @xdbml/parse and @xdbml/render 0.7.3 on npm, the
+MCP server and the rendering API deployed, "release 0.7.3" committed and
+pushed, the tag v0.7.3 and its GitHub release from the "## v0.7.3" section
+of the CHANGELOG. xdbml.org deploys from main.
 
 VERIFIED BEFORE DELIVERY
 ------------------------
-On a Linux clone of dev/0.7.2 with its own npm ci, Node 22, with this
-delivery applied: parser 875, renderer 384, viewport 14, interactive 61,
+On a Linux clone of main at 99956b8 with its own npm ci, with this
+delivery applied: parser 878, renderer 384, viewport 14, interactive 61,
 MCP 104, from-mongodb 24, playground 67, VS Code extension package in
 sync, spec links 236, TextMate grammar test, playground and MCP
 type-checks, MCP reference in sync with llms.txt, docs build OK.

@@ -129,7 +129,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.7.2';
+export const SUPPORTED_XDBML_VERSION = '0.7.3';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
