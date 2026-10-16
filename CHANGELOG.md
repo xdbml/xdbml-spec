@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.7.3 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-10-16
 
 A point release of the v0.7 draft that renames one kind of transformation. `derivation`, the kind for a value computed within the row, is now `calculation`. The word "derivation" already names the derivation of a physical model, in this specification (§12.7) and in Hackolade Studio. v0.7.2 had just been published, so the old word is not kept as an alias. Documents keep declaring `xdbml: 0.7`.
 
