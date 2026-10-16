@@ -225,16 +225,16 @@ Table t {
   id int
 }
 Dep load {
-  s.id -> t.id [transformation: derivation]
+  s.id -> t.id [transformation: calculation]
   s.status -> t [transformation: filter]
 }`);
 const dashCount = (): number => (mapHost.innerHTML.match(/stroke-dasharray="5 3"/g) ?? []).length;
 const pillText = (t: string): boolean => mapHost.innerHTML.includes(`>${t}</text>`);
-check('indirect: a filter draws dashed with its pill', dashCount() === 1 && pillText('filter') && pillText('derivation'));
+check('indirect: a filter draws dashed with its pill', dashCount() === 1 && pillText('filter') && pillText('calculation'));
 mapHandle.setRelationshipVisibility({ indirectLineage: false });
-check('indirect: hiding indirect dependencies keeps the direct ones', dashCount() === 0 && !pillText('filter') && pillText('derivation'));
+check('indirect: hiding indirect dependencies keeps the direct ones', dashCount() === 0 && !pillText('filter') && pillText('calculation'));
 mapHandle.setRelationshipVisibility({ indirectLineage: true, lineage: false });
-check('indirect: hiding dependencies hides both', dashCount() === 0 && !pillText('filter') && !pillText('derivation'));
+check('indirect: hiding dependencies hides both', dashCount() === 0 && !pillText('filter') && !pillText('calculation'));
 // ---- selection highlight follows the line style (spec 11.13) ----
 //
 // A selected relationship is re-stroked in the selection colour over its own

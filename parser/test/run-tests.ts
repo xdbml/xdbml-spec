@@ -3677,7 +3677,7 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
 Entity A { }`,
       assert: (doc) => {
         if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
-        for (const v of ['0.8', '0.7.3', '1.0', '0.10']) {
+        for (const v of ['0.8', '0.7.4', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -4340,8 +4340,14 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.7.2' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.7.2 §4: xdbml: 0.7.3 is newer than this parser supports',
+      name: 'v0.7.3 §4: xdbml: 0.7.3 parses and keeps its patch number',
       source: `xdbml: 0.7.3
+Entity e { id int [pk] }`,
+      assert: (doc) => (doc.version?.version === '0.7.3' ? null : `version: ${doc.version?.version}`),
+    },
+    {
+      name: 'v0.7.3 §4: xdbml: 0.7.4 is newer than this parser supports',
+      source: `xdbml: 0.7.4
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -7469,7 +7475,7 @@ function runV072Tests (): TestResult[] {
   check('§27.10.1: the eight kinds, bare or quoted, in any casing', () => {
     const lines = TRANSFORMATIONS.map((k, i) => {
       const written = i % 2 ? `'${k.toUpperCase()}'` : k[0].toUpperCase() + k.slice(1);
-      return ['identity', 'derivation', 'aggregation', 'conditional'].includes(k)
+      return ['identity', 'calculation', 'aggregation', 'conditional'].includes(k)
         ? `  a.x -> b.x [transformation: ${written}]` : `  a.y -> b [transformation: ${written}]`;
     });
     const got = TRANSFORMATIONS.map((k, i) => pairs(`${V}${T}Dep n {\n${lines[i]}\n}`)[0].split(':')[1]);
@@ -7478,24 +7484,29 @@ function runV072Tests (): TestResult[] {
   check('§27.10.1: a line without transformation carries no kind', () =>
     same(pairs(`${V}${T}Dep: a.x -> b.x\nDep: a -> b`), ['a.x->b.x', 'a->b']));
   check('§27.3: in the short form, the brackets after the dependency hold its transformation', () =>
-    same(pairs(`${V}${T}Dep n [note: 'n']: a.x -> b.x [transformation: derivation]`), ['a.x->b.x:derivation']));
+    same(pairs(`${V}${T}Dep n [note: 'n']: a.x -> b.x [transformation: calculation]`), ['a.x->b.x:calculation']));
   check('§27.3: a transformation in the brackets of a block is no setting of its lines', () =>
-    same(pairs(`${V}${T}Dep n [transformation: derivation] {\n  a.x -> b.x\n}`), ['a.x->b.x']));
+    same(pairs(`${V}${T}Dep n [transformation: calculation] {\n  a.x -> b.x\n}`), ['a.x->b.x']));
   check('§27.10.1: the indirect kinds may end at the entity, from fields', () =>
     expectCodes(`${V}${T}Dep n {\n  a.x, b.y -> c [transformation: join]\n  a.y -> c [transformation: lookup]\n  b.x -> c [transformation: filter]\n}\nDep m {\n  a.x -> b [transformation: group_by]\n}`, ''));
-  check('§27.10.1: a CASE: derivation of the value, conditional of the field it tests', () =>
-    expectCodes(`${V}${T}Dep n [source_database: ansi_sql] {\n  a.x -> c.x [transformation: derivation]\n  a.y -> c.x [transformation: conditional]\n  source_query: '''\n    SELECT CASE WHEN y = 1 THEN x END AS x FROM a\n  '''\n}`, ''));
+  check('§27.10.1: a CASE: calculation of the value, conditional of the field it tests', () =>
+    expectCodes(`${V}${T}Dep n [source_database: ansi_sql] {\n  a.x -> c.x [transformation: calculation]\n  a.y -> c.x [transformation: conditional]\n  source_query: '''\n    SELECT CASE WHEN y = 1 THEN x END AS x FROM a\n  '''\n}`, ''));
 
   /* ---- §27.10.5 checks ---- */
 
   check('§27.10.5: an unknown value of transformation is an error, a word or any other value', () =>
     expectCodes(`${V}${T}Dep n {\n  a.x -> b.x [transformation: copy]\n  a.y -> b.y [transformation: 3]\n}`, 'error:unknown-transformation error:unknown-transformation'));
+  check('§27.10.1 (v0.7.3): derivation is no kind of transformation, and the message lists calculation', () => {
+    const d = resolveNames(parse(`${V}${T}Dep: a.x -> b.x [transformation: derivation]`)).diagnostics;
+    return same(d.map((x) => x.code), ['unknown-transformation'])
+      ?? (/identity, calculation, aggregation/.test(d[0].message) ? undefined : d[0].message);
+  });
   check('§27.10.5: a transformation between two entities is an error', () =>
     expectCodes(`${V}${T}Dep: a -> b [transformation: filter]`, 'error:transformation-between-entities'));
   check('§27.10.5: a transformation on a line where one pair is between entities is an error', () =>
     expectCodes(`${V}${T}Dep: a, b.x -> c [transformation: join]`, 'error:transformation-between-entities'));
-  check('§27.10.5: identity, derivation, aggregation and conditional ending at an entity are errors', () =>
-    expectCodes(`${V}${T}Dep n {\n  a.x -> c [transformation: identity]\n  a.y -> c [transformation: derivation]\n  b.x -> c [transformation: aggregation]\n  b.y -> c [transformation: conditional]\n}`,
+  check('§27.10.5: identity, calculation, aggregation and conditional ending at an entity are errors', () =>
+    expectCodes(`${V}${T}Dep n {\n  a.x -> c [transformation: identity]\n  a.y -> c [transformation: calculation]\n  b.x -> c [transformation: aggregation]\n  b.y -> c [transformation: conditional]\n}`,
       'error:transformation-target-mismatch error:transformation-target-mismatch error:transformation-target-mismatch error:transformation-target-mismatch'));
   check('§27.10.1: identity between two entities states a copy', () =>
     expectCodes(`${V}${T}Dep: a -> b [transformation: identity]`, '') ?? same(pairs(`${V}${T}Dep: a -> b [transformation: identity]`), ['a->b:identity']));
@@ -7538,7 +7549,7 @@ function runV072Tests (): TestResult[] {
   /* ---- §27.8 modules ---- */
 
   const files: Record<string, string> = {
-    '/l/lib.xdbml': `${V}${T}Dep load [dialect: snowflake] {\n  a.x, a.y -> b.x [transformation: derivation]\n  source_query: 'SELECT x || y AS x FROM a'\n}\n`,
+    '/l/lib.xdbml': `${V}${T}Dep load [dialect: snowflake] {\n  a.x, a.y -> b.x [transformation: calculation]\n  source_query: 'SELECT x || y AS x FROM a'\n}\n`,
   };
   const opts = (path: string): ParseOptions => ({
     filePath: path,
@@ -7556,7 +7567,7 @@ function runV072Tests (): TestResult[] {
   check('§27.8: importing everything brings a Dep with its upstream ends, transformation and statement', () => {
     const src = `${V}use * from './lib'\n`;
     const l = collectLineage(flatten(parse(src, opts('/l/main.xdbml'))))[0];
-    return same([pairs(src, opts('/l/main.xdbml')), l.sourceQuery, l.sourceDatabase], [['a.x->b.x:derivation', 'a.y->b.x:derivation'], 'SELECT x || y AS x FROM a', 'snowflake'])
+    return same([pairs(src, opts('/l/main.xdbml')), l.sourceQuery, l.sourceDatabase], [['a.x->b.x:calculation', 'a.y->b.x:calculation'], 'SELECT x || y AS x FROM a', 'snowflake'])
       ?? expectCodes(src, '', opts('/l/main.xdbml'));
   });
 

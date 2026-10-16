@@ -819,7 +819,7 @@ metadataSetting
 // several upstream ends (depEndList); a block may mix the two levels; the body
 // of a block may hold `source_query`, the statement that loads the target, and
 // `source_database` or its alias `dialect`, its language; and the brackets
-// after a dependency may hold `transformation`, one of identity, derivation,
+// after a dependency may hold `transformation`, one of identity, calculation,
 // aggregation, join, lookup, filter, group_by, conditional (§27.3, §27.10).
 // Without a version declaration they are custom properties, as in DBML.
 
@@ -1545,11 +1545,11 @@ quotedIdentifier options { caseInsensitive=false; }
 //            block with no dependency draws a warning.
 //          * in a document that declares a version (v0.7.2): the value of
 //            `transformation` is one of the eight kinds; a dependency
-//            between two entities takes none; identity, derivation,
-//            aggregation and conditional end at a field; identity with
-//            several upstream ends, and an indirect kind from a whole
-//            entity, draw a warning; `source_query` in brackets draws a
-//            warning (§27.10.5, §27.12).
+//            between two entities takes identity only; identity,
+//            calculation, aggregation and conditional end at a field;
+//            identity with several upstream ends, and an indirect kind
+//            from a whole entity, draw a warning; `source_query` in
+//            brackets draws a warning (§27.10.5, §27.12).
 //          * an inline `dep` on an entity or a View names one, and on a
 //            field names a field. A TablePartial carries no `dep`.
 //          * `color` is #rgb or #rrggbb; a field does not depend on itself;

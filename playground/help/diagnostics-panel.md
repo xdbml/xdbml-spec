@@ -121,9 +121,9 @@ Data lineage (spec §27):
 
 Source-to-target mapping (spec §27.10, v0.7.2):
 
-- **`unknown-transformation`** (error): `transformation` takes one of identity, derivation, aggregation, join, lookup, filter, group_by and conditional.
+- **`unknown-transformation`** (error): `transformation` takes one of identity, calculation, aggregation, join, lookup, filter, group_by and conditional.
 - **`transformation-between-entities`** (error): a kind other than `identity` on a dependency between two entities; name the field that takes part.
-- **`transformation-target-mismatch`** (error): `identity`, `derivation`, `aggregation` or `conditional` from a field to an entity; these kinds give the value of one field.
+- **`transformation-target-mismatch`** (error): `identity`, `calculation`, `aggregation` or `conditional` from a field to an entity; these kinds give the value of one field.
 - **`transformation-mismatch`** (warning): `identity` with several sources; a copy has one.
 - **`indirect-from-entity`** (warning): a join, a lookup, a filter, a grouping or a condition starting from a whole entity, which does not say which field takes part.
 - **`source-query-in-settings`** (warning): `source_query` in the brackets of a `Dep`, where it is not the statement; write it in the body of a block, as for a View.

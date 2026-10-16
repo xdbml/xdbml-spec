@@ -918,7 +918,7 @@ DiagramView legend_only { Notes { legend } }`;
     'Table copy {\n  id int\n}',
     'Dep load {',
     '  src.id -> tgt.id [transformation: identity]',
-    '  src.first, src.last -> tgt.full_name [transformation: derivation]',
+    '  src.first, src.last -> tgt.full_name [transformation: calculation]',
     '  ref.name -> tgt.country',
     '  src.code, ref.code -> tgt [transformation: lookup]',
     '  src.status -> tgt [transformation: filter]',
@@ -929,13 +929,13 @@ DiagramView legend_only { Notes { legend } }`;
   const load = m.deps[0];
   check('mapping: a dependency carries its kind and its line',
     JSON.stringify(load.dependencies.map((d) => [d.transformation ?? null, d.line ?? null]))
-      === JSON.stringify([['identity', 0], ['derivation', 1], ['derivation', 1], [null, 2], ['lookup', 3], ['lookup', 3], ['filter', 4]]),
+      === JSON.stringify([['identity', 0], ['calculation', 1], ['calculation', 1], [null, 2], ['lookup', 3], ['lookup', 3], ['filter', 4]]),
     JSON.stringify(load.dependencies.map((d) => [d.transformation, d.line])));
   const [g, copy] = layoutDeps(m.deps, m.entities);
   const dashed = g.curves.filter((c) => c.dashed).map((c) => c.index);
   check('mapping: the indirect kinds draw dashed, the direct ones solid', JSON.stringify(dashed) === JSON.stringify([4, 5, 6]), JSON.stringify(dashed));
-  check('mapping: a pill names derivation, lookup and filter, and none for identity or a line without a kind',
-    JSON.stringify(g.pills.map((p) => p.text).sort()) === JSON.stringify(['derivation', 'filter', 'lookup']),
+  check('mapping: a pill names calculation, lookup and filter, and none for identity or a line without a kind',
+    JSON.stringify(g.pills.map((p) => p.text).sort()) === JSON.stringify(['calculation', 'filter', 'lookup']),
     JSON.stringify(g.pills.map((p) => p.text)));
   const lookupJ = g.junctions.find((j) => g.pills.some((p) => p.text === 'lookup' && p.x === j.x && p.y === j.y));
   check('mapping: the two ends of a lookup meet at a junction that carries its pill', !!lookupJ);
@@ -948,7 +948,7 @@ DiagramView legend_only { Notes { legend } }`;
   check('mapping: two groups that end at one header spread their arrowheads', new Set(headerTips).size === 2, JSON.stringify(headerTips));
   check('mapping: a copy between two entities shows identity', JSON.stringify(copy.pills.map((p) => p.text)) === JSON.stringify(['identity']));
   const svg = serializeDiagram(m);
-  check('mapping: the SVG draws dashes and pills', svg.includes('stroke-dasharray="5 3"') && svg.includes('>lookup</text>') && svg.includes('>derivation</text>'));
+  check('mapping: the SVG draws dashes and pills', svg.includes('stroke-dasharray="5 3"') && svg.includes('>lookup</text>') && svg.includes('>calculation</text>'));
   check('mapping: group_by reads group by', layoutDeps(buildDiagram(flatten(parse('xdbml: 0.7\nTable a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a.x -> b [transformation: group_by]'))).deps,
     buildDiagram(flatten(parse('xdbml: 0.7\nTable a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a.x -> b [transformation: group_by]'))).entities)[0]?.pills[0]?.text === 'group by');
   const plain = buildDiagram(flatten(parse('Table a {\n  x int\n}\nTable b {\n  x int\n}\nDep: a.x -> b.x')));

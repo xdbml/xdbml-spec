@@ -81,10 +81,10 @@ Container dv [type: schema, target: Snowflake] {
   }
 }
 
-// The member dimension: two copies, a derivation, a lookup and a filter.
+// The member dimension: two copies, a calculation, a lookup and a filter.
 Dep load_dim_member [source_database: snowflake] {
   legacy.MBR.MBR_ID   -> dw.dim_member.member_id    [transformation: identity]
-  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: derivation]
+  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: calculation]
   legacy.COUNTRY.NAME -> dw.dim_member.country_name [transformation: identity]
 
   legacy.MBR.CNTRY_CD, legacy.COUNTRY.CODE -> dw.dim_member [transformation: lookup]

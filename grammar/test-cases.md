@@ -3584,7 +3584,7 @@ Container dw [type: schema, target: Snowflake] {
 
 Dep load_dim_member [source_database: snowflake] {
   legacy.MBR.MBR_ID   -> dw.dim_member.member_id    [transformation: identity]
-  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: derivation]
+  legacy.MBR.FIRST_NM, legacy.MBR.LAST_NM -> dw.dim_member.full_name [transformation: calculation]
   legacy.COUNTRY.NAME -> dw.dim_member.country_name [transformation: identity]
 
   legacy.MBR.CNTRY_CD, legacy.COUNTRY.CODE -> dw.dim_member [transformation: lookup]
@@ -3602,7 +3602,7 @@ Dep load_dim_member [source_database: snowflake] {
 }
 ```
 
-### VALID -- a CASE: derivation of the value, conditional of the field it tests (§27.10.1)
+### VALID -- a CASE: calculation of the value, conditional of the field it tests (§27.10.1)
 
 ```
 xdbml: 0.7
@@ -3623,7 +3623,7 @@ Container dw {
 }
 
 Dep load_fct_payment [source_database: ansi_sql] {
-  src.payment.amount -> dw.fct_payment.settled_amount [transformation: derivation]
+  src.payment.amount -> dw.fct_payment.settled_amount [transformation: calculation]
   src.payment.state  -> dw.fct_payment.settled_amount [transformation: conditional]
   source_query: '''
     SELECT CASE WHEN state = 'S' THEN amount END AS settled_amount
@@ -3936,7 +3936,7 @@ Table b {
   full_name varchar
 }
 
-Dep: a.first_name -> b [transformation: derivation]
+Dep: a.first_name -> b [transformation: calculation]
 ```
 
 ### VALID with a warning -- identity with several upstream ends (transformation-mismatch, §27.10.5)
@@ -4018,6 +4018,25 @@ Table fct_orders {
 Metadata Table fct_orders {
   grain: 'One row per order'
 }
+```
+
+## v0.7.3 -- calculation
+
+### INVALID -- derivation is no kind of transformation (unknown-transformation, §27.10.1)
+
+```
+xdbml: 0.7
+
+Table a {
+  first_name varchar
+  last_name  varchar
+}
+
+Table b {
+  full_name varchar
+}
+
+Dep: a.first_name, a.last_name -> b.full_name [transformation: derivation]
 ```
 
 ---
