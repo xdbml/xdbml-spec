@@ -936,6 +936,12 @@ scalarType
       // e.g. varchar, decimal(19,4), objectId, core.job_status, text[], varchar(20)[].
       // The empty brackets belong to the type only when written with no space
       // before them (spec §8.1); `int []` is an empty settings block.
+      // A type of several words is one quoted name: "timestamp with time zone".
+      // In the declaration of a field or a Type on a line of its own, a
+      // parser also reads the words without quotes, up to the settings or
+      // the end of the line, as that name, with a warning (spec §8.1,
+      // v0.7.4). The rule depends on the ends of lines, which this grammar
+      // skips, so it is not expressed here.
     ;
 
 // A type name may be qualified, as in DBML: `core.job_status` names an Enum

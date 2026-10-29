@@ -35,6 +35,7 @@ The playground checks your schema in two stages.
 Resolution reports two severities. An **error** marks something the schema cannot mean as written, such as a relationship to an entity that doesn't exist, or two declarations with the same name. A **warning** marks something valid that is probably not what you intended. These warnings exist today:
 
 - **`possible-type-typo`**: a type name that is not declared, but is close to a declared Type or Enum, such as `Adress` in a schema that declares `Type Address`. The message suggests the declared name. Any type name is valid in xDBML, so target-native types such as `number`, `clob` or `serial` raise nothing on their own; the warning appears only for a near miss.
+- **`unquoted-type-name`**: a type of several words written without quotes, such as `timestamp with time zone`, in a field declared on a line of its own. The words up to the settings or the end of the line read as one type name, as `"timestamp with time zone"` does, so the diagram shows the field as intended. Write the quotes to clear the warning.
 - **`ambiguous-ref-endpoint`**: a relationship endpoint that reads both as an entity and as a field of another entity. The field reading is used; rename one of them or qualify the path.
 - **`empty-supertype-group`**: a supertype group that lists no subtype yet.
 - **`merge-without-roll-up`**: a `merge` setting on a supertype group where neither the group nor any subtype uses `strategy: roll_up`, the only strategy it applies to.

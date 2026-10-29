@@ -193,6 +193,15 @@ export interface ScalarType {
   name: string;
   /** `(p, s)` parameters, e.g. for `decimal(19, 4)`. Numbers preserved as strings to keep round-trip fidelity. */
   params?: string[];
+  /**
+   * Set when the type is several words written without quotes in a
+   * declaration on a line of its own, `timestamp with time zone` (spec
+   * §8.1, v0.7.4).
+   * `name` then holds the words as written, each with its parameters, as
+   * the quoted form `"timestamp with time zone"` holds them, and `params`
+   * is unset.
+   */
+  unquotedWords?: true;
   span: Span;
 }
 
