@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.7.4 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-10-29
 
 A point release of the v0.7 draft that reads a type of several words written without quotes. A type such as `timestamp with time zone` is one name in double quotes, as in DBML, and tools write it so. Written without quotes in a field or a Type declared on a line of its own, the words now read as that name, with a warning. Before, the parser read the words after the first as further fields: an error at best, and with an even number of extra words, such as Oracle's `TIMESTAMP WITH LOCAL TIME ZONE`, fields named after the words, with no error. Documents keep declaring `xdbml: 0.7`.
 
