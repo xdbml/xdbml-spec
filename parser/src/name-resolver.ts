@@ -49,6 +49,7 @@ import type {
   Position,
   RecordsBlock,
   RefEndpoint,
+  ScalarType,
   Span,
   TablePartialDeclaration,
   TopLevelStatement,
@@ -131,6 +132,8 @@ export type DiagnosticCode =
   | 'container-target-not-in-project'
   | 'unresolved-type'
   | 'possible-type-typo'
+  // A type of several words written without quotes (spec §8.1, v0.7.4)
+  | 'unquoted-type-name'
   | 'unresolved-key-field'
   | 'unresolved-index-field'
   | 'key-path-crosses-collection'
@@ -514,7 +517,45 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
   // downgrade above for that reason.
   diagnostics.push(...checkDefinitions(flat, (name) => typeOrEnumDeclarations(name, symbols).length > 0));
 
+  // Pass 10: types of several words written without quotes (spec §8.1), in
+  // the document's own declarations; an imported type is checked in its
+  // file. A warning whatever version the document declares.
+  diagnostics.push(...checkUnquotedTypeNames(doc));
+
   return { diagnostics, symbols };
+}
+
+/**
+ * A warning for each type written in several words without quotes, which
+ * the parser reads as the quoted name (spec §8.1, v0.7.4).
+ */
+function checkUnquotedTypeNames (doc: XDbmlDocument): Diagnostic[] {
+  const diagnostics: Diagnostic[] = [];
+  const visit = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const n of node) visit(n);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    const rec = node as Record<string, unknown>;
+    if (rec.kind === 'ModuleImportDirective') return;
+    if (rec.kind === 'ScalarType' && rec.unquotedWords) {
+      const t = node as ScalarType;
+      diagnostics.push({
+        severity: 'warning',
+        code: 'unquoted-type-name',
+        message: `Type ${t.name} is written without quotes. A type of several words is one name in double quotes: ` +
+          `"${t.name}" (spec §8.1).`,
+        span: t.span,
+      });
+      return;
+    }
+    for (const [key, value] of Object.entries(rec)) {
+      if (key !== 'span') visit(value);
+    }
+  };
+  visit(doc.statements);
+  return diagnostics;
 }
 
 /** The two ends of one dependency, resolved; an end that names no element is undefined. */

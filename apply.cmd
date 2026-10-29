@@ -1,17 +1,17 @@
 @echo off
 setlocal
-REM xDBML 0.7.3: the kind of transformation derivation becomes calculation.
+REM xDBML 0.7.4: a type of several words written without quotes.
 REM Two steps, each run from cmd.exe at the repo root:
 REM
 REM   apply.cmd            branch, gate, commit this delivery, open the pull request
-REM   apply.cmd release    merge the pull request, release 0.7.3, tag v0.7.3
+REM   apply.cmd release    merge the pull request, release 0.7.4, tag v0.7.4
 REM
 REM Each step stops at the first failure and says what to do next. APPLY.txt
-REM describes the two steps. The VS Code extension does not change in 0.7.3.
-set "VER=0.7.3"
-set "BRANCH=dev/0.7.3"
-set "PRTITLE=xDBML 0.7.3: the kind of transformation derivation becomes calculation"
-set "PRBODY=PR-0.7.3.md"
+REM describes the two steps. The VS Code extension does not change in 0.7.4.
+set "VER=0.7.4"
+set "BRANCH=dev/0.7.4"
+set "PRTITLE=xDBML 0.7.4: a type of several words written without quotes"
+set "PRBODY=PR-0.7.4.md"
 set "ROOT=%~dp0"
 cd /d "%ROOT%" || exit /b 1
 if not exist "parser\src\parser.ts" (
@@ -76,7 +76,7 @@ REM the pull request is not committed: it goes into the pull request.
 call git add -A -- . ":(exclude)%PRBODY%" || goto :fail
 call git diff --cached --quiet
 if errorlevel 1 (
-  call git commit -m "0.7.3: the kind of transformation derivation becomes calculation" || goto :fail
+  call git commit -m "0.7.4: a type of several words written without quotes" || goto :fail
 ) else (
   echo   nothing to commit: the delivery is committed already.
 )
@@ -113,7 +113,7 @@ echo ============================================================
 exit /b 0
 
 REM ===========================================================================
-REM  Step 2: merge the pull request, release 0.7.3, tag v0.7.3
+REM  Step 2: merge the pull request, release 0.7.4, tag v0.7.4
 REM ===========================================================================
 :release
 echo.

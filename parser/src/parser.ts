@@ -129,7 +129,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.7.3';
+export const SUPPORTED_XDBML_VERSION = '0.7.4';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -1401,6 +1401,7 @@ export class Parser {
    */
   private parseFieldDeclaration (): FieldDeclaration {
     const start = this.peek().start;
+    const ownLine = this.atLineStart();
     const nameTok = this.peek();
     let name: string;
     let nameQuoted = false;
@@ -1417,7 +1418,7 @@ export class Parser {
         nameTok.start,
       );
     }
-    const type = this.parseTypeExpression();
+    const type = this.parseTypeExpression(ownLine);
     const settings = this.maybeSettingsBlock();
     return {
       kind: 'FieldDeclaration',
@@ -1443,7 +1444,7 @@ export class Parser {
    *   - `json { ... }` (and synonyms jsonb/variant; block optional)
    *   - Otherwise: scalar / named-type reference. With optional `(p, s)`.
    */
-  private parseTypeExpression (): TypeExpression {
+  private parseTypeExpression (ownLine = false): TypeExpression {
     const t = this.peek();
     const k = kw(t);
     if (k === 'object' || k === 'struct' || k === 'record') return this.parseObjectType();
@@ -1455,7 +1456,7 @@ export class Parser {
     if (k === 'anyof') return this.parsePolymorphicType('anyOf') as AnyOfType;
     if (k === 'allof') return this.parsePolymorphicType('allOf') as AllOfType;
     if (k === 'json' || k === 'jsonb' || k === 'variant') return this.parseJsonType();
-    return this.parseScalarOrNamedType();
+    return this.parseScalarOrNamedType(ownLine);
   }
 
   private parseObjectType (): ObjectType {
@@ -1522,6 +1523,7 @@ export class Parser {
     // `name type` form: Identifier followed by something that starts a type.
     const first = this.peek();
     const second = this.peek(1);
+    const elementOwnLine = this.atLineStart();
     let elementName: string | undefined;
     if (
       first.kind === TokenKind.Identifier
@@ -1537,7 +1539,10 @@ export class Parser {
       elementName = this.advance().text;
     }
     const elemStart = this.peek().start;
-    let elementType = this.parseTypeExpression();
+    // After an element name on a line of its own, a type of several words
+    // reads as in a field (spec §8.1); without a name, `array [double
+    // precision]` names an element `double`.
+    let elementType = this.parseTypeExpression(elementName !== undefined && elementOwnLine);
     const elementSettings = this.maybeSettingsBlock();
 
     // Sugar: `array [T1, T2, ...]` == `array [union [T1, T2, ...]]` (see helper).
@@ -1600,11 +1605,12 @@ export class Parser {
     const out: TupleElement[] = [];
     while (this.check(TokenKind.LBracket) && !this.check(TokenKind.EOF)) {
       const start = this.peek().start;
+      const ownLine = this.atLineStart();
       this.advance(); // [
       const numTok = this.expect(TokenKind.NumberLiteral, 'Expected position number in tuple');
       this.expect(TokenKind.RBracket, "Expected ']' after position");
       const elementName = this.parseIdentLikeName('tuple element name');
-      const type = this.parseTypeExpression();
+      const type = this.parseTypeExpression(ownLine);
       // Optional per-element settings. A following `[` only opens a settings
       // block if it is NOT the next element's `[N]` position marker; otherwise
       // maybeSettingsBlock would greedily consume it and fail on the number
@@ -1726,8 +1732,9 @@ export class Parser {
   /** `alternative_name typeExpression [settings]` -- shape is the same as a field declaration, context disambiguates */
   private parsePolymorphicAlternative (): PolymorphicAlternative {
     const start = this.peek().start;
+    const ownLine = this.atLineStart();
     const name = this.parseIdentLikeName('polymorphic alternative name');
-    const type = this.parseTypeExpression();
+    const type = this.parseTypeExpression(ownLine);
     const settings = this.maybeSettingsBlock();
     return {
       kind: 'PolymorphicAlternative',
@@ -1787,7 +1794,7 @@ export class Parser {
    * whose names resolve to user types as NamedTypeReference. The PoC keeps
    * the AST shape consistent regardless.
    */
-  private parseScalarOrNamedType (): ScalarType | NamedTypeReference {
+  private parseScalarOrNamedType (ownLine = false): ScalarType | NamedTypeReference {
     const start = this.peek().start;
     const t = this.peek();
     if (t.kind !== TokenKind.Identifier && t.kind !== TokenKind.QuotedIdentifier) {
@@ -1796,35 +1803,40 @@ export class Parser {
         t.start,
       );
     }
+    const first = this.idx;
     // A qualified type name, `core.job_status`, names an Enum declared in
     // a container (spec §16), or a target-native type such as
     // `public.geometry` that passes through as written. Held in the form
     // of names.ts, so a quoted segment that holds a dot keeps its quotes.
     let name = this.parseQualifiedName('type name');
-    let params: string[] | undefined;
-    if (this.check(TokenKind.LParen)) {
-      this.advance();
-      params = [];
-      if (!this.check(TokenKind.RParen)) {
-        params.push(this.parseTypeParam());
-        while (this.match(TokenKind.Comma)) {
-          params.push(this.parseTypeParam());
+    const params = this.maybeTypeParams();
+    name += this.arraySuffix();
+    // A type of several words written without quotes in a declaration on a
+    // line of its own, `timestamp with time zone` (spec §8.1, v0.7.4): the
+    // words up to the settings or the end of the line, each with its
+    // parameters, form one name, as in the quoted form. The resolver
+    // reports `unquoted-type-name`. When more follows on the line, such as
+    // a second field, `{ a int b int }`, the words read as before.
+    if (ownLine && t.kind === TokenKind.Identifier && this.atTypeWord()) {
+      const single = this.idx;
+      try {
+        while (this.atTypeWord()) {
+          this.advance();
+          this.maybeTypeParams();
         }
+        this.arraySuffix();
+        if (this.atLineEndOrSettings()) {
+          return {
+            kind: 'ScalarType',
+            name: this.textSince(first),
+            unquotedWords: true,
+            span: this.spanFrom(start),
+          };
+        }
+      } catch (e) {
+        if (!(e instanceof ParseError)) throw e;
       }
-      this.expect(TokenKind.RParen, "Expected ')' closing type parameters");
-    }
-    // DBML's array type of a target, `text[]` or `varchar(20)[]`, keeps its
-    // brackets in the type name (spec §8.1). Only empty brackets written
-    // right after the type, with no space, belong to it: `int [pk]` and
-    // `int []` remain settings blocks.
-    while (
-      this.check(TokenKind.LBracket) &&
-      this.peek(1).kind === TokenKind.RBracket &&
-      this.peek().start.offset === this.tokens[this.idx - 1].end.offset
-    ) {
-      this.advance();
-      this.advance();
-      name += '[]';
+      this.idx = single;
     }
     return {
       kind: 'ScalarType',
@@ -1832,6 +1844,82 @@ export class Parser {
       params,
       span: this.spanFrom(start),
     };
+  }
+
+  /** The `(p, s)` parameters after a type name, if any. */
+  private maybeTypeParams (): string[] | undefined {
+    if (!this.check(TokenKind.LParen)) return undefined;
+    this.advance();
+    const params: string[] = [];
+    if (!this.check(TokenKind.RParen)) {
+      params.push(this.parseTypeParam());
+      while (this.match(TokenKind.Comma)) {
+        params.push(this.parseTypeParam());
+      }
+    }
+    this.expect(TokenKind.RParen, "Expected ')' closing type parameters");
+    return params;
+  }
+
+  /**
+   * DBML's array type of a target, `text[]` or `varchar(20)[]`, keeps its
+   * brackets in the type name (spec §8.1). Only empty brackets written
+   * right after the type, with no space, belong to it: `int [pk]` and
+   * `int []` remain settings blocks.
+   */
+  private arraySuffix (): string {
+    let suffix = '';
+    while (
+      this.check(TokenKind.LBracket) &&
+      this.peek(1).kind === TokenKind.RBracket &&
+      this.peek().start.offset === this.tokens[this.idx - 1].end.offset
+    ) {
+      this.advance();
+      this.advance();
+      suffix += '[]';
+    }
+    return suffix;
+  }
+
+  /**
+   * Whether the current token is one more word of a type written without
+   * quotes (spec §8.1, v0.7.4): a bare word on the line of the previous
+   * token. A word that opens an element of the body, `Note:`, `indexes {`
+   * or `records (`, ends the type instead.
+   */
+  private atTypeWord (): boolean {
+    const w = this.peek();
+    if (w.kind !== TokenKind.Identifier) return false;
+    if (w.start.line !== this.tokens[this.idx - 1].end.line) return false;
+    const next = this.peek(1).kind;
+    if (next === TokenKind.Colon || next === TokenKind.LBrace) return false;
+    return !this.atRecordsBlock();
+  }
+
+  /** Whether the previous token ends its line, or settings follow it. */
+  private atLineEndOrSettings (): boolean {
+    const n = this.peek();
+    return n.kind === TokenKind.EOF || n.kind === TokenKind.LBracket
+      || n.start.line !== this.tokens[this.idx - 1].end.line;
+  }
+
+  /** Whether the current token is the first of its line. */
+  private atLineStart (): boolean {
+    return this.idx === 0 || this.tokens[this.idx - 1].end.line < this.peek().start.line;
+  }
+
+  /**
+   * The source text of the tokens from index `from` to the current one, as
+   * written, with one space wherever the source separates two tokens.
+   */
+  private textSince (from: number): string {
+    let text = '';
+    for (let i = from; i < this.idx; i++) {
+      const tok = this.tokens[i];
+      if (i > from && tok.start.offset > this.tokens[i - 1].end.offset) text += ' ';
+      text += tok.text;
+    }
+    return text;
   }
 
   private parseTypeParam (): string {
@@ -1847,8 +1935,9 @@ export class Parser {
 
   private parseTypeDecl (): TypeDeclaration {
     const start = this.peek().start;
+    const ownLine = this.atLineStart();
     this.advance(); // Type
-    return this.parseTypeDeclFromName(start);
+    return this.parseTypeDeclFromName(start, ownLine);
   }
 
   /**
@@ -1864,7 +1953,7 @@ export class Parser {
     for (;;) {
       this.skipListSeparators();
       if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
-      entries.push(this.parseTypeDeclFromName(this.peek().start));
+      entries.push(this.parseTypeDeclFromName(this.peek().start, this.atLineStart()));
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing definitions");
     return {
@@ -1878,7 +1967,7 @@ export class Parser {
    * The rest of a Type declaration from its name on: `Type` has been
    * consumed, or the declaration is an entry of a definitions block.
    */
-  private parseTypeDeclFromName (start: Position): TypeDeclaration {
+  private parseTypeDeclFromName (start: Position, ownLine = false): TypeDeclaration {
     const name = this.parseDeclaredName('type name');
 
     // After `Type <Name>`, the next token disambiguates the form:
@@ -1911,7 +2000,7 @@ export class Parser {
     // expressions like `array(int)` -- the spec calls this "scalar" because
     // that's the typical use case, but the syntactic form supports any
     // type expression as the base.
-    const scalarBase = this.parseTypeExpression();
+    const scalarBase = this.parseTypeExpression(ownLine);
     const settings = this.maybeSettingsBlock();
     return {
       kind: 'TypeDeclaration',

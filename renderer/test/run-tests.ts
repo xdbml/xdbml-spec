@@ -968,6 +968,24 @@ DiagramView legend_only { Notes { legend } }`;
     (sel.match(/<circle [^>]*r="4"/g) ?? []).length === g.junctions.filter((j) => !g.pills.some((p) => p.x === j.x && p.y === j.y)).length);
 }
 
+/* ---- Types of several words without quotes (spec §8.1, v0.7.4) ----- */
+
+{
+  const m = buildDiagram(flatten(parse([
+    'xdbml: 0.7',
+    'Table t {',
+    '  a TIMESTAMP WITH TIME ZONE [not null]',
+    '  b "TIMESTAMP WITH TIME ZONE"',
+    '  c TIMESTAMP(6) WITH TIME ZONE',
+    '  d int',
+    '}',
+  ].join('\n'))));
+  const labels = m.entities[0].fields.map((f) => `${f.name}:${f.typeLabel}`);
+  check('types: a type of several words without quotes is labeled as written, like the quoted form',
+    JSON.stringify(labels) === JSON.stringify(['a:TIMESTAMP WITH TIME ZONE', 'b:TIMESTAMP WITH TIME ZONE', 'c:TIMESTAMP(6) WITH TIME ZONE', 'd:int']),
+    JSON.stringify(labels));
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);

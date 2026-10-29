@@ -4039,6 +4039,63 @@ Table b {
 Dep: a.first_name, a.last_name -> b.full_name [transformation: derivation]
 ```
 
+## v0.7.4 -- types of several words without quotes
+
+### VALID with a warning -- a type of several words without quotes reads as the quoted name (unquoted-type-name, §8.1)
+
+```
+xdbml: 0.7
+
+TablePartial Audit {
+  "Created At" TIMESTAMP WITH TIME ZONE [not null, default: `CURRENT_TIMESTAMP`]
+  "Updated At" TIMESTAMP WITH TIME ZONE [not null, default: `CURRENT_TIMESTAMP`]
+}
+```
+
+### VALID with a warning -- an even number of words after the first, and parameters on a later word (unquoted-type-name, §8.1)
+
+```
+xdbml: 0.7
+
+Table events {
+  id         int [pk]
+  created_at TIMESTAMP WITH LOCAL TIME ZONE [not null]
+  duration   INTERVAL DAY(2) TO SECOND(6)
+}
+```
+
+### VALID with a warning -- in a document without a version declaration (unquoted-type-name, §8.1)
+
+```
+Table measures {
+  id    int [pk]
+  value double precision
+}
+```
+
+### VALID -- the quoted form, which tools write (§8.1)
+
+```
+xdbml: 0.7
+
+Table events {
+  id         int [pk]
+  created_at "timestamp with time zone" [not null]
+  value      "double precision"
+}
+```
+
+### INVALID -- a type in the brackets of a map takes the quotes (§8.1)
+
+```
+xdbml: 0.7
+
+Table readings {
+  id     int [pk]
+  values map [string, double precision]
+}
+```
+
 ---
 
 ## Test runner

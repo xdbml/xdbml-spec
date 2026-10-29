@@ -1,17 +1,17 @@
-xDBML 0.7.3 -- the kind of transformation derivation becomes calculation
-Base: main at 99956b8 (release 0.7.2). Built 2026-10-15.
+xDBML 0.7.4 -- a type of several words written without quotes
+Base: main at 7ed180e (release 0.7.3). Built 2026-10-29.
 
 WHAT THIS DELIVERY CHANGES
 --------------------------
 The files are in the working tree of your clone, on main, uncommitted:
-the spec (chapter 27, Appendix A, the version index), the parser and its
-tests, the grammar comments and corpus, the renderer tests and the golden
-of example 19, the playground tests and two help pages, llms.txt and the
-MCP reference, example 19 and its description, the CHANGELOG, and:
+the spec (sections 3.9 and 8.1, Appendix D, the version index), the
+parser and its tests, the grammar comment and corpus, a renderer test,
+the help page of the diagnostics panel, llms.txt and the MCP reference,
+the CHANGELOG, and:
 
   apply.cmd      the two steps below
   APPLY.txt      this file
-  PR-0.7.3.md    the description of the pull request; step 1 puts it in
+  PR-0.7.4.md    the description of the pull request; step 1 puts it in
                  the pull request and deletes it, so it is never committed
 
 The VS Code extension does not change, so there is no vscode step.
@@ -21,31 +21,31 @@ THE WHOLE DEPLOYMENT, IN TWO COMMANDS
 From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on main:
 
   apply.cmd            branch, gate, commit this delivery, open the pull request
-  apply.cmd release    merge the pull request, release 0.7.3, tag v0.7.3
+  apply.cmd release    merge the pull request, release 0.7.4, tag v0.7.4
 
 Each step stops at the first failure, says what failed, and can be rerun
 once the cause is fixed. Nothing is published before step 2.
 
 Step 1 checks that the GitHub CLI is logged in and that main is level with
-origin/main, then creates the branch dev/0.7.3, which takes the changes of
-the working tree. On a rerun it finds itself on dev/0.7.3 and goes on from
+origin/main, then creates the branch dev/0.7.4, which takes the changes of
+the working tree. On a rerun it finds itself on dev/0.7.4 and goes on from
 there. It runs npm run check and the type-check of the MCP server, commits
-every change in the tree except PR-0.7.3.md, pushes the branch, and opens
-the pull request into main with PR-0.7.3.md as its description.
+every change in the tree except PR-0.7.4.md, pushes the branch, and opens
+the pull request into main with PR-0.7.4.md as its description.
 
 Step 2 waits for the checks of the pull request and merges it with
 --admin, since the rules of main ask for a review that the author of the
 pull request cannot give. It then switches to main and pulls, runs
-tools\release-preflight.cmd 0.7.3, dates the CHANGELOG, and runs
-tools\release.cmd 0.7.3: @xdbml/parse and @xdbml/render 0.7.3 on npm, the
-MCP server and the rendering API deployed, "release 0.7.3" committed and
-pushed, the tag v0.7.3 and its GitHub release from the "## v0.7.3" section
+tools\release-preflight.cmd 0.7.4, dates the CHANGELOG, and runs
+tools\release.cmd 0.7.4: @xdbml/parse and @xdbml/render 0.7.4 on npm, the
+MCP server and the rendering API deployed, "release 0.7.4" committed and
+pushed, the tag v0.7.4 and its GitHub release from the "## v0.7.4" section
 of the CHANGELOG. xdbml.org deploys from main.
 
 VERIFIED BEFORE DELIVERY
 ------------------------
-On a Linux clone of main at 99956b8 with its own npm ci, with this
-delivery applied: parser 878, renderer 384, viewport 14, interactive 61,
-MCP 104, from-mongodb 24, playground 67, VS Code extension package in
+On a Linux clone of main at 7ed180e with its own npm ci, with this
+delivery applied: parser 901, renderer 385, viewport 14, interactive 61,
+MCP 105, from-mongodb 24, playground 67, VS Code extension package in
 sync, spec links 236, TextMate grammar test, playground and MCP
 type-checks, MCP reference in sync with llms.txt, docs build OK.

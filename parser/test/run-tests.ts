@@ -3677,7 +3677,7 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
 Entity A { }`,
       assert: (doc) => {
         if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
-        for (const v of ['0.8', '0.7.4', '1.0', '0.10']) {
+        for (const v of ['0.8', '0.7.5', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -4346,8 +4346,14 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.7.3' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.7.3 §4: xdbml: 0.7.4 is newer than this parser supports',
+      name: 'v0.7.4 §4: xdbml: 0.7.4 parses and keeps its patch number',
       source: `xdbml: 0.7.4
+Entity e { id int [pk] }`,
+      assert: (doc) => (doc.version?.version === '0.7.4' ? null : `version: ${doc.version?.version}`),
+    },
+    {
+      name: 'v0.7.4 §4: xdbml: 0.7.5 is newer than this parser supports',
+      source: `xdbml: 0.7.5
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -7574,6 +7580,178 @@ function runV072Tests (): TestResult[] {
   return results;
 }
 
+/* -------------------------------------------------------------------------
+ * v0.7.4: a type of several words written without quotes (spec §8.1)
+ *
+ * The words of a type written on the line of its declaration, up to the
+ * settings or a separator, form one name, with the parameters of each
+ * word, as the quoted form does: `timestamp with time zone` reads as
+ * `"timestamp with time zone"`, with the warning `unquoted-type-name`.
+ * DBML 10.3.1 rejects the unquoted form (checked against @dbml/core
+ * 10.3.1); before 0.7.4, the parser read the words after the first as
+ * further fields.
+ * ----------------------------------------------------------------------- */
+
+function runV074Tests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const codes = (src: string, options?: ParseOptions): string =>
+    resolveNames(parse(src, options)).diagnostics.map((d) => `${d.severity}:${d.code}`).join(' ');
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  // `name:type` for each field of the first entity or partial, `+w` when
+  // the type was written in words without quotes, `(p,s)` for parameters.
+  const fieldTypes = (src: string): string[] => {
+    const decl = parse(src).statements.find((s) => s.kind === 'EntityDeclaration' || s.kind === 'TablePartialDeclaration') as
+      unknown as { body: { kind: string; name?: string; type?: { kind: string; name?: string; params?: string[]; unquotedWords?: true } }[] };
+    return decl.body.filter((b) => b.kind === 'FieldDeclaration').map((f) => {
+      const t = f.type!;
+      return `${f.name}:${t.name ?? t.kind}${t.params ? `(${t.params.join(',')})` : ''}${t.unquotedWords ? '+w' : ''}`;
+    });
+  };
+  const V = 'xdbml: 0.7\n';
+
+  const REPORTED = `xdbml: 0.6.5
+
+Project empty {
+  targets: PostgreSQL
+}
+
+TablePartial Audit [synonyms: ['AUDIT'], x_hackolade_id: 'Audit-11265'] {
+  Note: 'Reusable creation and last-update timestamps. The application must maintain the last-update value on changes.'
+  "Created At" TIMESTAMP WITH TIME ZONE [not null, default: \`SYSTIMESTAMP\`, synonyms: ['CREATED_AT'], x_hackolade_id: 'Created At-97781']
+  "Updated At" TIMESTAMP WITH TIME ZONE [not null, default: \`SYSTIMESTAMP\`, synonyms: ['UPDATED_AT'], x_hackolade_id: 'Updated At-44876']
+}
+`;
+
+  check('§8.1: the reported partial parses, two fields typed TIMESTAMP WITH TIME ZONE, with their settings', () => {
+    const p = parse(REPORTED).statements.find((s) => s.kind === 'TablePartialDeclaration') as unknown as { body: FieldDeclaration[] };
+    const fields = p.body.filter((b) => b.kind === 'FieldDeclaration');
+    return same(fieldTypes(REPORTED), ['Created At:TIMESTAMP WITH TIME ZONE+w', 'Updated At:TIMESTAMP WITH TIME ZONE+w'])
+      ?? same(fields.map((f) => f.settings.map((s) => s.name).join(',')), ['not null,default,synonyms,x_hackolade_id', 'not null,default,synonyms,x_hackolade_id']);
+  });
+  check('§8.1: the reported partial draws one unquoted-type-name warning per field, on the type', () => {
+    const d = resolveNames(parse(REPORTED)).diagnostics;
+    return same(d.map((x) => `${x.severity}:${x.code}@${x.span.start.line}:${x.span.start.column}-${x.span.end.column}`),
+      ['warning:unquoted-type-name@9:16-40', 'warning:unquoted-type-name@10:16-40'])
+      ?? (d[0].message.includes('"TIMESTAMP WITH TIME ZONE"') ? undefined : `message: ${d[0].message}`);
+  });
+  check('§8.1: the words read as the quoted name, which draws no warning', () => {
+    const quoted = `${V}Entity e {\n  a "TIMESTAMP WITH TIME ZONE"\n}`;
+    return same(fieldTypes(quoted), ['a:TIMESTAMP WITH TIME ZONE']) ?? same(codes(quoted), '');
+  });
+  check('§8.1: an even number of words after the first no longer reads as further fields', () =>
+    same(fieldTypes(`${V}Entity e {\n  created_at TIMESTAMP WITH LOCAL TIME ZONE [not null]\n  b int\n}`),
+      ['created_at:TIMESTAMP WITH LOCAL TIME ZONE+w', 'b:int']));
+  check('§8.1: without settings, the line break ends the type', () =>
+    same(fieldTypes(`${V}Entity e {\n  a double precision\n  b int\n}`), ['a:double precision+w', 'b:int']));
+  check('§8.1: each word keeps its parameters, as written', () =>
+    same(fieldTypes(`${V}Entity e {\n  a TIMESTAMP(6) WITH TIME ZONE\n  b INTERVAL DAY(2) TO SECOND(6)\n  c character varying(255) [not null]\n  d decimal(10, 2) unsigned\n}`),
+      ['a:TIMESTAMP(6) WITH TIME ZONE+w', 'b:INTERVAL DAY(2) TO SECOND(6)+w', 'c:character varying(255)+w', 'd:decimal(10, 2) unsigned+w']));
+  check('§8.1: the array brackets of the target follow the last word', () =>
+    same(fieldTypes(`${V}Entity e {\n  a timestamp with time zone[]\n}`), ['a:timestamp with time zone[]+w']));
+  check('§8.1: spaces and a comment between the words read as one space', () =>
+    same(fieldTypes(`${V}Entity e {\n  a timestamp   with /* tz */ time zone\n}`), ['a:timestamp with time zone+w']));
+  check('§8.1: a type of one word is read as before', () =>
+    same(fieldTypes(`${V}Entity e {\n  a varchar(20) [pk]\n  b int\n  c text[]\n  d public.geometry\n}`), ['a:varchar(20)', 'b:int', 'c:text[]', 'd:public.geometry'])
+      ?? same(codes(`${V}Entity e {\n  a varchar(20) [pk]\n  b int\n}`), ''));
+  check('§3.9: fields that share a line read as before, the words of each one a field', () =>
+    same((parse(`${V}Type Inner { value int  label varchar }`).statements[0] as unknown as { body: FieldDeclaration[] }).body
+      .map((f) => `${f.name}:${(f.type as unknown as { name: string }).name}`), ['value:int', 'label:varchar'])
+      ?? same(fieldTypes(`${V}Entity e { a int b varchar }`), ['a:int', 'b:varchar'])
+      ?? same(fieldTypes(`${V}Entity e {\n  a int  b varchar }`), ['a:int', 'b:varchar'])
+      ?? same(fieldTypes(`${V}Entity e {\n  a int, b timestamp }`), ['a:int', 'b:timestamp'])
+      ?? same(codes(`${V}Entity e { a int b varchar }`), ''));
+  check('§3.9: on a line that holds more than the declaration, the words need the quotes, as before', () => {
+    try {
+      parse(`${V}Entity e {\n  a double precision, b int\n}`);
+      return 'parsed';
+    } catch (e) {
+      return e instanceof ParseError ? undefined : String(e);
+    }
+  });
+  check('§3.10: a body element on the line of a field ends its type', () => {
+    const doc = parse(`${V}Entity e {\n  a int Note: 'n'\n}\nEntity f {\n  a int indexes { a }\n}\nEntity g {\n  a int records { 1 }\n}`);
+    const kinds = doc.statements.map((s) => (s as unknown as { body: { kind: string }[] }).body.map((b) => b.kind).join(','));
+    return same(kinds, ['FieldDeclaration,NoteBlock', 'FieldDeclaration,IndexesBlock', 'FieldDeclaration,RecordsBlock']);
+  });
+  check('§8.1: words on the next line are not part of the type', () =>
+    same(fieldTypes(`${V}Entity e {\n  a timestamp\n  with_tz int\n}`), ['a:timestamp', 'with_tz:int']));
+  check('§8.1: nested fields, Type declarations, alternatives and tuple elements read the words too', () => {
+    const doc = parse(`${V}Type stamp timestamp with time zone [note: 'UTC']
+Entity e {
+  meta object {
+    at timestamp with time zone
+  }
+  v oneOf {
+    when timestamp with time zone
+    n int
+  }
+  pt array [
+    [0] at timestamp with time zone
+    [1] v double precision
+  ]
+}`);
+    const type = doc.statements[0] as unknown as { scalarBase: { name: string }; settings: { name: string }[] };
+    const body = (doc.statements[1] as unknown as { body: FieldDeclaration[] }).body;
+    const meta = body[0].type as unknown as { fields: FieldDeclaration[] };
+    const alts = (body[1].type as unknown as { alternatives: { name: string; type: { name: string } }[] }).alternatives;
+    const tuple = (body[2].type as unknown as { elementType?: unknown; elements?: { name: string; type: { name: string } }[] });
+    const elements = (tuple.elements ?? (tuple.elementType as { elements: { name: string; type: { name: string } }[] }).elements);
+    return same([
+      type.scalarBase.name, type.settings.map((s) => s.name).join(','),
+      (meta.fields[0].type as unknown as { name: string }).name,
+      alts.map((a) => `${a.name}:${a.type.name}`),
+      elements.map((t) => `${t.name}:${t.type.name}`),
+    ], [
+      'timestamp with time zone', 'note',
+      'timestamp with time zone',
+      ['when:timestamp with time zone', 'n:int'],
+      ['at:timestamp with time zone', 'v:double precision'],
+    ]) ?? same(codes(`${V}Type stamp timestamp with time zone`), 'warning:unquoted-type-name');
+  });
+  check('§8.1: the element of an array keeps its name form, array [double precision] names the element double', () => {
+    const doc = parse(`${V}Entity e {\n  a array [double precision]\n  b array [\n    at timestamp with time zone [not null]\n  ]\n}`);
+    const body = (doc.statements[0] as unknown as { body: FieldDeclaration[] }).body;
+    const el = (i: number) => body[i].type as unknown as { elementName?: string; elementType: { name: string }; elementSettings?: { name: string }[] };
+    return same([el(0).elementName, el(0).elementType.name, el(1).elementName, el(1).elementType.name, el(1).elementSettings?.map((s) => s.name)],
+      ['double', 'precision', 'at', 'timestamp with time zone', ['not null']]);
+  });
+  check('§8.1: the warning appears in a document of any version, and in DBML', () =>
+    same([
+      codes(`Table t {\n  a timestamp with time zone\n}`),
+      codes(`xdbml: 0.5\nEntity t {\n  a timestamp with time zone\n}`),
+      codes(`${V}Entity t {\n  a timestamp with time zone\n}`),
+    ], ['warning:unquoted-type-name', 'warning:unquoted-type-name', 'warning:unquoted-type-name']));
+  const files: Record<string, string> = {
+    '/l/lib.xdbml': `${V}Entity audit {\n  at timestamp with time zone\n}\n`,
+  };
+  const opts = (path: string): ParseOptions => ({
+    filePath: path,
+    readFile: (p: string) => {
+      const text = files[p.replace(/\\/g, '/')];
+      if (text === undefined) throw new Error(`no ${p}`);
+      return text;
+    },
+  });
+  check('§8.1: an imported type keeps its reading, and its warning belongs to its own file', () => {
+    const src = `${V}use * from './lib'\n`;
+    const e = flatten(parse(src, opts('/l/main.xdbml'))).statements.find((s) => s.kind === 'EntityDeclaration') as unknown as { body: FieldDeclaration[] };
+    return same((e.body[0].type as unknown as { name: string }).name, 'timestamp with time zone')
+      ?? same(codes(src, opts('/l/main.xdbml')), '')
+      ?? same(codes(files['/l/lib.xdbml'], opts('/l/lib.xdbml')), 'warning:unquoted-type-name');
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -7593,6 +7771,7 @@ function main (): void {
   const specifierTests = runV07ModuleSpecifierTests();
   const v071Tests = runV071Tests();
   const v072Tests = runV072Tests();
+  const v074Tests = runV074Tests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -7610,9 +7789,10 @@ function main (): void {
   const sr = report('v0.7 module specifiers (spec §28.13)', specifierTests);
   const v71 = report('v0.7.1 x- custom properties, color, EntityPartial and EntityGroup (spec §24.5, §7.5, §17)', v071Tests);
   const v72 = report('v0.7.2 source-to-target mapping, metrics and grain (spec §27.2, §27.3, §27.10, §27.11, §7.5)', v072Tests);
+  const v74 = report('v0.7.4 types of several words without quotes (spec §8.1)', v074Tests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + v71.passed + v72.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + v71.failed + v72.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + v71.passed + v72.passed + v74.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + v71.failed + v72.failed + v74.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

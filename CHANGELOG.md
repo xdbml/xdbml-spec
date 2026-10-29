@@ -4,9 +4,39 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.7.3 -- 2026
+## v0.7.4 -- 2026
 
 **Status**: Draft -- current
+**Released**: unreleased
+
+A point release of the v0.7 draft that reads a type of several words written without quotes. A type such as `timestamp with time zone` is one name in double quotes, as in DBML, and tools write it so. Written without quotes in a field or a Type declared on a line of its own, the words now read as that name, with a warning. Before, the parser read the words after the first as further fields: an error at best, and with an even number of extra words, such as Oracle's `TIMESTAMP WITH LOCAL TIME ZONE`, fields named after the words, with no error. Documents keep declaring `xdbml: 0.7`.
+
+### Changed
+
+#### Spec
+
+- **Field types (§8.1)**: a type of several words is one name in double quotes. Written without quotes in the declaration of a field or a Type that stands on a line of its own, the words up to the settings or the end of the line, parameters included, read as that name and draw a warning.
+- **Separators (§3.9)**: the end of the line ends a type written in words without quotes, as it ends a row of `records`.
+- **Compatibility with DBML (Appendix D, item 10)**: the reading holds in every document, including one without a version declaration; DBML rejects the words.
+- **Grammar (`grammar/xDBML.g4`)**: a comment on `scalarType` states the reading, which depends on the end of the line and so stays out of the rules.
+
+#### Tooling
+
+- **`@xdbml/parse`**: reads the words after the name of a field, a Type, a polymorphic alternative, a tuple element or an array element as one type name, `TIMESTAMP(6) WITH TIME ZONE` included, when the declaration stands on a line of its own, and marks the `ScalarType` with `unquotedWords`. The resolver reports `unquoted-type-name`, a warning, for each one in the document's own declarations. `@xdbml/parse` accepts documents declaring `xdbml: 0.7.4`.
+- **Renderer and playground**: show the type as written. The help page of the diagnostics panel describes the warning.
+- **`llms.txt` and the MCP server**: the paragraph on types states the double quotes, with a PostgreSQL and an Oracle example, beside the type names an assistant picks from; the rule was stated only in the section on quoting. The common mistake of an unquoted type of several words names the warning.
+- **Grammar corpus**: five v0.7.4 cases.
+
+### Not changed (compatibility)
+
+- A document that parsed before reads as before, apart from a line that holds only two fields, with no separator, `a int  b int`, which DBML rejects: it now reads as one field `a` of type `int b int`, with the warning. Fields that share a line with a brace, `{ a int b int }`, or with a comma or a semicolon between them, read as before (§3.9).
+- In the brackets of `array`, `set`, `map` and `union`, a type of several words that follows no name still takes the quotes: `array [double precision]` keeps naming an element `double` of type `precision` (§8.5).
+
+---
+
+## v0.7.3 -- 2026
+
+**Status**: Draft -- superseded by v0.7.4
 **Released**: 2026-10-16
 
 A point release of the v0.7 draft that renames one kind of transformation. `derivation`, the kind for a value computed within the row, is now `calculation`. The word "derivation" already names the derivation of a physical model, in this specification (§12.7) and in Hackolade Studio. v0.7.2 had just been published, so the old word is not kept as an alias. Documents keep declaring `xdbml: 0.7`.
