@@ -63,7 +63,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { joinName, quoteNameSegment, refCardinalityIn, splitName } from '@xdbml/parse';
+import { isForeignMaster as isForeignMasterRef, isUndirected, joinName, quoteNameSegment, refCardinalityIn, splitName } from '@xdbml/parse';
 import type { CardinalityOrigin, EndCardinality, RefDeclaration, RefEndpoint, Setting, Span, XDbmlDocument } from '@xdbml/parse';
 
 import InspectorSection   from './InspectorSection.vue';
@@ -95,9 +95,7 @@ function settingText (settings: readonly Setting[], name: string): string {
   return v.value === undefined ? '' : String(v.value);
 }
 
-const isForeignMaster = computed(
-  () => props.refDecl.settings.some((s) => s.name === 'foreign_master'),
-);
+const isForeignMaster = computed(() => isForeignMasterRef(props.refDecl));
 
 const typeLabel = computed(
   () => (isForeignMaster.value ? 'Foreign master (denormalized replication)' : 'Foreign key (referential)'),
@@ -111,7 +109,7 @@ const constraint = computed(() => {
 });
 
 const directionLabel = computed(() => {
-  if (settingText(props.refDecl.settings, 'undirected') === 'true') return 'Both ways';
+  if (isUndirected(props.refDecl)) return 'Both ways';
   switch (props.refDecl.spec.operator) {
     case '>':  return 'Source to target';
     case '<':  return 'Target to source';

@@ -18,7 +18,7 @@ import { dirname } from 'node:path';
 import {
   parse, flatten, resolveNames,
   isForeignMaster, pathToString, refChildEndpoint, refParentEndpoint, relationshipType,
-  constraintType, isUndirected,
+  constraintType, isUndirected, isInactive,
   resolveSupertypeGroups, subtypeStrategy, supertypeChains, supertypeGroupSettings,
   viewSourceQuery,
   diagramViewMembers, diagramViews, diagramViewNote,
@@ -1832,6 +1832,108 @@ Ref: a - b [undirected: true]`,
         const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
         if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
         return isUndirected(ref) ? null : 'expected isUndirected true';
+      },
+    },
+    {
+      name: 'RD: undirected alone is accepted on a Ref, as on an Edge',
+      source: `xdbml: 0.7
+Entity a { }
+Entity b { }
+Ref: a - b [undirected]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        return isUndirected(ref) ? null : 'expected isUndirected true';
+      },
+    },
+    {
+      name: "RD: undirected reads true from true, 'true' and the name alone, false from false",
+      source: `xdbml: 0.7
+Entity a { }
+Entity b { }
+Ref r1: a - b [undirected]
+Ref r2: a - b [undirected: true]
+Ref r3: a - b [undirected: 'true']
+Ref r4: a - b [undirected: false]
+Ref r5: a - b [undirected: 'false']
+Ref r6: a - b`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const got = doc.statements.filter((st) => st.kind === 'RefDeclaration')
+          .map((ref) => (ref.kind === 'RefDeclaration' && isUndirected(ref) ? 'y' : 'n')).join('');
+        return got === 'yyynnn' ? null : `expected yyynnn, got ${got}`;
+      },
+    },
+    {
+      name: 'RD: undirected on an Edge takes the values it takes on a Ref',
+      source: `xdbml: 0.7
+Entity Person { id int [pk] }
+Edge KNOWS [source: Person, target: Person, undirected] { since date }
+Edge LIKES [source: Person, target: Person, undirected: false] { at date }
+Edge BAD [source: Person, target: Person, undirected: yes] { at date }
+Keyspace social {
+  Edge WORSE [source: Person, target: Person, undirected: 2] { at date }
+}`,
+      assert: (doc) => {
+        const hits = resolveNames(doc).diagnostics.filter((d) => d.code === 'invalid-undirected');
+        if (hits.length !== 2) return `expected 2 invalid-undirected, got ${hits.length}`;
+        const edges = doc.statements.filter((st) => st.kind === 'EdgeDeclaration');
+        const got = edges.map((e) => (e.kind === 'EdgeDeclaration' && isUndirected(e) ? 'y' : 'n')).join('');
+        return got === 'ynn' ? null : `expected ynn, got ${got}`;
+      },
+    },
+    {
+      name: 'RD: inactive false and foreign_master false leave the flags unset',
+      source: `xdbml: 0.3
+Entity a { id int [pk] }
+Entity b {
+  aid int
+  bid int [foreign_master: false]
+}
+Ref: b.aid > a.id [inactive: false, foreign_master: false]`,
+      assert: (doc) => {
+        const r = resolveNames(doc);
+        if (r.diagnostics.length !== 0) return `expected clean, got ${r.diagnostics.map((d) => d.code).join(', ')}`;
+        const ref = doc.statements.find((st) => st.kind === 'RefDeclaration');
+        if (!ref || ref.kind !== 'RefDeclaration') return 'expected a RefDeclaration';
+        if (isInactive(ref)) return 'expected isInactive false';
+        return relationshipType(ref) === 'referential' ? null : `expected referential, got ${relationshipType(ref)}`;
+      },
+    },
+    {
+      name: 'RD: inactive reads true from the name alone and from true',
+      source: `xdbml: 0.4
+Entity a { id int [pk] }
+Entity b { aid int }
+Ref r1: b.aid > a.id [inactive]
+Ref r2: b.aid > a.id [inactive: true]
+Ref r3: b.aid > a.id [inactive: 'true']
+Ref r4: b.aid > a.id [foreign_master: true]`,
+      assert: (doc) => {
+        const refs = doc.statements.filter((st) => st.kind === 'RefDeclaration');
+        const got = refs.map((ref) => (ref.kind === 'RefDeclaration' && isInactive(ref) ? 'y' : 'n')).join('');
+        if (got !== 'yyyn') return `expected yyyn, got ${got}`;
+        const last = refs[3];
+        return last.kind === 'RefDeclaration' && isForeignMaster(last) ? null : 'expected foreign_master: true to set the flag';
+      },
+    },
+    {
+      name: 'RD: inactive and foreign_master with a value other than true or false are errors',
+      source: `xdbml: 0.4
+Entity a { id int [pk] }
+Entity b {
+  aid int
+  bid int [ref: > a.id, foreign_master: maybe]
+}
+Ref: b.aid > a.id [inactive: 'soon', foreign_master: 1]`,
+      assert: (doc) => {
+        const codes = resolveNames(doc).diagnostics.map((d) => d.code).sort().join(', ');
+        return codes === 'invalid-foreign-master, invalid-foreign-master, invalid-inactive'
+          ? null
+          : `expected two invalid-foreign-master and one invalid-inactive, got ${codes}`;
       },
     },
     {

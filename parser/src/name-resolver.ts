@@ -173,6 +173,8 @@ export type DiagnosticCode =
   | 'invalid-constraint-type'
   | 'constraint-type-on-foreign-master'
   | 'invalid-undirected'
+  | 'invalid-inactive'
+  | 'invalid-foreign-master'
   | 'entity-level-many-to-many'
   // Supertype groups (spec §12, v0.5)
   | 'missing-supertype'

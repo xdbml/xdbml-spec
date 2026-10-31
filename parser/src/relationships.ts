@@ -8,9 +8,10 @@
  *
  * This module holds three things:
  *
- *   1. `relationshipType()` and `isForeignMaster()` -- one definition of the
- *      type test, so the renderer, the MCP server, and any generator agree
- *      rather than each re-reading the settings array.
+ *   1. `relationshipType()`, `isForeignMaster()`, `isInactive()` and
+ *      `isUndirected()` -- one reading of each flag, so the renderer, the
+ *      playground, the MCP server, and any generator agree rather than each
+ *      re-reading the settings array.
  *
  *   2. `refChildEndpoint()` / `refParentEndpoint()` -- which side of a Ref is
  *      the child. The cardinality operator decides: `>` and `-` put the child
@@ -26,6 +27,7 @@ import type {
 } from './name-resolver.ts';
 import type {
   ContainerDeclaration,
+  EdgeDeclaration,
   EntityDeclaration,
   FieldDeclaration,
   PathSegment,
@@ -74,10 +76,79 @@ export function constraintType (ref: RefDeclaration): ConstraintType | undefined
     : undefined;
 }
 
-/** True when the Ref is marked `undirected: true` (spec 11.16.2). */
-export function isUndirected (ref: RefDeclaration): boolean {
-  const s = ref.settings.find((x) => x.name === 'undirected');
-  return !!s && !!s.value && settingText(s) === 'true';
+/* -------------------------------------------------------------------------
+ * Flags
+ * ----------------------------------------------------------------------- */
+
+/**
+ * The flags of a relationship (spec 11.9, 13.3). Each one reads the same
+ * way wherever it appears: the name alone sets it, `: true` sets it, and
+ * `: false` leaves it unset, as absence does. The quoted 'true' and 'false'
+ * read like the unquoted ones. Any other value is an error, reported by
+ * `checkRelationships()`.
+ */
+export const RELATIONSHIP_FLAGS = ['foreign_master', 'inactive', 'undirected'] as const;
+export type RelationshipFlag = (typeof RELATIONSHIP_FLAGS)[number];
+
+/**
+ * What a flag setting says: true for the name alone or a true value, false
+ * for a false value, and undefined for any other value.
+ */
+function flagValue (s: Setting): boolean | undefined {
+  if (s.value === null) return true;
+  if (s.value.kind === 'BooleanValue') return s.value.value;
+  if (s.value.kind === 'StringValue' || s.value.kind === 'IdentifierValue') {
+    const text = s.value.value.toLowerCase();
+    if (text === 'true') return true;
+    if (text === 'false') return false;
+  }
+  return undefined;
+}
+
+/**
+ * True when a settings array sets the flag `name`: the name alone, `: true`,
+ * or `: 'true'`. `: false`, absence, and a value that is not a boolean leave
+ * it unset.
+ */
+export function isFlagSet (settings: ReadonlyArray<Setting>, name: string): boolean {
+  const s = settings.find((x) => x.name === name);
+  return !!s && flagValue(s) === true;
+}
+
+/**
+ * True when a Ref or an Edge reads the same way from both ends: the
+ * `undirected` flag (spec 11.16.2, 13.3), written alone or as
+ * `undirected: true`.
+ */
+export function isUndirected (decl: { settings: ReadonlyArray<Setting> }): boolean {
+  return isFlagSet(decl.settings, 'undirected');
+}
+
+/** True when the Ref carries the `inactive` flag (spec 11.9, 11.13). */
+export function isInactive (ref: RefDeclaration): boolean {
+  return isFlagSet(ref.settings, 'inactive');
+}
+
+/** The diagnostic code of a flag whose value is not a boolean. */
+const INVALID_FLAG_CODES: Record<RelationshipFlag, Diagnostic['code']> = {
+  foreign_master: 'invalid-foreign-master',
+  inactive: 'invalid-inactive',
+  undirected: 'invalid-undirected',
+};
+
+/**
+ * The error for a flag setting whose value is not a boolean, or undefined
+ * when the setting reads as a flag.
+ */
+function invalidFlagDiagnostic (s: Setting): Diagnostic | undefined {
+  if (flagValue(s) !== undefined) return undefined;
+  const raw = settingText(s);
+  return {
+    severity: 'error',
+    code: INVALID_FLAG_CODES[s.name as RelationshipFlag],
+    message: `'${s.name}' is a flag: write it alone, or with true or false${raw ? `, not '${raw}'` : ''}.`,
+    span: s.span,
+  };
 }
 
 /** The text of a setting value, for the string-ish value kinds. */
@@ -97,13 +168,13 @@ function settingText (s: Setting): string {
 }
 
 /**
- * True when a settings array carries the `foreign_master` flag. The flag
- * takes no value, so presence is the whole test; a `foreign_master: true`
- * spelling is accepted as well rather than silently ignored, since a user
- * reaching for the more explicit form means the same thing.
+ * True when a settings array sets the `foreign_master` flag. The spec
+ * writes the flag alone; `foreign_master: true` sets it as well, since a
+ * user reaching for the more explicit form means the same thing, and
+ * `foreign_master: false` leaves it unset, like every flag.
  */
 export function hasForeignMasterFlag (settings: ReadonlyArray<Setting>): boolean {
-  return settings.some((s) => s.name === FOREIGN_MASTER_FLAG);
+  return isFlagSet(settings, FOREIGN_MASTER_FLAG);
 }
 
 /** The relationship type a Ref declares. */
@@ -297,16 +368,9 @@ export function checkRelationships (doc: XDbmlDocument): Diagnostic[] {
         }
       }
 
-      if (setting.name === 'undirected') {
-        const raw = settingText(setting);
-        if (raw !== 'true' && raw !== 'false') {
-          diagnostics.push({
-            severity: 'error',
-            code: 'invalid-undirected',
-            message: `'undirected' takes true or false, not '${raw || '(no value)'}'.`,
-            span: setting.span,
-          });
-        }
+      if ((RELATIONSHIP_FLAGS as ReadonlyArray<string>).includes(setting.name)) {
+        const invalid = invalidFlagDiagnostic(setting);
+        if (invalid) diagnostics.push(invalid);
       }
     }
 
@@ -375,6 +439,12 @@ export function checkRelationships (doc: XDbmlDocument): Diagnostic[] {
   ): void => {
     const flag = field.settings.find((s) => s.name === FOREIGN_MASTER_FLAG);
     if (!flag) return;
+    const invalid = invalidFlagDiagnostic(flag);
+    if (invalid) {
+      diagnostics.push(invalid);
+      return;
+    }
+    if (!hasForeignMasterFlag(field.settings)) return;
     noteForeignMaster();
 
     const inlineRef = field.settings.find(
@@ -415,6 +485,15 @@ export function checkRelationships (doc: XDbmlDocument): Diagnostic[] {
     // grammar gives an inline ref a single target; nothing to check here.
   };
 
+  /* ---- Edges ---- */
+
+  // 13.3: `undirected` reads on an Edge as it does on a Ref.
+  const checkEdge = (edge: EdgeDeclaration): void => {
+    const flag = edge.settings.find((s) => s.name === 'undirected');
+    const invalid = flag && invalidFlagDiagnostic(flag);
+    if (invalid) diagnostics.push(invalid);
+  };
+
   /* ---- walk ---- */
 
   const walkFields = (
@@ -447,12 +526,16 @@ export function checkRelationships (doc: XDbmlDocument): Diagnostic[] {
       case 'EntityDeclaration':
         walkEntity(stmt);
         break;
+      case 'EdgeDeclaration':
+        checkEdge(stmt);
+        break;
       case 'ContainerDeclaration': {
         // Ref declarations are top-level only (spec 11.2), so a container
         // body holds entities, views, edges, enums and notes but no refs.
         const container = stmt as ContainerDeclaration;
         for (const item of container.body) {
           if (item.kind === 'EntityDeclaration') walkEntity(item as EntityDeclaration, container.name);
+          else if (item.kind === 'EdgeDeclaration') checkEdge(item as EdgeDeclaration);
         }
         break;
       }

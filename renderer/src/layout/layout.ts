@@ -41,13 +41,16 @@ import {
   entityDefinitions,
   hasPartialInjection,
   injectedPartials,
+  isInactive,
   isQualifiedName,
+  isUndirected,
   metadataColor,
   metadataIndex,
   joinName,
   primaryKey,
   quoteNameSegment,
   refCardinalityIn,
+  relationshipType,
   resolveSupertypeGroups,
   splitName,
   stickyNotes,
@@ -1923,18 +1926,6 @@ function renderScalarLabel (s: ScalarType): string {
  * Refs
  * ----------------------------------------------------------------------- */
 
-/**
- * The relationship type a Ref declares (spec 11.10): the `foreign_master`
- * flag marks denormalized replication, and its absence marks a referential
- * relationship. Mirrors `relationshipType()` in @xdbml/parse; kept local so
- * the layout has no runtime dependency on the parser package.
- */
-function relationshipTypeOf (ref: RefDeclaration): 'referential' | 'foreign_master' {
-  return ref.settings.some((s) => s.name === 'foreign_master')
-    ? 'foreign_master'
-    : 'referential';
-}
-
 function buildRefLayout (
   ref: RefDeclaration,
   entityByName: Map<string, EntityLayout>,
@@ -1953,11 +1944,13 @@ function buildRefLayout (
   return {
     id: `ref:${index}`,
     operator: ref.spec.operator,
-    relationshipType: relationshipTypeOf(ref),
-    inactive: ref.settings.some((s) => s.name === 'inactive'),
+    // The flags read as @xdbml/parse reads them (spec 11.9): the name alone
+    // or `: true` sets one, and `: false` leaves it unset.
+    relationshipType: relationshipType(ref),
+    inactive: isInactive(ref),
     decl: ref,
     entityLevel: !!source && !!target && !source.fieldName && !target.fieldName,
-    undirected: settingValueAsString(ref.settings, 'undirected') === 'true',
+    undirected: isUndirected(ref),
     source,
     target,
     sourceCardinality,

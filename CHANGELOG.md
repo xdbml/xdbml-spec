@@ -4,6 +4,28 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
+## Unreleased
+
+Changes on `main` since v0.7.4. The playground serves them as soon as they are pushed; the npm packages, the MCP server and the rendering API take them at the next release.
+
+### Changed
+
+#### Tooling
+
+- **Relationship flags (§11.9, §11.16.2, §13.3)**: the tools read `undirected`, `inactive` and `foreign_master` the same way on every element that takes them. The name alone sets a flag, as do `: true` and the quoted `: 'true'`; `: false` and `: 'false'` leave it unset, as absence does; any other value is an error. Before:
+  - a Ref rejected `undirected` written alone (`invalid-undirected`), while an Edge accepted it, and an Edge accepted any value at all;
+  - the diagram drew no arrows for `undirected: true` on a relationship between entities, and drew them for `undirected: 'true'`, because the renderer read the setting as a string only;
+  - `inactive: false` drew the relationship as inactive, and `foreign_master: false` made it a foreign master, because the tools tested only whether the setting was present. In a document declaring a version before 0.4, `foreign_master: false` also drew the version error of a v0.4 construct, and on a field without an inline `ref:`, the `foreign-master-without-ref` error.
+
+  `@xdbml/parse` exports `isFlagSet()`, `isInactive()` and `RELATIONSHIP_FLAGS`, and `isUndirected()` takes an Edge as well as a Ref. The resolver reports `invalid-undirected` on an Edge as on a Ref, and `invalid-inactive` and `invalid-foreign-master` for a value other than true or false. The renderer and the relationship inspector of the playground read the flags through these functions instead of their own copies.
+
+### Not changed (compatibility)
+
+- The spec keeps the forms it shows, `undirected: true` and `inactive` and `foreign_master` written alone, and tools keep writing them. The parser reads the other forms without recommending them.
+- `inactive` or `foreign_master` with a value other than true or false, such as `inactive: 'yes'`, now draws an error; before, it read as set.
+
+---
+
 ## v0.7.4 -- 2026
 
 **Status**: Draft -- current
