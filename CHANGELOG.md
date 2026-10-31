@@ -7,7 +7,7 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 ## v0.7.5 -- 2026
 
 **Status**: Draft -- current
-**Released**: unreleased
+**Released**: 2026-10-31
 
 A point release of the v0.7 draft on the flags of a relationship. §11.9 described `foreign_master` and `inactive` as flags without a value and `undirected` as a setting that takes `true` or `false`, and the tools read each of the three in its own way, on a Ref and on an Edge. The three now follow one rule: the name alone or `: true` sets a flag, and `: false` leaves it unset. Documents keep declaring `xdbml: 0.7`.
 

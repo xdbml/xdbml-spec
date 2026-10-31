@@ -1,6 +1,6 @@
 {
   "name": "@xdbml/mcp",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "description": "Remote MCP server exposing the xDBML render core as a tool. Cloudflare Worker.",
   "private": true,
   "type": "module",
@@ -18,8 +18,8 @@
     "@cfworker/json-schema": "^4.1.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@resvg/resvg-wasm": "^2.6.2",
-    "@xdbml/parse": "0.7.4",
-    "@xdbml/render": "0.7.4",
+    "@xdbml/parse": "0.7.5",
+    "@xdbml/render": "0.7.5",
     "agents": "^0.30.1",
     "zod": "^4.6.6"
   },
