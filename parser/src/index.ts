@@ -88,8 +88,11 @@ export {
   entityNames,
   isEntityLevelEndpoint,
   isUndirected,
+  isInactive,
+  isFlagSet,
+  RELATIONSHIP_FLAGS,
 } from './relationships.ts';
-export type { RelationshipType, ConstraintType } from './relationships.ts';
+export type { RelationshipType, ConstraintType, RelationshipFlag } from './relationships.ts';
 export { checkOptionalMarks, refCardinality, refCardinalityIn } from './cardinality.ts';
 export {
   METADATA_SETTINGS,

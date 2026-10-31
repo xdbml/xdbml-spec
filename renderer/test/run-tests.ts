@@ -986,6 +986,39 @@ DiagramView legend_only { Notes { legend } }`;
     JSON.stringify(labels));
 }
 
+/* ---- Relationship flags (spec 11.9, 11.16.2) ------------------------ */
+// A flag reads the same way in every form: the name alone, `: true` and
+// `: 'true'` set it, `: false` leaves it unset. `undirected: true` once drew
+// no arrows, because the layout read the setting as a string only.
+
+{
+  const directionArrows = (svg: string): number =>
+    (svg.match(/<path d="M 0 0 L 10 -5 L 10 5 Z"/g) ?? []).length;
+  const pairedWith = (settings: string): DiagramModel => buildDiagram(flatten(parse([
+    'xdbml: 0.7',
+    'Entity Phone { phone_id int32 [pk] }',
+    'Entity Headset { headset_id int32 [pk] }',
+    `Ref paired_with: Phone - Headset [${settings}]`,
+  ].join('\n'))));
+  for (const form of ['undirected', 'undirected: true', "undirected: 'true'"]) {
+    const m = pairedWith(form);
+    check(`flags: [${form}] draws an arrow at both ends of an entity-level relationship`,
+      m.refs[0].undirected && directionArrows(serializeDiagram(m)) === 2,
+      `undirected=${m.refs[0].undirected}, arrows=${directionArrows(serializeDiagram(m))}`);
+  }
+  for (const form of ['undirected: false', "undirected: 'false'"]) {
+    const m = pairedWith(form);
+    check(`flags: [${form}] draws no arrow on a '-' relationship`,
+      !m.refs[0].undirected && directionArrows(serializeDiagram(m)) === 0);
+  }
+  for (const [form, inactive] of [['inactive', true], ['inactive: true', true], ['inactive: false', false]] as const) {
+    check(`flags: [${form}] ${inactive ? 'draws' : 'does not draw'} the relationship as inactive`,
+      pairedWith(form).refs[0].inactive === inactive);
+  }
+  check('flags: [foreign_master: false] leaves the relationship referential',
+    pairedWith('foreign_master: false').refs[0].relationshipType === 'referential');
+}
+
 /* ---- Report -------------------------------------------------------- */
 
 console.log(`goldens: ${goldensDir}`);
