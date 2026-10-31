@@ -97,6 +97,11 @@
  *     on a View parses the same way, and so does `grain` on an entity or a
  *     View. Their reading and their checks apply after parsing (§27.12).
  *
+ * v0.7.5 changes (spec §11.9):
+ *   - relationshipFlag: `foreign_master`, `inactive` and `undirected` are
+ *     flags, written alone or with `: true` or `: false`. edgeSetting takes
+ *     `undirected` alone as well.
+ *
  * Replacements (rules redefined here that override upstream DBML):
  *   - tableDefinition  (adds Entity/Collection/Record keywords)
  *   - columnType       (replaced by typeExpression)
@@ -599,7 +604,7 @@ edgeSetting
     | 'target'              COLON entityReference         //§17.11.1
     | 'source_cardinality'  COLON cardinalityValue        //§17.11.2
     | 'target_cardinality'  COLON cardinalityValue        //§17.11.2
-    | 'undirected'          COLON BOOLEAN_LITERAL         //§17.11.3
+    | 'undirected' (COLON BOOLEAN_LITERAL)?               //§17.11.3, a flag (§11.9, v0.7.5)
     | generalSetting                                      // notes, tags, x_* etc.
     ;
 
@@ -1302,6 +1307,14 @@ setting
 
 flagSetting
     : 'pk' | 'primary key' | 'unique' | 'null' | 'not null' | 'required' | 'increment'
+    | relationshipFlag (COLON BOOLEAN_LITERAL)?           // §11.9 (v0.7.5)
+    ;
+
+// The flags of a relationship (§11.9, v0.7.5): set by the name alone or by
+// `: true`, left unset by `: false`. A parser also reads the quoted 'true'
+// and 'false'.
+relationshipFlag
+    : 'foreign_master' | 'inactive' | 'undirected'
     ;
 
 generalSetting
@@ -1501,8 +1514,10 @@ quotedIdentifier options { caseInsensitive=false; }
 //          * the `name:` setting is optional; generators MAY synthesize
 //            a deterministic name when omitted.
 //      - relationship settings (§11.9):
-//          * `inactive` is a flag (no value); a visualization hint, not
-//            a structural change. Parser preserves the flag in the AST.
+//          * `inactive` is a flag; a visualization hint, not a
+//            structural change. Parser preserves the flag in the AST.
+//          * a flag is set by its name alone or by `: true`, and left
+//            unset by `: false`; any other value is an error (v0.7.5).
 //      - optional marks (§11.1, v0.7):
 //          * an inline `ref:` setting takes the operators of
 //            cardinalityOperator, OPTIONAL_OPERATOR included: `[ref: >? t.id]`.
@@ -1510,8 +1525,8 @@ quotedIdentifier options { caseInsensitive=false; }
 //            end draw a warning; the setting applies in a document that
 //            declares a version, the `?` in one that does not (§11.7).
 //      - foreign master relationships (§11.10, new in v0.4):
-//          * `foreign_master` is a flag (no value) on a Ref. Its absence
-//            marks the relationship referential.
+//          * `foreign_master` is a flag on a Ref. Its absence marks the
+//            relationship referential.
 //          * neither endpoint may use the composite form `entity.(a, b)`
 //            (§11.11). The grammar accepts it; the check is semantic so the
 //            error can name the flag rather than fail on syntax alone.
@@ -1539,7 +1554,8 @@ quotedIdentifier options { caseInsensitive=false; }
 //            cardinality inference of §11.8 does not apply.
 //          * `<>` is rejected between entities: many-to-many states a
 //            cardinality, which is unstated there.
-//          * `undirected` takes true or false (§11.16.2).
+//          * `undirected` is a flag, on a Ref and on an Edge (§11.9,
+//            §11.16.2, §13.3).
 //      - data lineage (§27, v0.7):
 //          * each endpoint names an entity, a View or a field declared in
 //            the document or brought by an import; the longest leading part

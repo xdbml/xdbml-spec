@@ -4,11 +4,19 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## Unreleased
+## v0.7.5 -- 2026
 
-Changes on `main` since v0.7.4. The playground serves them as soon as they are pushed; the npm packages, the MCP server and the rendering API take them at the next release.
+**Status**: Draft -- current
+**Released**: unreleased
+
+A point release of the v0.7 draft on the flags of a relationship. §11.9 described `foreign_master` and `inactive` as flags without a value and `undirected` as a setting that takes `true` or `false`, and the tools read each of the three in its own way, on a Ref and on an Edge. The three now follow one rule: the name alone or `: true` sets a flag, and `: false` leaves it unset. Documents keep declaring `xdbml: 0.7`.
 
 ### Changed
+
+#### Spec
+
+- **Relationship settings (§11.9)**: `foreign_master`, `inactive` and `undirected` are flags. A flag is set by its name alone or by `: true`, and left unset by `: false`, as by its absence; any other value is an error. `undirected` on an Edge reads the same way, as §11.16.2 states. §11.10 says that the `foreign_master` flag needs no value, rather than that it takes none.
+- **Grammar (`grammar/xDBML.g4`)**: `flagSetting` takes the three flags, `relationshipFlag`, alone or with `: true` or `: false`, and `edgeSetting` takes `undirected` alone.
 
 #### Tooling
 
@@ -17,18 +25,19 @@ Changes on `main` since v0.7.4. The playground serves them as soon as they are p
   - the diagram drew no arrows for `undirected: true` on a relationship between entities, and drew them for `undirected: 'true'`, because the renderer read the setting as a string only;
   - `inactive: false` drew the relationship as inactive, and `foreign_master: false` made it a foreign master, because the tools tested only whether the setting was present. In a document declaring a version before 0.4, `foreign_master: false` also drew the version error of a v0.4 construct, and on a field without an inline `ref:`, the `foreign-master-without-ref` error.
 
-  `@xdbml/parse` exports `isFlagSet()`, `isInactive()` and `RELATIONSHIP_FLAGS`, and `isUndirected()` takes an Edge as well as a Ref. The resolver reports `invalid-undirected` on an Edge as on a Ref, and `invalid-inactive` and `invalid-foreign-master` for a value other than true or false. The renderer and the relationship inspector of the playground read the flags through these functions instead of their own copies.
+  `@xdbml/parse` exports `isFlagSet()`, `isInactive()` and `RELATIONSHIP_FLAGS`, and `isUndirected()` takes an Edge as well as a Ref. The resolver reports `invalid-undirected` on an Edge as on a Ref, and `invalid-inactive` and `invalid-foreign-master` for a value other than true or false. The renderer and the relationship inspector of the playground read the flags through these functions instead of their own copies. `@xdbml/parse` accepts documents declaring `xdbml: 0.7.5`.
+- **Grammar corpus**: four v0.7.5 cases.
 
 ### Not changed (compatibility)
 
-- The spec keeps the forms it shows, `undirected: true` and `inactive` and `foreign_master` written alone, and tools keep writing them. The parser reads the other forms without recommending them.
-- `inactive` or `foreign_master` with a value other than true or false, such as `inactive: 'yes'`, now draws an error; before, it read as set.
+- The examples of the spec keep `undirected: true`, and tools keep writing `foreign_master` and `inactive` alone.
+- Two forms that parsed without an error now draw one: `undirected` with a value other than true or false on an Edge, and `inactive` or `foreign_master` with such a value, which read as set. `inactive: false` and `foreign_master: false`, which set the flag, now leave it unset.
 
 ---
 
 ## v0.7.4 -- 2026
 
-**Status**: Draft -- current
+**Status**: Draft -- superseded by v0.7.5
 **Released**: 2026-10-29
 
 A point release of the v0.7 draft that reads a type of several words written without quotes. A type such as `timestamp with time zone` is one name in double quotes, as in DBML, and tools write it so. Written without quotes in a field or a Type declared on a line of its own, the words now read as that name, with a warning. Before, the parser read the words after the first as further fields: an error at best, and with an even number of extra words, such as Oracle's `TIMESTAMP WITH LOCAL TIME ZONE`, fields named after the words, with no error. Documents keep declaring `xdbml: 0.7`.

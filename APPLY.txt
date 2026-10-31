@@ -1,82 +1,104 @@
-Relationship flags read the same way on Refs and Edges -- a tooling fix
-Base: main at 6161700 (pull request #7, merged). Built 2026-10-31.
+xDBML 0.7.5 -- one rule for the flags of a relationship
+Base: main at 67db8da (pull request #8, merged). Built 2026-10-31.
 
 WHAT THIS DELIVERY CHANGES
 --------------------------
-undirected, inactive and foreign_master now read the same way on every
-element that takes them: the name alone, true and 'true' set a flag;
-false and 'false' leave it unset; any other value is an error.
-
-  - A Ref accepts undirected written alone, as an Edge did.
-  - An Edge reports invalid-undirected for a value such as yes, as a Ref
-    did; it accepted any value.
-  - undirected: true draws arrows at both ends of a relationship between
-    entities. The renderer read the setting as a string only, so
-    undirected: 'true' drew them and true did not.
-  - inactive: false and foreign_master: false leave the flag unset. They
-    set it before, since the tools tested only whether the setting was
-    present.
-  - inactive and foreign_master with a value other than true or false
-    are errors (invalid-inactive, invalid-foreign-master).
-
-There is no version: a tooling change goes out with the next spec
-release. Nothing is published to npm, nothing is tagged. The spec,
-llms.txt and the MCP reference do not change.
+Pull request #8 made the tools read foreign_master, inactive and
+undirected with one rule: the name alone or `: true` sets a flag,
+`: false` leaves it unset, and any other value is an error. This release
+states the rule in the spec and publishes the tools, so the MCP server
+and the rendering API stop drawing `undirected: true` without its
+arrows.
 
 The files are in the working tree of your clone, on main, uncommitted:
-the parser (relationships.ts, index.ts, name-resolver.ts) and its tests,
-the renderer layout and its tests, the relationship inspector of the
-playground, the CHANGELOG (an Unreleased section), and:
 
-  apply.cmd          the two steps below; replaces the one of the
-                     Dependabot delivery, whose release step you ran
-  APPLY.txt          this file
-  PR-flags.md        the description of the pull request
-  COMMIT-flags.txt   the commit message
+  spec/v0.7.md         section 11.9 (the three rows, and one sentence
+                       under the table), section 11.10 (one word), the
+                       description line
+  spec/index.md        the v0.7 row names the 0.7.5 point release
+  grammar/xDBML.g4     relationshipFlag; undirected alone on an Edge
+  grammar/test-cases.md  four v0.7.5 cases
+  parser/src/parser.ts   accepts xdbml: 0.7.5
+  parser/test/run-tests.ts  the version tests
+  CHANGELOG.md         the Unreleased section of #8 becomes v0.7.5
+  apply.cmd            the two steps below
+  APPLY.txt            this file
+  PR-0.7.5.md          the description of the pull request
+  COMMIT-0.7.5.txt     the commit message
 
-Step 1 puts the last two in the commit and the pull request and deletes
-them, so they are never committed.
+Step 1 puts the last two in the pull request and the commit and deletes
+them, so they are never committed. The VS Code extension, llms.txt and
+the MCP reference do not change.
+
+BEFORE YOU START
+----------------
+Stop wrangler dev, the MCP Inspector and any dev server: Windows locks
+their files, and the clean installs of step 2 fail with EPERM. Step 2
+needs npm and wrangler logged in; its preflight checks both and says
+what to run if either is not.
 
 THE WHOLE DEPLOYMENT, IN TWO COMMANDS
 -------------------------------------
 From cmd.exe at the repo root (C:\Repos\Hackolade\xdbml-spec), on main:
 
   apply.cmd            branch, gate, commit this delivery, open the pull request
-  apply.cmd release    merge the pull request, bring main up to date
+  apply.cmd release    merge the pull request, release 0.7.5, tag v0.7.5
 
 Each step stops at the first failure, says what failed, and can be rerun
-once the cause is fixed.
+once the cause is fixed. Nothing is published before step 2.
 
 Step 1 checks that the GitHub CLI is logged in and that main is level
-with origin/main, then creates the branch fix/relationship-flags, which
-takes the changes of the working tree. On a rerun it finds itself on
-that branch and goes on from there. It runs npm run check and the
-type-check of the MCP server, commits every change in the tree except
-PR-flags.md and COMMIT-flags.txt, pushes the branch, and opens the pull
-request into main.
+with origin/main, then creates the branch dev/0.7.5, which takes the
+changes of the working tree. On a rerun it finds itself on dev/0.7.5 and
+goes on from there. It runs npm run check and the type-check of the MCP
+server, commits every change in the tree except PR-0.7.5.md and
+COMMIT-0.7.5.txt, pushes the branch, and opens the pull request into
+main.
 
-Step 2 waits for the checks of the pull request, merges it with --squash
---admin (the rules of main ask for a review that the author of the pull
-request cannot give), then switches to main and pulls. xdbml.org deploys
-from main by itself.
+Step 2 first copies apply.cmd to %TEMP% and runs from the copy. (This is
+the fix for the error of the last delivery: switching to main replaced
+apply.cmd on disk while it ran, and cmd.exe went on reading the old
+script.) It waits for the checks of the pull request, merges it with
+--squash --admin, switches to main and pulls. It then runs
+tools\release-preflight.cmd 0.7.5, dates the CHANGELOG, and runs
+tools\release.cmd 0.7.5:
+
+  - @xdbml/parse and @xdbml/render 0.7.5 published on npm
+  - the MCP server and the rendering API deployed with them
+  - "release 0.7.5" committed and pushed
+  - the tag v0.7.5 and its GitHub release, from the "## v0.7.5" section
+    of the CHANGELOG
+
+xdbml.org deploys from main by itself.
+
+IF STEP 2 STOPS
+---------------
+Before tools\release.cmd starts, rerun apply.cmd release: it finds the
+pull request merged and goes on from the pull. Once tools\release.cmd
+has started, rerun tools\release.cmd 0.7.5 directly, as the message
+says: it skips what it already published, while the preflight refuses a
+version that is already on npm.
 
 CHECK IT LIVE
 -------------
-Once xdbml.org has deployed, this link opens a document with the four
-forms of undirected on entity-level Refs and the two forms on Edges. The
+Once xdbml.org has deployed, this link opens the four forms of
+undirected on Refs between entities and the two forms on Edges. The
 first three Refs draw an arrow at both ends, the fourth none, and the
 diagnostics panel stays empty:
 
 https://xdbml.org/playground/index.html#s=B4EwRgtgNgXABABgHQHYBQaD0m4CUCmUAhgC4CWA9gHYDOAFmQA5wBmxA5jfPkQMZ2sKAJwhwhPEDTgk6+ODSIQ5AdyIBPONThE8+FtqohNVA3ACiIdviRozVciQ0AFfEJpaA3nDJGy9gMwATHAA2owA1gC6cAC+tvZkjnBOdNRyXoypVPgA+j7eAcFhUbHxDhoAEhI0+CRwXrJEkrV5voWhEdFxduVwAMJ0REJWQvVw-EMjrQUkQR0l3QlJfUQ1Y7yrufl+s0WdpbaWcgBiuACSZgByACIAyjkA6mcAKhWh7gCuQrz48C5u1AANNJJrU-q53FRgR9DGRxLwSPgQNEPGg4PI-D84CBSPg0HFDlY4KcLjd7k9XjkAG5FT7fX7JCFAkHDMGMgFQuAwkBw-AIpHwEhCD74FFojFULE4xH4jDYOAAQSEQgoyikpDgYAoMjg+EMXGksjgVEUciIUDSwKFIuBAHJrfhbWgCPpGEReSAcspEnQ-lk5ABaOBVJo1Oohbm8-nI516caDVmesBqP1pOBBgag0YR2HwxEgQXC0Wx-QsRIGlJpjObUKRvMCuD2ou2yJynCXCjaZWq+Asc01EvyChQT3emTwEPNOrVtY5nn1gusfvFoA
 
+The MCP server shows the same through an assistant: render that
+document with render_xdbml, and validate_xdbml returns no diagnostic.
+
 VERIFIED BEFORE DELIVERY
 ------------------------
-On a Linux clone of main at 6161700 with its own npm ci, with this
-delivery applied: npm run check (parser 907, renderer 394, viewport 14,
+On a Linux clone of main at 67db8da with its own npm ci, with this
+delivery applied: npm run check (parser 912, renderer 394, viewport 14,
 interactive 61, MCP 105, from-mongodb 24, playground 67, VS Code
 extension package in sync, spec links, playground type-check, docs
-build). The new renderer checks fail on main for undirected alone,
-undirected: true, inactive: false and foreign_master: false, and pass
-with the delivery. The renderer type-checks and builds against the
-parser built from this delivery, as tools\release.cmd does at the next
-release.
+build); MCP type-check; MCP reference in sync with llms.txt;
+scripts\release-notes.mjs 0.7.5 extracts the CHANGELOG section. The
+renderer and the MCP server type-check and build against the parser
+built from this delivery, as tools\release.cmd does. The batch steps
+themselves were not run: there is no cmd.exe on Linux.

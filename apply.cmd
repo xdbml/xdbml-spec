@@ -1,20 +1,22 @@
 @echo off
 setlocal
-REM Relationship flags: undirected, inactive and foreign_master read the same
-REM way on Refs and Edges, and undirected: true draws its arrows.
-REM A tooling change: no spec version, nothing published to npm, no tag.
+REM xDBML 0.7.5: one rule for the flags of a relationship.
 REM Two steps, each run from cmd.exe at the repo root:
 REM
 REM   apply.cmd            branch, gate, commit this delivery, open the pull request
-REM   apply.cmd release    merge the pull request, bring main up to date
+REM   apply.cmd release    merge the pull request, release 0.7.5, tag v0.7.5
 REM
 REM Each step stops at the first failure and says what to do next. APPLY.txt
-REM describes the two steps.
-set "BRANCH=fix/relationship-flags"
-set "PRTITLE=Relationship flags read the same way on Refs and Edges"
-set "PRBODY=PR-flags.md"
-set "COMMITMSG=COMMIT-flags.txt"
+REM describes the two steps. The VS Code extension does not change in 0.7.5.
+set "VER=0.7.5"
+set "BRANCH=dev/0.7.5"
+set "PRTITLE=xDBML 0.7.5: one rule for the flags of a relationship"
+set "PRBODY=PR-0.7.5.md"
+set "COMMITMSG=COMMIT-0.7.5.txt"
 set "ROOT=%~dp0"
+REM The release step runs from a copy of this file in %TEMP% (see :release),
+REM which receives the root of the clone as its third argument.
+if /i "%~2"=="--from-temp" set "ROOT=%~3"
 cd /d "%ROOT%" || exit /b 1
 if not exist "parser\src\parser.ts" (
   echo ERROR: run apply.cmd from the root of the xdbml-spec clone.
@@ -102,7 +104,8 @@ if not exist "%PRBODY%" (
 call gh pr create --base main --head %BRANCH% --title "%PRTITLE%" --body-file "%PRBODY%" || goto :fail
 :prready
 REM The description now lives in the pull request and the message in the
-REM commit. Removing both files leaves the tree clean.
+REM commit. Removing both files leaves the tree clean for the release, whose
+REM last step commits with git add -A.
 if exist "%PRBODY%" del "%PRBODY%"
 if exist "%COMMITMSG%" del "%COMMITMSG%"
 set "PRURL="
@@ -121,15 +124,24 @@ echo ============================================================
 exit /b 0
 
 REM ===========================================================================
-REM  Step 2: merge the pull request, bring main up to date
+REM  Step 2: merge the pull request, release 0.7.5, tag v0.7.5
 REM ===========================================================================
 :release
+if /i "%~2"=="--from-temp" goto :releasebody
+REM git checkout and git pull below replace apply.cmd in the clone, and
+REM cmd.exe reads a running batch file from disk line by line: it would go on
+REM in the new content at the old position. The step therefore runs from a
+REM copy in %TEMP%, which no git command touches. Without CALL, control passes
+REM to the copy and never returns here.
+copy /y "%~f0" "%TEMP%\xdbml-apply-%VER%.cmd" >nul || goto :fail
+"%TEMP%\xdbml-apply-%VER%.cmd" release --from-temp "%ROOT%"
+:releasebody
 echo.
 echo ============================================================
-echo  Step 2 of 2: merge into main
+echo  Step 2 of 2: merge into main, release %VER%, tag v%VER%
 echo ============================================================
 echo.
-echo [1/3] Checks: GitHub CLI, pull request
+echo [1/6] Checks: GitHub CLI, pull request
 call :needgh || exit /b 1
 REM gh pr list finds the pull request even once GitHub has deleted its branch.
 set "PRSTATE="
@@ -145,35 +157,73 @@ if not "%PRSTATE%"=="OPEN" (
 echo   ok
 
 echo.
-echo [2/3] Wait for the checks of the pull request, then merge it
+echo [2/6] Wait for the checks of the pull request, then merge it
 call gh pr checks %BRANCH% --watch || goto :failchecks
 REM --admin merges once the checks above pass: the rules of main ask for an
 REM approving review, and the author of a pull request cannot approve it.
-REM --squash, as pull requests #3 to #7 were merged.
+REM --squash, as pull requests #3 to #8 were merged.
 call gh pr merge %BRANCH% --squash --admin || goto :fail
 :merged
 
 echo.
-echo [3/3] Switch to main and pull
+echo [3/6] Switch to main, pull, check the line endings
+REM A squash merge leaves no commit of %BRANCH% in main, so the merge is
+REM checked through the pull request above, not through the history.
 call git fetch origin --quiet || goto :fail
 call git checkout main || goto :fail
 call git pull --ff-only origin main || goto :fail
+REM The tests read text files byte for byte and need LF line endings, which
+REM .gitattributes asks for. Files that git checked out with CRLF before that
+REM rule existed are checked out again, which changes nothing in the index.
+call :crlf
+if not errorlevel 1 goto :lfok
+set "DIRTY=0"
+for /f %%s in ('git status --porcelain ^| find /c /v ""') do set "DIRTY=%%s"
+if not "%DIRTY%"=="0" (
+  echo ERROR: the text files have CRLF line endings, and %DIRTY% changes are
+  echo        uncommitted. Commit or stash them, then rerun apply.cmd release.
+  exit /b 1
+)
+echo   the text files have CRLF line endings: checking them out again with LF
+call git rm -r --cached -q . || goto :fail
+call git reset --hard -q || goto :fail
+call :crlf
+if not errorlevel 1 goto :lfok
+echo ERROR: the text files still have CRLF line endings. .gitattributes needs
+echo        the line   * text=auto eol=lf   before the rules for *.cmd.
+exit /b 1
+:lfok
 echo   ok
 
 echo.
-echo ============================================================
-echo  Done: the fix is on main. xdbml.org deploys from main by
-echo  itself; once it has, the playground link in APPLY.txt shows
-echo  arrows at both ends of three relationships, none on the fourth.
+echo [4/6] Preflight
+call tools\release-preflight.cmd %VER% || goto :fail
+
 echo.
-echo  Nothing is published: @xdbml/parse, @xdbml/render, the MCP
-echo  server and the rendering API take the fix at the next release.
+echo [5/6] Release date in the CHANGELOG
+node -e "const fs=require('fs');const f='CHANGELOG.md';const s=fs.readFileSync(f,'utf8');const n=new Date();const d=new Date(n.getTime()-n.getTimezoneOffset()*60000).toISOString().slice(0,10);const r=s.replace('**Released**: unreleased','**Released**: '+d);if(r===s){console.log('  the release date is set already.')}else{fs.writeFileSync(f,r);console.log('  v%VER% released '+d)}" || goto :fail
+
+echo.
+echo [6/6] tools\release.cmd %VER%
+call tools\release.cmd %VER% || goto :failrelease
+
+echo.
+echo ============================================================
+echo  Done: %VER% is published and deployed, v%VER% is tagged and
+echo  released.
+echo    https://github.com/xdbml/xdbml-spec/releases/tag/v%VER%
+echo    https://xdbml.org/spec/v0.7
 echo ============================================================
 exit /b 0
 
 REM ===========================================================================
 REM  Subroutines and failure messages
 REM ===========================================================================
+:crlf
+REM Errorlevel 1 when the grammar test corpus has CRLF line endings.
+node -e "process.exit(require('fs').readFileSync('grammar/test-cases.md','utf8').includes('\r')?1:0)"
+exit /b
+
 :needgh
 where gh >nul 2>&1
 if errorlevel 1 (
@@ -201,4 +251,13 @@ echo.
 echo A check of the pull request failed or was cancelled. Open the pull
 echo request on GitHub, fix the cause on %BRANCH%, push, then rerun:
 echo   apply.cmd release
+exit /b 1
+
+:failrelease
+cd /d "%ROOT%"
+echo.
+echo tools\release.cmd stopped. Fix the cause it names, then rerun
+echo   tools\release.cmd %VER%
+echo directly, not apply.cmd release: release.cmd skips what it already
+echo published, while the preflight refuses a version that is on npm.
 exit /b 1
