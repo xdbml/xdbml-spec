@@ -4096,6 +4096,63 @@ Table readings {
 }
 ```
 
+## v0.7.5 -- relationship flags
+
+### VALID -- a flag written alone, with true, or with false, on a Ref and on an Edge (§11.9, §13.3)
+
+```
+xdbml: 0.7
+
+Entity Person { id int [pk] }
+Entity Phone {
+  phone_id int [pk]
+  owner_id int
+}
+Entity Headset { headset_id int [pk] }
+
+Edge KNOWS [source: Person, target: Person, undirected] { since date }
+Edge FOLLOWS [source: Person, target: Person, undirected: false] { since date }
+
+Ref paired_with: Phone - Headset [undirected]
+Ref sold_with: Phone - Headset [undirected: true]
+Ref owned_by: Phone.owner_id > Person.id [inactive: false, foreign_master: false]
+```
+
+### VALID -- foreign_master: false on a field needs no inline ref (§11.9, §11.10.2)
+
+```
+xdbml: 0.7
+
+Table orders {
+  id            int [pk]
+  customer_name varchar [foreign_master: false]
+}
+```
+
+### INVALID -- undirected on an Edge with a value other than true or false (invalid-undirected, §11.9)
+
+```
+xdbml: 0.7
+
+Entity Person { id int [pk] }
+
+Edge KNOWS [source: Person, target: Person, undirected: yes] { since date }
+```
+
+### INVALID -- inactive with a value other than true or false (invalid-inactive, §11.9)
+
+```
+xdbml: 0.7
+
+Table users { id int [pk] }
+Table posts {
+  id      int [pk]
+  user_id int
+}
+
+Ref: posts.user_id > users.id [inactive: 'soon']
+```
+
 ---
 
 ## Test runner
