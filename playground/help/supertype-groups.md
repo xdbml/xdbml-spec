@@ -7,12 +7,7 @@ description: How a supertype group is drawn, what the marks in its symbol mean, 
 
 A supertype group states that several entities are specialized forms of one more general entity: a Person and an Organization are both kinds of Party. The supertype holds the attributes they share, and each subtype declares only its own. The diagram draws the group as a half-circle between the supertype and its subtypes. Supertype groups arrived with xDBML v0.5; the language side is in [spec §12](/spec/v0.5#_12-supertype-group-generalization-and-inheritance).
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `supertype-groups-overview.png`
-Caption: Example 14, with its three supertype groups.
-Should show: Party at the top with two symbols on its bottom edge (legal_nature with a cross and a bar, business_role plain), Person, Organization, Customer and Supplier below, Employee and Contractor below Person, with Display > Relationship names turned on so the group names show.
-:::
+![Example 14 with its three supertype groups: Party at the top with the legal_nature and business_role symbols on its bottom edge, its subtypes below, and Employee and Contractor below Person.](./img/supertype-groups-overview.png)
 
 ## Reading the symbol
 

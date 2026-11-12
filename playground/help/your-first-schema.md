@@ -39,12 +39,7 @@ Table users {
 
 A card appears in the diagram. It shows the table name in a colored header band, four field rows with their types right-aligned, and small badges next to `id` (a yellow PK badge) and `email` (a purple unique badge plus a red required badge).
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `your-first-schema-single-table.png`
-Caption: A single `users` table rendered in the diagram, with PK and unique badges visible.
-Should show: editor pane on the left with the Project + Table source, diagram pane on the right showing the `users` card with its four field rows, no inspector pane (nothing selected).
-:::
+![The editor on the left with the Project and Table source, and the diagram on the right showing the users card with its four field rows, a PK badge on id, and unique and required badges on email.](./img/your-first-schema-single-table.png)
 
 ## Click a field to inspect it
 

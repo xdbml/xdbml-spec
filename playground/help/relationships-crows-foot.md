@@ -7,12 +7,7 @@ description: How relationship lines are drawn and what the symbols at each endpo
 
 Every `Ref:` declaration in your schema becomes a line in the diagram, connecting the source field to the target field. The shape of the line tells you which two fields are related; the symbols at each end tell you the cardinality and optionality of that relationship.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `relationships-overview.png`
-Caption: A diagram with three relationships visible, demonstrating different cardinalities.
-Should show: a small schema (e.g. blog or e-commerce) with three or four relationship lines visible, showing a mix of crow's foot variants at the endpoints (one-to-many, many-to-many, and one-or-zero). Cardinality text labels visible next to each endpoint.
-:::
+![Four tables joined by three relationship lines with different crow's foot symbols and cardinality labels: many-to-many, zero-or-many to exactly one, and zero-or-one to exactly one.](./img/relationships-overview.png)
 
 ## Crow's foot symbols
 

@@ -7,12 +7,7 @@ description: How to show a diagram view, what it draws, and what it keeps of its
 
 A large model is easier to read one subject at a time. A diagram view is a named subset of the model's diagram, known in other data modeling tools as a subject area or a sub-model. It lists the entities to show, directly or through the Containers, EntityGroups and supertype groups that hold them, and the playground draws them on a canvas of their own. Diagram views arrived with xDBML v0.6.3; the language side is in [spec §18](/spec/v0.6#_18-diagram-view-subject-areas-and-sub-models), and [example 16](/examples/16-diagram-views) has three of them.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `diagram-views-menu.png`
-Caption: Example 16, with the Diagram menu open.
-Should show: the Diagram menu in the diagram toolbar, open, listing Main ERD, order_to_cash, parties and catalog_usage, with order_to_cash drawn behind it: the sales, billing and crm frames, and customers alone in crm.
-:::
+![Example 16 with the order_to_cash diagram view chosen in the Diagram menu of the toolbar: the crm, sales and billing frames, with customers alone in crm.](./img/diagram-views-menu.png)
 
 ## Showing a diagram view
 

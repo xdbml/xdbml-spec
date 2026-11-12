@@ -7,16 +7,11 @@ description: The five regions of the playground UI and how layout state is remem
 
 The playground's main window has five regions: the header bar across the top, three resizable panes in the middle (editor, diagram, inspector), and the diagnostics panel across the bottom.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `layout-overview-annotated.png`
-Caption: The playground UI with each region labeled.
-Should show: header bar at top with labels "Header bar"; editor, diagram, inspector panes labeled in the body; diagnostics strip labeled at the bottom. A sample schema should be loaded so all panes have content.
-:::
+![The playground with each region outlined and labeled: header bar, editor pane, diagram pane, inspector pane and diagnostics panel.](./img/layout-overview-annotated.png)
 
 ## The header bar
 
-A thin strip at the top with the xDBML logo on the left and four action buttons on the right (Examples, Share, Help). Always visible, always the same height. Covered in detail in [**Header bar & menus**](./header-bar).
+A thin strip at the top with the xDBML logo on the left and the action buttons on the right (Open, Save, Examples, Share, Help), followed by the button that switches between light and dark mode. Always visible, always the same height. Covered in detail in [**Header bar & menus**](./header-bar).
 
 ## The editor pane (left)
 

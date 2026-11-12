@@ -105,6 +105,32 @@ The `docs:build` script runs the playground build first
 `/public/playground/` so VitePress publishes it as a static asset,
 then runs `vitepress build`.
 
+## Help screenshots
+
+The help pages in [`help/`](./help/) show screenshots of the playground.
+The images are in [`help/img/`](./help/img/) and are committed. They are
+taken by
+[`scripts/capture-help-screenshots.mjs`](./scripts/capture-help-screenshots.mjs),
+which opens the playground in the Chrome installed on your computer and
+saves one PNG file for each image.
+
+Run the script again when a change to the interface makes an image differ
+from what the user sees, such as a new toolbar button or a new pane:
+
+```bash
+cd playground
+npm run dev                  # in one terminal
+npm run help:screenshots     # in another terminal
+```
+
+To take only some of the images, pass their names without the extension:
+`npm run help:screenshots -- header-bar share-dropdown`.
+
+Look at each image that changed before you commit it. To add an image, add
+an entry to `shots` in the script and include the file in the help page
+with a regular Markdown image. The comment at the top of the script lists
+what it cannot capture.
+
 ## How asset deduplication works
 
 The playground reads from canonical sources elsewhere in the repo:
@@ -177,7 +203,8 @@ type-checking.
 playground/
 ├── public/                       (gitignored; populated by prepare-assets.mjs)
 ├── scripts/
-│   └── prepare-assets.mjs        (copies /logo/*.svg into public/)
+│   ├── prepare-assets.mjs        (copies /logo/*.svg into public/)
+│   └── capture-help-screenshots.mjs  (takes the images in help/img/)
 ├── src/
 │   ├── components/
 │   │   ├── diagram/

@@ -7,12 +7,7 @@ description: The bottom strip that lists errors and warnings, with click-to-jump
 
 The diagnostics panel is a thin horizontal strip across the bottom of the playground. It tells you at a glance whether your schema has problems, and lists each one with click-to-jump-to-source.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `diagnostics-panel-errors.png`
-Caption: The diagnostics panel expanded, showing one error and one warning with line and column.
-Should show: the bottom of the playground UI with the diagnostics panel expanded. The header shows "1 error" in red and "1 warning" in amber. Two rows are visible: one with a red × icon, one with an amber ! icon, each with a message, "Line N, column M" in a smaller grey font, and a code chip such as `possible-type-typo`.
-:::
+![The diagnostics panel expanded at the bottom of the playground. Its header shows 1 error and 1 warning, and each row shows a message, its line and column, and a code.](./img/diagnostics-panel-errors.png)
 
 ## What the header shows
 

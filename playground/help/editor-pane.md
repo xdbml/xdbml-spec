@@ -7,12 +7,7 @@ description: The Monaco-backed xDBML editor, syntax highlighting, live parsing, 
 
 The editor pane on the left side of the playground is where you write xDBML. It uses the [Monaco editor](https://microsoft.github.io/monaco-editor/), the same editor that powers VS Code.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `editor-pane.png`
-Caption: The editor pane with syntax-highlighted xDBML and a parse error squiggle visible.
-Should show: editor pane occupying most of the screen, with a sample schema loaded, syntax highlighting visible (keywords in one color, types in another, comments in grey), and at least one red squiggle from a deliberate parse error so its hover tooltip can be captured too.
-:::
+![The editor pane with the blog example. The xDBML source is syntax-highlighted, and a red squiggle on line 26 marks a parse error.](./img/editor-pane.png)
 
 ## Live parsing
 

@@ -17,12 +17,7 @@ Note order_lifecycle [color: #FDE68A] {
 }
 ```
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `sticky-notes-overview.png`
-Caption: A sticky note beside the entities it explains, and a second one inside a Container.
-Should show: the note above on the canvas, its heading and bold text rendered, and a note in a Container frame, with the frame grown to hold it.
-:::
+![A yellow sticky note on the canvas next to the customers table, with its heading and bold text rendered, and a blue sticky note inside the sales container.](./img/sticky-notes-overview.png)
 
 ## How a note is drawn
 

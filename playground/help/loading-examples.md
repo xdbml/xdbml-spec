@@ -1,30 +1,25 @@
 ---
 title: Loading examples
-description: How to load and use the six bundled sample schemas as starting points.
+description: How to load and use the bundled sample schemas as starting points.
 ---
 
 # Loading examples
 
-The playground ships with six bundled sample schemas covering different modeling styles and storage technologies. They're useful as starting points for your own work and as references for how specific xDBML features look in practice.
+The playground ships with bundled sample schemas. The first six cover different modeling styles and storage technologies, and the later ones each show one feature of the language. They're useful as starting points for your own work and as references for how specific xDBML features look in practice.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `examples-menu-open.png`
-Caption: The Examples dropdown in the header bar, showing the six bundled samples.
-Should show: the playground header bar with the Examples button highlighted and its dropdown open below it, listing the six examples vertically. Ideally one example has the active checkmark next to it indicating it's currently loaded.
-:::
+![The Examples menu open below its button in the header bar, with a checkmark next to the example that is currently loaded.](./img/examples-menu-open.png)
 
 ## Opening the menu
 
-Click the **Examples** button in the header bar. A dropdown opens below it listing the six examples. Click any entry to load that schema into the editor.
+Click the **Examples** button in the header bar. A dropdown opens below it listing the examples. The list is longer than the menu, so scroll to see the later ones. Click any entry to load that schema into the editor.
 
 A checkmark appears next to the entry whose content currently matches what's in the editor. If you've edited the schema since loading, no checkmark shows; the editor content no longer matches any example.
 
-## The six examples
+## The examples
 
 **Blog** is a small relational schema with users, posts, and comments. Three entities, two relationships, no nested fields. The smallest and simplest example; good starting point for anyone new to xDBML or to ER modeling generally. Built around PostgreSQL conventions.
 
-**E-commerce** is a polyglot example. It has two containers: a `catalog` container targeting Oracle (for products and categories) and an `orders_store` container targeting MongoDB (for orders, customers, and shopping carts). A cross-container `Ref:` links an order to the customer in the relational store. Use this one to see how xDBML handles mixed-engine schemas in a single model.
+**E-commerce** is a polyglot example. It has two containers: a `core` container targeting Oracle (for customers and products) and an `orders_store` container targeting MongoDB (for orders). A cross-container `Ref:` links an order to the customer in the relational store. Use this one to see how xDBML handles mixed-engine schemas in a single model.
 
 **IoT telemetry** demonstrates time-series-oriented modeling. Sensor readings live in a denormalized structure optimized for high write volume and time-windowed reads. Shows what xDBML looks like when the modeling style isn't normalized relational. Useful as a reference for time-series databases (TimescaleDB, InfluxDB) and for understanding when denormalization is the right call.
 
@@ -32,7 +27,18 @@ A checkmark appears next to the entry whose content currently matches what's in 
 
 **Healthcare (FHIR)** is the most complex of the bundled examples. Based on the [FHIR](https://www.hl7.org/fhir/) resource model, it uses deeply nested objects, polymorphism (oneOf alternatives), and optional cardinalities (`0..*`). If you want to see how xDBML handles a real-world standards-based schema with non-trivial nesting, this is the example to load.
 
-**Financial services** is the largest sample, demonstrating multiple containers, view definitions, and reference data. Modeled after the kinds of schemas you'd find in retail banking or trading systems, with accounts, transactions, instruments, and counterparties. Good reference for enterprise-scale modeling patterns.
+**Financial services** is the largest of these six samples, demonstrating multiple containers, view definitions, and reference data. Modeled after the kinds of schemas you'd find in retail banking or trading systems, with accounts, transactions, instruments, and counterparties. Good reference for enterprise-scale modeling patterns.
+
+The examples after these six are smaller, and each one shows a feature of the language:
+
+- **Project management** and **University registrar** show self-referential relationships and composite keys.
+- The three **Module system** examples show a schema split over several files. See [**The module system**](./module-system).
+- **Conceptual to denormalized** and **Denormalization with foreign master** show the kinds of relationships introduced in v0.4.
+- **Supertype groups** shows supertypes and subtypes. See [**Supertype groups**](./supertype-groups).
+- **Constraints** shows keys and checks declared in a constraints block.
+- **Diagram views** shows a model split into subject areas. See [**Diagram views**](./diagram-views).
+- **Internal definitions** shows reusable shapes that belong to one entity.
+- **Data lineage** and **Source-to-target mapping** show dependencies between fields. See [**Data lineage**](./data-lineage).
 
 ## What happens when you load an example
 
@@ -46,12 +52,25 @@ If you've made changes since loading and want to discard them and start fresh, s
 
 The main xdbml.org site has a longer write-up for each example, explaining the modeling choices and the language features it exercises. From the playground, you can find these at:
 
-- [Blog](https://xdbml.org/examples/blog)
-- [E-commerce](https://xdbml.org/examples/ecommerce)
-- [IoT telemetry](https://xdbml.org/examples/iot)
-- [Social graph](https://xdbml.org/examples/social-graph)
-- [Healthcare (FHIR)](https://xdbml.org/examples/healthcare)
-- [Financial services](https://xdbml.org/examples/financial-services)
+- [Blog (relational)](https://xdbml.org/examples/01-blog)
+- [E-commerce (polyglot)](https://xdbml.org/examples/02-ecommerce)
+- [IoT telemetry](https://xdbml.org/examples/03-iot-telemetry)
+- [Social graph (LPG)](https://xdbml.org/examples/04-social-graph)
+- [Healthcare (FHIR-style)](https://xdbml.org/examples/05-healthcare-fhir)
+- [Financial services](https://xdbml.org/examples/06-financial-services)
+- [Project management (self-refs)](https://xdbml.org/examples/07-project-management)
+- [University registrar (composite keys)](https://xdbml.org/examples/08-university-registrar)
+- [Module system: conformed dimensions library (v0.2)](https://xdbml.org/examples/09-modules-conformed-dimensions)
+- [Module system: sales data product (v0.2)](https://xdbml.org/examples/10-modules-consumer)
+- [Module system: remote sources (v0.3)](https://xdbml.org/examples/11-modules-remote)
+- [Conceptual to denormalized (v0.4)](https://xdbml.org/examples/12-conceptual-to-denormalized)
+- [Denormalization with foreign master (v0.4)](https://xdbml.org/examples/13-foreign-master-denormalization)
+- [Supertype groups (v0.5)](https://xdbml.org/examples/14-supertype-groups)
+- [Constraints: keys and checks (v0.6)](https://xdbml.org/examples/15-constraints)
+- [Diagram views: subject areas (v0.6.3)](https://xdbml.org/examples/16-diagram-views)
+- [Internal definitions (v0.6.5)](https://xdbml.org/examples/17-internal-definitions)
+- [Data lineage (v0.7)](https://xdbml.org/examples/18-data-lineage)
+- [Source-to-target mapping (v0.7.2)](https://xdbml.org/examples/19-source-to-target)
 
 Or click the **xDBML** logo in the header to go to the main site and browse the Examples section.
 

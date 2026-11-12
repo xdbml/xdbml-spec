@@ -9,12 +9,7 @@ The diagram's automatic layout puts entities in a reasonable default arrangement
 
 ## How to drag
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `diagram-drag-header.png`
-Caption: An entity card mid-drag, showing the grab cursor on the header band.
-Should show: a diagram with multiple entities, one entity card being dragged with the cursor visibly on its header (the colored top band). The relationship line to another entity should be visible, re-routing toward the dragged card's new position.
-:::
+![The comments entity card while it is dragged by its header band. The relationship lines to the users entity follow the card.](./img/diagram-drag-header.png)
 
 **Click and hold** on an entity's **header band** (the colored top strip with the entity name). The cursor changes to a grab indicator. Drag to move the entity. Release to drop it at the new position.
 

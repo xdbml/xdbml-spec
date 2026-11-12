@@ -149,7 +149,7 @@ See [Supertype groups](./supertype-groups).
 | Purple | U badge | Unique constraint |
 | Cyan, teal | fk, dk, fm, dm badges | Relationship roles of a field |
 | Red | ! badge, error squiggles, diagnostics errors | Required field, or an error |
-| Amber | Warning indicators, screenshot placeholders in help | Warning or todo |
+| Amber | Warning indicators | Warning |
 | Grey | Type labels, cardinality text, indent guides | Subordinate information |
 | Container accent colors | Container header bands, member entity header bands | Container identity (deterministic from name) |
 

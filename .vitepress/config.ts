@@ -1,5 +1,4 @@
 import { defineConfig } from 'vitepress'
-import container from 'markdown-it-container'
 import { buildHelpSidebar, assertHelpIsConsistent } from './help-sidebar'
 import { examples as exampleManifest } from '../scripts/examples-manifest.mjs'
 
@@ -582,26 +581,6 @@ export default defineConfig({
 
     // External links open in new tab and get rel=noopener noreferrer
     externalLinkIcon: true,
-
-    // Custom containers used in playground/help/*.md.
-    //
-    // ::: screenshot
-    //   [body describing what the screenshot should show]
-    // :::
-    //
-    // Renders as a visible TODO block in the rendered help page until
-    // an actual screenshot is captured and embedded. The CSS lives in
-    // .vitepress/theme/style.css under .custom-block.screenshot.
-    config(md) {
-      md.use(container, 'screenshot', {
-        render(tokens: { nesting: number }[], idx: number): string {
-          if (tokens[idx].nesting === 1) {
-            return '<div class="custom-block screenshot"><p class="custom-block-title">📸 Screenshot placeholder</p>\n';
-          }
-          return '</div>\n';
-        },
-      });
-    },
   },
 
   // Build hooks

@@ -7,12 +7,7 @@ description: How Schema, Database, Keyspace, and other container declarations ar
 
 Containers in xDBML are groupings that wrap related entities together. They serve two purposes: organizing the schema logically, and naming the target technology (Oracle, MongoDB, Neo4j, etc.) that the group lives on. The diagram renders each container as a labeled box around its member entities.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `containers-example.png`
-Caption: Two containers in a polyglot e-commerce schema, with the target engines visible in their header bands.
-Should show: the e-commerce example, with both the `catalog` (Container, Oracle target) and `orders_store` (Container, MongoDB target) visible. Each container is a dashed box wrapping its entities, with a colored header band at the top showing the keyword, name, and target.
-:::
+![The e-commerce example with its two containers: core, which targets Oracle, and orders_store, which targets MongoDB. Each container is a dashed box around its entities, with a colored header band showing the keyword, the name and the target.](./img/containers-example.png)
 
 ## The container keywords
 

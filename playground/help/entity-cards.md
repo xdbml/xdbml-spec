@@ -7,12 +7,7 @@ description: How each entity is rendered in the diagram, including header bands,
 
 Each `Table`, `Entity`, `Collection`, or `Record` declaration in your schema appears in the diagram as a card. This page walks through what's on a card and what each visual element signals.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `entity-card-anatomy.png`
-Caption: An entity card with each visual region labeled.
-Should show: a single entity card (e.g. a `users` table) at large enough size to see clearly, with annotations or callouts identifying: the colored header band with the entity keyword and name, the field rows, the right-aligned type labels, the PK/UNIQUE/REQUIRED badges, and the card outline.
-:::
+![An entity card with its parts labeled: the header band with the entity name, the keyword, a field row, a type, a badge and the card outline.](./img/entity-card-anatomy.png)
 
 ## The header band
 

@@ -9,12 +9,7 @@ A `Dep` records that an entity, a View or a field is computed from another, by a
 
 A `Dep` is not a relationship. A `Ref` says how the rows of two entities connect; a `Dep` says how the data is produced, and states no cardinality.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `data-lineage-overview.png`
-Caption: Example 18, with its sources on the left and its marts on the right.
-Should show: the raw tables on the left, the staging layer in the middle, the marts on the right, the amber curves between them, and the junction where `first_name` and `last_name` meet before `full_name`.
-:::
+![Example 18, with its sources on the left, the staging layer in the middle and the marts on the right, joined by the dependency curves.](./img/data-lineage-overview.png)
 
 ## Writing a dependency
 

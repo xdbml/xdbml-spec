@@ -19,7 +19,7 @@ xDBML is a polyglot, vendor-neutral data-modeling language: one syntax for descr
 
 **[The grammar](https://xdbml.org/grammar/)** is the formal ANTLR4 definition of the language. Useful if you're building tools that need to parse xDBML, or if you want absolute precision about what is and isn't accepted by the parser.
 
-**[The examples gallery](https://xdbml.org/examples/)** has longer write-ups for each of the six bundled examples plus additional patterns. Each example explains why specific modeling decisions were made, which is often more useful than reading the spec.
+**[The examples gallery](https://xdbml.org/examples/)** has longer write-ups for each of the bundled examples. Each example explains why specific modeling decisions were made, which is often more useful than reading the spec.
 
 **[The FAQ](https://xdbml.org/faq)** answers common questions about the language, the project's relationship to DBML, and the project's positioning relative to other modeling notations.
 

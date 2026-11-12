@@ -17,7 +17,7 @@ The xDBML playground is a free, browser-based tool for writing, visualizing, and
 
 **Share schemas as URLs.** A single button copies a link that encodes your entire schema into the URL itself. Send it in chat, paste it in an email, bookmark it. No server stores anything; the URL is the schema.
 
-**Load realistic examples.** Six bundled samples cover relational, document, polyglot, graph, healthcare, and financial-services modeling. They are useful as starting points or as reference for how specific xDBML features look in practice.
+**Load realistic examples.** The bundled samples cover relational, document, polyglot, graph, healthcare, and financial-services modeling, and the later ones each show one feature of the language. They are useful as starting points or as reference for how specific xDBML features look in practice.
 
 ## What you can't do here (yet)
 

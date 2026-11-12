@@ -59,7 +59,7 @@ The bundled examples in the playground are part of the repository. New examples 
 - Have a clear pedagogical purpose explained in an accompanying write-up
 - Use realistic field names and types, not placeholder-style content
 
-The six existing examples in `/examples/` show the expected shape. New examples follow the same conventions.
+The existing examples in `/examples/` show the expected shape. New examples follow the same conventions.
 
 ## Reporting documentation issues
 

@@ -7,12 +7,7 @@ description: The right-side panel that shows full metadata for any selected elem
 
 The inspector pane on the right side of the playground shows the complete metadata for whatever you've selected in the diagram. It's the place to look when you want to know exactly what the parser made of a specific construct, beyond what fits on a diagram card.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `inspector-pane-field.png`
-Caption: The inspector showing a selected field with its identification, type, flag badges, settings, and Note.
-Should show: the playground with a field selected in the diagram (the row visibly highlighted), and the inspector pane open on the right showing: kind badge (FIELD), field name, parent entity and container, type, REQUIRED and UNIQUE badges, a couple of settings rows, and a Note block with some text.
-:::
+![The playground with the email field of customers selected in the diagram, and the inspector on the right showing its name, entity, container, type, UNIQUE and REQUIRED badges, settings and note.](./img/inspector-pane-field.png)
 
 ## When it appears
 

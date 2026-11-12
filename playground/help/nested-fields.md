@@ -7,12 +7,7 @@ description: How object, array, and polymorphism children are visualized inside 
 
 xDBML lets fields have structured types: objects with their own sub-fields, arrays of elements, oneOf alternatives, maps, sets, and so on. The diagram renders these structures as indented rows inside the entity card, with disclosure carets that let you collapse or expand them.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `nested-fields-expanded.png`
-Caption: An entity card with a nested object and an array of objects, both expanded to show their children.
-Should show: a single entity card (e.g. a customer record from the e-commerce or FHIR example) tall enough to show several levels of nesting. At least one `object {...}` field expanded, one `array of object` expanded, and ideally one polymorphic `oneOf` row visible. Disclosure carets (▾ or ▸) clearly visible on the parent rows.
-:::
+![The orders card of the e-commerce example, with nested objects, an array of objects and a oneOf field, all expanded to show their children as indented rows.](./img/nested-fields-expanded.png)
 
 ## Indented rows
 

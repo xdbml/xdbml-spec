@@ -7,12 +7,7 @@ description: What happens to the diagram and inspector when your schema has erro
 
 xDBML is parsed on every keystroke. When the source has syntax errors, the playground does several things to make recovery easy without losing your work. This page explains what happens visually and how to get back to a clean parse.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `when-parsing-fails-state.png`
-Caption: The playground with a parse error visible: red squiggle in the editor, error in the diagnostics panel, and the diagram showing the last good state.
-Should show: the editor pane with at least one red squiggle under a token, the diagnostics panel at the bottom expanded and showing one or more errors with line/column, and the diagram pane showing the previous successfully-parsed schema (so the user can see the diagram is "frozen" while errors are present).
-:::
+![The playground with a parse error: a red squiggle in the editor on line 26, the error listed in the diagnostics panel with its line and column, and the diagram still showing the last schema that parsed.](./img/when-parsing-fails-state.png)
 
 ## What the playground does on a parse error
 

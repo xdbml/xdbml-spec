@@ -7,12 +7,7 @@ description: How URL sharing works, what's in the URL, and the size limits to kn
 
 The Share button in the header copies a single URL that contains your entire schema. Send the URL to a colleague, paste it in chat or an email, bookmark it for yourself: opening it loads the schema into a fresh playground session. No accounts, no server-side storage, no login.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `share-dropdown.png`
-Caption: The Share dropdown showing a generated URL, the Copy button, and the size indicator.
-Should show: the Share button in the playground header (highlighted/active) and its dropdown open below. The dropdown contains a read-only text field with a long URL starting with `https://xdbml.org/playground/#/...`, a Copy button, and a small size indicator like "1.2 KB" or similar.
-:::
+![The Share menu open below its button, showing the generated URL, the Copy button, and the size of the URL.](./img/share-dropdown.png)
 
 ## Opening the menu
 

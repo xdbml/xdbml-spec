@@ -7,12 +7,7 @@ description: The center pane that renders your schema as an entity-relationship 
 
 The diagram pane in the center of the playground renders your xDBML schema as an entity-relationship diagram. It updates live as you edit, with no Refresh button or Generate step.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `diagram-pane.png`
-Caption: The diagram pane with a multi-entity schema rendered, including a container, a relationship line, and one entity selected.
-Should show: a sample like the e-commerce or blog schema, occupying the center pane between a visible editor on the left and a closed inspector. At least one entity should be selected (highlighted) so the selection style is captured.
-:::
+![The diagram pane between the editor and the inspector, showing the blog example: a container, three entities, their relationship lines, and the posts entity selected.](./img/diagram-pane.png)
 
 This page covers what the diagram contains and what you can do with it. For the visual vocabulary itself (what crow's foot symbols mean, how containers are styled, how nested fields display), see [**Reading the diagram**](./reading-the-diagram).
 

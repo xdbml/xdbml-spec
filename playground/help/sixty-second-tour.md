@@ -7,12 +7,7 @@ description: Quick walkthrough of the three panes, the header bar, and the diagn
 
 The playground has three main panes, a header bar across the top, and a diagnostics strip across the bottom. Here's what each does.
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `sixty-second-tour-full.png`
-Caption: The full playground UI with all panes visible and a sample schema loaded.
-Should show: header bar at top, editor pane (left) with xDBML text, diagram pane (center) with a parsed diagram, inspector pane (right) with a selected entity, diagnostics strip at bottom showing "No issues".
-:::
+![The playground with the e-commerce example loaded: the header bar at the top, the editor on the left, the diagram in the center, the inspector on the right showing the selected products entity, and the diagnostics panel at the bottom showing "No issues".](./img/sixty-second-tour-full.png)
 
 ## The editor pane (left)
 

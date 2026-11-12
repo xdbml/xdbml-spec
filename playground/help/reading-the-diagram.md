@@ -7,12 +7,7 @@ description: The visual vocabulary of the playground's entity-relationship diagr
 
 The playground's diagram uses a consistent visual vocabulary so you can understand a schema at a glance. This section breaks down what each visual element means, separately from how you interact with the diagram (which is covered in [**Diagram pane**](./diagram-pane)).
 
-::: screenshot
-**[Screenshot needed]**
-Filename suggestion: `reading-the-diagram-overview.png`
-Caption: A diagram with most visual vocabulary elements visible, captioned to identify each.
-Should show: a moderately complex schema like the e-commerce example, with at least one container visible (with its accent color and dashed border), entity cards with header bands, field rows with badges (PK, unique, required), one nested object structure with disclosure carets, and at least two relationship lines with crow's foot symbols at their endpoints.
-:::
+![The diagram of the e-commerce example with labels on a container, an entity card, badges, nested fields and a relationship line.](./img/reading-the-diagram-overview.png)
 
 ## What's in this section
 
@@ -40,7 +35,7 @@ The diagram is meant to be read at a glance. That guides three design choices:
 
 **Structure over detail.** The diagram shows shape: which entities exist, which ones are related to which, what the rough field layout looks like. Detailed metadata (full setting values, Notes, custom properties) lives in the inspector, not on the cards. The cards stay legible.
 
-**Consistent symbols across all examples.** Crow's foot at the many-end of every relationship. PK badge on every primary key, regardless of which container the entity lives in. Dashed border on every container. The same conventions apply to all six bundled examples and any schema you write yourself.
+**Consistent symbols across all examples.** Crow's foot at the many-end of every relationship. PK badge on every primary key, regardless of which container the entity lives in. Dashed border on every container. The same conventions apply to all the bundled examples and any schema you write yourself.
 
 **Visual differentiation by structural role, not by name.** A field's name doesn't determine how it's drawn; its role does. A primary-key field gets a yellow badge whether it's called `id`, `customer_id`, or `uuid_pk`. A required field gets a red badge whether it's tagged `[not null]` or `[required]`. This makes the diagram robust to your naming conventions.
 

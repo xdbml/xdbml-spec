@@ -18,7 +18,8 @@
     "build": "npm run prepare:assets && vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "type-check": "vue-tsc --noEmit",
-    "test": "node --experimental-strip-types --import ./test/parser-from-source.mjs test/run-tests.ts"
+    "test": "node --experimental-strip-types --import ./test/parser-from-source.mjs test/run-tests.ts",
+    "help:screenshots": "node scripts/capture-help-screenshots.mjs"
   },
   "dependencies": {
     "lodash-es": "^4.17.21",
@@ -35,6 +36,7 @@
     "@types/prismjs": "^1.26.6",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/tsconfig": "^0.7.0",
+    "playwright-core": "^1.65.0",
     "tailwindcss": "^4.1.11",
     "typescript": "^5.7.3",
     "vite": "^7.1.7",
