@@ -24,7 +24,9 @@ export function setMonacoMarkers (
     // group warnings).
     severity: e.severity === 'warning'
       ? monaco.MarkerSeverity.Warning
-      : monaco.MarkerSeverity.Error,
+      : e.severity === 'info'
+        ? monaco.MarkerSeverity.Info
+        : monaco.MarkerSeverity.Error,
     message: e.message,
     startLineNumber: e.location.line,
     startColumn: e.location.column,

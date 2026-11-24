@@ -1,0 +1,155 @@
+# xDBML 0.8 -- change blocks and stable identifiers
+
+## Proposal
+
+### Summary
+
+This proposal adds two things to xDBML v0.8. A `Changes` block lists changes to a model in the form of the `CREATE`, `ALTER` and `DROP` statements of SQL. A statement creates an element, drops it, or alters it: it renames the element, moves it to another Container, modifies its type and settings, or adds, modifies, renames and drops its fields, indexes, constraints and Enum values. A document may hold a model and any number of change blocks among its declarations. The `uid` setting gives an element an identifier that stays the same when the element is renamed or moved.
+
+The specification text is chapter 29 of [`spec/v0.8.md`](spec/v0.8.md).
+
+### Motivation
+
+xDBML describes the state of a model. To change a model, a person or an AI assistant writes the whole model again, and the tool that receives it compares the two versions. This causes several problems:
+
+- A tool can't tell a renamed field from a field that was dropped and another one that was added. A tool that generates migration statements then drops the column and adds a new one, and the data in the column is lost.
+- An AI assistant often sees only part of a large model. When the document it sends back lacks some elements, the tool can't tell whether they were dropped or simply not shown to the assistant.
+- Rewriting a large model to change one field costs tokens, and it gives the assistant a chance to change things nobody asked for.
+- A reviewer has to compare two complete documents to find out what the change is.
+
+Tools that exchange xDBML with an AI assistant work around this today with identifiers of their own in custom properties, such as `x_hackolade_id`, and with separate commands for deletions. This works within one tool but not between tools.
+
+DDL is used for the whole life of a database, because `ALTER` statements let people change a schema step by step. Change blocks give xDBML the same ability for a model, so that a person and an AI assistant can discuss changes one statement at a time, and a tool can apply, accept or reject each statement.
+
+### Proposed syntax
+
+```xdbml
+xdbml: 0.8
+
+Container core {
+  Table customers [uid: '7f3c'] {
+    id          int [pk]
+    name        varchar [uid: '7f3c-2']
+    email       varchar(255)
+    legacy_code varchar(10)
+  }
+}
+
+Container staging {
+  Table addresses {
+    id          int [pk]
+    customer_id int
+    city        varchar
+  }
+}
+
+Changes "Customer contact details" [note: 'Requested by the CRM team'] {
+  alter Table core.customers {
+    rename Field name to full_name
+    modify Field email varchar(320) [was: 'varchar(255)']
+    add Field preferred_language varchar(5) [not null, default: 'en']
+    drop Field legacy_code
+  }
+
+  create Table core.loyalty_accounts {
+    id          int [pk]
+    customer_id int [ref: > core.customers.id]
+  }
+}
+
+Changes "Addresses leave staging" {
+  alter Table staging.addresses move to core
+  create Ref: core.addresses.customer_id > core.customers.id
+}
+```
+
+At the end of this document, `core.customers` holds `id`, `full_name`, `email` and `preferred_language`. `full_name` keeps the `uid` of `name`, and `email` is a `varchar(320)`. `core` also holds `loyalty_accounts` and `addresses`, and `staging` is empty.
+
+The statements:
+
+| Statement | SQL counterpart |
+|---|---|
+| `create Table core.loyalty_accounts { … }` | `CREATE TABLE` |
+| `drop Table core.legacy_customers` | `DROP TABLE` |
+| `alter Table core.customers rename to clients` | `ALTER TABLE … RENAME TO` |
+| `alter Table staging.addresses move to core` | `ALTER TABLE … SET SCHEMA` in PostgreSQL |
+| `alter Table core.customers add Field …` | `ALTER TABLE … ADD COLUMN` |
+| `alter Table core.customers modify Field email varchar(320)` | `MODIFY` in Oracle and MySQL, `ALTER COLUMN` in PostgreSQL |
+| `alter Table core.customers modify Field email drop default` | `ALTER COLUMN … DROP DEFAULT` in PostgreSQL |
+| `alter Table core.customers rename Field name to full_name` | `ALTER TABLE … RENAME COLUMN` |
+| `alter Table core.customers drop Field legacy_code` | `ALTER TABLE … DROP COLUMN` |
+| `alter Enum billing.status add Value archived` | `ALTER TYPE … ADD VALUE` in PostgreSQL |
+
+The main rules:
+
+- **Order.** A change block changes the model declared above it, and the declarations below it see the result. Declarations between two change blocks may come in any order. A declaration never names an element declared below a change block that stands between the two. A reference follows the element it names through a rename or a move. The model a document describes is the model at its end. A document without change blocks reads as before.
+- **Blocks.** A document may hold any number of change blocks. A new set of changes is added as a new block after the last one, or in a new file, so earlier blocks are never edited. Each block is the unit a person reviews. Every statement belongs to a block.
+- **`create`** is optional, inside and outside a block. **`add`** and **`drop`** are always written, because a field line inside `alter` could otherwise mean adding a field or changing one.
+- **`modify`** changes only what it names. `drop default`, `drop not null` and `drop [default, note]` remove settings. The setting `was` records the type and settings before the change, so a tool can detect that the model changed after the statement was written, and can reverse the change.
+- **`drop`** fails while another element refers to the element being dropped. The statements that remove those references come first, so a reviewer sees each one.
+- **`if exists`** and **`if not exists`** skip a statement whose element is missing or already present, as in SQL. The skip is reported at a new severity, information, as PostgreSQL reports a notice.
+- **Keywords** are case-insensitive and accept the keyword synonyms of xDBML, so `ALTER TABLE core.customers ADD COLUMN …` is a valid statement. Settings stay in xDBML brackets.
+- **Change files.** A file may hold only change blocks and import the model it changes. An import brings the model of the imported file after its own change blocks, so a sequence of files can record the versions of a model. Without an import, the host supplies the model, as in a conversation with an AI assistant.
+- **`uid`** is a string on any element, written by the tool that keeps the model, unique in the model, and unchanged by a rename or a move. It lets a tool that compares two complete documents tell a rename from a drop and a create, even without change blocks.
+
+### Round-trip behavior
+
+A change block states a change to the structure of the model. The generator for a target decides how the target carries out the change, and whether it can.
+
+- **SQL DDL targets** (Oracle, PostgreSQL, etc.): `CREATE`, `ALTER` and `DROP` statements. A rename becomes `ALTER TABLE … RENAME COLUMN` where the engine has it.
+- **MongoDB validators**: a new `$jsonSchema` applied with `collMod`, and update operations such as `$rename` for the documents already stored.
+- **JSON Schema**: a new version of the schema. The generator applies the change blocks and writes the model at its end.
+- **Avro**: a new version of the schema, in which a renamed field can carry the old name in `aliases`. Avro's compatibility rules decide whether existing readers accept the new version, as they do today.
+- **Neo4j Cypher**: statements that rename labels and properties, such as `SET` and `REMOVE`.
+
+A generator that writes schemas, not migrations, applies the change blocks and writes the model at its end. Generators ignore `uid`.
+
+### Adjacent standards
+
+- **SQL DDL**: the statements borrow the form of `CREATE`, `ALTER` and `DROP`, and `IF EXISTS` behaves as in PostgreSQL. The statements apply to a model, not to a database.
+- **Liquibase and Flyway**: these tools order migrations as change sets. Liquibase's preconditions and rollbacks correspond to `was`, which lets a tool check a statement before it applies and reverse it afterwards.
+- **JSON Patch (RFC 6902)**: it also applies ordered operations (`add`, `remove`, `replace`, `move`) by path. Change blocks name elements by their kind and their name in the model, so a person can read them.
+- **Avro and Protobuf evolution rules**: these say which changes existing readers accept. They remain the rules of those targets (§1.1).
+
+### Alternatives considered
+
+- **Sending the whole model and letting the tool compare the versions.** This is how tools work today. It doesn't distinguish renames, costs tokens on large models, and makes missing elements ambiguous.
+- **A single `ALTER` verb for everything.** Adding a table would then read `alter Container core add Table …`, and a relationship, a Type or an Enum declared outside any Container would have no element to alter. SQL uses `CREATE` and `DROP` for whole objects for this reason.
+- **One change block per document.** Every new change would then be an edit inside an existing block. Several blocks, each added after the last, keep earlier changes untouched.
+- **Statements outside a block.** A block gives a set of changes a name and a reason, and it is the unit that a person reviews.
+- **Operations on the AST, as in JSON Patch, or diff-style markers such as `+` and `-`.** Both are hard for people to read.
+- **`set` and `unset` keywords.** `modify` with brackets sets values, `drop` removes settings, and `move to` replaces PostgreSQL's `SET SCHEMA`, so no `set` keyword is needed.
+- **Required identifiers in every statement.** Statements name elements by their names, which people and assistants read. `uid` is optional and can be used as a check.
+
+### Backward compatibility
+
+Every v0.7 document stays valid and reads as before. `Changes` and the statement words are recognized only in a document declaring `xdbml: 0.8` or later. The statement words have that meaning only inside a change block, except `create` in front of a declaration, so they remain available as names of fields and other elements. In a document declaring an earlier version, `uid` remains an ordinary custom property. Chapters 29 to 32 of the specification become 30 to 33.
+
+### Open questions
+
+- Should `add Field` be able to place the new field at a given position, as SQL's `AFTER` does? Field order matters for Avro, Parquet and tuples.
+- Should a field be movable into or out of a nested object? Document stores often need this kind of restructuring.
+- How should a change block change the EntityPartials an entity injects?
+- Is requiring a separate statement for each reference before a `drop` workable for large changes, or is a form of `CASCADE` needed?
+- Should tools be required to write `was` on every `modify` they produce?
+
+## Plan
+
+The steward is the only contributor to xDBML, so the proposal issue and the discussion period of GOVERNANCE.md §3.3 are not used for this version. The design was discussed with Claude Code on 2026-11-23 and 2026-11-24.
+
+As for v0.7, the work happens on the branch `dev/0.8`, and each topic carries its spec text, grammar, parser, editor grammars, renderer, playground, MCP reference, examples and tests.
+
+| Step | Status |
+|---|---|
+| 1. Design of change blocks and `uid` | Done |
+| 2. Specification text: chapter 29 of `spec/v0.8.md`, the changelog entry, the version table of `spec/index.md` and the FAQ | Done, commit `afac974` |
+| 3. Grammar: change blocks and `uid` in `grammar/xDBML.g4`, with cases in `grammar/test-cases.md` | Done |
+| 4. `@xdbml/parse`: AST nodes, parsing of change blocks, applying the statements with the order rules of §29.2, `uid`, the information severity, diagnostics and tests | Done. `flatten()` applies the change blocks; `resolveNames()` reports their diagnostics. One part is simpler than §29.2 states: Metadata blocks apply after every change block, with their targets following renamed elements, rather than within each part of the document. |
+| 5. Editor grammars: Monaco (`parser/src/monarch.ts`), TextMate (`tools/textmate`) and the VS Code extension 0.8.0 | To do |
+| 6. Renderer and playground: the information level in the Diagnostics panel (done: icon, editor marker and copied text), the starter schema, a help page on change blocks, and the 29 "View in playground" buttons of the v0.8 page, which open `xdbml: 0.8` | To do |
+| 7. `llms.txt` and the MCP server: a section on change blocks and `uid`, documents that declare `xdbml: 0.8` | To do |
+| 8. Examples: a new example with change blocks | To do |
+| 9. Release: a pull request from `dev/0.8` to `main` with this file as its description, `npm run check`, the status in `spec/index.md`, the README and the "What's new" text of the site, then `tools\release.cmd 0.8.0` | To do |
+| 10. Hackolade Studio, in the `application` repository and probably `packages` first: write `uid` in place of `x_hackolade_id` and read both during a transition, and accept change blocks from the AI assistant, one proposal per statement | Separate work |
+
+The open questions above are decided before step 9.

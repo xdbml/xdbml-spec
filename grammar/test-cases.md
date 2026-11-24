@@ -2546,7 +2546,7 @@ SupertypeGroup business_role [supertype: Party, exclusivity: overlapping, discri
 ### INVALID -- a newer version than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.8
+xdbml: 0.9
 
 Entity A { id int [pk] }
 ```
@@ -2827,7 +2827,7 @@ Entity A { id int [pk] }
 ### INVALID -- a patch release newer than the parser supports (unsupported-version)
 
 ```
-xdbml: 0.7.99
+xdbml: 0.8.99
 
 Entity A { id int [pk] }
 ```
@@ -4151,6 +4151,333 @@ Table posts {
 }
 
 Ref: posts.user_id > users.id [inactive: 'soon']
+```
+
+## v0.8 -- change blocks and uid
+
+### VALID -- the example of the specification: rename, modify, add, drop, create and move (§29.1)
+
+```
+xdbml: 0.8
+
+Container core {
+  Table customers [uid: '7f3c'] {
+    id          int [pk]
+    name        varchar [uid: '7f3c-2']
+    email       varchar(255)
+    legacy_code varchar(10)
+  }
+}
+
+Container staging {
+  Table addresses {
+    id          int [pk]
+    customer_id int
+    city        varchar
+  }
+}
+
+Changes "Customer contact details" [note: 'Requested by the CRM team'] {
+  alter Table core.customers {
+    rename Field name to full_name
+    modify Field email varchar(320) [was: 'varchar(255)']
+    add Field preferred_language varchar(5) [not null, default: 'en']
+    drop Field legacy_code
+  }
+
+  create Table core.loyalty_accounts {
+    id          int [pk]
+    customer_id int [ref: > core.customers.id]
+  }
+}
+
+Changes "Addresses leave staging" {
+  alter Table staging.addresses move to core
+  create Ref: core.addresses.customer_id > core.customers.id
+}
+```
+
+### VALID -- a relationship above a change block follows the renamed entity (§29.2)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk] }
+Table orders {
+  id          int [pk]
+  customer_id int
+}
+
+Ref: orders.customer_id > customers.id
+
+Changes { alter Table customers rename to clients }
+
+Table invoices {
+  id        int [pk]
+  client_id int [ref: > clients.id]
+}
+```
+
+### INVALID -- a declaration names an entity declared below a change block (forward-reference-across-changes, §29.2)
+
+```
+xdbml: 0.8
+
+Table orders {
+  id          int [pk]
+  customer_id int
+}
+
+Ref: orders.customer_id > customers.id
+
+Changes { alter Table orders add Field total decimal }
+
+Table customers { id int [pk] }
+```
+
+### VALID -- several change blocks, each applied after the one before (§29.1)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk], name varchar }
+
+Changes "Full name" { alter Table customers rename Field name to full_name }
+Changes "Nickname" { alter Table customers add Field nickname varchar }
+Changes "No nickname" { alter Table customers drop Field nickname }
+```
+
+### VALID -- a field named drop, and create in front of a declaration (§29.3, §29.5)
+
+```
+xdbml: 0.8
+
+create Table t {
+  id     int [pk]
+  drop   varchar
+  modify varchar
+}
+
+Changes { alter Table t rename Field drop to dropped }
+```
+
+### VALID -- statements in capitals, with the SQL keyword Column (§29.3)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk] }
+
+Changes {
+  ALTER TABLE customers ADD COLUMN email varchar [not null]
+}
+```
+
+### INVALID -- a change block in a document declaring v0.7 (§29)
+
+```
+xdbml: 0.7
+
+Table customers { id int [pk] }
+
+Changes { drop Table customers }
+```
+
+### INVALID -- a statement names an entity that does not exist (change-target-not-found, §29.4)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk] }
+
+Changes { drop Table legacy }
+```
+
+### VALID -- if exists and if not exists skip their statements, reported at the information level (change-skipped, §29.10)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk] }
+
+Changes {
+  drop Table if exists legacy
+  create Table if not exists customers { id int [pk] }
+  alter Table customers {
+    add Field if not exists id int
+    drop Field if exists nickname
+  }
+}
+```
+
+### INVALID -- if not exists on a declaration without create (§29.5)
+
+```
+xdbml: 0.8
+
+Changes {
+  if not exists Table customers { id int [pk] }
+}
+```
+
+### INVALID -- creating an entity that already exists (change-element-exists, §29.5)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk] }
+
+Changes { create Table customers { id int [pk] } }
+```
+
+### INVALID -- dropping an entity that a relationship refers to (change-element-referenced, §29.6)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk] }
+Table orders {
+  id          int [pk]
+  customer_id int [ref: > customers.id]
+}
+
+Changes { drop Table customers }
+```
+
+### VALID -- the relationship is dropped first, then the entity (§29.6)
+
+```
+xdbml: 0.8
+
+Table customers { id int [pk] }
+Table orders {
+  id          int [pk]
+  customer_id int [ref: > customers.id]
+}
+
+Changes {
+  drop Ref: orders.customer_id > customers.id
+  drop Table customers
+}
+```
+
+### INVALID -- dropping a field that an index names (change-element-referenced, §29.6)
+
+```
+xdbml: 0.8
+
+Table t {
+  id   int [pk]
+  code varchar
+  indexes { code }
+}
+
+Changes { alter Table t drop Field code }
+```
+
+### VALID -- modify sets and drops settings (§29.8)
+
+```
+xdbml: 0.8
+
+Table t {
+  id    int [pk]
+  email varchar(255) [default: 'x', note: 'Login']
+}
+
+Changes {
+  alter Table t {
+    modify Field email varchar(320) [not null]
+    modify Field email drop [default, note]
+    modify [note: 'Accounts']
+  }
+}
+```
+
+### INVALID -- a was that the field no longer matches (change-was-mismatch, §29.8)
+
+```
+xdbml: 0.8
+
+Table t {
+  id    int [pk]
+  email varchar(100)
+}
+
+Changes { alter Table t modify Field email varchar(320) [was: 'varchar(255)'] }
+```
+
+### INVALID -- a rename to a name the entity already uses (change-name-taken, §29.9)
+
+```
+xdbml: 0.8
+
+Table a {
+  id int [pk]
+  x  int
+  y  int
+}
+
+Changes { alter Table a rename Field x to y }
+```
+
+### VALID -- Enum values added, renamed and dropped (§29.7)
+
+```
+xdbml: 0.8
+
+enum status { draft, issued, void }
+
+Changes {
+  alter Enum status {
+    add Value paid
+    rename Value issued to sent
+    drop Value void
+  }
+}
+```
+
+### VALID -- a Container declared again below a change block adds an entity (§29.11)
+
+```
+xdbml: 0.8
+
+Container core { Table a { id int [pk] } }
+
+Changes { alter Table core.a rename to b }
+
+Container core { Table c { id int [pk] } }
+```
+
+### INVALID -- a Container declared again with settings (container-redeclared, §29.11)
+
+```
+xdbml: 0.8
+
+Container core { Table a { id int [pk] } }
+
+Changes { alter Table core.a rename to b }
+
+Container core [type: schema] { Table c { id int [pk] } }
+```
+
+### INVALID -- two elements with the same uid (duplicate-uid, §29.15)
+
+```
+xdbml: 0.8
+
+Table a [uid: 'u1'] { id int [pk] }
+Table b [uid: 'u1'] { id int [pk] }
+```
+
+### INVALID -- a statement whose uid names another element (change-uid-mismatch, §29.4)
+
+```
+xdbml: 0.8
+
+Table a [uid: 'u1'] { id int [pk] }
+
+Changes { drop Table a [uid: 'u9'] }
 ```
 
 ---

@@ -31,6 +31,13 @@ Adds change blocks, which list changes to a model in the form of the `CREATE`, `
 - **Validation summary (§29.16)** for change blocks, with the information severity.
 - **Document structure (§2)**, **separators (§3.9)**, **version declaration (§4)**, **AST (§30, §30.9)**, **round-trip (§31.1)**, **other standards (§32)**, **conformance (§33, item 25)**, **reserved keywords (Appendix A)** and **compatibility with DBML (Appendix D, items 9 and 14)** for change blocks and `uid`.
 
+#### Tooling
+
+- **Grammar (`grammar/xDBML.g4`)**: `changesDefinition` and its statements, `create` in front of a declaration at the top level and in a Container body, and the tokens `Changes` and `create`.
+- **`@xdbml/parse`**: reads change blocks into `ChangesDeclaration` nodes, with `CreateStatement`, `DropStatement` and `AlterStatement` and the actions of `alter`, in a document declaring `xdbml: 0.8`; a change block in a document declaring an earlier version is a parse error. `flatten()` applies the change blocks in order, so a flattened document holds the model at its end, and an import brings the model of the imported file after its own change blocks. References follow a renamed or moved element: relationships, inline relationships, dependencies, Edges, supertype groups, groups and diagram views, Metadata blocks, field types, indexes, keys and records. `resolveNames()` reports the conditions of §29.16, among them `forward-reference-across-changes`, `change-element-referenced`, `change-was-mismatch` and `duplicate-uid`, and a skipped statement as `change-skipped`, with the new severity `info`. New exports: `applyChanges()`, `checkChanges()`, `checkUids()`, `hasChanges()` and `flatStatementsWithChanges()`. `SUPPORTED_XDBML_VERSION` is `0.8`.
+- **Playground**: the Diagnostics panel and the editor show a diagnostic of the information level with its own icon and marker.
+- **Grammar corpus**: twenty-two v0.8 cases; the two cases of a version newer than the parser declare 0.9 and 0.8.99.
+
 ### Changed
 
 #### Site
@@ -40,6 +47,7 @@ Adds change blocks, which list changes to a model in the form of the `CREATE`, `
 ### Not changed (compatibility)
 
 - Every v0.7 document stays valid and reads as before. `Changes` and the statement words are recognized only in a document declaring `xdbml: 0.8` or later, and the statement words only inside a change block, so they remain available as names of fields and other elements.
+- `@xdbml/parse`: `TopLevelStatement` gains `ChangesDeclaration`, and `Diagnostic.severity` gains `info`. Code with an exhaustive `switch` on these unions needs the new cases.
 
 ---
 

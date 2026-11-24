@@ -1,9 +1,9 @@
 /*
- * xDBML v0.7 -- ANTLR4 grammar additions
+ * xDBML v0.8 -- ANTLR4 grammar additions
  *
- * Status:    Draft v0.7 -- pre-stable
+ * Status:    Draft v0.8 -- pre-stable
  * License:   Apache License 2.0
- * Spec:      xDBML Specification v0.7 (xdbml.org/spec/current)
+ * Spec:      xDBML Specification v0.8 (xdbml.org/spec/current)
  * Upstream:  github.com/holistics/dbml (Apache 2.0)
  * Baseline:  DBML 10.3.1 (spec Appendix D); DBML 3.13.6 through v0.6
  *
@@ -241,6 +241,11 @@ METADATA            : 'Metadata' ;     // top-level only; also names an entity o
 
 DEP                 : 'Dep' ;          // top-level only; also names an entity or a field elsewhere
 
+// ---- §29 Change blocks (v0.8) -----------------------------------------------
+
+CHANGES             : 'Changes' ;      // top-level only; also names an entity or a field elsewhere
+CREATE              : 'create' ;       // before a declaration only; also names a field elsewhere
+
 // ---- §17.2 Structural type keywords ---------------------------------------
 
 OBJECT              : 'object' ;
@@ -377,6 +382,8 @@ topLevelStatement
     | stickyNoteDefinition         // spec §19.2 (defined in v0.7)
     | noteDefinition               // upstream DBML; unnamed: the note of the project, §19.5
     | topLevelRecords              // §26.2 (defined in v0.7)
+    | changesDefinition            // spec §29 (defined in v0.8)
+    | CREATE createdDeclaration    // spec §29.5 (v0.8): `create` in front of a declaration means the declaration
     | useDirective                 //§25  (new in v0.2)
     ;
 
@@ -467,6 +474,7 @@ containerBody
     | noteDefinition               // the Container's own note
     | useDirective                 //§25  (new in v0.2; field imports are semantically rejected here)
     | containerSetting             // e.g. replication, location, default_charset
+    | CREATE (tableDefinition | edgeDefinition | viewDefinition | enumDefinition | stickyNoteDefinition)  // spec §29.5 (v0.8)
     ;
 
 containerSetting
@@ -861,6 +869,151 @@ depBodyItem
 // or earlier, a custom property that draws a warning (§27.9).
 depSetting
     : 'dep' COLON depArrow refEndpoint
+    ;
+
+// ---- §29 Change blocks (defined in v0.8) -----------------------------------
+//
+// A list of changes to the model declared above the block (§29.2). The words
+// below are recognized only in a document declaring xdbml: 0.8 or later, and
+// only in the body of a change block and in the braces of an alter; the one
+// exception is `create`, which may also stand in front of a declaration at
+// the top level or in a Container body (§29.3, §29.5). Everywhere else they
+// remain identifiers, so a field may be named `drop` or `modify` (§3.10).
+// Whether a statement names an element that exists, the order rules of
+// §29.2, `was` and `uid` are checked after parsing (§29.16).
+
+changesDefinition
+    : CHANGES nameSegment? settingsBlock? LBRACE
+        (changeStatement | listSeparator)*
+      RBRACE
+    ;
+
+changeStatement
+    : CREATE createdDeclaration
+    | CREATE elementKind ifNotExists createdDeclarationTail
+    | createdDeclaration                          // a declaration creates its element (§29.5)
+    | 'drop' elementKind ifExists? elementName statementSettings?
+    | 'alter' elementKind ifExists? elementName statementSettings? alterActions
+    ;
+
+// A declaration, as at the top level of a document (§29.5).
+createdDeclaration
+    : containerDefinition
+    | tableDefinition
+    | typeDefinition
+    | edgeDefinition
+    | viewDefinition
+    | enumDefinition
+    | refDefinition
+    | tablePartialDefinition
+    | tableGroupDefinition
+    | supertypeGroupDefinition
+    | diagramViewDefinition
+    | stickyNoteDefinition
+    | depDefinition
+    ;
+
+// `create Table if not exists core.loyalty_accounts { ... }` (§29.10): the
+// words stand after the keyword of the declaration, as in SQL, and the rest
+// of the declaration follows them. The rule lists the rest of each
+// declaration rule above, from the name on; a parser reads the words after
+// the keyword and then the declaration as usual.
+createdDeclarationTail
+    : entityReference (AS nameSegment)? settingsBlock? LBRACE (entityBodyItem | listSeparator)* RBRACE
+    | entityReference LBRACE (enumValue | listSeparator)* RBRACE
+    | nameSegment? (COLON refSpec | LBRACE refSpec RBRACE)
+    | nameSegment settingsBlock? LBRACE (containerBody | listSeparator)* RBRACE
+    ;
+
+// The keyword that declares the element, with its synonyms (§29.3).
+elementKind
+    : containerKeyword
+    | tableKeyword
+    | VIEW | EDGE | TYPE_KW | ENUM | REF | NOTE | DEP
+    | 'EntityPartial' | 'TablePartial' | 'EntityGroup' | 'TableGroup'
+    | SUPERTYPE_GROUP | DIAGRAM_VIEW
+    ;
+
+// The element a statement names (§29.4): by its name, a relationship also by
+// its endpoints, a dependency by its line.
+elementName
+    : entityReference
+    | nameSegment? COLON refSpec
+    | COLON depSpec
+    ;
+
+// The settings that identify an element or a part and set nothing: `uid`,
+// `was`, and `name` for an index, a key or a check (§29.4, §29.8).
+statementSettings
+    : settingsBlock
+    ;
+
+ifExists
+    : 'if' 'exists'
+    ;
+
+ifNotExists
+    : 'if' 'not' 'exists'
+    ;
+
+alterActions
+    : alterAction
+    | LBRACE (alterAction | listSeparator)* RBRACE
+    ;
+
+// The word after `modify` decides between the element and a part: a part kind
+// (Field, Column, Index, Constraint, Value, or the kind of a member) starts a
+// part; anything else is the element's own type and settings (§29.7).
+alterAction
+    : 'rename' 'to' nameSegment
+    | 'move' 'to' entityReference
+    | 'modify' 'source_query' COLON (STRING_LITERAL | multilineString)
+    | 'modify' modifyTail
+    | 'add' partKind ifNotExists? partDeclaration
+    | 'modify' partKind partName modifyTail
+    | 'rename' partKind partName 'to' nameSegment
+    | 'drop' partKind ifExists? partName statementSettings?
+    ;
+
+modifyTail
+    : typeExpression? settingsBlock? ('drop' settingNames)?
+    ;
+
+// One setting name, or several in brackets: a comma between two names
+// outside brackets would separate two actions (§3.9, §29.8).
+settingNames
+    : settingName
+    | LBRACK settingName (COMMA settingName)* RBRACK
+    ;
+
+settingName
+    : 'not null' | 'primary key' | IDENTIFIER | quotedIdentifier
+    ;
+
+partKind
+    : 'Field' | 'Column' | 'Index' | 'Constraint' | 'Value'
+    | tableKeyword | VIEW | containerKeyword | 'EntityGroup' | 'TableGroup' | SUPERTYPE_GROUP | NOTE
+    ;
+
+// A part as the body of its element declares it (§29.7).
+partDeclaration
+    : fieldDeclaration
+    | indexEntry
+    | constraintEntry
+    | enumValue
+    | entityReference                             // a member of a group or a diagram view
+    ;
+
+// A part as a statement names it (§29.4): a field by its path, an index or a
+// key by its fields, a check by its expression, any of the three by its name
+// in brackets, an Enum value or a member by its name.
+partName
+    : fieldPath
+    | LPAREN indexComponent (COMMA indexComponent)* RPAREN
+    | LPAREN EXPRESSION_LITERAL RPAREN
+    | STRING_LITERAL
+    | settingsBlock
+    | QUOTED_STRING
     ;
 
 // ---- §26 Records (defined in v0.7) -----------------------------------------

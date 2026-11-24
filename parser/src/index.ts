@@ -29,7 +29,9 @@ export * from './ast.ts';
 export { tokenize, TokenKind, LexError } from './lexer.ts';
 export type { Token } from './lexer.ts';
 export { parse, Parser, ParseError, SUPPORTED_XDBML_VERSION, compareVersions } from './parser.ts';
-export { flatten } from './module-resolver.ts';
+export { flatten, flatStatementsWithChanges } from './module-resolver.ts';
+export { applyChanges, checkChanges, checkUids, hasChanges } from './changes.ts';
+export type { ChangeResult } from './changes.ts';
 export { isCustomPropertyName, isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment, splitName } from './names.ts';
 export {
   classifyModuleSource,

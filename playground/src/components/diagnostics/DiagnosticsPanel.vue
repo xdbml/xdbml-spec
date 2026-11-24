@@ -92,11 +92,19 @@
           class="flex items-start gap-3 px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer transition-colors"
           @click="onErrorClick(err)"
         >
-          <!-- Severity icon: red 'x' for errors, amber '!' for warnings.
-               Drives the styling per-row so a mixed list (some errors,
-               some warnings) reads at a glance. -->
+          <!-- Severity icon: red 'x' for errors, amber '!' for warnings,
+               blue 'i' for information. Drives the styling per-row so a
+               mixed list reads at a glance. -->
           <span
-            v-if="err.severity === 'warning'"
+            v-if="err.severity === 'info'"
+            class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 flex-shrink-0 mt-0.5"
+          >
+            <svg viewBox="0 0 8 8" class="w-2.5 h-2.5">
+              <path d="M4 1.5v0.5M4 3.5v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span
+            v-else-if="err.severity === 'warning'"
             class="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5"
           >
             <svg viewBox="0 0 8 8" class="w-2.5 h-2.5">
@@ -207,7 +215,7 @@ function onErrorClick (err: ParserError): void {
 
 /** One line per diagnostic, as the list shows it. */
 function diagnosticLine (err: ParserError): string {
-  const severity = err.severity === 'warning' ? 'Warning' : 'Error';
+  const severity = err.severity === 'warning' ? 'Warning' : err.severity === 'info' ? 'Information' : 'Error';
   const code = typeof err.code === 'string' ? ` [${err.code}]` : '';
   return `${severity} at line ${err.location.line}, column ${err.location.column}${code}: ${err.message}`;
 }
