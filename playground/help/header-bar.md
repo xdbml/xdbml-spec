@@ -5,9 +5,9 @@ description: The xDBML logo and the action buttons in the playground header.
 
 # Header bar & menus
 
-The header bar sits across the top of the playground and stays visible at all times. It hosts the xDBML logo, the playground title, the name of the open file, and the action buttons: Open, Save, Examples, Share and Help. The last button switches between light and dark mode.
+The header bar sits across the top of the playground and stays visible at all times. It hosts the xDBML logo, the playground title, the name of the open file, and the action buttons: Open, Save, Append changes, Examples, Share and Help. The last button switches between light and dark mode.
 
-![The playground header bar, with the xDBML logo and the file name on the left, and the Open, Save, Examples, Share and Help buttons on the right.](./img/header-bar.png)
+![The playground header bar, with the xDBML logo and the file name on the left, and the Open, Save, Append changes, Examples, Share and Help buttons on the right.](./img/header-bar.png)
 
 ## The logo
 
@@ -16,6 +16,10 @@ The xDBML logo on the left links back to the main site at [xdbml.org](https://xd
 ## Open and Save
 
 Click **Open** to load an `.xdbml` file from your computer into the editor, and **Save** to write the current schema to a file. The arrow next to **Save** opens more save options. The name of the open file is shown next to the playground title, with an amber dot when there are unsaved changes. See [**Open and save files**](./open-and-save-files).
+
+## Append changes
+
+Click **Append changes** to add change blocks at the end of the open document, from text you paste or from a file. The playground checks that the text holds change blocks only before it adds them, and **Ctrl+Z** in the editor takes them back. See [**Change blocks**](./change-blocks).
 
 ## Examples
 
@@ -30,7 +34,7 @@ The first six examples are:
 - **Healthcare (FHIR)**: a complex schema based on the FHIR resource model, showing nested objects, polymorphism, and `0..*` optional cardinality patterns.
 - **Financial services**: the largest of these six, demonstrating multiple containers, views, and reference data.
 
-The later examples each show one feature of the language, such as modules, supertype groups, constraints, diagram views and data lineage.
+The later examples each show one feature of the language, such as modules, supertype groups, constraints, diagram views, data lineage and change blocks.
 
 For more on the examples, including links to per-example write-ups that explain the modeling choices, see [**Loading examples**](./loading-examples).
 

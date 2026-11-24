@@ -27,7 +27,7 @@ The playground checks your schema in two stages.
 
 **Resolution** runs on a schema that parsed and checks what its names refer to: that a relationship points at an entity and a field that exist, that an injected partial is declared, that a key or index names fields the entity declares, that a foreign key references a key, that a supertype group follows the rules of the specification. It can report several problems at once. Since the schema parsed, the diagram and the inspector keep up with your edits while these diagnostics are listed.
 
-Resolution reports two severities. An **error** marks something the schema cannot mean as written, such as a relationship to an entity that doesn't exist, or two declarations with the same name. A **warning** marks something valid that is probably not what you intended. These warnings exist today:
+Resolution reports three severities. An **error** marks something the schema cannot mean as written, such as a relationship to an entity that doesn't exist, or two declarations with the same name. A **warning** marks something valid that is probably not what you intended. **Information** reports what the playground did and asks nothing of you; today it reports the change statements that `if exists` or `if not exists` skipped. These warnings exist today:
 
 - **`possible-type-typo`**: a type name that is not declared, but is close to a declared Type or Enum, such as `Adress` in a schema that declares `Type Address`. The message suggests the declared name. Any type name is valid in xDBML, so target-native types such as `number`, `clob` or `serial` raise nothing on their own; the warning appears only for a near miss.
 - **`unquoted-type-name`**: a type of several words written without quotes, such as `timestamp with time zone`, in a field declared on a line of its own. The words up to the settings or the end of the line read as one type name, as `"timestamp with time zone"` does, so the diagram shows the field as intended. Write the quotes to clear the warning.
@@ -124,11 +124,26 @@ Source-to-target mapping (spec §27.10, v0.7.2):
 - **`indirect-from-entity`** (warning): a join, a lookup, a filter, a grouping or a condition starting from a whole entity, which does not say which field takes part.
 - **`source-query-in-settings`** (warning): `source_query` in the brackets of a `Dep`, where it is not the statement; write it in the body of a block, as for a View.
 
+Change blocks and `uid` (spec §29, v0.8). See [**Change blocks**](./change-blocks):
+
+- **`change-target-not-found`** (error): a statement names an element that doesn't exist at that point of the document.
+- **`change-part-not-found`** (error): a statement names a field, an index, a constraint, an Enum value or a member that the element doesn't hold.
+- **`change-element-exists`**, **`change-part-exists`** (error): `create` or `add` names an element or a part that already exists.
+- **`change-element-referenced`** (error): a `drop` names an element that a relationship, a dependency, an index or a key still refers to. Drop those first.
+- **`change-name-taken`** (error): a rename or a move takes a name already in use.
+- **`change-was-mismatch`** (error): a `was` that the element no longer matches; the model changed after the statement was written.
+- **`change-uid-mismatch`** (error): the `uid` written after a name is not the one the element carries.
+- **`change-invalid-action`** (error): an action that the element can't take, such as `add Value` on a table.
+- **`forward-reference-across-changes`** (error): a declaration names an element declared below a change block between the two.
+- **`container-redeclared`** (error): a Container declared again below a change block carries settings, or declares an element it already holds.
+- **`duplicate-uid`** (error): two elements carry the same `uid`.
+- **`change-skipped`** (information): `if exists` or `if not exists` skipped a statement.
+
 ## Rows in the body
 
 Each row shows:
 
-- A red × for an error, or an amber ! for a warning.
+- A red × for an error, an amber ! for a warning, or a blue i for information.
 - The message, for example "Relationship endpoint references unknown entity 'custmers'."
 - The source position in grey: "Line 12, column 5".
 - For a resolution diagnostic, a short code such as `unresolved-entity` or `possible-type-typo`, the same code the MCP `validate_xdbml` tool reports. Syntax errors carry no code.

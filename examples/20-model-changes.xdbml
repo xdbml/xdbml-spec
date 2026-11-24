@@ -1,0 +1,97 @@
+xdbml: 0.8
+
+// ---------------------------------------------------------------------------
+// Changes to a model (spec 29).
+//
+// The customer schema of a subscription service, followed by three sets of
+// changes, as an AI assistant might propose them in a conversation and a
+// person apply them one after the other. The declarations above the first
+// change block describe the model as it was; the diagram shows the model at
+// the end of the document.
+//
+//   - `alter Table ... { ... }` renames, modifies, adds and drops fields.
+//     `was` records what a changed field looked like before the change.
+//   - `move to` moves a table to another Container, and the relationships
+//     that name it follow it.
+//   - `create` adds an element and `drop` removes one. A relationship is
+//     dropped before the table it refers to.
+//   - `uid` keeps the identity of a field through its rename.
+//   - `if exists` lets a statement skip an element that does not exist. The
+//     Diagnostics panel reports the skip as information.
+//
+// In the playground, Append changes adds a set of changes like these at the
+// end of the document that is open.
+// ---------------------------------------------------------------------------
+
+Project subscriptions {
+  targets: PostgreSQL
+  Note: 'Customer schema of a subscription service, and the changes made to it (spec §29).'
+}
+
+Container billing [type: schema] {
+  Enum plan_code {
+    basic
+    standard
+    premium
+  }
+
+  Table customers [uid: 'c1'] {
+    id         int [pk, increment]
+    name       varchar(100) [not null, uid: 'c1-name']
+    email      varchar(255) [not null, unique]
+    fax        varchar(20)
+    created_at timestamp [not null, default: `now()`]
+  }
+
+  Table subscriptions {
+    id          int [pk, increment]
+    customer_id int [not null, ref: > billing.customers.id]
+    plan        billing.plan_code [not null]
+    started_on  date [not null]
+    ended_on    date
+  }
+}
+
+Container staging [type: schema] {
+  Table payment_methods {
+    id          int [pk, increment]
+    customer_id int [not null]
+    kind        varchar(20) [not null]
+    last4       varchar(4)
+  }
+
+  Table legacy_invoices {
+    id          int [pk]
+    customer_id int
+    amount      decimal(10,2)
+  }
+
+  Table raw_signups {
+    id          int [pk]
+    email       varchar(255)
+    received_at timestamp
+  }
+}
+
+Ref: staging.legacy_invoices.customer_id > billing.customers.id
+
+Changes "Customer names and contact details" [note: 'Customers are addressed by their full name, and nobody has sent a fax since 2015.'] {
+  alter Table billing.customers {
+    rename Field name to full_name
+    modify Field email varchar(320) [was: 'varchar(255) [not null, unique]']
+    add Field preferred_language varchar(5) [not null, default: 'en']
+    drop Field fax
+  }
+}
+
+Changes "Payment methods move to billing" {
+  alter Table staging.payment_methods move to billing
+  create Ref fk_payment_methods_customer: billing.payment_methods.customer_id > billing.customers.id
+  alter Enum billing.plan_code add Value family [note: 'Up to five members']
+}
+
+Changes "Retire the legacy invoices" {
+  drop Ref: staging.legacy_invoices.customer_id > billing.customers.id
+  drop Table staging.legacy_invoices
+  drop Table if exists staging.legacy_credit_notes
+}

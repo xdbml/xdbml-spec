@@ -682,11 +682,11 @@ function applyCreate (model: Model, declaration: TopLevelStatement, ifNotExists:
 }
 
 /** Find the element a statement names, reporting it when it does not exist and `if exists` does not apply. */
-function locate (model: Model, kind: ChangeElementKind, name: string, ifExists: boolean, verb: string, span: Span): Located | undefined {
+function locate (model: Model, kind: ChangeElementKind, name: string, ifExists: boolean, verb: string, span: Span, keyword: string = kind): Located | undefined {
   const found = findElement(model, kind, name);
   if (found) return found;
-  if (ifExists) skipped(model, `${describe(kind, name)} does not exist`, span);
-  else error(model, 'change-target-not-found', `'${verb}' names ${describe(kind, name)}, which does not exist at this point of the document (spec §29.4).`, span);
+  if (ifExists) skipped(model, `${describe(keyword, name)} does not exist`, span);
+  else error(model, 'change-target-not-found', `'${verb}' names ${describe(keyword, name)}, which does not exist at this point of the document (spec §29.4).`, span);
   return undefined;
 }
 
@@ -710,7 +710,7 @@ function applyDrop (model: Model, stmt: DropStatement): void {
     dropDependency(model, stmt);
     return;
   }
-  const found = locate(model, target.kind, target.name ?? '', stmt.ifExists, 'drop', stmt.span);
+  const found = locate(model, target.kind, target.name ?? '', stmt.ifExists, 'drop', stmt.span, target.keyword);
   if (!found) return;
   if (!checkUidSetting(model, stmt.settings, found.decl as { settings?: Setting[] }, describe(target.kind, target.name ?? ''), stmt.span)) return;
   const roles = new Set<UseRole>(['endpoint', 'type', 'partial']);
@@ -818,7 +818,7 @@ function applyAlter (model: Model, stmt: AlterStatement): void {
     return;
   }
   const name = target.name ?? '';
-  const found = locate(model, target.kind, name, stmt.ifExists, 'alter', stmt.span);
+  const found = locate(model, target.kind, name, stmt.ifExists, 'alter', stmt.span, target.keyword);
   if (!found) return;
   if (!checkUidSetting(model, stmt.settings, found.decl as { settings?: Setting[] }, describe(target.kind, name), stmt.span)) return;
   let current = found;

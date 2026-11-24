@@ -117,6 +117,9 @@ slug  = "module-system"
 title = "Metadata blocks"
 slug  = "metadata-blocks"
 [[nodes.children]]
+title = "Change blocks"
+slug  = "change-blocks"
+[[nodes.children]]
 title = "Sharing via URL"
 slug  = "sharing-via-url"
 [[nodes.children]]
