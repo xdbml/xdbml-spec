@@ -892,8 +892,8 @@ changeStatement
     : CREATE createdDeclaration
     | CREATE elementKind ifNotExists createdDeclarationTail
     | createdDeclaration                          // a declaration creates its element (§29.5)
-    | 'drop' elementKind ifExists? elementName statementSettings?
-    | 'alter' elementKind ifExists? elementName statementSettings? alterActions
+    | 'drop' elementKind ifExists? (elementName statementSettings? | statementSettings)
+    | 'alter' elementKind ifExists? (elementName statementSettings? | statementSettings) alterActions
     ;
 
 // A declaration, as at the top level of a document (§29.5).
@@ -943,7 +943,10 @@ elementName
     ;
 
 // The settings that identify an element or a part and set nothing: `uid`,
-// `was`, and `name` for an index, a key or a check (§29.4, §29.8).
+// `was`, and `name` for an index, a key or a check (§29.4, §29.8). Without a
+// name before them, they name the element by its `uid` alone:
+// `alter Table [uid: '7f3c'] { ... }`. A `uid` decides which element a
+// statement applies to; a name beside it that leads elsewhere is a warning.
 statementSettings
     : settingsBlock
     ;
@@ -1006,7 +1009,8 @@ partDeclaration
 
 // A part as a statement names it (§29.4): a field by its path, an index or a
 // key by its fields, a check by its expression, any of the three by its name
-// in brackets, an Enum value or a member by its name.
+// in brackets, an Enum value or a member by its name, and any part by its
+// `uid` in brackets.
 partName
     : fieldPath
     | LPAREN indexComponent (COMMA indexComponent)* RPAREN

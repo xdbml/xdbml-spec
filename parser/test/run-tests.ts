@@ -8168,9 +8168,58 @@ Changes { alter Table a rename Field name [uid: 'f1'] to full_name }`));
     return f?.settings.some((s) => s.name === 'uid') ? undefined : 'the renamed field lost its uid';
   });
 
-  check('§29.4: a statement whose uid does not match the element is an error', () => same(codes(`${V}
+  check('§29.4: a uid that no element carries is an error, and skipped with if exists', () => same([
+    codes(`${V}
 Table a [uid: 'u1'] { id int [pk] }
-Changes { drop Table a [uid: 'u9'] }`), ['error:change-uid-mismatch']));
+Changes { drop Table a [uid: 'u9'] }`),
+    codes(`${V}
+Table a [uid: 'u1'] { id int [pk] }
+Changes { drop Table if exists [uid: 'u9'] }`),
+  ], [['error:change-target-not-found'], ['info:change-skipped']]));
+
+  check('§29.4: an element and a field named by their uid alone', () => {
+    const src = `${V}
+Table customers [uid: 'c1'] {
+  id   int [pk]
+  name varchar [uid: 'f2']
+}
+Changes {
+  alter Table [uid: 'c1'] {
+    rename Field [uid: 'f2'] to full_name
+    modify Field [uid: 'f2'] varchar(200)
+  }
+}`;
+    const all = codes(src);
+    return all.length > 0 ? all.join(' ') : same(model(src), ['customers(id:int, full_name:varchar(200))']);
+  });
+
+  check('§29.4: the uid decides; a name beside it that leads elsewhere draws a warning', () => {
+    const src = `${V}
+Table customers [uid: 'c1'] {
+  id   int [pk]
+  name varchar [uid: 'f2']
+}
+Changes "Theirs" {
+  alter Table customers rename to clients
+  alter Table clients rename Field name to label
+}
+Changes "Ours, written before theirs" {
+  alter Table customers [uid: 'c1'] {
+    add Field email varchar
+    modify Field name [uid: 'f2', not null]
+  }
+}`;
+    return same([codes(src), model(src)], [
+      ['warning:change-name-mismatch', 'warning:change-name-mismatch'],
+      ['clients(id:int, label:varchar, email:varchar)'],
+    ]);
+  });
+
+  check('§29.4: a relationship named by its uid', () => same(model(`${V}
+Table customers { id int [pk] }
+Table orders { id int [pk], customer_id int }
+Ref fk_orders: orders.customer_id > customers.id [uid: 'r1']
+Changes { drop Ref [uid: 'r1'] }`), ['customers(id:int)', 'orders(id:int, customer_id:int)']));
 
   check('§29.3: Monarch colors the words of a statement, and leaves fields named drop, modify or changes alone', () => {
     const sources = ['^changes', '(create|alter|drop)(', '(add|modify|drop|rename|move)(', '(rename|move)', 'modify(?=', '(drop)(', '(if)'];

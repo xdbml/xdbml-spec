@@ -126,13 +126,13 @@ Source-to-target mapping (spec §27.10, v0.7.2):
 
 Change blocks and `uid` (spec §29, v0.8). See [**Change blocks**](./change-blocks):
 
-- **`change-target-not-found`** (error): a statement names an element that doesn't exist at that point of the document.
+- **`change-target-not-found`** (error): a statement names an element that doesn't exist at that point of the document, or a `uid` that no element carries.
 - **`change-part-not-found`** (error): a statement names a field, an index, a constraint, an Enum value or a member that the element doesn't hold.
 - **`change-element-exists`**, **`change-part-exists`** (error): `create` or `add` names an element or a part that already exists.
 - **`change-element-referenced`** (error): a `drop` names an element that a relationship, a dependency, an index or a key still refers to. Drop those first.
 - **`change-name-taken`** (error): a rename or a move takes a name already in use.
 - **`change-was-mismatch`** (error): a `was` that the element no longer matches; the model changed after the statement was written.
-- **`change-uid-mismatch`** (error): the `uid` written after a name is not the one the element carries.
+- **`change-name-mismatch`** (warning): a name written beside a `uid` no longer leads to the element that carries the `uid`, because it was renamed or moved after the statement was written. The `uid` decides, and the statement applies to that element.
 - **`change-invalid-action`** (error): an action that the element can't take, such as `add Value` on a table.
 - **`forward-reference-across-changes`** (error): a declaration names an element declared below a change block between the two.
 - **`container-redeclared`** (error): a Container declared again below a change block carries settings, or declares an element it already holds.

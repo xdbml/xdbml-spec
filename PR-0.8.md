@@ -21,7 +21,7 @@ The proposal and the plan of the version follow the release notes below.
 - **Statements (§29.3 to §29.9)**: `create`, which may be left out, `drop`, and `alter` with `rename to`, `move to`, `modify`, and `add`, `modify`, `rename` and `drop` of a `Field` (alias `Column`), an `Index`, a `Constraint`, an Enum `Value` or a member. `modify` changes what it names; `drop default` and `drop [default, note]` remove settings; `was` records the type and settings before the change. A `drop` is refused while another element refers to the element.
 - **`if exists` and `if not exists` (§29.10)**: skip a statement, which is reported at a new severity, information, as PostgreSQL reports a notice.
 - **Change sets in their own file (§29.12)**: a file of change blocks imports the model it changes; an import brings the model of a file after its own change blocks.
-- **`uid` (§29.15)**: on every element, unique in the model, unchanged by a rename or a move, ignored by generators.
+- **`uid` (§29.15)**: on every element, unique in the model, unchanged by a rename or a move, ignored by generators. In a statement, a `uid` decides which element or part it applies to (§29.4): `alter Table [uid: '7f3c']` names the table by its `uid` alone, and a name beside a `uid` that no longer leads to the element draws a warning, so a change set still applies after someone renamed the element.
 - **Scope (§1.1, §29.14)**: how a target carries out a change, such as renaming a column in place or copying its values, is decided by the tool that writes the statements of the target.
 - Chapter 29 is new, and chapters 29 to 32 become 30 to 33.
 
@@ -41,7 +41,7 @@ The proposal and the plan of the version follow the release notes below.
 
 ## Verification
 
-`npm run check` on the branch: parser 955 tests, the grammar test corpus included; renderer 405, viewport 14, interactive 61; MCP 112; from-mongodb 24; playground 69 and its type check; 305 "View in playground" links in the spec; docs build. The TextMate tests pass, and the MCP reference is in sync with `llms.txt`.
+`npm run check` on the branch: parser 960 tests, the grammar test corpus included; renderer 405, viewport 14, interactive 61; MCP 112; from-mongodb 24; playground 69 and its type check; 305 "View in playground" links in the spec; docs build. The TextMate tests pass, and the MCP reference is in sync with `llms.txt`.
 
 ## After the merge
 
@@ -137,7 +137,7 @@ The main rules:
 - **`if exists`** and **`if not exists`** skip a statement whose element is missing or already present, as in SQL. The skip is reported at a new severity, information, as PostgreSQL reports a notice.
 - **Keywords** are case-insensitive and accept the keyword synonyms of xDBML, so `ALTER TABLE core.customers ADD COLUMN …` is a valid statement. Settings stay in xDBML brackets.
 - **Change files.** A file may hold only change blocks and import the model it changes. An import brings the model of the imported file after its own change blocks, so a sequence of files can record the versions of a model. Without an import, the host supplies the model, as in a conversation with an AI assistant.
-- **`uid`** is a string on any element, written by the tool that keeps the model, unique in the model, and unchanged by a rename or a move. It lets a tool that compares two complete documents tell a rename from a drop and a create, even without change blocks.
+- **`uid`** is a string on any element, written by the tool that keeps the model, unique in the model, and unchanged by a rename or a move. It lets a tool that compares two complete documents tell a rename from a drop and a create, even without change blocks. In a statement, a `uid` decides which element or part the statement applies to. It may stand alone, `alter Table [uid: '7f3c']`, or beside the name, `alter Table core.customers [uid: '7f3c']`. When the name no longer leads to the element that carries the `uid`, because someone renamed or moved it after the statement was written, the statement still applies to that element, and a warning says so.
 
 ### Round-trip behavior
 
@@ -166,7 +166,8 @@ A generator that writes schemas, not migrations, applies the change blocks and w
 - **Statements outside a block.** A block gives a set of changes a name and a reason, and it is the unit that a person reviews.
 - **Operations on the AST, as in JSON Patch, or diff-style markers such as `+` and `-`.** Both are hard for people to read.
 - **`set` and `unset` keywords.** `modify` with brackets sets values, `drop` removes settings, and `move to` replaces PostgreSQL's `SET SCHEMA`, so no `set` keyword is needed.
-- **Required identifiers in every statement.** Statements name elements by their names, which people and assistants read. `uid` is optional and can be used as a check.
+- **Required identifiers in every statement.** Statements name elements by their names, which people and assistants read, and a `uid` is optional.
+- **A `uid` that must match the name beside it.** Any rename made by someone else after a change set was written would then block every statement that mentions the old name. When a statement gives a `uid`, the `uid` decides, and an outdated name only draws a warning.
 
 ### Backward compatibility
 

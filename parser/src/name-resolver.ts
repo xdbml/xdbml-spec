@@ -136,7 +136,7 @@ export type DiagnosticCode =
   | 'change-element-referenced'
   | 'change-name-taken'
   | 'change-was-mismatch'
-  | 'change-uid-mismatch'
+  | 'change-name-mismatch'
   | 'change-invalid-action'
   | 'change-skipped'
   | 'forward-reference-across-changes'

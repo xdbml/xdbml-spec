@@ -4470,7 +4470,7 @@ Table a [uid: 'u1'] { id int [pk] }
 Table b [uid: 'u1'] { id int [pk] }
 ```
 
-### INVALID -- a statement whose uid names another element (change-uid-mismatch, §29.4)
+### INVALID -- a uid that no element carries (change-target-not-found, §29.4)
 
 ```
 xdbml: 0.8
@@ -4478,6 +4478,38 @@ xdbml: 0.8
 Table a [uid: 'u1'] { id int [pk] }
 
 Changes { drop Table a [uid: 'u9'] }
+```
+
+### VALID -- an element and a field named by their uid alone (§29.4)
+
+```
+xdbml: 0.8
+
+Table customers [uid: '7f3c'] {
+  id   int [pk]
+  name varchar [uid: '7f3c-2']
+}
+
+Changes {
+  alter Table [uid: '7f3c'] {
+    rename Field [uid: '7f3c-2'] to full_name
+    add Field preferred_language varchar(5)
+  }
+}
+```
+
+### VALID with a warning -- the uid decides when the name beside it is out of date (change-name-mismatch, §29.4)
+
+```
+xdbml: 0.8
+
+Table customers [uid: '7f3c'] { id int [pk] }
+
+Changes "Theirs" { alter Table customers rename to clients }
+
+Changes "Ours, written before theirs" {
+  alter Table customers [uid: '7f3c'] add Field email varchar
+}
 ```
 
 ---

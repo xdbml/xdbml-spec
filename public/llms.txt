@@ -693,7 +693,7 @@ Changes "Customer contact details" [note: 'Requested by the CRM team'] {
 - A relationship without a name is named by its endpoints, `drop Ref: core.orders.customer_id > core.customers.id`; an index or a key by its fields, `drop Index (email)`; a check by its expression; and any of them by its name, `drop Constraint [name: 'uk_email']`.
 - `if exists` after `drop Table` or `alter Table`, and `if not exists` after `create Table` or `add Field`, skip a statement whose element is missing or already present. Write them only for a change meant for several versions of a model: otherwise a name that does not match is an error the user needs to see.
 - Keywords match any casing, so `ALTER TABLE customers ADD COLUMN email varchar` is valid. Settings stay in brackets, `[not null, default: 'en']`.
-- When the model you were given carries `uid` settings, keep them in what you write, and do not invent new ones: the tool gives new elements their `uid`.
+- When the model you were given carries `uid` settings, write the `uid` of each element you change beside its name, `alter Table core.customers [uid: 'c1']`, and in `modify` with the settings, `modify Field email [uid: 'c1-3', not null]`. The `uid` decides which element the statement changes, so the change still applies if someone renamed the element meanwhile. Do not invent a `uid`: the tool gives new elements theirs.
 
 A rename written as a drop and an add.
 

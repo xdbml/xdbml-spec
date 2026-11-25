@@ -27,6 +27,7 @@ import type {
   DropStatement,
   EntityBodyItem,
   EnumDeclaration,
+  EnumValue,
   FieldDeclaration,
   IndexComponent,
   IndexesBlock,
@@ -690,14 +691,73 @@ function locate (model: Model, kind: ChangeElementKind, name: string, ifExists: 
   return undefined;
 }
 
-function checkUidSetting (model: Model, settings: ReadonlyArray<Setting>, element: { settings?: Setting[] }, what: string, span: Span): boolean {
-  const wanted = settings.find((s) => s.name === 'uid');
-  if (!wanted) return true;
-  const actual = element.settings?.find((s) => s.name === 'uid');
-  if (actual && valueText(actual.value) === valueText(wanted.value)) return true;
-  error(model, 'change-uid-mismatch',
-    `${what} carries ${actual ? `uid ${valueText(actual.value)}` : 'no uid'}, not ${valueText(wanted.value)}; the statement names another element (spec §29.4).`, span);
-  return false;
+/** The `uid` a statement writes, in the brackets that name its target or in those of a `modify`. */
+function uidOf (...lists: ReadonlyArray<ReadonlyArray<Setting>>): string | undefined {
+  for (const list of lists) {
+    const s = list.find((x) => x.name === 'uid');
+    if (s) return valueText(s.value);
+  }
+  return undefined;
+}
+
+function carriesUid (node: unknown, uid: string): boolean {
+  const settings = (node as { settings?: Setting[] }).settings;
+  return Array.isArray(settings) && settings.some((s) => s.name === 'uid' && valueText(s.value) === uid);
+}
+
+function uidNotFound (model: Model, what: string, uid: string, ifExists: boolean, verb: string, span: Span): void {
+  if (ifExists) skipped(model, `No ${what} carries uid '${uid}'`, span);
+  else error(model, 'change-target-not-found', `'${verb}' names uid '${uid}', which no ${what} carries at this point of the document (spec §29.4).`, span);
+}
+
+/** A name written beside a `uid` that no longer leads to the element carrying it: the `uid` decides (§29.4). */
+function nameMismatch (model: Model, verb: string, written: string, actual: string, uid: string, span: Span): void {
+  report(model, 'warning', 'change-name-mismatch',
+    `'${verb}' names ${written}, but uid '${uid}' is carried by ${actual}, which the statement changes; it was renamed or moved after the statement was written (spec §29.4).`, span);
+}
+
+/**
+ * The element a `drop` or an `alter` names (§29.4). A `uid` decides which
+ * element it is; a name beside it that leads elsewhere draws a warning.
+ * Without a `uid`, the name finds the element.
+ */
+function locateTarget (model: Model, stmt: DropStatement | AlterStatement, verb: string): Located | undefined {
+  const { target } = stmt;
+  const uid = uidOf(stmt.settings);
+  if (uid !== undefined) {
+    const found = elements(model).find((el) => el.decl.kind === DECLARATION_KIND[target.kind] && carriesUid(el.decl, uid));
+    if (!found) {
+      uidNotFound(model, target.keyword, uid, stmt.ifExists, verb, stmt.span);
+      return undefined;
+    }
+    if (target.name !== undefined && findElement(model, target.kind, target.name)?.decl !== found.decl) {
+      nameMismatch(model, verb, describe(target.keyword, target.name), describe(target.keyword, joinName(found.segments)), uid, stmt.span);
+    }
+    return found;
+  }
+  if (target.name === undefined) {
+    error(model, 'change-target-not-found', `'${verb}' names no element; write its name, or its uid in brackets (spec §29.4).`, stmt.span);
+    return undefined;
+  }
+  return locate(model, target.kind, target.name, stmt.ifExists, verb, stmt.span, target.keyword);
+}
+
+/** A relationship by its uid, its name or its endpoints (§29.4). */
+function findRef (model: Model, stmt: DropStatement | AlterStatement, verb: string): Extract<Declaration, { kind: 'RefDeclaration' }> | 'none' | 'inline' {
+  const { target } = stmt;
+  const refs = model.statements.filter((s): s is Extract<Declaration, { kind: 'RefDeclaration' }> => s.kind === 'RefDeclaration');
+  const ctx = nameContext(model);
+  const byName = target.name !== undefined ? refs.find((r) => r.name === target.name)
+    : target.ref ? refs.find((r) => sameEndpoints(target.ref!, r.spec, ctx)) : undefined;
+  const uid = uidOf(stmt.settings);
+  if (uid === undefined) return byName ?? 'none';
+  const byUid = refs.find((r) => carriesUid(r, uid));
+  if (!byUid) return 'none';
+  if ((target.name !== undefined || target.ref) && byName !== byUid) {
+    nameMismatch(model, verb, target.name !== undefined ? describe('relationship', target.name) : 'a relationship by its endpoints',
+      byUid.name !== undefined ? describe('relationship', byUid.name) : 'another relationship', uid, stmt.span);
+  }
+  return byUid;
 }
 
 function applyDrop (model: Model, stmt: DropStatement): void {
@@ -710,9 +770,8 @@ function applyDrop (model: Model, stmt: DropStatement): void {
     dropDependency(model, stmt);
     return;
   }
-  const found = locate(model, target.kind, target.name ?? '', stmt.ifExists, 'drop', stmt.span, target.keyword);
+  const found = locateTarget(model, stmt, 'drop');
   if (!found) return;
-  if (!checkUidSetting(model, stmt.settings, found.decl as { settings?: Setting[] }, describe(target.kind, target.name ?? ''), stmt.span)) return;
   const roles = new Set<UseRole>(['endpoint', 'type', 'partial']);
   const blocking = blockingUses(model, found.segments, found.decl, roles)
     .filter((use) => !(found.decl.kind === 'ContainerDeclaration' && use.holders.includes(found.decl)));
@@ -770,15 +829,14 @@ function findRefByEndpoints (model: Model, spec: RefSpec): FoundRef | undefined 
 
 function dropRef (model: Model, stmt: DropStatement): void {
   const { target } = stmt;
-  const what = target.name !== undefined ? describe('relationship', target.name) : 'the relationship with these endpoints';
+  const uid = uidOf(stmt.settings);
+  const what = uid !== undefined ? `the relationship with uid '${uid}'`
+    : target.name !== undefined ? describe('relationship', target.name) : 'the relationship with these endpoints';
   let found: FoundRef | undefined;
-  if (target.name !== undefined) {
-    const el = findElement(model, 'Ref', target.name);
-    if (el && el.decl.kind === 'RefDeclaration') {
-      const decl = el.decl;
-      found = { remove: () => removeFrom(el.owner, decl), settings: decl.settings };
-    }
-  } else if (target.ref) {
+  const ref = findRef(model, stmt, 'drop');
+  if (ref !== 'none' && ref !== 'inline') {
+    found = { remove: () => removeFrom(model.statements, ref), settings: ref.settings };
+  } else if (uid === undefined && target.ref) {
     found = findRefByEndpoints(model, target.ref);
   }
   if (!found) {
@@ -817,10 +875,8 @@ function applyAlter (model: Model, stmt: AlterStatement): void {
     alterRef(model, stmt);
     return;
   }
-  const name = target.name ?? '';
-  const found = locate(model, target.kind, name, stmt.ifExists, 'alter', stmt.span, target.keyword);
+  const found = locateTarget(model, stmt, 'alter');
   if (!found) return;
-  if (!checkUidSetting(model, stmt.settings, found.decl as { settings?: Setting[] }, describe(target.kind, name), stmt.span)) return;
   let current = found;
   for (const action of stmt.actions) {
     switch (action.kind) {
@@ -842,16 +898,8 @@ function alterRef (model: Model, stmt: AlterStatement): void {
     error(model, 'change-invalid-action', "A dependency is not altered; drop it and declare the new one (spec §29.7).", stmt.span);
     return;
   }
-  let decl: Extract<Declaration, { kind: 'RefDeclaration' }> | undefined;
-  if (target.name !== undefined) {
-    const el = findElement(model, 'Ref', target.name);
-    if (el?.decl.kind === 'RefDeclaration') decl = el.decl;
-  } else if (target.ref) {
-    const ctx = nameContext(model);
-    const spec = target.ref;
-    decl = model.statements.find((s): s is Extract<Declaration, { kind: 'RefDeclaration' }> =>
-      s.kind === 'RefDeclaration' && sameEndpoints(spec, s.spec, ctx));
-  }
+  const found = findRef(model, stmt, 'alter');
+  const decl = found === 'none' || found === 'inline' ? undefined : found;
   if (!decl) {
     if (stmt.ifExists) skipped(model, 'The relationship does not exist', stmt.span);
     else error(model, 'change-target-not-found', "'alter' names a relationship that does not exist at this point of the document (spec §29.4).", stmt.span);
@@ -1224,41 +1272,112 @@ interface FoundPart {
   /** The canonical path of a field, for the references that lead to it. */
   segments?: string[];
   field?: FieldDeclaration;
+  value?: EnumValue;
   label: string;
+}
+
+type ConstraintLike = { kind: string; settings: Setting[]; expression?: string; fields?: PathSegment[][] };
+
+function valuePart (enumDecl: EnumDeclaration, value: EnumValue, where: string): FoundPart {
+  return {
+    settings: value.settings,
+    setSettings: (s) => { value.settings = s; },
+    remove: () => { enumDecl.values = enumDecl.values.filter((v) => v !== value); },
+    value,
+    label: `Value '${value.name}' of ${where}`,
+  };
+}
+
+function fieldPart (el: Located, found: FoundField): FoundPart {
+  const { field, list, path } = found;
+  return {
+    settings: field.settings,
+    setSettings: (s) => { field.settings = s; },
+    type: field.type,
+    setType: (t) => { field.type = t; },
+    remove: () => removeFrom(list, field),
+    segments: [...el.segments, ...path],
+    field,
+    label: `Field '${pathText(path)}' of ${joinName(el.segments)}`,
+  };
+}
+
+function indexPart (block: IndexesBlock, entry: IndexesBlock['entries'][number], where: string): FoundPart {
+  return {
+    settings: entry.settings,
+    setSettings: (s) => { entry.settings = s; },
+    remove: () => { block.entries = block.entries.filter((e) => e !== entry); },
+    label: `the index ${componentsText(entry.components)} of ${where}`,
+  };
+}
+
+function constraintPart (block: { entries: unknown[] }, entry: ConstraintLike, where: string): FoundPart {
+  return {
+    settings: entry.settings,
+    setSettings: (s) => { entry.settings = s; },
+    remove: () => { block.entries = block.entries.filter((e) => e !== entry); },
+    label: `the constraint ${entry.expression !== undefined ? `'${entry.expression}'` : (entry.fields ?? []).map((f) => pathToString(f)).join(', ')} of ${where}`,
+  };
+}
+
+/** The field that carries a `uid`, at any depth of a body. */
+function findFieldByUid (items: ReadonlyArray<{ kind: string }>, uid: string, path: string[] = []): FoundField | undefined {
+  for (const item of items) {
+    if (item.kind !== 'FieldDeclaration') continue;
+    const field = item as FieldDeclaration;
+    if (carriesUid(field, uid)) return { field, list: items as Array<{ kind: string }>, path: [...path, field.name] };
+    const nested = nestedFields(field.type);
+    const inner = nested ? findFieldByUid(nested.items, uid, [...path, field.name, ...nested.via]) : undefined;
+    if (inner) return inner;
+  }
+  return undefined;
+}
+
+/** The part of a kind that carries a `uid` (§29.4). */
+function findPartByUid (el: Located, kind: ChangePartTarget['kind'], uid: string): FoundPart | undefined {
+  const where = joinName(el.segments);
+  const d = el.decl;
+  if (kind === 'Value') {
+    const value = d.kind === 'EnumDeclaration' ? d.values.find((v) => carriesUid(v, uid)) : undefined;
+    return value && d.kind === 'EnumDeclaration' ? valuePart(d, value, where) : undefined;
+  }
+  if (kind === 'Member') {
+    const m = d.kind === 'SupertypeGroupDeclaration' ? d.members.find((x) => carriesUid(x, uid)) : undefined;
+    if (!m || d.kind !== 'SupertypeGroupDeclaration') return undefined;
+    return { settings: m.settings, setSettings: (s) => { m.settings = s; }, remove: () => { d.members = d.members.filter((x) => x !== m); }, label: `subtype '${m.name}'` };
+  }
+  const body = partBody(el);
+  if (!body) return undefined;
+  if (kind === 'Field') {
+    const found = findFieldByUid(body, uid);
+    return found ? fieldPart(el, found) : undefined;
+  }
+  for (const block of body) {
+    if (kind === 'Index' && block.kind === 'IndexesBlock') {
+      const entry = block.entries.find((e) => carriesUid(e, uid));
+      if (entry) return indexPart(block, entry, where);
+    }
+    if (kind === 'Constraint' && (block.kind === 'ConstraintsBlock' || block.kind === 'ChecksBlock')) {
+      const entry = (block.entries as ConstraintLike[]).find((e) => carriesUid(e, uid));
+      if (entry) return constraintPart(block as { entries: unknown[] }, entry, where);
+    }
+  }
+  return undefined;
 }
 
 function findPart (el: Located, target: ChangePartTarget): FoundPart | undefined {
   const where = joinName(el.segments);
   if (target.kind === 'Value') {
     if (el.decl.kind !== 'EnumDeclaration') return undefined;
-    const enumDecl: EnumDeclaration = el.decl;
-    const value = enumDecl.values.find((v) => v.name === target.name);
-    if (!value) return undefined;
-    return {
-      settings: value.settings,
-      setSettings: (s) => { value.settings = s; },
-      remove: () => { enumDecl.values = enumDecl.values.filter((v) => v !== value); },
-      label: `Value '${value.name}' of ${where}`,
-    };
+    const value = el.decl.values.find((v) => v.name === target.name);
+    return value ? valuePart(el.decl, value, where) : undefined;
   }
   if (target.kind === 'Member') return findMember(el, target);
   const body = partBody(el);
   if (!body) return undefined;
-  if (target.kind === 'Field' && target.path) {
-    const path = target.path.map(segmentKey);
-    const found = findField(body, path);
-    if (!found) return undefined;
-    const { field, list } = found;
-    return {
-      settings: field.settings,
-      setSettings: (s) => { field.settings = s; },
-      type: field.type,
-      setType: (t) => { field.type = t; },
-      remove: () => removeFrom(list, field),
-      segments: [...el.segments, ...path],
-      field,
-      label: `Field '${pathText(path)}' of ${where}`,
-    };
+  if (target.kind === 'Field') {
+    const found = target.path ? findField(body, target.path.map(segmentKey)) : undefined;
+    return found ? fieldPart(el, found) : undefined;
   }
   const byName = nameSetting(target.settings);
   if (target.kind === 'Index') {
@@ -1266,22 +1385,14 @@ function findPart (el: Located, target: ChangePartTarget): FoundPart | undefined
       if (block.kind !== 'IndexesBlock') continue;
       const entry = block.entries.find((e) =>
         (byName !== undefined && !target.components ? nameSetting(e.settings) === byName : target.components !== undefined && sameComponents(e.components, target.components)));
-      if (entry) {
-        return {
-          settings: entry.settings,
-          setSettings: (s) => { entry.settings = s; },
-          remove: () => { block.entries = block.entries.filter((e) => e !== entry); },
-          label: `the index ${componentsText(entry.components)} of ${where}`,
-        };
-      }
+      if (entry) return indexPart(block, entry, where);
     }
     return undefined;
   }
   // Constraint: a key by its fields, a check by its expression, either by its name.
   for (const block of body) {
     if (block.kind !== 'ConstraintsBlock' && block.kind !== 'ChecksBlock') continue;
-    const entries = block.entries as Array<{ kind: string; settings: Setting[]; expression?: string; fields?: PathSegment[][] }>;
-    const entry = entries.find((e) => {
+    const entry = (block.entries as ConstraintLike[]).find((e) => {
       if (byName !== undefined && !target.components && target.expression === undefined) return nameSetting(e.settings) === byName;
       if (target.expression !== undefined) return e.kind === 'CheckEntry' && e.expression === target.expression;
       if (target.components && e.kind === 'KeyConstraintEntry' && e.fields) {
@@ -1290,14 +1401,7 @@ function findPart (el: Located, target: ChangePartTarget): FoundPart | undefined
       }
       return false;
     });
-    if (entry) {
-      return {
-        settings: entry.settings,
-        setSettings: (s) => { entry.settings = s; },
-        remove: () => { (block as { entries: unknown[] }).entries = block.entries.filter((e) => e !== entry); },
-        label: `the constraint ${entry.expression !== undefined ? `'${entry.expression}'` : (entry.fields ?? []).map((f) => pathToString(f)).join(', ')} of ${where}`,
-      };
-    }
+    if (entry) return constraintPart(block as { entries: unknown[] }, entry, where);
   }
   // A key written inline on its field, `[pk]` or `[unique]` (§10.3).
   if (target.components?.length === 1 && target.components[0].kind === 'IndexPathComponent') {
@@ -1344,19 +1448,41 @@ function partTargetText (target: ChangePartTarget): string {
   return byName !== undefined ? `${target.keyword} named '${byName}'` : target.keyword;
 }
 
-function locatePart (model: Model, el: Located, target: ChangePartTarget, ifExists: boolean, verb: string, span: Span): FoundPart | undefined {
+/** Whether a statement names a part by its path, name, fields or expression, apart from a `uid`. */
+function namesPart (target: ChangePartTarget): boolean {
+  return target.path !== undefined || target.name !== undefined || target.expression !== undefined ||
+    target.components !== undefined || nameSetting(target.settings) !== undefined;
+}
+
+/**
+ * The part a statement names (§29.4). A `uid`, in the brackets that name the
+ * part or in those of a `modify` (`extra`), decides which part it is; a name
+ * beside it that leads elsewhere draws a warning.
+ */
+function locatePart (model: Model, el: Located, target: ChangePartTarget, ifExists: boolean, verb: string, span: Span, extra: ReadonlyArray<Setting> = []): FoundPart | undefined {
+  const where = describe(kindOfDeclaration(el.decl as TopLevelStatement) ?? 'element', joinName(el.segments));
+  const uid = uidOf(target.settings, extra);
+  if (uid !== undefined) {
+    const byUid = findPartByUid(el, target.kind, uid);
+    if (!byUid) {
+      uidNotFound(model, `${target.keyword} of ${where}`, uid, ifExists, verb, span);
+      return undefined;
+    }
+    if (namesPart(target) && findPart(el, target)?.settings !== byUid.settings) {
+      nameMismatch(model, verb, partTargetText(target), byUid.label, uid, span);
+    }
+    return byUid;
+  }
   const found = findPart(el, target);
   if (found) return found;
-  const where = describe(kindOfDeclaration(el.decl as TopLevelStatement) ?? 'element', joinName(el.segments));
   if (ifExists) skipped(model, `${partTargetText(target)} does not exist in ${where}`, span);
   else error(model, 'change-part-not-found', `'${verb}' names ${partTargetText(target)}, which ${where} does not hold at this point of the document (spec §29.4).`, span);
   return undefined;
 }
 
 function modifyPart (model: Model, el: Located, action: ModifyPartAction): void {
-  const part = locatePart(model, el, action.target, false, 'modify', action.span);
+  const part = locatePart(model, el, action.target, false, 'modify', action.span, action.settings);
   if (!part) return;
-  if (!checkUidSetting(model, action.settings, { settings: part.settings }, part.label, action.span)) return;
   if (!checkWas(model, action.settings, part.type, part.settings, part.label, action.span)) return;
   if (action.type) {
     if (!part.setType) {
@@ -1371,10 +1497,9 @@ function modifyPart (model: Model, el: Located, action: ModifyPartAction): void 
 function renamePart (model: Model, el: Located, target: ChangePartTarget, newName: string, span: Span): void {
   const part = locatePart(model, el, target, false, 'rename', span);
   if (!part) return;
-  if (!checkUidSetting(model, target.settings, { settings: part.settings }, part.label, span)) return;
   if (target.kind === 'Value' && el.decl.kind === 'EnumDeclaration') {
-    const value = el.decl.values.find((v) => v.name === target.name);
-    if (el.decl.values.some((v) => v.name === newName)) {
+    const value = part.value;
+    if (el.decl.values.some((v) => v !== value && v.name === newName)) {
       error(model, 'change-name-taken', `Value '${newName}' of ${joinName(el.segments)} already exists (spec §29.9).`, span);
       return;
     }
@@ -1399,7 +1524,6 @@ function renamePart (model: Model, el: Located, target: ChangePartTarget, newNam
 function dropPart (model: Model, el: Located, target: ChangePartTarget, ifExists: boolean, span: Span): void {
   const part = locatePart(model, el, target, ifExists, 'drop', span);
   if (!part) return;
-  if (!checkUidSetting(model, target.settings, { settings: part.settings }, part.label, span)) return;
   if (part.field && !checkWas(model, target.settings, part.type, part.settings, part.label, span)) return;
   if (part.field && part.segments) {
     const roles = new Set<UseRole>(['endpoint', 'key']);

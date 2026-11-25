@@ -1256,6 +1256,10 @@ export class Parser {
   /** The element a `drop` or an `alter` names (§29.4). */
   private parseChangeTarget (kind: ChangeElementKind, keyword: string): ChangeTarget {
     const target: ChangeTarget = { kind, keyword };
+    // An element named by its uid alone, `alter Table [uid: '7f3c']`: the
+    // brackets stand in place of the name, and the caller reads them as the
+    // settings of the statement (§29.4).
+    if (this.check(TokenKind.LBracket) && kind !== 'Dep') return target;
     if (kind === 'Ref') {
       if (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier)) {
         target.name = this.parseIdentLikeName('the name of the relationship');
@@ -1407,7 +1411,11 @@ export class Parser {
     const start = this.peek().start;
     const target: ChangePartTarget = { kind: part, keyword, settings: [], span: this.spanFrom(start) };
     const t = this.peek();
-    if (part === 'Field') {
+    if (t.kind === TokenKind.LBracket) {
+      // A part named by its name or its uid in brackets, in place of its
+      // path or its name: `[name: 'created_at_index']`, `[uid: '7f3c-2']`.
+      target.settings = this.maybeSettingsBlock();
+    } else if (part === 'Field') {
       target.path = this.parsePathSegments();
     } else if (part === 'Value') {
       if (t.kind === TokenKind.StringLiteral || t.kind === TokenKind.QuotedIdentifier) {
@@ -1418,9 +1426,6 @@ export class Parser {
       }
     } else if (part === 'Member') {
       target.name = this.parseQualifiedName(`the name of the ${keyword}`);
-    } else if (t.kind === TokenKind.LBracket) {
-      // A part named by its name: `[name: 'created_at_index']`.
-      target.settings = this.maybeSettingsBlock();
     } else if (part === 'Constraint' && (t.kind === TokenKind.StringLiteral || t.kind === TokenKind.ExpressionLiteral || t.kind === TokenKind.MultilineString)) {
       this.advance();
       target.expression = t.value ?? '';

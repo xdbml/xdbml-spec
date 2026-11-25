@@ -50,6 +50,20 @@ The playground checks the text before it adds anything:
 
 Change blocks need `xdbml: 0.8` or later. When the open document declares an earlier version, the box says so, and appending changes its version line to `xdbml: 0.8`. A document with no version line receives one at the top.
 
+## Naming elements by their uid
+
+A model can give its elements a `uid`, an identifier that stays the same when the element is renamed or moved. A statement may then name an element or a field by its `uid`, alone or beside its name:
+
+```xdbml
+Changes {
+  alter Table core.customers [uid: '7f3c'] {
+    rename Field [uid: '7f3c-2'] to full_name
+  }
+}
+```
+
+The `uid` decides which element the statement changes. If the table was renamed after the change block was written, the statement still applies to it, and the Diagnostics panel shows a warning saying that the name no longer matches.
+
 ## Statements that fail or are skipped
 
 A statement that cannot apply is reported in the [**Diagnostics panel**](./diagnostics-panel), and its line in the editor is underlined. For example:
