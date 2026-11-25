@@ -62,7 +62,6 @@ A statement written with `if exists` or `if not exists` is skipped when its elem
 
 ## Limits
 
-- The editor doesn't color the statement words, such as `Changes`, `alter` and `drop`, yet.
 - The diagram doesn't mark which elements the change blocks added, changed or dropped.
 - The playground can't yet rewrite the document as the model after the changes, without the change blocks.
 

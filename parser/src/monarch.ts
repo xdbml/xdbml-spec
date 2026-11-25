@@ -34,6 +34,10 @@ import {
   TRANSFORMATION_VALUES,
   DIAGRAM_VIEW_CATEGORIES,
   METADATA_TARGET_KINDS,
+  CHANGE_VERBS,
+  CHANGE_ACTIONS,
+  CHANGE_PART_KINDS,
+  CHANGE_ELEMENT_KINDS,
 } from './keywords.ts';
 
 /** Subset of Monaco's LanguageConfiguration -- only the fields we set. */
@@ -254,6 +258,18 @@ export const xdbmlMonarchTokensProvider: XDbmlMonarchLanguage = {
 
       // x_ custom property identifiers
       [/\bx_[a-zA-Z0-9_]+/, 'identifier.custom-property'],
+
+      // Spec §29 (v0.8): the words of a change block, colored only in the
+      // positions of a statement, so a field may still be named `drop` or
+      // `modify` (§29.3). `Changes` starts a block at the start of a line,
+      // before its name, its settings and '{'.
+      [/^changes(?![\w$])(?=\s*(?:"[^"]*"|[A-Za-z_][\w$]*)?\s*(?:\[[^\]]*\]\s*)?\{)/, 'keyword.declaration'],
+      [new RegExp(`(${CHANGE_VERBS.join('|')})(\\s+)(${CHANGE_ELEMENT_KINDS.join('|')})(?![\\w$])`), ['keyword.change', '', 'keyword.declaration']],
+      [new RegExp(`(${CHANGE_ACTIONS.join('|')})(\\s+)(${CHANGE_PART_KINDS.join('|')})(?![\\w$])`), ['keyword.change', '', 'keyword.declaration']],
+      [/(rename|move)(\s+)(to)(?![\w$])/, ['keyword.change', '', 'keyword.change']],
+      [/modify(?=\s*(?:\[|drop(?![\w$])|source_query\s*:))/, 'keyword.change'],
+      [new RegExp(`(drop)(\\s+)(?=\\[|not\\s+null(?![\\w$])|primary\\s+key(?![\\w$])|(?:${[...SETTING_KEYS, ...SETTING_FLAGS].join('|')})(?![\\w$]))`), ['keyword.change', '']],
+      [/(if)(\s+)(not\s+)?(exists)(?![\w$])/, ['keyword.change', '', 'keyword.change', 'keyword.change']],
 
       // Spec §3.10 (v0.6.1): `Note` starts a note only before ':' or '{',
       // or before the name of a sticky note, qualified or not, its settings

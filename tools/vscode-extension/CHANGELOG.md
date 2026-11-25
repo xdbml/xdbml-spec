@@ -4,6 +4,20 @@ Notable changes to the xDBML language support extension.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0]
+
+Follows xDBML 0.8.
+
+### Added
+- **Change blocks**: `Changes` is colored as a declaration keyword at the head
+  of a block. In a statement, `create`, `alter` and `drop`, the actions `add`,
+  `modify`, `rename` and `move`, `to`, and `if exists` and `if not exists` take
+  the color of control keywords, and the kind of element or part after them,
+  such as `Table` or `Field`, the color of declaration keywords. The words are
+  colored only in these positions, so a field named `drop` or `modify` keeps
+  the color of a name.
+- **`uid`, `was` and `base`**: colored as setting keys.
+
 ## [0.7.2]
 
 Follows xDBML 0.7.2.

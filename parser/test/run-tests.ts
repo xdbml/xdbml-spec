@@ -8172,6 +8172,21 @@ Changes { alter Table a rename Field name [uid: 'f1'] to full_name }`));
 Table a [uid: 'u1'] { id int [pk] }
 Changes { drop Table a [uid: 'u9'] }`), ['error:change-uid-mismatch']));
 
+  check('§29.3: Monarch colors the words of a statement, and leaves fields named drop, modify or changes alone', () => {
+    const sources = ['^changes', '(create|alter|drop)(', '(add|modify|drop|rename|move)(', '(rename|move)', 'modify(?=', '(drop)(', '(if)'];
+    const rules = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .filter((r) => Array.isArray(r) && r[0] instanceof RegExp && sources.some((s) => r[0].source.startsWith(s)))
+      .map((r) => new RegExp(`^(?:${r[0].source})`, 'i'));
+    if (rules.length !== sources.length) return `${rules.length} rules found, want ${sources.length}`;
+    const colored = (text: string) => rules.some((re) => re.test(text));
+    const yes = ['Changes "Full name" {', 'Changes {', "changes [note: 'x'] {", 'alter Table core.customers {', 'ALTER TABLE customers ADD COLUMN x int',
+      'create Table if not exists x {', 'drop Ref: a.x > b.y', 'add Field email varchar', 'rename Field name to x', 'rename to clients', 'move to core',
+      "modify [note: 'x']", 'drop default', 'drop [default, note]', 'drop not null', 'if not exists x', 'if exists x', 'add Value paid'];
+    const no = ['drop   varchar', 'modify varchar', 'changes int', 'create varchar', 'move int', 'rename varchar', 'add varchar', 'alter int'];
+    const bad = [...yes.filter((s) => !colored(s)).map((s) => `not colored: ${s}`), ...no.filter(colored).map((s) => `colored: ${s}`)];
+    return bad.length ? bad.join('; ') : undefined;
+  });
+
   check('§29.12: an import brings the model of the imported file after its change blocks', () => {
     const files: Record<string, string> = {
       '/m/v1.xdbml': `${V}Table customers { id int [pk], name varchar }`,

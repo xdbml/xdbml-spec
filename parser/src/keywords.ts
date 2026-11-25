@@ -99,6 +99,40 @@ export const DECLARATION_KEYWORDS = [
 ] as const;
 
 /* -------------------------------------------------------------------------
+ * Change blocks (v0.8, spec §29)
+ *
+ * The verbs of a statement, the actions of an `alter`, the kinds of part an
+ * action names, and the kinds of element a statement names. They are
+ * keywords only in a change block, `create` also before a declaration, so a
+ * field may still be named `drop` or `modify` (§29.3). The editors color
+ * them only in the positions of a statement.
+ * ----------------------------------------------------------------------- */
+
+export const CHANGE_VERBS = ['create', 'alter', 'drop'] as const;
+
+export const CHANGE_ACTIONS = ['add', 'modify', 'drop', 'rename', 'move'] as const;
+
+export const CHANGE_PART_KINDS = ['field', 'column', 'index', 'constraint', 'value'] as const;
+
+export const CHANGE_ELEMENT_KINDS = [
+  ...CONTAINER_KEYWORDS,
+  ...ENTITY_KEYWORDS,
+  'type',
+  'edge',
+  'view',
+  'enum',
+  'ref',
+  'note',
+  'entitypartial',
+  'tablepartial',
+  'entitygroup',
+  'tablegroup',
+  'supertypegroup',
+  'diagramview',
+  'dep',
+] as const;
+
+/* -------------------------------------------------------------------------
  * Type expression keywords
  *
  * Keywords that appear inside a field's type expression, after the
@@ -372,6 +406,10 @@ export const SETTING_KEYS = [
   'default_charset',
   // Module system (v0.2 §26)
   'cloned_at',        // v0.2 directive setting: ISO 8601 timestamp on a use/reuse directive
+  // Change blocks and stable identifiers (v0.8 §29)
+  'uid',              // §29.15: an identifier a rename or a move leaves unchanged
+  'was',              // §29.8: the type and settings before a modify
+  'base',             // §29.1: the version of the model a change block was written for
 ] as const;
 
 /* -------------------------------------------------------------------------
