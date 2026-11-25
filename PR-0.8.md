@@ -2,7 +2,7 @@
 
 Adds change blocks to xDBML. A `Changes` block lists changes to a model in the form of the `CREATE`, `ALTER` and `DROP` statements of SQL, and a document may hold a model and any number of change blocks after it. Adds `uid`, an identifier that a rename or a move leaves unchanged. Every v0.7 document remains valid.
 
-One topic, in five commits. Together they carry the spec text, grammar, parser, editor grammars, playground, MCP reference, examples and tests:
+One topic, in six commits. Together they carry the spec text, grammar, parser, editor grammars, playground, MCP reference, examples and tests:
 
 | Commit | Content |
 |---|---|
@@ -10,7 +10,8 @@ One topic, in five commits. Together they carry the spec text, grammar, parser, 
 | `1a7b9c2` | Grammar and parser: change blocks applied by `flatten()`, the diagnostics of §29.16, `uid` |
 | `b49efe2` | Example 20, and Append changes in the playground |
 | `0adcde9` | Colors in Monaco, TextMate and the VS Code extension 0.8.0 |
-| last commit | Starter schema, `llms.txt` and the MCP server, release files |
+| `1e54e79` | Starter schema, `llms.txt` and the MCP server, release files |
+| `3e80701` | A `uid` decides which element a statement changes |
 
 The proposal and the plan of the version follow the release notes below.
 
