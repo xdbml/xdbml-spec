@@ -1,5 +1,52 @@
 # xDBML 0.8 -- change blocks and stable identifiers
 
+Adds change blocks to xDBML. A `Changes` block lists changes to a model in the form of the `CREATE`, `ALTER` and `DROP` statements of SQL, and a document may hold a model and any number of change blocks after it. Adds `uid`, an identifier that a rename or a move leaves unchanged. Every v0.7 document remains valid.
+
+One topic, in five commits. Together they carry the spec text, grammar, parser, editor grammars, playground, MCP reference, examples and tests:
+
+| Commit | Content |
+|---|---|
+| `afac974` | Specification text: chapter 29 of `spec/v0.8.md`, the changelog, the FAQ |
+| `1a7b9c2` | Grammar and parser: change blocks applied by `flatten()`, the diagnostics of §29.16, `uid` |
+| `b49efe2` | Example 20, and Append changes in the playground |
+| `0adcde9` | Colors in Monaco, TextMate and the VS Code extension 0.8.0 |
+| last commit | Starter schema, `llms.txt` and the MCP server, release files |
+
+The proposal and the plan of the version follow the release notes below.
+
+## Language (spec v0.8)
+
+- **Change blocks (§29.1)**: `Changes "name" [settings] { statements }` at the top level, any number per document. A block takes `note`, `base` and custom properties. Its statements apply in order, and a statement that cannot apply is an error.
+- **The order of a document (§29.2)**: a change block changes the model declared above it, and the declarations below it see the result. A declaration never names an element declared below a change block that stands between the two. A reference follows the element it names through a rename or a move. The model a document describes is the model at its end.
+- **Statements (§29.3 to §29.9)**: `create`, which may be left out, `drop`, and `alter` with `rename to`, `move to`, `modify`, and `add`, `modify`, `rename` and `drop` of a `Field` (alias `Column`), an `Index`, a `Constraint`, an Enum `Value` or a member. `modify` changes what it names; `drop default` and `drop [default, note]` remove settings; `was` records the type and settings before the change. A `drop` is refused while another element refers to the element.
+- **`if exists` and `if not exists` (§29.10)**: skip a statement, which is reported at a new severity, information, as PostgreSQL reports a notice.
+- **Change sets in their own file (§29.12)**: a file of change blocks imports the model it changes; an import brings the model of a file after its own change blocks.
+- **`uid` (§29.15)**: on every element, unique in the model, unchanged by a rename or a move, ignored by generators.
+- **Scope (§1.1, §29.14)**: how a target carries out a change, such as renaming a column in place or copying its values, is decided by the tool that writes the statements of the target.
+- Chapter 29 is new, and chapters 29 to 32 become 30 to 33.
+
+## Compatibility
+
+- Every v0.7 document stays valid and reads as before. `Changes` and the statement words are recognized only in a document declaring `xdbml: 0.8`, and the statement words only inside a change block, so they remain available as names. In a document declaring an earlier version, `uid` is a custom property.
+- `@xdbml/parse`: `TopLevelStatement` gains `ChangesDeclaration`, and `Diagnostic.severity` gains `info`. Code with an exhaustive `switch` on these unions needs the new cases. `SUPPORTED_XDBML_VERSION` is `0.8`.
+- The MCP validator reports `info` diagnostics apart from warnings, and they leave a document valid.
+
+## Tooling
+
+- **`@xdbml/parse`**: reads change blocks; `flatten()` applies them, so the renderer, the playground and the MCP server see the model at the end of the document; `resolveNames()` reports the conditions of §29.16. New exports: `applyChanges()`, `checkChanges()`, `checkUids()`, `hasChanges()`, `flatStatementsWithChanges()`.
+- **Playground**: Append changes in the header adds change blocks from pasted text or a file at the end of the open document, as one step of the editor's undo history, and refuses text that holds anything but change blocks. The Diagnostics panel and the editor show the information level. A new help page, Change blocks. The starter schema declares `xdbml: 0.8`, and the help screenshots are regenerated.
+- **Editors**: Monaco, TextMate and the VS Code extension color the statements of change blocks. The VS Code extension 0.8.0 is built: `tools/vscode-extension/xdbml-0.8.0.vsix`.
+- **`llms.txt` and the MCP server**: a section on change blocks, with checked Wrong and Right examples; documents declare `xdbml: 0.8`; the server's instructions tell an assistant to answer a request to change a schema with a change block.
+- **Examples**: `20-model-changes` is new; example 02 declares `xdbml: 0.8`.
+
+## Verification
+
+`npm run check` on the branch: parser 955 tests, the grammar test corpus included; renderer 405, viewport 14, interactive 61; MCP 112; from-mongodb 24; playground 69 and its type check; 305 "View in playground" links in the spec; docs build. The TextMate tests pass, and the MCP reference is in sync with `llms.txt`.
+
+## After the merge
+
+`tools\release.cmd 0.8.0` publishes `@xdbml/parse` and `@xdbml/render` 0.8.0, deploys the MCP server and the rendering API, commits the version bumps, tags `v0.8` and publishes the GitHub release from the CHANGELOG. The VS Code extension is published on its own. The CHANGELOG gives 2026-11-25 as the release date; change it if the merge happens on another day.
+
 ## Proposal
 
 ### Summary
@@ -146,10 +193,10 @@ As for v0.7, the work happens on the branch `dev/0.8`, and each topic carries it
 | 3. Grammar: change blocks and `uid` in `grammar/xDBML.g4`, with cases in `grammar/test-cases.md` | Done |
 | 4. `@xdbml/parse`: AST nodes, parsing of change blocks, applying the statements with the order rules of §29.2, `uid`, the information severity, diagnostics and tests | Done. `flatten()` applies the change blocks; `resolveNames()` reports their diagnostics. One part is simpler than §29.2 states: Metadata blocks apply after every change block, with their targets following renamed elements, rather than within each part of the document. |
 | 5. Editor grammars: Monaco (`parser/src/monarch.ts`), TextMate (`tools/textmate`) and the VS Code extension 0.8.0 | Done. The extension is packaged as `tools/vscode-extension/xdbml-0.8.0.vsix` and not yet published on the Marketplace. |
-| 6. Renderer and playground: the information level in the Diagnostics panel; Append changes in the header, which adds change blocks from pasted text or a file at the end of the open document, raises its version line to 0.8 when needed, and refuses text that holds anything but change blocks; a help page on change blocks; the starter schema; the 29 "View in playground" buttons of the v0.8 page, which open `xdbml: 0.8` | Done, except the starter schema and the screenshots of the help pages. Later: a button that rewrites the document as the model after the changes (it needs an xDBML writer), and marks on the diagram for what the changes added, changed or dropped. |
-| 7. `llms.txt` and the MCP server: a section on change blocks and `uid`, documents that declare `xdbml: 0.8` | To do |
+| 6. Renderer and playground: the information level in the Diagnostics panel; Append changes in the header, which adds change blocks from pasted text or a file at the end of the open document, raises its version line to 0.8 when needed, and refuses text that holds anything but change blocks; a help page on change blocks; the starter schema; the 29 "View in playground" buttons of the v0.8 page, which open `xdbml: 0.8` | Done. Later: a button that rewrites the document as the model after the changes (it needs an xDBML writer), and marks on the diagram for what the changes added, changed or dropped. |
+| 7. `llms.txt` and the MCP server: a section on change blocks and `uid`, documents that declare `xdbml: 0.8` | Done. The MCP validator also reports `info` diagnostics apart from warnings. |
 | 8. Examples: a new example with change blocks | Done: `20-model-changes` |
-| 9. Release: a pull request from `dev/0.8` to `main` with this file as its description, `npm run check`, the status in `spec/index.md`, the README and the "What's new" text of the site, then `tools\release.cmd 0.8.0` | To do |
+| 9. Release: a pull request from `dev/0.8` to `main` with this file as its description, `npm run check`, the status in `spec/index.md`, the README and the "What's new" text of the site, then `tools\release.cmd 0.8.0` | Ready: the release files name v0.8 as the current draft, and `npm run check` passes. The pull request, the merge and the release script remain. |
 | 10. Hackolade Studio, in the `application` repository and probably `packages` first: write `uid` in place of `x_hackolade_id` and read both during a transition, and accept change blocks from the AI assistant, one proposal per statement | Separate work |
 
 The open questions above are decided before step 9.

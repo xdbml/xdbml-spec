@@ -6,8 +6,8 @@ The format is loosely based on [Keep a Changelog](https://keepachangelog.com), a
 
 ## v0.8 -- 2026
 
-**Status**: Draft -- in preparation
-**Released**: not yet
+**Status**: Draft -- current
+**Released**: 2026-11-25
 
 Adds change blocks, which list changes to a model in the form of the `CREATE`, `ALTER` and `DROP` statements of SQL, and the `uid` setting, which gives an element an identifier that stays the same through a rename or a move. Until now, xDBML described the state of a model, and a change could only be stated by writing the whole model again; a tool comparing two versions could not tell a renamed field from a field dropped and another one added. Chapter 29 is new, and chapters 29 to 32 become 30 to 33.
 
@@ -55,7 +55,7 @@ Adds change blocks, which list changes to a model in the form of the `CREATE`, `
 
 ## v0.7.5 -- 2026
 
-**Status**: Draft -- current
+**Status**: Draft -- superseded by v0.8
 **Released**: 2026-10-31
 
 A point release of the v0.7 draft on the flags of a relationship. §11.9 described `foreign_master` and `inactive` as flags without a value and `undirected` as a setting that takes `true` or `false`, and the tools read each of the three in its own way, on a Ref and on an Edge. The three now follow one rule: the name alone or `: true` sets a flag, and `: false` leaves it unset. Documents keep declaring `xdbml: 0.7`.

@@ -1,4 +1,4 @@
-xdbml: 0.7
+xdbml: 0.8
 
 Project ecommerce {
   targets: [Oracle, MongoDB]

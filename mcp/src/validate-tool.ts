@@ -26,7 +26,8 @@ export interface ValidateArgs {
 }
 
 export interface ValidateDiagnostic {
-  severity: 'error' | 'warning';
+  /** `info` reports what was done, such as a change statement skipped by `if exists` (spec §29.10). */
+  severity: 'error' | 'warning' | 'info';
   /** Stable machine code, e.g. 'parse-error', 'unresolved-entity'. */
   code: string;
   message: string;
@@ -129,7 +130,7 @@ export function validateXdbml (source: string): ValidateOutcome {
   }));
 
   const errorCount = diagnostics.filter((d) => d.severity === 'error').length;
-  const warningCount = diagnostics.length - errorCount;
+  const warningCount = diagnostics.filter((d) => d.severity === 'warning').length;
   const valid = errorCount === 0;
 
   // "2 entities and 1 container" -- the container part is phrased as a
