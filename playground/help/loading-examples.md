@@ -39,6 +39,7 @@ The examples after these six are smaller, and each one shows a feature of the la
 - **Diagram views** shows a model split into subject areas. See [**Diagram views**](./diagram-views).
 - **Internal definitions** shows reusable shapes that belong to one entity.
 - **Data lineage** and **Source-to-target mapping** show dependencies between fields. See [**Data lineage**](./data-lineage).
+- **Changes to a model** shows a model followed by three change blocks, which rename, modify, add, move and drop elements. See [**Change blocks**](./change-blocks).
 
 ## What happens when you load an example
 

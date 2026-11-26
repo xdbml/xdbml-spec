@@ -36,6 +36,9 @@
       "include": "#dep-declaration"
     },
     {
+      "include": "#change-blocks"
+    },
+    {
       "include": "#declarations"
     },
     {
@@ -131,6 +134,80 @@
           "name": "keyword.declaration.xdbml"
         }
       }
+    },
+    "change-blocks": {
+      "comment": "Change blocks (spec 29, v0.8). The words are colored only in the positions of a statement, so a field may still be named drop or modify (spec 29.3).",
+      "patterns": [
+        {
+          "comment": "Changes starts a change block (spec 29.1, v0.8) at the start of a line, before its name, its settings and '{'.",
+          "match": "^((?i:changes))\\b(?=\\s*(?:\"[^\"]*\"|[A-Za-z_][A-Za-z0-9_]*)?\\s*(?:\\[[^\\]]*\\]\\s*)?\\{)",
+          "captures": {
+            "1": {
+              "name": "keyword.declaration.xdbml"
+            }
+          }
+        },
+        {
+          "comment": "A statement (spec 29.3): create, alter or drop, then the kind of element, and if exists or if not exists.",
+          "match": "\\b((?i:create|alter|drop))\\s+((?i:supertypegroup|entitypartial|tablepartial|entitygroup|diagramview|collection|tablegroup|container|namespace|database|keyspace|dataset|schema|bucket|entity|record|table|type|edge|view|enum|note|ref|dep))\\b(?:\\s+((?i:if\\s+(?:not\\s+)?exists))\\b)?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.change.xdbml"
+            },
+            "2": {
+              "name": "keyword.declaration.xdbml"
+            },
+            "3": {
+              "name": "keyword.control.change.xdbml"
+            }
+          }
+        },
+        {
+          "comment": "An action of alter on a part (spec 29.7): add, modify, drop or rename, then Field, Column, Index, Constraint or Value.",
+          "match": "\\b((?i:modify|rename|drop|move|add))\\s+((?i:constraint|column|field|index|value))\\b(?:\\s+((?i:if\\s+(?:not\\s+)?exists))\\b)?",
+          "captures": {
+            "1": {
+              "name": "keyword.control.change.xdbml"
+            },
+            "2": {
+              "name": "keyword.declaration.xdbml"
+            },
+            "3": {
+              "name": "keyword.control.change.xdbml"
+            }
+          }
+        },
+        {
+          "comment": "rename to and move to (spec 29.9).",
+          "match": "\\b((?i:rename|move))\\s+((?i:to))\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.control.change.xdbml"
+            },
+            "2": {
+              "name": "keyword.control.change.xdbml"
+            }
+          }
+        },
+        {
+          "comment": "modify on the element itself, before its settings, drop or source_query (spec 29.8). Before a type alone, modify is left uncolored, since a field may be named modify.",
+          "match": "\\b((?i:modify))(?=\\s*(?:\\[|(?i:drop)\\b|(?i:source_query)\\s*:))",
+          "captures": {
+            "1": {
+              "name": "keyword.control.change.xdbml"
+            }
+          }
+        },
+        {
+          "comment": "drop before the settings it removes (spec 29.8): a bracket, not null, primary key, or a setting name.",
+          "match": "\\b((?i:drop))\\s+(?=\\[|(?i:not\\s+null|primary\\s+key|source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|constraint_type|source_database|storage_options|default_charset|transformation|database_type|discriminator|minproperties|maxproperties|business_term|completeness|source_query|materialized|headercolor|source_role|target_role|source_verb|target_verb|exclusivity|uniqueitems|granularity|constraints|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|supertype|minlength|maxlength|cloned_at|strategy|minitems|maxitems|synonyms|location|default|targets|dialect|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|merge|grain|note|name|type|tags|base|ref|dep|uid|was|as|foreign_master|increment|required|inactive|primary|example|unique|null|key|not|pk)\\b)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.change.xdbml"
+            }
+          }
+        }
+      ]
     },
     "lineage-arrows": {
       "comment": "The arrows of a dependency (spec 27, v0.7): -> from upstream to downstream, <- from downstream to upstream, in a Dep and in a dep setting.",
@@ -268,7 +345,7 @@
     },
     "setting-keys": {
       "comment": "Setting keys appear before a colon. Matched only here inside the settings block.",
-      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|constraint_type|source_database|storage_options|default_charset|transformation|database_type|discriminator|minproperties|maxproperties|business_term|completeness|source_query|materialized|headercolor|source_role|target_role|source_verb|target_verb|exclusivity|uniqueitems|granularity|constraints|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|supertype|minlength|maxlength|cloned_at|strategy|minitems|maxitems|synonyms|location|default|targets|dialect|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|merge|grain|note|name|type|tags|ref|dep|as))\\b(\\s*)(:)",
+      "match": "\\b((?i:source_cardinality|target_cardinality|refresh_schedule|exclusiveminimum|exclusivemaximum|constraint_type|source_database|storage_options|default_charset|transformation|database_type|discriminator|minproperties|maxproperties|business_term|completeness|source_query|materialized|headercolor|source_role|target_role|source_verb|target_verb|exclusivity|uniqueitems|granularity|constraints|replication|min_source|max_source|min_target|max_target|undirected|refresh_on|multipleof|supertype|minlength|maxlength|cloned_at|strategy|minitems|maxitems|synonyms|location|default|targets|dialect|pattern|minimum|maximum|indexes|target|source|format|delete|update|checks|color|check|merge|grain|note|name|type|tags|base|ref|dep|uid|was|as))\\b(\\s*)(:)",
       "captures": {
         "1": {
           "name": "variable.parameter.setting.xdbml"

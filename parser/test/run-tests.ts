@@ -3779,7 +3779,7 @@ reuse { entity Party, entity Person, supertypegroup legal_nature } from './party
 Entity A { }`,
       assert: (doc) => {
         if (doc.version?.version !== '0.7') return 'version 0.7 not parsed';
-        for (const v of ['0.8', '0.7.6', '1.0', '0.10']) {
+        for (const v of ['0.9', '0.8.1', '1.0', '0.10']) {
           try {
             parse(`xdbml: ${v}\nEntity A { }`);
             return `xdbml: ${v} was accepted`;
@@ -4460,8 +4460,8 @@ Entity e { id int [pk] }`,
       assert: (doc) => (doc.version?.version === '0.7.5' ? null : `version: ${doc.version?.version}`),
     },
     {
-      name: 'v0.7.5 §4: xdbml: 0.7.6 is newer than this parser supports',
-      source: `xdbml: 0.7.6
+      name: 'v0.8 §4: xdbml: 0.8.1 is newer than this parser supports',
+      source: `xdbml: 0.8.1
 Entity e { id int [pk] }`,
       expectError: true,
       assert: () => 'expected unsupported-version',
@@ -5066,8 +5066,8 @@ DiagramView reports { Tables { orders } }`,
   });
   check('v0.6.3 §4.1: the parser reads xdbml: 0.6.3 and refuses a later patch it does not know', () => {
     parse('xdbml: 0.6.3\nTable a { id int [pk] }');
-    try { parse('xdbml: 0.7.99\nTable a { id int [pk] }'); } catch { return undefined; }
-    return '0.7.99 accepted';
+    try { parse('xdbml: 0.8.99\nTable a { id int [pk] }'); } catch { return undefined; }
+    return '0.8.99 accepted';
   });
   check('v0.6.3: Monarch colors a category keyword before { only', () => {
     const rule = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
@@ -7860,6 +7860,403 @@ Entity e {
   return results;
 }
 
+/**
+ * v0.8: change blocks and uid (spec §29). Each check reads the model that
+ * `flatten()` leaves at the end of the document, written compactly: one
+ * line per entity, `container.entity(field:type, ...)`, and one per
+ * relationship, `source > target`.
+ */
+function runV08ChangeTests (): TestResult[] {
+  const results: TestResult[] = [];
+  const check = (name: string, fn: () => string | undefined): void => {
+    try {
+      const problem = fn();
+      results.push(problem ? fail(name, problem) : ok(name));
+    } catch (e) {
+      results.push(fail(name, e instanceof Error ? e.message : String(e)));
+    }
+  };
+  const same = (got: unknown, want: unknown): string | undefined =>
+    (JSON.stringify(got) === JSON.stringify(want) ? undefined : `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
+  const codes = (src: string): string[] =>
+    resolveNames(parse(src)).diagnostics.map((d) => `${d.severity}:${d.code}`);
+  const typeText = (t: { kind: string; name?: string; params?: string[] }): string =>
+    `${t.name ?? t.kind}${t.params ? `(${t.params.join(',')})` : ''}`;
+  const entityLine = (prefix: string, e: EntityDeclaration): string => {
+    const fields = e.body.filter((b): b is FieldDeclaration => b.kind === 'FieldDeclaration').map((f) => `${f.name}:${typeText(f.type)}`);
+    return `${prefix}${e.name}(${fields.join(', ')})`;
+  };
+  const model = (src: string): string[] => {
+    const lines: string[] = [];
+    for (const s of flatten(parse(src)).statements) {
+      if (s.kind === 'EntityDeclaration') lines.push(entityLine('', s));
+      if (s.kind === 'ContainerDeclaration') {
+        for (const b of s.body) if (b.kind === 'EntityDeclaration') lines.push(entityLine(`${s.name}.`, b));
+      }
+      if (s.kind === 'RefDeclaration') lines.push(`${pathToString(s.spec.source.path)} ${s.spec.operator} ${pathToString(s.spec.target.path)}`);
+    }
+    return lines;
+  };
+  const V = 'xdbml: 0.8\n';
+
+  check('§29.1: a change block parses into its statements, in order', () => {
+    const doc = parse(`${V}
+Table customers { id int [pk] }
+Changes "Contact" [note: 'Requested by the CRM team', base: 'v12'] {
+  alter Table customers add Field email varchar
+  create Table orders { id int [pk] }
+  drop Table if exists legacy
+}`);
+    const block = doc.statements.find((s) => s.kind === 'ChangesDeclaration');
+    if (!block || block.kind !== 'ChangesDeclaration') return 'no ChangesDeclaration';
+    return same([block.name, block.settings.map((s) => s.name), block.statements.map((s) => s.kind)],
+      ['Contact', ['note', 'base'], ['AlterStatement', 'CreateStatement', 'DropStatement']]);
+  });
+
+  check('§29.1: the example of the specification ends with the model it describes', () => {
+    const src = `${V}
+Container core {
+  Table customers [uid: '7f3c'] {
+    id          int [pk]
+    name        varchar [uid: '7f3c-2']
+    email       varchar(255)
+    legacy_code varchar(10)
+  }
+}
+Container staging {
+  Table addresses {
+    id          int [pk]
+    customer_id int
+    city        varchar
+  }
+}
+Changes "Customer contact details" [note: 'Requested by the CRM team'] {
+  alter Table core.customers {
+    rename Field name to full_name
+    modify Field email varchar(320) [was: 'varchar(255)']
+    add Field preferred_language varchar(5) [not null, default: 'en']
+    drop Field legacy_code
+  }
+  create Table core.loyalty_accounts {
+    id          int [pk]
+    customer_id int [ref: > core.customers.id]
+  }
+}
+Changes "Addresses leave staging" {
+  alter Table staging.addresses move to core
+  create Ref: core.addresses.customer_id > core.customers.id
+}`;
+    const errors = codes(src).filter((c) => c.startsWith('error'));
+    if (errors.length > 0) return errors.join(' ');
+    return same(model(src), [
+      'core.customers(id:int, full_name:varchar, email:varchar(320), preferred_language:varchar(5))',
+      'core.loyalty_accounts(id:int, customer_id:int)',
+      'core.addresses(id:int, customer_id:int, city:varchar)',
+      'core.addresses.customer_id > core.customers.id',
+    ]);
+  });
+
+  check('§29.2: a relationship above a change block follows a renamed entity, a bare name included', () => same(model(`${V}
+Container core {
+  Table customers { id int [pk] }
+  Table orders {
+    id          int [pk]
+    customer_id int
+  }
+}
+Ref: orders.customer_id > customers.id
+Ref: core.orders.customer_id > core.customers.id
+Changes { alter Table core.customers rename to clients }
+Table core.invoices {
+  id        int [pk]
+  client_id int [ref: > core.clients.id]
+}`), [
+    'core.clients(id:int)',
+    'core.orders(id:int, customer_id:int)',
+    'orders.customer_id > clients.id',
+    'core.orders.customer_id > core.clients.id',
+    'core.invoices(id:int, client_id:int)',
+  ]));
+
+  check('§29.2: a declaration that names an element declared below a change block is an error', () => {
+    const got = codes(`${V}
+Table orders { id int [pk], customer_id int }
+Ref: orders.customer_id > customers.id
+Changes { alter Table orders add Field total decimal }
+Table customers { id int [pk] }`);
+    return got.includes('error:forward-reference-across-changes') ? undefined : got.join(' ');
+  });
+
+  check('§29.9: a renamed field takes its relationships, indexes, keys and records columns along', () => {
+    const src = `${V}
+Table customers {
+  id   int [pk]
+  code varchar
+  indexes { code [unique] }
+  constraints { code [unique, name: 'uk_code'] }
+  records (id, code) { 1, 'A' }
+}
+Table orders { id int [pk], customer_code varchar }
+Ref: orders.customer_code > customers.code
+Changes { alter Table customers rename Field code to reference }`;
+    const errors = codes(src).filter((c) => c.startsWith('error'));
+    if (errors.length > 0) return errors.join(' ');
+    const flat = flatten(parse(src));
+    const customers = flat.statements.find((s): s is EntityDeclaration => s.kind === 'EntityDeclaration' && s.name === 'customers')!;
+    const index = customers.body.find((b) => b.kind === 'IndexesBlock') as { entries: { components: { path: { name: string }[] }[] }[] };
+    const records = customers.body.find((b): b is RecordsBlock => b.kind === 'RecordsBlock')!;
+    return same([model(src)[2], index.entries[0].components[0].path[0].name, records.columns], [
+      'orders.customer_code > customers.reference', 'reference', ['id', 'reference'],
+    ]);
+  });
+
+  check('§29.6: a drop is refused while a relationship refers to the element, and applies once the relationship goes', () => {
+    const base = `${V}
+Table customers { id int [pk] }
+Table orders { id int [pk], customer_id int [ref: > customers.id] }
+`;
+    const refused = codes(`${base}Changes { drop Table customers }`);
+    if (!refused.includes('error:change-element-referenced')) return `refused: ${refused.join(' ')}`;
+    const src = `${base}Changes {
+  drop Ref: orders.customer_id > customers.id
+  drop Table customers
+}`;
+    const errors = codes(src).filter((c) => c.startsWith('error'));
+    return errors.length > 0 ? errors.join(' ') : same(model(src), ['orders(id:int, customer_id:int)']);
+  });
+
+  check('§29.6: a dropped field is refused while an index names it; its Metadata blocks go with it', () => {
+    const refused = codes(`${V}
+Table t { id int [pk], code varchar
+  indexes { code } }
+Changes { alter Table t drop Field code }`);
+    if (!refused.includes('error:change-element-referenced')) return `refused: ${refused.join(' ')}`;
+    const flat = flatten(parse(`${V}
+Table t { id int [pk], code varchar }
+Metadata Column t.code { note: 'Old code' }
+Changes { alter Table t drop Field code }`));
+    return flat.statements.some((s) => s.kind === 'MetadataDeclaration') ? 'the Metadata block stayed' : undefined;
+  });
+
+  check('§29.6: a dropped field takes its column and its values out of the records', () => {
+    const flat = flatten(parse(`${V}
+Table t {
+  id   int [pk]
+  code varchar
+  name varchar
+  records (id, code, name) { 1, 'A', 'Alpha' }
+}
+Table u {
+  id   int [pk]
+  code varchar
+  records { 1, 'B' }
+}
+Changes {
+  alter Table t drop Field code
+  alter Table u drop Field code
+}`));
+    const rows = flat.statements
+      .filter((s): s is EntityDeclaration => s.kind === 'EntityDeclaration')
+      .map((e) => {
+        const r = e.body.find((b): b is RecordsBlock => b.kind === 'RecordsBlock')!;
+        return [r.columns ?? null, r.rows[0].values.map((v) => settingValueText(v))];
+      });
+    return same(rows, [[['id', 'name'], ['1', 'Alpha']], [null, ['1']]]);
+  });
+
+  check('§29.10: if exists and if not exists skip a statement, reported at the information level', () => {
+    const got = codes(`${V}
+Table customers { id int [pk] }
+Changes {
+  drop Table if exists legacy
+  create Table if not exists customers { id int [pk] }
+  alter Table customers {
+    add Field if not exists id int
+    drop Field if exists nickname
+  }
+}`);
+    return same(got, ['info:change-skipped', 'info:change-skipped', 'info:change-skipped', 'info:change-skipped']);
+  });
+
+  check('§29.4, §29.5: a missing element, or one that already exists, is an error without if exists', () => same(codes(`${V}
+Table customers { id int [pk] }
+Changes {
+  drop Table legacy
+  create Table customers { id int [pk] }
+  alter Table customers add Field id int
+}`), ['error:change-target-not-found', 'error:change-element-exists', 'error:change-part-exists']));
+
+  check('§29.8: modify changes what it names, drop removes settings, and was must match', () => {
+    const src = `${V}
+Table t {
+  id    int [pk]
+  email varchar(255) [not null, default: 'x', note: 'Login']
+}
+Changes {
+  alter Table t modify Field email varchar(320) [was: 'varchar(255) [not null, default: \\'x\\', note: \\'Login\\']']
+  alter Table t modify Field email drop [default, note]
+  alter Table t modify Field email drop not null
+}`;
+    const errors = codes(src).filter((c) => c.startsWith('error'));
+    if (errors.length > 0) return errors.join(' ');
+    const t = flatten(parse(src)).statements.find((s): s is EntityDeclaration => s.kind === 'EntityDeclaration')!;
+    const email = t.body.find((b): b is FieldDeclaration => b.kind === 'FieldDeclaration' && b.name === 'email')!;
+    const mismatch = codes(`${V}
+Table t { id int [pk], email varchar(100) }
+Changes { alter Table t modify Field email varchar(320) [was: 'varchar(255)'] }`);
+    return same([typeText(email.type), email.settings.map((s) => s.name), mismatch], ['varchar(320)', [], ['error:change-was-mismatch']]);
+  });
+
+  check('§29.9: a rename to a name already taken is an error', () => same(codes(`${V}
+Table a { id int [pk], x int, y int }
+Changes { alter Table a rename Field x to y }`), ['error:change-name-taken']));
+
+  check('§29.7: Enum values are added, renamed and dropped', () => {
+    const flat = flatten(parse(`${V}
+enum status { draft, issued, void }
+Changes { alter Enum status { add Value paid, rename Value issued to sent, drop Value void } }`));
+    const e = flat.statements.find((s) => s.kind === 'EnumDeclaration');
+    return same(e && e.kind === 'EnumDeclaration' ? e.values.map((v) => v.name) : [], ['draft', 'sent', 'paid']);
+  });
+
+  check('§29.11: a Container declared again below a change block adds an entity; with settings it is an error', () => {
+    const src = `${V}
+Container core { Table a { id int [pk] } }
+Changes { alter Table core.a rename to b }
+Container core { Table c { id int [pk] } }`;
+    const errors = codes(src).filter((c) => c.startsWith('error'));
+    if (errors.length > 0) return errors.join(' ');
+    const withSettings = codes(`${V}
+Container core { Table a { id int [pk] } }
+Changes { alter Table core.a rename to b }
+Container core [type: schema] { Table c { id int [pk] } }`);
+    return same([model(src), withSettings.includes('error:container-redeclared')], [['core.b(id:int)', 'core.c(id:int)'], true]);
+  });
+
+  check('§29.3, §29.5: create in front of a declaration; the statement words remain names of fields', () => {
+    const src = `${V}
+create Table t {
+  id     int [pk]
+  drop   varchar
+  modify varchar
+  create varchar
+}
+Changes { alter Table t rename Field drop to dropped }`;
+    const errors = codes(src).filter((c) => c.startsWith('error'));
+    return errors.length > 0 ? errors.join(' ') : same(model(src), ['t(id:int, dropped:varchar, modify:varchar, create:varchar)']);
+  });
+
+  check('§29: a change block needs xdbml: 0.8', () => {
+    try {
+      parse('xdbml: 0.7\nTable t { id int }\nChanges { drop Table t }');
+    } catch (e) {
+      return e instanceof ParseError && e.message.includes('0.8') ? undefined : String(e);
+    }
+    return 'parsed';
+  });
+
+  check('§29.15: two elements with the same uid are an error; a rename keeps the uid', () => {
+    const dup = codes(`${V}
+Table a [uid: 'u1'] { id int [pk, uid: 'u2'] }
+Table b [uid: 'u1'] { id int [pk] }`);
+    if (!dup.includes('error:duplicate-uid')) return dup.join(' ');
+    const flat = flatten(parse(`${V}
+Table a { id int [pk], name varchar [uid: 'f1'] }
+Changes { alter Table a rename Field name [uid: 'f1'] to full_name }`));
+    const a = flat.statements.find((s): s is EntityDeclaration => s.kind === 'EntityDeclaration')!;
+    const f = a.body.find((b): b is FieldDeclaration => b.kind === 'FieldDeclaration' && b.name === 'full_name');
+    return f?.settings.some((s) => s.name === 'uid') ? undefined : 'the renamed field lost its uid';
+  });
+
+  check('§29.4: a uid that no element carries is an error, and skipped with if exists', () => same([
+    codes(`${V}
+Table a [uid: 'u1'] { id int [pk] }
+Changes { drop Table a [uid: 'u9'] }`),
+    codes(`${V}
+Table a [uid: 'u1'] { id int [pk] }
+Changes { drop Table if exists [uid: 'u9'] }`),
+  ], [['error:change-target-not-found'], ['info:change-skipped']]));
+
+  check('§29.4: an element and a field named by their uid alone', () => {
+    const src = `${V}
+Table customers [uid: 'c1'] {
+  id   int [pk]
+  name varchar [uid: 'f2']
+}
+Changes {
+  alter Table [uid: 'c1'] {
+    rename Field [uid: 'f2'] to full_name
+    modify Field [uid: 'f2'] varchar(200)
+  }
+}`;
+    const all = codes(src);
+    return all.length > 0 ? all.join(' ') : same(model(src), ['customers(id:int, full_name:varchar(200))']);
+  });
+
+  check('§29.4: the uid decides; a name beside it that leads elsewhere draws a warning', () => {
+    const src = `${V}
+Table customers [uid: 'c1'] {
+  id   int [pk]
+  name varchar [uid: 'f2']
+}
+Changes "Theirs" {
+  alter Table customers rename to clients
+  alter Table clients rename Field name to label
+}
+Changes "Ours, written before theirs" {
+  alter Table customers [uid: 'c1'] {
+    add Field email varchar
+    modify Field name [uid: 'f2', not null]
+  }
+}`;
+    return same([codes(src), model(src)], [
+      ['warning:change-name-mismatch', 'warning:change-name-mismatch'],
+      ['clients(id:int, label:varchar, email:varchar)'],
+    ]);
+  });
+
+  check('§29.4: a relationship named by its uid', () => same(model(`${V}
+Table customers { id int [pk] }
+Table orders { id int [pk], customer_id int }
+Ref fk_orders: orders.customer_id > customers.id [uid: 'r1']
+Changes { drop Ref [uid: 'r1'] }`), ['customers(id:int)', 'orders(id:int, customer_id:int)']));
+
+  check('§29.3: Monarch colors the words of a statement, and leaves fields named drop, modify or changes alone', () => {
+    const sources = ['^changes', '(create|alter|drop)(', '(add|modify|drop|rename|move)(', '(rename|move)', 'modify(?=', '(drop)(', '(if)'];
+    const rules = (xdbmlMonarchTokensProvider.tokenizer.root as unknown as ReadonlyArray<[RegExp, unknown]>)
+      .filter((r) => Array.isArray(r) && r[0] instanceof RegExp && sources.some((s) => r[0].source.startsWith(s)))
+      .map((r) => new RegExp(`^(?:${r[0].source})`, 'i'));
+    if (rules.length !== sources.length) return `${rules.length} rules found, want ${sources.length}`;
+    const colored = (text: string) => rules.some((re) => re.test(text));
+    const yes = ['Changes "Full name" {', 'Changes {', "changes [note: 'x'] {", 'alter Table core.customers {', 'ALTER TABLE customers ADD COLUMN x int',
+      'create Table if not exists x {', 'drop Ref: a.x > b.y', 'add Field email varchar', 'rename Field name to x', 'rename to clients', 'move to core',
+      "modify [note: 'x']", 'drop default', 'drop [default, note]', 'drop not null', 'if not exists x', 'if exists x', 'add Value paid'];
+    const no = ['drop   varchar', 'modify varchar', 'changes int', 'create varchar', 'move int', 'rename varchar', 'add varchar', 'alter int'];
+    const bad = [...yes.filter((s) => !colored(s)).map((s) => `not colored: ${s}`), ...no.filter(colored).map((s) => `colored: ${s}`)];
+    return bad.length ? bad.join('; ') : undefined;
+  });
+
+  check('§29.12: an import brings the model of the imported file after its change blocks', () => {
+    const files: Record<string, string> = {
+      '/m/v1.xdbml': `${V}Table customers { id int [pk], name varchar }`,
+      '/m/v2.xdbml': `${V}reuse * from './v1'\nChanges "Full name" { alter Table customers rename Field name to full_name }`,
+    };
+    const doc = parse(`${V}reuse * from './v2'\nTable orders { id int [pk] }`, {
+      filePath: '/m/main.xdbml',
+      readFile: (p: string) => {
+        const key = p.replace(/\\/g, '/');
+        if (!(key in files)) throw new Error(`no file ${key}`);
+        return files[key];
+      },
+    });
+    const lines: string[] = [];
+    for (const s of flatten(doc).statements) if (s.kind === 'EntityDeclaration') lines.push(entityLine('', s));
+    return same(lines, ['customers(id:int, full_name:varchar)', 'orders(id:int)']);
+  });
+
+  return results;
+}
+
 function main (): void {
   console.log(`${CYAN}@xdbml/parse proof-of-concept test suite${RESET}`);
   console.log(`${DIM}examples directory: ${examplesDir}${RESET}`);
@@ -7880,6 +8277,7 @@ function main (): void {
   const v071Tests = runV071Tests();
   const v072Tests = runV072Tests();
   const v074Tests = runV074Tests();
+  const v08Tests = runV08ChangeTests();
   const corpus = runGrammarCorpusTests();
   const ir = report('Inline grammar tests', inline);
   const er = report('Official example files (xdbml/xdbml-spec/examples)', examples);
@@ -7898,9 +8296,10 @@ function main (): void {
   const v71 = report('v0.7.1 x- custom properties, color, EntityPartial and EntityGroup (spec §24.5, §7.5, §17)', v071Tests);
   const v72 = report('v0.7.2 source-to-target mapping, metrics and grain (spec §27.2, §27.3, §27.10, §27.11, §7.5)', v072Tests);
   const v74 = report('v0.7.4 types of several words without quotes (spec §8.1)', v074Tests);
+  const v8 = report('v0.8 change blocks and uid (spec §29)', v08Tests);
   const cr = report('v0.6.4 grammar test corpus (grammar/test-cases.md)', corpus);
-  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + v71.passed + v72.passed + v74.passed + cr.passed;
-  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + v71.failed + v72.failed + v74.failed + cr.failed;
+  const totalPassed = ir.passed + er.passed + kr.passed + vr.passed + dr.passed + fr.passed + pr.passed + qr.passed + rr.passed + or.passed + mr.passed + nr.passed + lr.passed + sr.passed + v71.passed + v72.passed + v74.passed + v8.passed + cr.passed;
+  const totalFailed = ir.failed + er.failed + kr.failed + vr.failed + dr.failed + fr.failed + pr.failed + qr.failed + rr.failed + or.failed + mr.failed + nr.failed + lr.failed + sr.failed + v71.failed + v72.failed + v74.failed + v8.failed + cr.failed;
   console.log(`\n${CYAN}== Summary ==${RESET}`);
   console.log(`  ${GREEN}${totalPassed} passed${RESET}, ${totalFailed > 0 ? RED : DIM}${totalFailed} failed${RESET}`);
   if (totalFailed > 0) {

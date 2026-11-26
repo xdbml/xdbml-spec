@@ -65,6 +65,7 @@ export type TopLevelStatement =
   | TopLevelRecordsDeclaration
   | MetadataDeclaration
   | DepDeclaration
+  | ChangesDeclaration
   | ModuleImportDirective;
 
 /* -------------------------------------------------------------------------
@@ -971,6 +972,185 @@ export interface DepDependency {
    * concern this dependency alone.
    */
   settings: Setting[];
+  span: Span;
+}
+
+/* -------------------------------------------------------------------------
+ * Change blocks (spec §29, v0.8)
+ *
+ *     Changes "Customer contact details" [note: '...'] {
+ *       alter Table core.customers {
+ *         rename Field name to full_name
+ *         modify Field email varchar(320) [was: 'varchar(255)']
+ *       }
+ *       create Table core.loyalty_accounts { ... }
+ *       drop Ref: core.orders.customer_id > core.customers.id
+ *     }
+ *
+ * The raw AST keeps each block in document order, with its statements as
+ * written (§30.9). `flatten()` applies them, so a flattened document holds
+ * the model at its end and no ChangesDeclaration.
+ * ----------------------------------------------------------------------- */
+
+export interface ChangesDeclaration {
+  kind: 'ChangesDeclaration';
+  name?: string;
+  /** `note`, `base` and custom properties (§29.1). */
+  settings: Setting[];
+  statements: ChangeStatement[];
+  /** The file that declares the block, when the parser was given one. */
+  file?: string;
+  span: Span;
+}
+
+export type ChangeStatement = CreateStatement | DropStatement | AlterStatement;
+
+/** The kinds of element a statement names (§29.3), each keyword reduced to its canonical form. */
+export type ChangeElementKind =
+  | 'Container'
+  | 'Entity'
+  | 'View'
+  | 'Edge'
+  | 'Type'
+  | 'Enum'
+  | 'Ref'
+  | 'EntityPartial'
+  | 'EntityGroup'
+  | 'SupertypeGroup'
+  | 'DiagramView'
+  | 'Note'
+  | 'Dep';
+
+export interface CreateStatement {
+  kind: 'CreateStatement';
+  /** True when the statement writes `create`; a declaration in a change block creates its element as well (§29.5). */
+  explicit: boolean;
+  ifNotExists: boolean;
+  declaration: TopLevelStatement;
+  span: Span;
+}
+
+/** The element a `drop` or an `alter` names (§29.4). */
+export interface ChangeTarget {
+  kind: ChangeElementKind;
+  /** The keyword as written, such as `Table` or `Collection`. */
+  keyword: string;
+  /** The name, qualified as written; absent for a relationship or a dependency named by what it holds. */
+  name?: string;
+  /** A relationship named by its endpoints: `drop Ref: a.x > b.y`. */
+  ref?: RefSpec;
+  /** A dependency named by its line: `drop Dep: a.x -> b.y`. */
+  dependency?: DepDependency;
+}
+
+export interface DropStatement {
+  kind: 'DropStatement';
+  target: ChangeTarget;
+  ifExists: boolean;
+  /** The settings that identify the element, `uid` and `was` (§29.4). */
+  settings: Setting[];
+  span: Span;
+}
+
+export interface AlterStatement {
+  kind: 'AlterStatement';
+  target: ChangeTarget;
+  ifExists: boolean;
+  /** The settings that identify the element, `uid` (§29.4). */
+  settings: Setting[];
+  actions: AlterAction[];
+  span: Span;
+}
+
+/** The parts an `alter` names (§29.7); `Member` is a member of a group or a diagram view. */
+export type ChangePartKind = 'Field' | 'Index' | 'Constraint' | 'Value' | 'Member';
+
+/** A part as a statement names it (§29.4). */
+export interface ChangePartTarget {
+  kind: ChangePartKind;
+  /** The keyword as written: `Field`, `Column`, `Index`, `Table`, ... */
+  keyword: string;
+  /** A field, by its path from the element. */
+  path?: PathSegment[];
+  /** An index or a key, by its fields; an index also by an expression. */
+  components?: IndexComponent[];
+  /** A check, by its expression. */
+  expression?: string;
+  /** An Enum value or a member, by its name. */
+  name?: string;
+  /** The settings that identify the part and set nothing: `name`, `uid`, `was` (§29.4). */
+  settings: Setting[];
+  span: Span;
+}
+
+export type AlterAction =
+  | RenameElementAction
+  | MoveElementAction
+  | ModifyElementAction
+  | AddPartAction
+  | ModifyPartAction
+  | RenamePartAction
+  | DropPartAction;
+
+export interface RenameElementAction {
+  kind: 'RenameElementAction';
+  newName: string;
+  span: Span;
+}
+
+export interface MoveElementAction {
+  kind: 'MoveElementAction';
+  container: string;
+  span: Span;
+}
+
+/** `modify [type] [settings] [drop names]` on the element itself (§29.8). */
+export interface ModifyElementAction {
+  kind: 'ModifyElementAction';
+  type?: TypeExpression;
+  settings: Setting[];
+  drop: string[];
+  /** The new source query of a View, `modify source_query: '...'` (§29.7). */
+  sourceQuery?: string;
+  span: Span;
+}
+
+export interface AddPartAction {
+  kind: 'AddPartAction';
+  part: ChangePartKind;
+  keyword: string;
+  ifNotExists: boolean;
+  /** A field, with the path of the object that receives it when it is nested. */
+  field?: FieldDeclaration;
+  parentPath?: PathSegment[];
+  index?: IndexEntry;
+  constraint?: ConstraintEntry;
+  value?: EnumValue;
+  /** A member of a group or a diagram view, by its name. */
+  member?: string;
+  span: Span;
+}
+
+export interface ModifyPartAction {
+  kind: 'ModifyPartAction';
+  target: ChangePartTarget;
+  type?: TypeExpression;
+  settings: Setting[];
+  drop: string[];
+  span: Span;
+}
+
+export interface RenamePartAction {
+  kind: 'RenamePartAction';
+  target: ChangePartTarget;
+  newName: string;
+  span: Span;
+}
+
+export interface DropPartAction {
+  kind: 'DropPartAction';
+  target: ChangePartTarget;
+  ifExists: boolean;
   span: Span;
 }
 

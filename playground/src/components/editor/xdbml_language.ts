@@ -49,6 +49,8 @@ const XDBML_THEME: monaco.editor.IStandaloneThemeData = {
     { token: 'keyword.literal', foreground: 'aa3399' },
     { token: 'keyword.wildcard', foreground: 'ff5500', fontStyle: 'bold' },
     { token: 'keyword.partial', foreground: 'ff5500', fontStyle: 'bold' },
+    // The verbs and actions of a change block (spec §29, v0.8).
+    { token: 'keyword.change', foreground: 'c2410c', fontStyle: 'bold' },
 
     { token: 'type', foreground: '107010' },
     { token: 'type.bson', foreground: '107010', fontStyle: 'italic' },
@@ -103,6 +105,7 @@ const XDBML_THEME_DARK: monaco.editor.IStandaloneThemeData = {
     { token: 'keyword.literal', foreground: 'e08fd0' },
     { token: 'keyword.wildcard', foreground: 'ff9e5e', fontStyle: 'bold' },
     { token: 'keyword.partial', foreground: 'ff9e5e', fontStyle: 'bold' },
+    { token: 'keyword.change', foreground: 'fb923c', fontStyle: 'bold' },
 
     { token: 'type', foreground: '7ec699' },
     { token: 'type.bson', foreground: '7ec699', fontStyle: 'italic' },

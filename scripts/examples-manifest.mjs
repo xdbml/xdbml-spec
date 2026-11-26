@@ -226,4 +226,13 @@ export const examples = [
     description: 'A source-to-target mapping with Dep (spec \u00a727.10) and metrics (\u00a727.11). A legacy Oracle system and a CRM load a Snowflake warehouse. Each dependency names its kind of transformation: `identity` for a copied column, `calculation` for a full name built from two columns, `aggregation` for counts and sums, and, drawn dashed, `lookup`, `join`, `filter`, `group_by` and `conditional` for the columns that select or group the rows. Each `Dep` carries the statement that implements it in `source_query`. In the daily sales fact, `MBR_ID` plays two roles, join key and grouping key. A View that is not materialized holds two metrics. A staging area holds replicas of the sources, a copy between two tables, and feeds a Data Vault hub whose record source each load writes. Three diagram views show one load each.',
     generators:  [],
   },
+  {
+    file:        '20-model-changes.xdbml',
+    slug:        '20-model-changes',
+    title:       'Changes to a model (v0.8)',
+    domain:      'Subscription service',
+    paradigm:    'PostgreSQL relational',
+    description: 'Change blocks (spec §29): the customer schema of a subscription service, followed by three sets of changes in the form of SQL statements, as an AI assistant might propose them and a person apply them one after the other. The first renames, modifies, adds and drops fields of a table, and records with `was` what the changed field looked like before. The second moves a table to another Container, creates a relationship and adds an Enum value. The third drops a relationship and then the table it referred to, and skips with `if exists` a table that does not exist, which the Diagnostics panel reports as information. A `uid` keeps the identity of a field through its rename. The diagram shows the model at the end of the document.',
+    generators:  [],
+  },
 ];

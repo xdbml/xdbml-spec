@@ -45,6 +45,7 @@ import {
 } from '../src/components/diagram/layout-history.ts';
 import type { LayoutSnapshot } from '../src/components/diagram/layout-history.ts';
 import { applyTextEdits, planStickyNote } from '../src/components/diagram/add-note.ts';
+import { planAppendChanges, versionNotice } from '../src/components/header/append-changes.ts';
 import { depNarrative } from '../src/components/inspector/dep-narrative.ts';
 import { depMapping, isMapping, mappingsInto } from '../src/components/inspector/dep-mapping.ts';
 import { collectLineage, resolveLineage } from '../../parser/src/index.ts';
@@ -1439,6 +1440,49 @@ Note legend { 'Legend' }`,
     assertTrue(resolveSelection(ast, { kind: 'note', noteName: 'states' }) === null, 'the inspector selects by id');
     assertTrue(selectionEquals({ kind: 'note', noteName: 'a' }, { kind: 'note', noteName: 'a' }), 'equal note selections');
     assertTrue(!selectionEquals({ kind: 'note', noteName: 'a' }, { kind: 'note', noteName: 'b' }), 'different note selections');
+  },
+});
+
+tests.push({
+  name: 'v0.8: Append changes adds change blocks at the end, raises the version, and refuses anything else',
+  source: 'xdbml: 0.8\nTable customers { id int [pk], name varchar }\n',
+  check: () => {
+    const doc = 'xdbml: 0.8\nTable customers { id int [pk], name varchar }\n';
+    const changes = 'xdbml: 0.8\n\nChanges "Full name" {\n  alter Table customers rename Field name to full_name\n}\n';
+    const p1 = planAppendChanges({ source: doc, changes });
+    if (!p1.ok) throw new Error(p1.message);
+    const out1 = applyTextEdits(doc, p1.edits);
+    assertEq(out1, 'xdbml: 0.8\nTable customers { id int [pk], name varchar }\n\nChanges "Full name" {\n  alter Table customers rename Field name to full_name\n}\n',
+      'appended after a blank line, without the version line of the changes');
+    assertEq(out1.slice(p1.revealOffset, p1.revealOffset + 7), 'Changes', 'the reveal offset points at the first change block');
+    assertEq(p1.raisedFrom, undefined, 'a document declaring 0.8 keeps its version line');
+    const customers = flatten(parse(out1)).statements.find((s) => s.kind === 'EntityDeclaration');
+    assertTrue(!!customers && customers.kind === 'EntityDeclaration' && customers.body.some((b) => b.kind === 'FieldDeclaration' && b.name === 'full_name'),
+      'the model after the changes holds the renamed field');
+    assertEq(versionNotice(doc), undefined, 'no notice for a document declaring 0.8');
+
+    const old = '// Customers\nxdbml: 0.7\nTable customers { id int [pk], name varchar }';
+    const p2 = planAppendChanges({ source: old, changes: 'Changes { alter Table customers drop Field name }' });
+    if (!p2.ok) throw new Error(p2.message);
+    const out2 = applyTextEdits(old, p2.edits);
+    assertTrue(out2.startsWith('// Customers\nxdbml: 0.8\nTable customers'), `the version line is raised: ${JSON.stringify(out2)}`);
+    assertEq(p2.raisedFrom, '0.7', 'the version it had');
+    assertEq(out2.slice(p2.revealOffset, p2.revealOffset + 7), 'Changes', 'the reveal offset follows the raised version line');
+    assertTrue((versionNotice(old) ?? '').includes('xdbml: 0.7'), 'the notice names the version declared');
+
+    const dbml = 'Table t { id int }';
+    const p3 = planAppendChanges({ source: dbml, changes: 'Changes { alter Table t add Field code varchar }' });
+    if (!p3.ok) throw new Error(p3.message);
+    const out3 = applyTextEdits(dbml, p3.edits);
+    assertTrue(out3.startsWith('xdbml: 0.8\n\nTable t { id int }\n\nChanges'), `a version line is added to a DBML document: ${JSON.stringify(out3)}`);
+    assertEq(p3.raisedFrom, 'none', 'the document declared no version');
+
+    const model = planAppendChanges({ source: doc, changes: 'Changes { alter Table customers drop Field name }\nTable orders { id int }' });
+    assertTrue(!model.ok && model.message.startsWith('Line 2 holds a declaration'), `a declaration outside a change block is refused: ${JSON.stringify(model)}`);
+    const broken = planAppendChanges({ source: doc, changes: 'Changes {\n  alter Table customers rename Field\n}' });
+    assertTrue(!broken.ok && broken.message.startsWith('Line 3:'), `a parse error names the line of the changes: ${JSON.stringify(broken)}`);
+    const empty = planAppendChanges({ source: doc, changes: 'xdbml: 0.8\n   ' });
+    assertTrue(!empty.ok, 'empty changes are refused');
   },
 });
 

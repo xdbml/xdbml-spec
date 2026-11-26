@@ -20,6 +20,7 @@ This means you can edit freely; you'll see your changes reflected almost immedia
 Different parts of xDBML are colored to make scanning easier:
 
 - **Declaration keywords** (Project, Container, Table, Entity, Ref, etc.) in deep blue, bold. `Note` takes that color where it starts a note, as in `Note: '...'` or `Note { ... }`; a field named `note` is colored like any other field name.
+- **The statements of change blocks** (`create`, `alter`, `drop`, `add`, `modify`, `rename`, `move`, `if exists`) in orange, bold, and the kind after them, such as `Table` or `Field`, in deep blue. A field named `drop` or `modify` is colored like any other field name. See [**Change blocks**](./change-blocks).
 - **Type expression keywords** (object, array, oneOf, etc.) in magenta.
 - **Scalar types** (int, varchar, etc.) in green, along with common types of specific targets such as Oracle `number`, PostgreSQL `serial` or SQL Server `uniqueidentifier`. A type name without color is still valid: xDBML accepts any type name.
 - **BSON types** (objectId, etc.) in italic green to flag them as MongoDB-specific.

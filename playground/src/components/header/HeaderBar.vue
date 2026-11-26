@@ -47,11 +47,12 @@
         </span>
       </div>
 
-      <!-- Action buttons. Open and Save come first (file actions);
-           Examples, Share, Help follow. -->
+      <!-- Action buttons. Open, Save and Append changes come first
+           (file actions); Examples, Share, Help follow. -->
       <div class="flex items-center gap-1">
         <OpenFileButton />
         <SaveFileButton />
+        <AppendChangesMenu @append="(plan) => emit('append-changes', plan)" />
         <span class="h-5 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
         <ExamplesMenu />
         <ShareMenu />
@@ -73,8 +74,8 @@
  * Brand cluster (left): xDBML logo, Playground label, Preview badge,
  * then the current-filename slot with the dirty-indicator dot.
  *
- * Action buttons (right): Open, Save (with Save As dropdown), then
- * a divider, then Examples, Share, Help.
+ * Action buttons (right): Open, Save (with Save As dropdown), Append
+ * changes (spec §29.12), then a divider, then Examples, Share, Help.
  *
  * Open/Save use the File System Access API on Chromium-based browsers
  * for direct file overwriting; Firefox and Safari fall back to a
@@ -93,10 +94,14 @@ import ShareMenu from './ShareMenu.vue';
 import OpenFileButton from './OpenFileButton.vue';
 import SaveFileButton from './SaveFileButton.vue';
 import AppearanceToggle from './AppearanceToggle.vue';
+import AppendChangesMenu from './AppendChangesMenu.vue';
+import type { AppendChangesPlan } from './append-changes';
 
 import { useFileSystem } from '@/composables/useFileSystem';
 import { useFileSystemStore } from '@/stores/fileSystemStore';
 import logger from '@/utils/logger';
+
+const emit = defineEmits<{ 'append-changes': [plan: AppendChangesPlan] }>();
 
 const fs = useFileSystemStore();
 const { filename, isDirty } = storeToRefs(fs);

@@ -6,7 +6,8 @@ Follow this reference exactly. Do not borrow syntax from SQL DDL, other DBML dia
 
 ## Ground rules
 
-- The first line of every document is `xdbml: 0.7`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
+- The first line of every document is `xdbml: 0.8`. Without it, a parser reads the file as plain DBML and rejects every xDBML construct.
+- To change a model the user already has, write a `Changes` block that states only what changes, not the whole model again (see Changes to a model).
 - Comments are `//` to the end of the line, or `/* ... */`. `#` and `--` are errors.
 - Keywords match any casing, and names are case-sensitive. Write construct keywords capitalized (`Entity`, `Table`, `View`, `Ref`), settings and type keywords in lowercase.
 - A name is a bare identifier, `[A-Za-z_][A-Za-z0-9_]*`, or it is double-quoted: `"order details"`. A field may take the name of any keyword, without quotes: `note`, `type`, `date`, `records`. `Note:` starts a note; `indexes {`, `constraints {`, `checks {`, `records {` and `definitions {` start blocks, and so do `records (` and `records [`.
@@ -355,7 +356,7 @@ A listed Container brings all of its entities, unless `Entities` names some of t
 A top-level `Note` with a name is a sticky note: an annotation drawn on the diagram, in the color of its `color` setting (`#rgb`, `#rrggbb`, or `none` for the text alone), or light yellow by default. Its text is Markdown: headings, `**bold**`, `*italic*`, `` `code` ``, links and lists render on the canvas. With `xdbml: 0.7`, a named `Note` in a Container body is a sticky note attached to it: it is drawn inside the Container's frame and moves with it, and the rest of the document names it with its Container, as in `sales.order_states`. The unnamed `Note:` of a Container body stays the Container's own note, and a top-level `Note:` without a name is the note of the project.
 
 ```xdbml
-xdbml: 0.7
+xdbml: 0.8
 
 Container sales [type: schema] {
   Note: 'Order management'
@@ -655,6 +656,99 @@ Metadata Column customers.email {
 ```
 
 The kinds are `Table`, `Column`, `TableGroup` and `Note`, and with `xdbml: 0.7` also `Entity`, `Field`, `EntityGroup`, `Container`, `View` and `DiagramView`. A block takes `note`, the element's `color` (on an entity, a View, a group, a sticky note or a Container), and custom properties. It does not take `synonyms`, `business_term`, `tags`, `granularity`, or a field setting such as `pk`: those read as custom properties there, with a warning.
+
+## Changes to a model
+
+When a user asks you to change a model they already have, answer with a `Changes` block that states only what changes, in the form of the `CREATE`, `ALTER` and `DROP` statements of SQL. Do not write the whole model again. The user's tool applies the block to the model it holds, so a part of the model you were not shown is not lost, and a rename keeps the data that dropping a field and adding another would lose. A change block needs `xdbml: 0.8`. It stands at the top level, after the declarations it changes, and its statements apply in order. In a conversation, send the block alone; the user appends it to the model, and the example below shows both together only so that it validates.
+
+```xdbml
+Container core {
+  Table customers [uid: 'c1'] {
+    id          int [pk]
+    name        varchar [uid: 'c1-2']
+    email       varchar(255)
+    legacy_code varchar(10)
+  }
+}
+
+// Right
+Changes "Customer contact details" [note: 'Requested by the CRM team'] {
+  alter Table core.customers {
+    rename Field name to full_name
+    modify Field email varchar(320) [was: 'varchar(255)']
+    add Field preferred_language varchar(5) [not null, default: 'en']
+    drop Field legacy_code
+  }
+  create Table core.loyalty_accounts {
+    id          int [pk]
+    customer_id int [not null, ref: > core.customers.id]
+  }
+}
+```
+
+- `create` followed by a declaration adds an element. The word may be left out: a declaration in a change block creates its element too.
+- `drop Table core.legacy` removes an element and what it holds. It is an error while a relationship, a dependency, an index or a key of another element still names the element: drop those first, in the same block.
+- `alter Table core.customers` takes one action, or several in braces: `rename to clients`, `move to sales` (another Container), `modify [note: '...']` on the table itself, and `add`, `modify`, `rename` and `drop` of a `Field` (alias `Column`), an `Index`, a `Constraint` or, in an Enum, a `Value`. A nested field is named by its path: `add Field shipping.region varchar`.
+- `modify Field email varchar(320) [not null]` changes only the type and the settings it names, and keeps the others. `drop default`, `drop not null` and `drop [default, note]` remove settings. When you know the type and settings the field had, write them in `was`, as a string: the tool refuses the change if the model changed since you read it.
+- A relationship without a name is named by its endpoints, `drop Ref: core.orders.customer_id > core.customers.id`; an index or a key by its fields, `drop Index (email)`; a check by its expression; and any of them by its name, `drop Constraint [name: 'uk_email']`.
+- `if exists` after `drop Table` or `alter Table`, and `if not exists` after `create Table` or `add Field`, skip a statement whose element is missing or already present. Write them only for a change meant for several versions of a model: otherwise a name that does not match is an error the user needs to see.
+- Keywords match any casing, so `ALTER TABLE customers ADD COLUMN email varchar` is valid. Settings stay in brackets, `[not null, default: 'en']`.
+- When the model you were given carries `uid` settings, write the `uid` of each element you change beside its name, `alter Table core.customers [uid: 'c1']`, and in `modify` with the settings, `modify Field email [uid: 'c1-3', not null]`. The `uid` decides which element the statement changes, so the change still applies if someone renamed the element meanwhile. Do not invent a `uid`: the tool gives new elements theirs.
+
+A rename written as a drop and an add.
+
+```xdbml
+Table customers {
+  id   int [pk]
+  name varchar
+}
+
+// Wrong (accepted silently): the field is dropped and a new one is added, so its data is lost
+Changes {
+  alter Table customers {
+    drop Field name
+    add Field full_name varchar
+  }
+}
+
+// Right
+Changes { alter Table customers rename Field name to full_name }
+```
+
+A column definition of SQL in an `add`.
+
+```xdbml
+Table customers { id int [pk] }
+
+// Wrong (parse-error): NOT NULL DEFAULT is SQL; settings go in brackets
+Changes {
+  ALTER TABLE customers ADD COLUMN email varchar NOT NULL DEFAULT 'none'
+}
+
+// Right
+Changes {
+  ALTER TABLE customers ADD COLUMN email varchar [not null, default: 'none']
+}
+```
+
+A drop of a table that a relationship still names.
+
+```xdbml
+Table customers { id int [pk] }
+Table orders {
+  id          int [pk]
+  customer_id int [ref: > customers.id]
+}
+
+// Wrong (change-element-referenced): orders.customer_id still refers to customers
+Changes { drop Table customers }
+
+// Right
+Changes {
+  drop Ref: orders.customer_id > customers.id
+  drop Table customers
+}
+```
 
 ## Common mistakes
 
@@ -1283,7 +1377,7 @@ Entity suppliers {
 
 ## Checklist before you answer
 
-1. The first line is `xdbml: 0.7`.
+1. The first line is `xdbml: 0.8`.
 2. Every `[ ]` holding two or more settings has a comma between each two of them, across line breaks too.
 3. No comma or semicolon follows an item in `{ }`.
 4. In every relationship between attributes, the referenced side -- the right side of `>`, the left side of `<` -- names all the fields of the parent's primary key or of one of its unique keys, and no other field.
@@ -1297,13 +1391,14 @@ Entity suppliers {
 12. Every entity, field, Enum and Type the document names is declared, qualified with its Container where it sits in one.
 13. Internal definitions sit in one `definitions { }` block of the entity that uses them, never for a relational, Cassandra, ScyllaDB or graph target; a shape used by several entities is a top-level `Type`.
 14. In a source-to-target mapping, each line names its source fields and one target; its kind is in `transformation`, the statement in `source_query:` in the body of the `Dep`, and its language in `source_database`.
+15. A change to an existing model is a `Changes` block that names only what changes; a rename is a `rename`, never a drop and an add, and a dropped table loses its relationships first.
 
 To check a schema, run it through an xDBML validator when one is available, or paste it into the playground at https://xdbml.org/playground/: its diagnostics panel lists each error and warning with its line.
 
 ## Complete example
 
 ```xdbml
-xdbml: 0.7
+xdbml: 0.8
 
 Project service_network {
   targets: PostgreSQL

@@ -28,7 +28,7 @@ Table orders {
 
 try {
   const doc = parse(source);                  // AST; throws ParseError on a syntax error
-  flatten(doc);                               // resolve imports and partials into one document
+  flatten(doc);                               // resolve imports and partials into one document, and apply change blocks
   const { diagnostics } = resolveNames(doc);  // unresolved references, duplicate declarations, ...
   if (diagnostics.length === 0) {
     console.log('valid');

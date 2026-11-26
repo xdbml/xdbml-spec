@@ -60,7 +60,8 @@ import type {
 } from './ast.ts';
 import { SCALAR_TYPES, BSON_TYPES } from './keywords.ts';
 import { isQualifiedName, joinName, lastNameSegment, nameQualifier, quoteNameSegment, splitName } from './names.ts';
-import { flatten } from './module-resolver.ts';
+import { flatStatementsWithChanges, flatten } from './module-resolver.ts';
+import { checkChanges } from './changes.ts';
 import { checkRelationships } from './relationships.ts';
 import { checkOptionalMarks } from './cardinality.ts';
 import { checkNotes } from './notes.ts';
@@ -127,6 +128,20 @@ export interface SymbolEntry {
  */
 export type DiagnosticCode =
   | 'duplicate-declaration'
+  // Change blocks and uid (spec §29, v0.8)
+  | 'change-target-not-found'
+  | 'change-element-exists'
+  | 'change-part-not-found'
+  | 'change-part-exists'
+  | 'change-element-referenced'
+  | 'change-name-taken'
+  | 'change-was-mismatch'
+  | 'change-name-mismatch'
+  | 'change-invalid-action'
+  | 'change-skipped'
+  | 'forward-reference-across-changes'
+  | 'container-redeclared'
+  | 'duplicate-uid'
   | 'name-collision'
   | 'container-target-missing'
   | 'container-target-not-in-project'
@@ -245,7 +260,8 @@ export type DiagnosticCode =
  * span (a field's type expression, a path endpoint, an entity name).
  */
 export interface Diagnostic {
-  severity: 'error' | 'warning';
+  /** `info` reports what an implementation did, such as a skipped change statement (spec §29.10, v0.8). */
+  severity: 'error' | 'warning' | 'info';
   code: DiagnosticCode;
   message: string;
   span: Span;
@@ -458,6 +474,10 @@ export function resolveNames (doc: XDbmlDocument): ResolutionResult {
 
   // Pass 2: resolve references.
   resolveReferences(flat, symbols, diagnostics);
+
+  // Pass 2a: change blocks and uid (spec §29.16), on the document before
+  // its change blocks apply; `flat` holds the model they leave.
+  diagnostics.push(...checkChanges(flatStatementsWithChanges(doc), doc));
 
   // Pass 2b: one records block per entity (spec §26.6).
   diagnostics.push(...checkRecordsBlocks(flat, symbols));

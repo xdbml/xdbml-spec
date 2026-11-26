@@ -25,7 +25,7 @@ xDBML occupies the **schema layer of the modern data stack**. It carries **decla
 
 The same xDBML document feeds an ODCS contract's schema section, an Apache Ossie semantic model's datasets, a SHACL validator's target shapes, and the SQL DDL that creates them.
 
-xDBML is currently a draft v0.7 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
+xDBML is currently a draft v0.8 specification, stewarded by [Hackolade](https://hackolade.com) pending evolution to neutral governance, with the grammar finalized and an open ecosystem of parsers, generators, and importers being built under Apache License 2.0.
 
 ## Design philosophy
 

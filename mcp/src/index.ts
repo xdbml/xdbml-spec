@@ -47,10 +47,12 @@ const SERVER_INSTRUCTIONS =
   'This server works with xDBML, a text markup language for data schemas and a ' +
   'strict superset of DBML 10.3.1. When a user asks you to design, draft, edit, ' +
   'or render a schema with these tools, author it in xDBML -- not plain DBML -- ' +
-  'beginning with the line "xdbml: 0.7" and using xDBML constructs (Entity, ' +
+  'beginning with the line "xdbml: 0.8" and using xDBML constructs (Entity, ' +
   'nested objects and arrays, oneOf/union, reusable Type, precise min/max ' +
   'cardinality, Edge, View, and AI-readiness metadata such as tags, synonyms, ' +
-  'and business_term) where they fit. If you are unsure of the syntax, call the ' +
+  'and business_term) where they fit. To change a schema the user already has, ' +
+  'answer with a Changes block of create, alter and drop statements that names ' +
+  'only what changes, rather than the whole schema again. If you are unsure of the syntax, call the ' +
   'xdbml_reference tool first, or read https://xdbml.org/llms.txt and ' +
   'https://xdbml.org/spec/current. render_xdbml and validate_xdbml accept DBML too, ' +
   'since xDBML is a superset, but prefer xDBML.';

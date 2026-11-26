@@ -11,6 +11,16 @@
  */
 
 import type {
+  AddPartAction,
+  AlterAction,
+  AlterStatement,
+  ChangeElementKind,
+  ChangePartKind,
+  ChangePartTarget,
+  ChangeStatement,
+  ChangeTarget,
+  ChangesDeclaration,
+  DropStatement,
   AllOfType,
   AnyOfType,
   ArrayType,
@@ -129,7 +139,7 @@ export class ParseError extends Error {
  * declaring a later version is refused (spec 4.1) rather than parsed with
  * semantics it does not have.
  */
-export const SUPPORTED_XDBML_VERSION = '0.7.5';
+export const SUPPORTED_XDBML_VERSION = '0.8';
 
 /** Compare dotted version strings numerically: -1, 0 or 1. */
 export function compareVersions (a: string, b: string): number {
@@ -206,6 +216,41 @@ function kw (token: Token | undefined): string | null {
 
 function isKw (token: Token | undefined, expected: string): boolean {
   return kw(token) === expected;
+}
+
+/** The canonical kind of element a change statement names (spec §29.3), or undefined. */
+function changeElementKind (token: Token): ChangeElementKind | undefined {
+  const k = kw(token);
+  if (!k) return undefined;
+  if (CONTAINER_KEYWORDS.has(k)) return 'Container';
+  if (ENTITY_KEYWORDS.has(k)) return 'Entity';
+  switch (k) {
+    case 'view': return 'View';
+    case 'edge': return 'Edge';
+    case 'type': return 'Type';
+    case 'enum': return 'Enum';
+    case 'ref': return 'Ref';
+    case 'entitypartial': case 'tablepartial': return 'EntityPartial';
+    case 'entitygroup': case 'tablegroup': return 'EntityGroup';
+    case 'supertypegroup': return 'SupertypeGroup';
+    case 'diagramview': return 'DiagramView';
+    case 'note': return 'Note';
+    case 'dep': return 'Dep';
+    default: return undefined;
+  }
+}
+
+/** The kind of part an action of `alter` names (spec §29.7), or undefined. */
+function partKind (token: Token): ChangePartKind | undefined {
+  const k = kw(token);
+  if (!k) return undefined;
+  if (k === 'field' || k === 'column') return 'Field';
+  if (k === 'index') return 'Index';
+  if (k === 'constraint') return 'Constraint';
+  if (k === 'value') return 'Value';
+  if (CONTAINER_KEYWORDS.has(k) || ENTITY_KEYWORDS.has(k)) return 'Member';
+  if (k === 'view' || k === 'entitygroup' || k === 'tablegroup' || k === 'supertypegroup' || k === 'note') return 'Member';
+  return undefined;
 }
 
 /**
@@ -551,6 +596,13 @@ export class Parser {
     if (k === 'records') return this.parseTopLevelRecords();
     if (k === 'metadata') return this.parseMetadata();
     if (k === 'dep') return this.parseDep();
+    if (k === 'changes') return this.parseChanges();
+    if (k === 'create') {
+      // Spec §29.5 (v0.8): `create` in front of a declaration means the declaration.
+      this.requireChanges(t, "'create'");
+      this.advance();
+      return this.parseCreatedDeclaration(true);
+    }
     if (k === 'use' || k === 'reuse') return this.parseModuleDirective('file-scope');
     throw new ParseError(`Unknown top-level construct: ${t.text}`, t.start);
   }
@@ -728,6 +780,9 @@ export class Parser {
         body.push(this.parseView());
       } else if (k === 'enum') {
         body.push(this.parseEnum());
+      } else if (k === 'create' && this.declaresChanges()) {
+        // Spec §29.5 (v0.8): `create` in front of a declaration means the declaration.
+        this.advance();
       } else if (k === 'use' || k === 'reuse') {
         body.push(this.parseModuleDirective('container-body'));
       } else if (k === 'diagramview') {
@@ -1053,6 +1108,410 @@ export class Parser {
     if (canonical === 'Table' || canonical === 'View') this.headerColorAlias(settings);
     if (this.options.filePath) decl.file = toForwardSlashes(this.options.filePath);
     return decl;
+  }
+
+  /* ----- Change blocks (spec §29, v0.8) ----- */
+
+  /** Whether the document declares `xdbml: 0.8` or later, which change blocks need (§29). */
+  private declaresChanges (): boolean {
+    return this.declaredVersion !== undefined && compareVersions(this.declaredVersion, '0.8') >= 0;
+  }
+
+  private requireChanges (tok: Token, what: string): void {
+    if (this.declaresChanges()) return;
+    throw new ParseError(
+      `${what} needs xdbml: 0.8 or later; this document declares ` +
+      (this.declaredVersion ? `xdbml: ${this.declaredVersion}` : 'no version') + ' (spec §29).',
+      tok.start,
+    );
+  }
+
+  /** `if exists`, after the kind of a `drop` or an `alter`, or the part of a `drop` (§29.10). */
+  private matchIfExists (): boolean {
+    if (!isKw(this.peek(), 'if') || !isKw(this.peek(1), 'exists')) return false;
+    this.advance();
+    this.advance();
+    return true;
+  }
+
+  /** `if not exists`, after the keyword of a `create` or the part of an `add` (§29.10). */
+  private matchIfNotExists (): boolean {
+    if (!isKw(this.peek(), 'if') || !isKw(this.peek(1), 'not') || !isKw(this.peek(2), 'exists')) return false;
+    this.advance();
+    this.advance();
+    this.advance();
+    return true;
+  }
+
+  /** Whether the current token is a word on the line of the previous token. */
+  private onSameLine (): boolean {
+    return !this.check(TokenKind.EOF) && !this.atLineStart();
+  }
+
+  /**
+   * `Changes "name" [settings] { statements }` at the top level (§29.1). The
+   * statements are a list body (§3.9).
+   */
+  private parseChanges (): ChangesDeclaration {
+    const start = this.peek().start;
+    const kwTok = this.advance(); // Changes
+    this.requireChanges(kwTok, 'A change block');
+    let name: string | undefined;
+    if (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier)) {
+      name = this.parseIdentLikeName('the name of the change block');
+    }
+    const settings = this.maybeSettingsBlock();
+    this.expect(TokenKind.LBrace, "Expected '{' starting the change block");
+    const statements: ChangeStatement[] = [];
+    for (;;) {
+      this.skipListSeparators();
+      if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
+      statements.push(this.parseChangeStatement());
+    }
+    this.expect(TokenKind.RBrace, "Expected '}' closing the change block");
+    const decl: ChangesDeclaration = {
+      kind: 'ChangesDeclaration',
+      settings,
+      statements,
+      span: this.spanFrom(start),
+    };
+    if (name !== undefined) decl.name = name;
+    if (this.options.filePath) decl.file = toForwardSlashes(this.options.filePath);
+    return decl;
+  }
+
+  private parseChangeStatement (): ChangeStatement {
+    const t = this.peek();
+    const k = kw(t);
+    if (k === 'drop') return this.parseDropStatement();
+    if (k === 'alter') return this.parseAlterStatement();
+    const start = t.start;
+    let explicit = false;
+    let ifNotExists = false;
+    if (k === 'create') {
+      this.advance();
+      explicit = true;
+      // `create Table if not exists core.x { ... }`: the words stand after
+      // the keyword, as in SQL (§29.10). They are taken out of the token
+      // stream so that the declaration parses as it does anywhere else.
+      if (isKw(this.peek(1), 'if') && isKw(this.peek(2), 'not') && isKw(this.peek(3), 'exists')) {
+        this.tokens.splice(this.idx + 1, 3);
+        ifNotExists = true;
+      }
+    } else if (k === 'if') {
+      throw new ParseError("'if not exists' needs 'create' before the declaration (spec §29.5).", t.start);
+    }
+    const declaration = this.parseCreatedDeclaration(explicit);
+    return {
+      kind: 'CreateStatement',
+      explicit,
+      ifNotExists,
+      declaration,
+      span: this.spanFrom(start),
+    };
+  }
+
+  /** A declaration that a change block, or `create` outside one, adds to the model (§29.5). */
+  private parseCreatedDeclaration (explicit: boolean): TopLevelStatement {
+    const t = this.peek();
+    const k = kw(t);
+    if (k && CONTAINER_KEYWORDS.has(k)) return this.parseContainer();
+    if (k && ENTITY_KEYWORDS.has(k)) return this.parseEntity();
+    if (k === 'type') return this.parseTypeDecl();
+    if (k === 'edge') return this.parseEdge();
+    if (k === 'view') return this.parseView();
+    if (k === 'enum') return this.parseEnum();
+    if (k === 'ref') return this.parseRef();
+    if (k === 'entitypartial' || k === 'tablepartial') return this.parseTablePartial();
+    if (k === 'entitygroup' || k === 'tablegroup') return this.parseTableGroup();
+    if (k === 'supertypegroup') return this.parseSupertypeGroup();
+    if (k === 'diagramview') return this.parseDiagramView();
+    if (k === 'dep') return this.parseDep();
+    if (k === 'note' && (this.peek(1).kind === TokenKind.Identifier || this.peek(1).kind === TokenKind.QuotedIdentifier)) {
+      return this.parseNoteDeclaration();
+    }
+    throw new ParseError(
+      explicit
+        ? `'create' is followed by a declaration, such as an entity, a Container, a relationship or an Enum (spec §29.5); got ${JSON.stringify(t.text)}.`
+        : `A change block holds statements: create, alter or drop, or a declaration (spec §29.3); got ${JSON.stringify(t.text)}.`,
+      t.start,
+    );
+  }
+
+  /** The kind a statement names, from its keyword (§29.3). */
+  private parseChangeElementKind (verb: string): { kind: ChangeElementKind; keyword: string } {
+    const tok = this.peek();
+    const kind = changeElementKind(tok);
+    if (!kind) {
+      throw new ParseError(
+        `Expected the kind of element after '${verb}', such as Table, Container, Ref, Enum or View (spec §29.3); ` +
+        `got ${JSON.stringify(tok.text)}.`,
+        tok.start,
+      );
+    }
+    this.advance();
+    return { kind, keyword: tok.text };
+  }
+
+  /** The element a `drop` or an `alter` names (§29.4). */
+  private parseChangeTarget (kind: ChangeElementKind, keyword: string): ChangeTarget {
+    const target: ChangeTarget = { kind, keyword };
+    // An element named by its uid alone, `alter Table [uid: '7f3c']`: the
+    // brackets stand in place of the name, and the caller reads them as the
+    // settings of the statement (§29.4).
+    if (this.check(TokenKind.LBracket) && kind !== 'Dep') return target;
+    if (kind === 'Ref') {
+      if (this.check(TokenKind.Identifier) || this.check(TokenKind.QuotedIdentifier)) {
+        target.name = this.parseIdentLikeName('the name of the relationship');
+      }
+      if (this.match(TokenKind.Colon)) target.ref = this.parseRefSpec();
+      if (target.name === undefined && target.ref === undefined) {
+        throw new ParseError("Expected the name of the relationship, or ':' and its endpoints (spec §29.4).", this.peek().start);
+      }
+      return target;
+    }
+    if (kind === 'Dep') {
+      if (this.match(TokenKind.Colon)) {
+        target.dependency = this.parseDepDependency();
+        return target;
+      }
+      throw new ParseError("A dependency is named by its line: 'Dep: a.x -> b.y' (spec §29.4).", this.peek().start);
+    }
+    target.name = this.parseQualifiedName(`the name of the ${keyword}`);
+    return target;
+  }
+
+  private parseDropStatement (): DropStatement {
+    const start = this.peek().start;
+    this.advance(); // drop
+    const { kind, keyword } = this.parseChangeElementKind('drop');
+    const ifExists = this.matchIfExists();
+    const target = this.parseChangeTarget(kind, keyword);
+    const settings = this.maybeSettingsBlock();
+    return {
+      kind: 'DropStatement',
+      target,
+      ifExists,
+      settings,
+      span: this.spanFrom(start),
+    };
+  }
+
+  private parseAlterStatement (): AlterStatement {
+    const start = this.peek().start;
+    this.advance(); // alter
+    const { kind, keyword } = this.parseChangeElementKind('alter');
+    const ifExists = this.matchIfExists();
+    const target = this.parseChangeTarget(kind, keyword);
+    const settings = this.maybeSettingsBlock();
+    const actions: AlterAction[] = [];
+    if (this.match(TokenKind.LBrace)) {
+      for (;;) {
+        this.skipListSeparators();
+        if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
+        actions.push(this.parseAlterAction());
+      }
+      this.expect(TokenKind.RBrace, "Expected '}' closing the actions of 'alter'");
+    } else {
+      actions.push(this.parseAlterAction());
+    }
+    return {
+      kind: 'AlterStatement',
+      target,
+      ifExists,
+      settings,
+      actions,
+      span: this.spanFrom(start),
+    };
+  }
+
+  private parseAlterAction (): AlterAction {
+    const start = this.peek().start;
+    const tok = this.peek();
+    const verb = kw(tok);
+    if (verb === 'rename') {
+      this.advance();
+      if (isKw(this.peek(), 'to')) {
+        this.advance();
+        const newName = this.parseIdentLikeName("the new name after 'rename to'");
+        return { kind: 'RenameElementAction', newName, span: this.spanFrom(start) };
+      }
+      const part = this.parsePartKind('rename');
+      const target = this.parsePartTarget(part, true);
+      if (!isKw(this.peek(), 'to')) throw new ParseError("Expected 'to' and the new name (spec §29.9).", this.peek().start);
+      this.advance();
+      const newName = this.parseIdentLikeName("the new name after 'to'");
+      return { kind: 'RenamePartAction', target, newName, span: this.spanFrom(start) };
+    }
+    if (verb === 'move') {
+      this.advance();
+      if (!isKw(this.peek(), 'to')) throw new ParseError("Expected 'to' and the name of a Container after 'move' (spec §29.9).", this.peek().start);
+      this.advance();
+      const container = this.parseQualifiedName("the Container after 'move to'");
+      return { kind: 'MoveElementAction', container, span: this.spanFrom(start) };
+    }
+    if (verb === 'modify') {
+      this.advance();
+      if (isKw(this.peek(), 'source_query') && this.peek(1).kind === TokenKind.Colon) {
+        this.advance();
+        this.advance();
+        const q = this.peek();
+        if (q.kind !== TokenKind.StringLiteral && q.kind !== TokenKind.MultilineString) {
+          throw new ParseError('Expected the source query, in quotes, after source_query: (spec §14.3).', q.start);
+        }
+        this.advance();
+        return { kind: 'ModifyElementAction', settings: [], drop: [], sourceQuery: q.value ?? '', span: this.spanFrom(start) };
+      }
+      if (partKind(this.peek())) {
+        const part = this.parsePartKind('modify');
+        const target = this.parsePartTarget(part, false);
+        const tail = this.parseModifyTail();
+        return { kind: 'ModifyPartAction', target, ...tail, span: this.spanFrom(start) };
+      }
+      const tail = this.parseModifyTail();
+      return { kind: 'ModifyElementAction', ...tail, span: this.spanFrom(start) };
+    }
+    if (verb === 'add') {
+      this.advance();
+      return this.parseAddPart(start);
+    }
+    if (verb === 'drop') {
+      this.advance();
+      const part = this.parsePartKind('drop');
+      const ifExists = this.matchIfExists();
+      const target = this.parsePartTarget(part, true);
+      return { kind: 'DropPartAction', target, ifExists, span: this.spanFrom(start) };
+    }
+    throw new ParseError(
+      `Expected an action of 'alter': rename, move, modify, add or drop (spec §29.7); got ${JSON.stringify(tok.text)}.`,
+      tok.start,
+    );
+  }
+
+  private parsePartKind (verb: string): { part: ChangePartKind; keyword: string } {
+    const tok = this.peek();
+    const part = partKind(tok);
+    if (!part) {
+      throw new ParseError(
+        `Expected the kind of part after '${verb}': Field, Column, Index, Constraint, Value, or the kind of a member (spec §29.7); ` +
+        `got ${JSON.stringify(tok.text)}.`,
+        tok.start,
+      );
+    }
+    this.advance();
+    return { part, keyword: tok.text };
+  }
+
+  /**
+   * A part as a statement names it (§29.4). With `identifying`, brackets
+   * after it hold the settings that identify it (`name`, `uid`, `was`); for
+   * `modify`, the brackets that follow belong to the change instead.
+   */
+  private parsePartTarget ({ part, keyword }: { part: ChangePartKind; keyword: string }, identifying: boolean): ChangePartTarget {
+    const start = this.peek().start;
+    const target: ChangePartTarget = { kind: part, keyword, settings: [], span: this.spanFrom(start) };
+    const t = this.peek();
+    if (t.kind === TokenKind.LBracket) {
+      // A part named by its name or its uid in brackets, in place of its
+      // path or its name: `[name: 'created_at_index']`, `[uid: '7f3c-2']`.
+      target.settings = this.maybeSettingsBlock();
+    } else if (part === 'Field') {
+      target.path = this.parsePathSegments();
+    } else if (part === 'Value') {
+      if (t.kind === TokenKind.StringLiteral || t.kind === TokenKind.QuotedIdentifier) {
+        this.advance();
+        target.name = t.value ?? '';
+      } else {
+        target.name = this.expect(TokenKind.Identifier, 'Expected the name of the Enum value').text;
+      }
+    } else if (part === 'Member') {
+      target.name = this.parseQualifiedName(`the name of the ${keyword}`);
+    } else if (part === 'Constraint' && (t.kind === TokenKind.StringLiteral || t.kind === TokenKind.ExpressionLiteral || t.kind === TokenKind.MultilineString)) {
+      this.advance();
+      target.expression = t.value ?? '';
+    } else if (this.match(TokenKind.LParen)) {
+      const components = [this.parseIndexComponent()];
+      while (this.match(TokenKind.Comma)) components.push(this.parseIndexComponent());
+      this.expect(TokenKind.RParen, "Expected ')' closing the fields");
+      target.components = components;
+    } else {
+      target.components = [this.parseIndexComponent()];
+    }
+    if (identifying && this.check(TokenKind.LBracket)) target.settings = [...target.settings, ...this.maybeSettingsBlock()];
+    target.span = this.spanFrom(start);
+    return target;
+  }
+
+  /** `[type] [settings] [drop names]` after `modify` (§29.8), on the line of the statement. */
+  private parseModifyTail (): { type?: TypeExpression; settings: Setting[]; drop: string[] } {
+    const tail: { type?: TypeExpression; settings: Setting[]; drop: string[] } = { settings: [], drop: [] };
+    const atEnd = () =>
+      !this.onSameLine() || this.check(TokenKind.RBrace) || this.check(TokenKind.Comma) || this.check(TokenKind.Semicolon);
+    if (!atEnd() && !this.check(TokenKind.LBracket) && !isKw(this.peek(), 'drop')) {
+      tail.type = this.parseTypeExpression(false);
+    }
+    if (!atEnd() && this.check(TokenKind.LBracket)) tail.settings = this.maybeSettingsBlock();
+    if (!atEnd() && isKw(this.peek(), 'drop')) {
+      this.advance();
+      if (this.match(TokenKind.LBracket)) {
+        tail.drop.push(this.parseSettingName());
+        while (this.match(TokenKind.Comma)) tail.drop.push(this.parseSettingName());
+        this.expect(TokenKind.RBracket, "Expected ']' closing the names of the settings to drop");
+      } else {
+        tail.drop.push(this.parseSettingName());
+      }
+    }
+    return tail;
+  }
+
+  /** The name of a setting after `drop`: `default`, `note`, `not null`, `primary key` (§29.8). */
+  private parseSettingName (): string {
+    const tok = this.peek();
+    if (isKw(tok, 'not') && isKw(this.peek(1), 'null')) {
+      this.advance();
+      this.advance();
+      return 'not null';
+    }
+    if (isKw(tok, 'primary') && isKw(this.peek(1), 'key')) {
+      this.advance();
+      this.advance();
+      return 'primary key';
+    }
+    return this.parseIdentLikeName('the name of a setting after drop');
+  }
+
+  private parseAddPart (start: Position): AddPartAction {
+    const { part, keyword } = this.parsePartKind('add');
+    const ifNotExists = this.matchIfNotExists();
+    const action: AddPartAction = { kind: 'AddPartAction', part, keyword, ifNotExists, span: this.spanFrom(start) };
+    const t = this.peek();
+    if (part === 'Field') {
+      if (this.peek(1).kind === TokenKind.Dot) {
+        const path = this.parsePathSegments();
+        const last = path[path.length - 1];
+        if (last.kind !== 'PathField') {
+          throw new ParseError('The path of a new field ends with its name (spec §29.7).', t.start);
+        }
+        action.parentPath = path.slice(0, -1);
+        const type = this.parseTypeExpression(false);
+        const settings = this.maybeSettingsBlock();
+        action.field = { kind: 'FieldDeclaration', name: last.name, nameQuoted: false, type, settings, span: this.spanFrom(last.span.start) };
+      } else {
+        action.field = this.parseFieldDeclaration();
+      }
+    } else if (part === 'Index') {
+      action.index = this.parseIndexEntry();
+    } else if (part === 'Constraint') {
+      action.constraint = t.kind === TokenKind.StringLiteral || t.kind === TokenKind.MultilineString || t.kind === TokenKind.ExpressionLiteral
+        ? this.parseCheckEntry()
+        : this.parseKeyConstraintEntry();
+    } else if (part === 'Value') {
+      action.value = this.parseEnumValue();
+    } else {
+      action.member = this.parseQualifiedName(`the name of the ${keyword}`);
+    }
+    action.span = this.spanFrom(start);
+    return action;
   }
 
   /* ----- Module-system directives (spec §28, new in v0.2) ----- */
@@ -2135,33 +2594,7 @@ export class Parser {
     for (;;) {
       this.skipListSeparators();
       if (this.check(TokenKind.RBrace) || this.check(TokenKind.EOF)) break;
-      const vStart = this.peek().start;
-      const vt = this.peek();
-      let vname: string;
-      let vquoted = false;
-      if (vt.kind === TokenKind.StringLiteral) {
-        // legacy form: 'A+'
-        this.advance();
-        vname = vt.value ?? '';
-        vquoted = true;
-      } else if (vt.kind === TokenKind.QuotedIdentifier) {
-        this.advance();
-        vname = vt.value ?? '';
-        vquoted = true;
-      } else if (vt.kind === TokenKind.Identifier) {
-        this.advance();
-        vname = vt.text;
-      } else {
-        throw new ParseError(`Expected enum value, got ${vt.kind}`, vt.start);
-      }
-      const settings = this.maybeSettingsBlock();
-      values.push({
-        kind: 'EnumValue',
-        name: vname,
-        nameQuoted: vquoted,
-        settings,
-        span: this.spanFrom(vStart),
-      });
+      values.push(this.parseEnumValue());
     }
     this.expect(TokenKind.RBrace, "Expected '}' closing enum");
     return {
@@ -2170,6 +2603,37 @@ export class Parser {
       name,
       values,
       span: this.spanFrom(start),
+    };
+  }
+
+  /** One value of an Enum, with its settings (spec §16). */
+  private parseEnumValue (): EnumValue {
+    const vStart = this.peek().start;
+    const vt = this.peek();
+    let vname: string;
+    let vquoted = false;
+    if (vt.kind === TokenKind.StringLiteral) {
+      // legacy form: 'A+'
+      this.advance();
+      vname = vt.value ?? '';
+      vquoted = true;
+    } else if (vt.kind === TokenKind.QuotedIdentifier) {
+      this.advance();
+      vname = vt.value ?? '';
+      vquoted = true;
+    } else if (vt.kind === TokenKind.Identifier) {
+      this.advance();
+      vname = vt.text;
+    } else {
+      throw new ParseError(`Expected enum value, got ${vt.kind}`, vt.start);
+    }
+    const settings = this.maybeSettingsBlock();
+    return {
+      kind: 'EnumValue',
+      name: vname,
+      nameQuoted: vquoted,
+      settings,
+      span: this.spanFrom(vStart),
     };
   }
 

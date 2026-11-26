@@ -42,6 +42,7 @@ import { joinName, quoteNameSegment, splitName } from './names.ts';
 import { entityDefinitions, inlineInternalDefinitions } from './definitions.ts';
 import { resolveStickyNote, stickyNotes } from './notes.ts';
 import { metadataForImport } from './metadata.ts';
+import { applyChanges, hasChanges } from './changes.ts';
 import type { LocalTypes } from './definitions.ts';
 
 /**
@@ -78,10 +79,26 @@ export function flatten (doc: XDbmlDocument): XDbmlDocument {
   const statements: TopLevelStatement[] = [];
   const metadata: MetadataDeclaration[] = [];
   flattenInto(doc.statements, statements, metadata);
+  if (hasChanges(statements)) {
+    // Spec §29.2 (v0.8): the change blocks apply in order, and the
+    // flattened document holds the model at the end of the document.
+    const applied = applyChanges(statements, metadata);
+    return { ...doc, statements: [...applied.statements, ...applied.metadata] };
+  }
   return {
     ...doc,
     statements: [...statements, ...metadata],
   };
+}
+
+/**
+ * The statements of a document with its imports merged and its change
+ * blocks not applied yet (spec §29.2), for the checks of the change blocks.
+ */
+export function flatStatementsWithChanges (doc: XDbmlDocument): TopLevelStatement[] {
+  const statements: TopLevelStatement[] = [];
+  flattenInto(doc.statements, statements, []);
+  return statements;
 }
 
 /**
@@ -133,8 +150,13 @@ function flattenTopLevel (
     // multi-level nesting in v0.2 phase 1).
     if (stmt.clone) {
       const brought: MetadataDeclaration[] = [];
-      flattenInto(stmt.clone.statements, out, brought);
-      importedMetadata.push(...brought.map(importedBlock));
+      const inner: TopLevelStatement[] = [];
+      flattenInto(stmt.clone.statements, inner, brought);
+      // Spec §29.12 (v0.8): an import brings the model of the imported
+      // file after its own change blocks.
+      const applied = hasChanges(inner) ? applyChanges(inner, brought) : { statements: inner, metadata: brought };
+      out.push(...applied.statements);
+      importedMetadata.push(...applied.metadata.map(importedBlock));
     }
     return;
   }
@@ -393,8 +415,11 @@ export function resolveImport (
  */
 function extractImports (
   spec: ImportSpec,
-  sourceDoc: XDbmlDocument,
+  source: XDbmlDocument,
 ): (TopLevelStatement | FieldDeclaration)[] {
+  // Spec §29.12 (v0.8): an import brings the model the source file
+  // describes, after its own change blocks.
+  const sourceDoc = hasChanges(source.statements) ? flatten(source) : source;
   if (spec.kind === 'ImportAll') {
     // ImportAll never matches field imports (the `*` form is for top-level
     // declarations only per spec §28.2). Return the source's top-level

@@ -232,6 +232,38 @@ async function main () {
       totalFailed++;
     }
   }
+  // Spec 29 (v0.8): the words of a change block, and the same words as names.
+  console.log(`\n${CYAN}Change blocks${RESET}`);
+  for (const [line, word, scope] of [
+    ['Changes "Full name" {', 'Changes', 'keyword.declaration.xdbml'],
+    ['Changes [note: \'x\'] {', 'Changes', 'keyword.declaration.xdbml'],
+    ['  alter Table core.customers {', 'alter', 'keyword.control.change.xdbml'],
+    ['  alter Table core.customers {', 'Table', 'keyword.declaration.xdbml'],
+    ['  create Table if not exists core.x {', 'create', 'keyword.control.change.xdbml'],
+    ['  create Table if not exists core.x {', 'exists', 'keyword.control.change.xdbml'],
+    ['  drop Ref: a.x > b.y', 'drop', 'keyword.control.change.xdbml'],
+    ['  ALTER TABLE customers ADD COLUMN email varchar', 'ADD', 'keyword.control.change.xdbml'],
+    ['    rename Field name to full_name', 'rename', 'keyword.control.change.xdbml'],
+    ['    rename Field name to full_name', 'Field', 'keyword.declaration.xdbml'],
+    ['  alter Table staging.addresses move to core', 'move', 'keyword.control.change.xdbml'],
+    ['    modify Field email drop [default, note]', 'drop', 'keyword.control.change.xdbml'],
+    ['    modify [note: \'x\']', 'modify', 'keyword.control.change.xdbml'],
+    ['  drop   varchar', 'drop', null],
+    ['  modify varchar', 'modify', null],
+    ['  changes int', 'changes', null],
+  ]) {
+    const toks = grammar.tokenizeLine(line, vsctm.INITIAL).tokens;
+    const at = line.indexOf(word);
+    const tok = toks.find((t) => t.startIndex <= at && at < t.endIndex);
+    const scopes = tok?.scopes ?? [];
+    const has = scope ? scopes.includes(scope) : !scopes.some((s) => s.startsWith('keyword.'));
+    if (has) {
+      console.log(`  ${GREEN}✓${RESET} '${line.trim()}': ${word} ${scope ? `is ${scope}` : 'is no keyword'}`);
+    } else {
+      console.log(`  ${RED}✗${RESET} '${line.trim()}': ${word} expected ${scope ?? 'no keyword'}, got ${scopes.join(' ')}`);
+      totalFailed++;
+    }
+  }
   // Spec 11.1 (v0.7): a `?` against the operator is part of it.
   console.log(`\n${CYAN}Optional marks on cardinality operators${RESET}`);
   for (const [line, op] of [

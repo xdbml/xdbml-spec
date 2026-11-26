@@ -4,9 +4,58 @@ This file records substantive changes between xDBML specification versions. Patc
 
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com), adapted for a specification rather than a software project.
 
-## v0.7.5 -- 2026
+## v0.8 -- 2026
 
 **Status**: Draft -- current
+**Released**: 2026-11-25
+
+Adds change blocks, which list changes to a model in the form of the `CREATE`, `ALTER` and `DROP` statements of SQL, and the `uid` setting, which gives an element an identifier that stays the same through a rename or a move. Until now, xDBML described the state of a model, and a change could only be stated by writing the whole model again; a tool comparing two versions could not tell a renamed field from a field dropped and another one added. Chapter 29 is new, and chapters 29 to 32 become 30 to 33.
+
+### Added
+
+#### Spec
+
+- **Change blocks (§29.1)**: `Changes "name" [settings] { statements }` at the top level, any number per document, before, between and after the declarations. A block takes `note`, `base` (the version of the model it was written for, informational) and custom properties. Its statements apply in order, and a statement that cannot apply is an error.
+- **The order of a document (§29.2)**: a change block changes the model declared above it, and the declarations below it see the result. Declarations between two change blocks may come in any order and name each other in any direction; a declaration never names an element declared below a change block that stands between the two. A reference follows the element it names through a rename or a move. The model a document describes is the model at its end. A document without change blocks reads as before.
+- **Statements (§29.3, §29.4)**: `create`, `drop` and `alter`, followed by the keyword of the element and its name, case-insensitive and with the keyword synonyms of xDBML, so `ALTER TABLE … ADD COLUMN …` is a statement. An element without a name is named by what it holds: a relationship by its endpoints, an index or a key by its fields, a check by its expression, a dependency by its line.
+- **`create` (§29.5)**: optional, inside and outside a change block; a declaration in a change block creates its element.
+- **`drop` (§29.6)**: removes an element and what it holds. It is an error while another element refers to it, so the statements that remove the references come first; Metadata blocks and memberships in groups and diagram views go with the element.
+- **`alter` (§29.7)**: one action, or several in braces: `rename to`, `move to` another Container, `modify` the element's own settings, and `add`, `modify`, `rename` and `drop` its parts, which are `Field` (alias `Column`), `Index`, `Constraint`, `Value`, or the members of a group or a diagram view.
+- **`modify` (§29.8)**: changes the type and the settings it names and keeps the others. `drop` removes settings: `drop default`, `drop not null`, `drop [default, note]`. The setting `was` records the type and settings before the change; a statement whose element no longer matches it is an error.
+- **`rename` and `move` (§29.9)**: the element keeps its `uid`, settings, parts and the references to it.
+- **`if exists` and `if not exists` (§29.10)**: after `create`, `drop`, `alter`, `add` and the `drop` of a part, as in SQL. A skipped statement is reported at a new severity, information, as PostgreSQL reports a notice.
+- **Declaring a Container again (§29.11)**: below a change block, a second declaration of a Container adds elements to it; the recommended form is `create` in a change block.
+- **Change sets in their own file (§29.12)**: a file of change blocks imports the model it changes, and an import brings the model a file describes after its own change blocks, so a sequence of files records the versions of a model. Without an import, the host supplies the model.
+- **Targets (§29.14, §1.1)**: a change block states the change to the model; how a target carries it out, such as renaming a column in place or copying its values, is decided by the tool that writes the statements of the target.
+- **`uid` (§29.15, §7.5, §8.8)**: a string on every element, written by the tool that keeps the model, unique in the model, unchanged by a rename or a move, and ignored by generators. In a statement, a `uid` decides which element or part the statement applies to: `alter Table [uid: '7f3c']` names the table by its `uid` alone, and a name written beside a `uid` that no longer leads to the element draws the warning `change-name-mismatch`, so a change set still applies after a rename. In a document declaring an earlier version, `uid` remains a custom property.
+- **Validation summary (§29.16)** for change blocks, with the information severity.
+- **Document structure (§2)**, **separators (§3.9)**, **version declaration (§4)**, **AST (§30, §30.9)**, **round-trip (§31.1)**, **other standards (§32)**, **conformance (§33, item 25)**, **reserved keywords (Appendix A)** and **compatibility with DBML (Appendix D, items 9 and 14)** for change blocks and `uid`.
+
+#### Tooling
+
+- **Grammar (`grammar/xDBML.g4`)**: `changesDefinition` and its statements, `create` in front of a declaration at the top level and in a Container body, and the tokens `Changes` and `create`.
+- **`@xdbml/parse`**: reads change blocks into `ChangesDeclaration` nodes, with `CreateStatement`, `DropStatement` and `AlterStatement` and the actions of `alter`, in a document declaring `xdbml: 0.8`; a change block in a document declaring an earlier version is a parse error. `flatten()` applies the change blocks in order, so a flattened document holds the model at its end, and an import brings the model of the imported file after its own change blocks. References follow a renamed or moved element: relationships, inline relationships, dependencies, Edges, supertype groups, groups and diagram views, Metadata blocks, field types, indexes, keys and records. `resolveNames()` reports the conditions of §29.16, among them `forward-reference-across-changes`, `change-element-referenced`, `change-was-mismatch` and `duplicate-uid`, and a skipped statement as `change-skipped`, with the new severity `info`. New exports: `applyChanges()`, `checkChanges()`, `checkUids()`, `hasChanges()` and `flatStatementsWithChanges()`. `SUPPORTED_XDBML_VERSION` is `0.8`.
+- **Playground**: the Diagnostics panel and the editor show a diagnostic of the information level with its own icon and marker. **Append changes**, in the header, adds change blocks at the end of the open document, from pasted text or from a file, as one step of the editor's undo history. It refuses text that holds anything but change blocks, reports a syntax error with its line in the text pasted, and raises the document's version line to `xdbml: 0.8` when it declares an earlier version, or adds one. A new help page, Change blocks; the pages on the header, the Diagnostics panel and the examples follow.
+- **Editors**: Monaco, TextMate and the VS Code extension color change blocks: `Changes` at the head of a block, the verbs and actions of a statement, `to`, `if exists` and `if not exists`, and the kind after a verb or an action. The words are colored only in those positions, so a field named `drop` or `modify` keeps the color of a name. `uid`, `was` and `base` are setting keys. The VS Code extension 0.8.0 is built: `tools/vscode-extension/xdbml-0.8.0.vsix`.
+- **Examples**: `20-model-changes` is new: the customer schema of a subscription service, followed by three sets of changes that rename, modify, add, move and drop elements.
+- **Grammar corpus**: twenty-two v0.8 cases; the two cases of a version newer than the parser declare 0.9 and 0.8.99.
+
+### Changed
+
+#### Site
+
+- **FAQ**: the answer on what data modeling tools do that xDBML does not now says that xDBML records changes to a model, and that comparing models and writing migration statements remain the work of the tool.
+
+### Not changed (compatibility)
+
+- Every v0.7 document stays valid and reads as before. `Changes` and the statement words are recognized only in a document declaring `xdbml: 0.8` or later, and the statement words only inside a change block, so they remain available as names of fields and other elements.
+- `@xdbml/parse`: `TopLevelStatement` gains `ChangesDeclaration`, and `Diagnostic.severity` gains `info`. Code with an exhaustive `switch` on these unions needs the new cases.
+
+---
+
+## v0.7.5 -- 2026
+
+**Status**: Draft -- superseded by v0.8
 **Released**: 2026-10-31
 
 A point release of the v0.7 draft on the flags of a relationship. §11.9 described `foreign_master` and `inactive` as flags without a value and `undirected` as a setting that takes `true` or `false`, and the tools read each of the three in its own way, on a Ref and on an Edge. The three now follow one rule: the name alone or `: true` sets a flag, and `: false` leaves it unset. Documents keep declaring `xdbml: 0.7`.

@@ -1,6 +1,6 @@
 <template>
   <div class="h-screen flex flex-col bg-gray-50 dark:bg-slate-950">
-    <HeaderBar />
+    <HeaderBar @append-changes="onAppendChanges" />
 
     <!-- Thin parsing-progress strip so users see the system reacting. -->
     <div
@@ -113,6 +113,7 @@ import { useParserStore } from '@/stores/parserStore';
 import { selectionEquals, type Selection } from '@/components/inspector/selection';
 import { spanStart } from '@/components/inspector/source-location';
 import { planStickyNote, type TextEdit } from '@/components/diagram/add-note';
+import type { AppendChangesPlan } from '@/components/header/append-changes';
 
 const parser = useParserStore();
 
@@ -321,6 +322,11 @@ watch(diagnosticsExpanded, (v) => {
     // ignore
   }
 });
+
+/** Append changes (spec §29.12): the editor takes the change blocks as one step of its undo history. */
+function onAppendChanges (plan: AppendChangesPlan): void {
+  editorRef.value?.applyEdits(plan.edits, plan.revealOffset);
+}
 
 function onDiagnosticsGoto (pos: { line: number; column: number }): void {
   editorRef.value?.revealPosition(pos.line, pos.column);
